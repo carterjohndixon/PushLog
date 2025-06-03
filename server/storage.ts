@@ -118,6 +118,9 @@ export class MemStorage implements IStorage {
     const repository: Repository = { 
       ...insertRepository, 
       id,
+      branch: insertRepository.branch || "main",
+      isActive: insertRepository.isActive ?? true,
+      webhookId: insertRepository.webhookId || null,
       createdAt: new Date()
     };
     this.repositories.set(id, repository);
@@ -154,6 +157,9 @@ export class MemStorage implements IStorage {
     const integration: Integration = { 
       ...insertIntegration, 
       id,
+      notificationLevel: insertIntegration.notificationLevel || "all",
+      includeCommitSummaries: insertIntegration.includeCommitSummaries ?? true,
+      isActive: insertIntegration.isActive ?? true,
       createdAt: new Date()
     };
     this.integrations.set(id, integration);
@@ -188,6 +194,7 @@ export class MemStorage implements IStorage {
     const pushEvent: PushEvent = { 
       ...insertPushEvent, 
       id,
+      notificationSent: insertPushEvent.notificationSent ?? false,
       createdAt: new Date()
     };
     this.pushEvents.set(id, pushEvent);

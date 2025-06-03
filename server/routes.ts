@@ -361,7 +361,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commit.author.name,
             branch,
             commit.id,
-            integration.includeCommitSummaries
+            Boolean(integration.includeCommitSummaries)
           );
 
           // Mark notification as sent
