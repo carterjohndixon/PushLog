@@ -1,0 +1,124 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%; /* #FFFFFF */
+  --foreground: 0 0% 20%; /* #333333 */
+  --muted: 210 7% 97%; /* #F8F9FA */
+  --muted-foreground: 0 0% 62%; /* #9E9E9E */
+  --popover: 0 0% 100%; /* #FFFFFF */
+  --popover-foreground: 0 0% 20%; /* #333333 */
+  --card: 0 0% 100%; /* #FFFFFF */
+  --card-foreground: 0 0% 20%; /* #333333 */
+  --border: 210 7% 89%; /* #E1E5E9 */
+  --input: 210 7% 89%; /* #E1E5E9 */
+  --primary: 122 39% 49%; /* #4CAF50 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 210 7% 97%; /* #F8F9FA */
+  --secondary-foreground: 0 0% 20%; /* #333333 */
+  --accent: 195 100% 50%; /* #00BFFF */
+  --accent-foreground: 0 0% 100%; /* #FFFFFF */
+  --destructive: 0 84% 60%; /* #EF4444 */
+  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+  --ring: 122 39% 49%; /* #4CAF50 */
+  --radius: 0.5rem;
+  --steel-gray: 0 0% 62%; /* #9E9E9E */
+  --log-green: 122 39% 49%; /* #4CAF50 */
+  --sky-blue: 195 100% 50%; /* #00BFFF */
+  --graphite: 0 0% 20%; /* #333333 */
+}
+
+.dark {
+  --background: 222 84% 5%; /* #0A0A0A */
+  --foreground: 0 0% 98%; /* #FAFAFA */
+  --muted: 217 33% 17%; /* #1F1F23 */
+  --muted-foreground: 0 0% 62%; /* #9E9E9E */
+  --popover: 222 84% 5%; /* #0A0A0A */
+  --popover-foreground: 0 0% 98%; /* #FAFAFA */
+  --card: 222 84% 5%; /* #0A0A0A */
+  --card-foreground: 0 0% 98%; /* #FAFAFA */
+  --border: 217 33% 17%; /* #1F1F23 */
+  --input: 217 33% 17%; /* #1F1F23 */
+  --primary: 122 39% 49%; /* #4CAF50 */
+  --primary-foreground: 0 0% 100%; /* #FFFFFF */
+  --secondary: 217 33% 17%; /* #1F1F23 */
+  --secondary-foreground: 0 0% 98%; /* #FAFAFA */
+  --accent: 195 100% 50%; /* #00BFFF */
+  --accent-foreground: 0 0% 100%; /* #FFFFFF */
+  --destructive: 0 63% 31%; /* #7F1D1D */
+  --destructive-foreground: 0 0% 98%; /* #FAFAFA */
+  --ring: 122 39% 49%; /* #4CAF50 */
+  --steel-gray: 0 0% 62%; /* #9E9E9E */
+  --log-green: 122 39% 49%; /* #4CAF50 */
+  --sky-blue: 195 100% 50%; /* #00BFFF */
+  --graphite: 0 0% 98%; /* #FAFAFA in dark mode */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-log-green {
+    color: hsl(var(--log-green));
+  }
+  
+  .text-sky-blue {
+    color: hsl(var(--sky-blue));
+  }
+  
+  .text-steel-gray {
+    color: hsl(var(--steel-gray));
+  }
+  
+  .text-graphite {
+    color: hsl(var(--graphite));
+  }
+  
+  .bg-log-green {
+    background-color: hsl(var(--log-green));
+  }
+  
+  .bg-sky-blue {
+    background-color: hsl(var(--sky-blue));
+  }
+  
+  .bg-steel-gray {
+    background-color: hsl(var(--steel-gray));
+  }
+  
+  .bg-graphite {
+    background-color: hsl(var(--graphite));
+  }
+  
+  .border-log-green {
+    border-color: hsl(var(--log-green));
+  }
+  
+  .border-sky-blue {
+    border-color: hsl(var(--sky-blue));
+  }
+
+  .hover\:bg-log-green:hover {
+    background-color: hsl(var(--log-green));
+  }
+  
+  .hover\:bg-sky-blue:hover {
+    background-color: hsl(var(--sky-blue));
+  }
+
+  .focus\:ring-log-green:focus {
+    --tw-ring-color: hsl(var(--log-green));
+  }
+  
+  .focus\:ring-sky-blue:focus {
+    --tw-ring-color: hsl(var(--sky-blue));
+  }
+}
