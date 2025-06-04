@@ -18,44 +18,25 @@ import {
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // GitHub OAuth callback
-  app.post("/api/auth/github", async (req, res) => {
+  // Get current user info (for authentication integration)
+  app.get("/api/auth/user", async (req, res) => {
     try {
-      const { code } = req.body;
-      
-      if (!code) {
-        return res.status(400).json({ error: "Authorization code required" });
-      }
-
-      const accessToken = await exchangeCodeForToken(code);
-      const githubUser = await getGitHubUser(accessToken);
-      
-      // Find or create user
-      let user = await storage.getUserByGithubId(githubUser.id.toString());
-      
-      if (!user) {
-        user = await storage.createUser({
-          username: githubUser.login,
-          password: "", // OAuth users don't need passwords
-        });
-      }
-
-      // Update user with GitHub info
-      await storage.updateUser(user.id, {
-        githubId: githubUser.id.toString(),
-        githubToken: accessToken,
-      });
-
-      res.json({ 
-        success: true, 
-        user: { 
-          id: user.id, 
-          username: user.username,
-          githubId: user.githubId 
-        } 
+      // This would be implemented with your existing OAuth system
+      // For now, return a mock user to test the UI
+      res.json({
+        success: true,
+        user: {
+          id: 1,
+          username: "demo_user",
+          email: "demo@pushlog.com",
+          isUsernameSet: true,
+          verifiedEmail: true,
+          selected_github_repo: null,
+          slack_channel_id: null
+        }
       });
     } catch (error) {
-      console.error("GitHub OAuth error:", error);
+      console.error("User auth error:", error);
       res.status(500).json({ error: "Authentication failed" });
     }
   });

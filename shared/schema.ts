@@ -4,12 +4,13 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  githubId: text("github_id"),
-  githubToken: text("github_token"),
-  slackUserId: text("slack_user_id"),
-  createdAt: timestamp("created_at").defaultNow(),
+  username: text("username"),
+  email: text("email"),
+  verifiedEmail: boolean("verifiedEmail").default(false),
+  isUsernameSet: boolean("isUsernameSet").default(false),
+  verificationToken: text("verificationToken"),
+  selected_github_repo: text("selected_github_repo"),
+  slack_channel_id: text("slack_channel_id"),
 });
 
 export const repositories = pgTable("repositories", {
@@ -61,7 +62,12 @@ export const slackWorkspaces = pgTable("slack_workspaces", {
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
-  password: true,
+  email: true,
+  verifiedEmail: true,
+  isUsernameSet: true,
+  verificationToken: true,
+  selected_github_repo: true,
+  slack_channel_id: true,
 });
 
 export const insertRepositorySchema = createInsertSchema(repositories).omit({
