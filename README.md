@@ -124,12 +124,13 @@ The application will be available at `http://localhost:5000`
 
 ## Deployment
 
-The application is designed to run on platforms like Replit, Vercel, or any Node.js hosting service.
+This is a personal project designed for private use. The application can be deployed on any Node.js hosting platform or nginx server.
 
 ### Environment Variables for Production
 
 ```bash
 NODE_ENV=production
+CLIENT_URL=https://yourdomain.com
 SLACK_BOT_TOKEN=your_production_slack_token
 SLACK_CHANNEL_ID=your_production_channel_id
 GITHUB_CLIENT_ID=your_github_client_id
@@ -137,18 +138,22 @@ GITHUB_CLIENT_SECRET=your_github_client_secret
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
 ```
 
-## Contributing
+### Environment Variables for Production
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+```bash
+NODE_ENV=production
+CLIENT_URL=https://yourdomain.com
+SLACK_BOT_TOKEN=your_production_slack_token
+SLACK_CHANNEL_ID=your_production_channel_id
+GITHUB_CLIENT_ID=your_github_client_id
+GITHUB_CLIENT_SECRET=your_github_client_secret
+GITHUB_WEBHOOK_SECRET=your_webhook_secret
+```
 
 ## License
 
-MIT License - feel free to use this for your own projects.
+This is a personal project for private use only. Not intended for distribution or commercial use.
 
 ## Support
 
-For issues and questions, please open a GitHub issue or contact the development team.
+This is a personal project. No external support provided.
