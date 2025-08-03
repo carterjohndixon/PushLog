@@ -2,11 +2,13 @@ import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 import { 
   Github, 
   Zap, 
@@ -19,17 +21,78 @@ import {
   Link as LinkIcon,
   Bell,
   Play,
-  Check
+  Check,
+  Plus,
+  Pause,
+  Settings
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
+import { useState, useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
+
+interface User {
+  id: number;
+  username: string;
+  email: string | null;
+  githubConnected: boolean;
+}
 
 export default function Home() {
-  const handleGitHubConnect = () => {
-    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "your_github_client_id";
-    const redirectUri = `${window.location.origin}/auth/github/callback`;
-    const scope = "repo,user:email";
-    
-    window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}`;
+  const { toast } = useToast();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+
+    // Fetch user profile
+    apiRequest("GET", "/api/profile")
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          setUser(data.user);
+        }
+      })
+      .catch(error => {
+        console.error("Failed to fetch user profile:", error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  const handleGitHubConnect = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in or sign up to connect your GitHub account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Use apiRequest to make an authenticated request
+      const response = await apiRequest("GET", "/api/github/connect");
+      
+      // Follow the redirect from the response
+      if (response.redirected) {
+        window.location.href = response.url;
+      } else {
+        throw new Error('No redirect URL received');
+      }
+    } catch (error) {
+      console.error('Failed to initiate GitHub connection:', error);
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to GitHub. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSlackConnect = () => {
@@ -58,11 +121,11 @@ export default function Home() {
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
-                onClick={handleGitHubConnect}
+                onClick={ user ? handleGitHubConnect : () => window.location.href = '/login'}
                 className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-colors font-semibold text-lg"
               >
                 <Github className="mr-2 w-5 h-5" />
-                Connect GitHub
+                {user ? 'Connect GitHub' : 'Get Started'}
               </Button>
               <Button 
                 variant="outline"
@@ -112,7 +175,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-graphite mb-4">
-              Powerful Dashboard for <span className="text-log-green">Integration Management</span>
+              Powerful Dashboard Experience
             </h2>
             <p className="text-xl text-steel-gray max-w-2xl mx-auto">
               Monitor all your integrations, configure settings, and track performance from one central hub.
@@ -122,184 +185,190 @@ export default function Home() {
           {/* Dashboard Mockup */}
           <Card className="overflow-hidden shadow-2xl">
             {/* Dashboard Header */}
-            <div className="bg-graphite text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <Logo size="sm" />
-                <h3 className="font-semibold">PushLog Dashboard</h3>
-              </div>
+            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <span className="text-sm">Welcome, John Developer</span>
-                <div className="w-8 h-8 bg-log-green rounded-full flex items-center justify-center">
-                  <Users className="text-white text-sm w-4 h-4" />
+                <Logo size="md" />
+                <div>
+                  <h1 className="text-xl font-bold text-log-green">PushLog</h1>
+                  <p className="text-xs text-steel-gray">GitHub ↔ Slack Integration</p>
                 </div>
               </div>
             </div>
 
-            <div className="flex">
-              {/* Sidebar */}
-              <div className="w-64 bg-gray-50 border-r border-gray-200 p-4">
-                <nav className="space-y-2">
-                  <a href="#" className="flex items-center space-x-3 bg-log-green text-white px-3 py-2 rounded-lg">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>Dashboard</span>
-                  </a>
-                  <a href="#" className="flex items-center space-x-3 text-graphite hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors">
-                    <Github className="w-4 h-4" />
-                    <span>Repositories</span>
-                  </a>
-                  <a href="#" className="flex items-center space-x-3 text-graphite hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors">
-                    <SiSlack className="w-4 h-4" />
-                    <span>Slack Channels</span>
-                  </a>
-                  <a href="#" className="flex items-center space-x-3 text-graphite hover:bg-gray-100 px-3 py-2 rounded-lg transition-colors">
-                    <Webhook className="w-4 h-4" />
-                    <span>Webhooks</span>
-                  </a>
-                </nav>
+            {/* Main Content */}
+            <div className="p-6 bg-gray-50">
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-graphite">Dashboard</h1>
+                <p className="text-steel-gray mt-2">Manage your integrations and monitor repository activity</p>
               </div>
 
-              {/* Main Content */}
-              <div className="flex-1 p-6">
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-steel-gray text-sm">Active Integrations</p>
-                          <p className="text-2xl font-bold text-log-green">12</p>
-                        </div>
-                        <div className="w-10 h-10 bg-log-green rounded-lg flex items-center justify-center">
-                          <LinkIcon className="text-white w-5 h-5" />
-                        </div>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-steel-gray">Active Integrations</p>
+                        <p className="text-2xl font-bold text-log-green">8</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-steel-gray text-sm">Daily Pushes</p>
-                          <p className="text-2xl font-bold text-sky-blue">48</p>
-                        </div>
-                        <div className="w-10 h-10 bg-sky-blue rounded-lg flex items-center justify-center">
-                          <GitBranch className="text-white w-5 h-5" />
-                        </div>
+                      <div className="w-12 h-12 bg-log-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                        <LinkIcon className="text-log-green w-6 h-6" />
                       </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-steel-gray text-sm">Notifications Sent</p>
-                          <p className="text-2xl font-bold text-graphite">156</p>
-                        </div>
-                        <div className="w-10 h-10 bg-steel-gray rounded-lg flex items-center justify-center">
-                          <Bell className="text-white w-5 h-5" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-steel-gray text-sm">Team Members</p>
-                          <p className="text-2xl font-bold text-log-green">8</p>
-                        </div>
-                        <div className="w-10 h-10 bg-log-green rounded-lg flex items-center justify-center">
-                          <Users className="text-white w-5 h-5" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                {/* Recent Activity */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Connected Repositories */}
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-graphite">Connected Repositories</h3>
-                        <Button className="bg-log-green text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors">
-                          <Github className="mr-1 w-3 h-3" />
-                          Add Repo
-                        </Button>
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-steel-gray">Connected Repos</p>
+                        <p className="text-2xl font-bold text-sky-blue">12</p>
                       </div>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                      <div className="w-12 h-12 bg-sky-blue bg-opacity-10 rounded-lg flex items-center justify-center">
+                        <Github className="text-sky-blue w-6 h-6" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-steel-gray">Daily Pushes</p>
+                        <p className="text-2xl font-bold text-graphite">24</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                        <GitBranch className="text-log-green w-6 h-6" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-steel-gray">Notifications Sent</p>
+                        <p className="text-2xl font-bold text-steel-gray">156</p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Bell className="text-sky-blue w-6 h-6" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Main Content Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Connected Repositories */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-lg font-semibold text-graphite">Connected Repositories</CardTitle>
+                      <Button 
+                        size="sm" 
+                        className="bg-log-green text-white hover:bg-green-600"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add Repo
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                              <Github className="text-white text-sm w-4 h-4" />
+                              <Github className="text-white w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-graphite">myproject/frontend</p>
+                              <p className="font-medium text-graphite">example/repository-{i}</p>
                               <p className="text-xs text-steel-gray">Last push: 2 hours ago</p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span className="w-2 h-2 bg-log-green rounded-full"></span>
-                            <span className="text-xs text-log-green">Active</span>
+                            <div className="w-2 h-2 rounded-full bg-log-green" />
+                            <Badge variant="default" className="text-xs">
+                              Active
+                            </Badge>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Active Integrations */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg font-semibold text-graphite">Active Integrations</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {[1, 2].map((i) => (
+                        <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                              <Github className="text-white text-sm w-4 h-4" />
+                            <div className="w-10 h-10 bg-log-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                              <SiSlack className="text-log-green" />
                             </div>
                             <div>
-                              <p className="font-medium text-graphite">myproject/backend</p>
-                              <p className="text-xs text-steel-gray">Last push: 5 hours ago</p>
+                              <p className="font-medium text-graphite">example/repository-{i}</p>
+                              <p className="text-sm text-steel-gray">#dev-updates channel</p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span className="w-2 h-2 bg-log-green rounded-full"></span>
-                            <span className="text-xs text-log-green">Active</span>
+                            <div className="w-2 h-2 rounded-full bg-log-green" />
+                            <Badge variant="default" className="text-xs">
+                              Active
+                            </Badge>
+                            <Button size="sm" variant="ghost">
+                              <Pause className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Recent Notifications */}
-                  <Card>
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold text-graphite">Recent Notifications</h3>
-                        <Button variant="link" className="text-sky-blue text-sm hover:underline">
-                          View All
-                        </Button>
-                      </div>
-                      <div className="space-y-4">
-                        <div className="flex items-start space-x-3">
-                          <div className="w-8 h-8 bg-sky-blue rounded-full flex items-center justify-center flex-shrink-0">
-                            <SiSlack className="text-white text-sm" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-graphite">
-                              <span className="font-medium">New push to frontend</span> - Fixed responsive layout issues in dashboard component
-                            </p>
-                            <p className="text-xs text-steel-gray">2 minutes ago</p>
-                          </div>
-                        </div>
-                        <div className="flex items-start space-x-3">
-                          <div className="w-8 h-8 bg-log-green rounded-full flex items-center justify-center flex-shrink-0">
-                            <GitBranch className="text-white text-sm w-4 h-4" />
-                          </div>
-                          <div className="flex-1">
-                            <p className="text-sm text-graphite">
-                              <span className="font-medium">Backend deployment</span> - Added new API endpoints for user management
-                            </p>
-                            <p className="text-xs text-steel-gray">15 minutes ago</p>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
+
+              {/* Quick Actions */}
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle className="text-lg font-semibold text-graphite">Quick Actions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Button 
+                      variant="outline" 
+                      className="flex items-center justify-center space-x-2 p-6 h-auto"
+                    >
+                      <Plus className="w-5 h-5 text-log-green" />
+                      <span>Set Up New Integration</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="flex items-center justify-center space-x-2 p-6 h-auto"
+                    >
+                      <TrendingUp className="w-5 h-5 text-sky-blue" />
+                      <span>View Analytics</span>
+                    </Button>
+                    
+                    <Button 
+                      variant="outline" 
+                      className="flex items-center justify-center space-x-2 p-6 h-auto"
+                    >
+                      <Settings className="w-5 h-5 text-steel-gray" />
+                      <span>Integration Settings</span>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </Card>
         </div>

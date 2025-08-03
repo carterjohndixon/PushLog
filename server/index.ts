@@ -1,10 +1,56 @@
+import dotenv from "dotenv";
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
+import session from "express-session";
+import pgSession from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import pkg from 'pg';
+import path from 'path';
+import { fileURLToPath } from 'url';
+const { Pool } = pkg;
 
+// Get the directory name for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env file from the project root (one level up from server directory)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const app = express();
+
+// Create PostgreSQL pool
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+// Configure session store
+const PostgresqlStore = pgSession(session);
+const sessionStore = new PostgresqlStore({
+  pool,
+  tableName: 'user_sessions'
+});
+
+// Middleware
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Session configuration
+app.use(session({
+  store: sessionStore,
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -59,11 +105,11 @@ app.use((req, res, next) => {
   // ALWAYS serve the app on port 5000
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = 5000;
+  const port = 5001;
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
+    // reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
   });

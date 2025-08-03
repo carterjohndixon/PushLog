@@ -6,12 +6,15 @@ import {
   type PushEvent, type InsertPushEvent,
   type SlackWorkspace, type InsertSlackWorkspace
 } from "@shared/schema";
+import { DatabaseStorage } from './database';
 
 export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
+  getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
 
@@ -74,21 +77,34 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values()).find(user => user.username === username);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.email === email);
+  }
+
   async getUserByGithubId(githubId: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(user => user.githubId === githubId);
   }
 
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(user => user.verificationToken === token);
+  }
+
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
+    console.log('Creating user with ID:', id);
     const user: User = { 
       ...insertUser, 
       id, 
-      githubId: null,
-      githubToken: null,
+      email: insertUser.email || null,
+      password: insertUser.password || null,
+      githubId: insertUser.githubId || null,
+      githubToken: insertUser.githubToken || null,
       slackUserId: null,
-      createdAt: new Date()
-    };
+      createdAt: new Date().toISOString()
+    } as any;
     this.users.set(id, user);
+    console.log('Created user:', user);
+    console.log('Current users in storage:', Array.from(this.users.entries()));
     return user;
   }
 
@@ -113,18 +129,18 @@ export class MemStorage implements IStorage {
     return Array.from(this.repositories.values()).find(repo => repo.githubId === githubId);
   }
 
-  async createRepository(insertRepository: InsertRepository): Promise<Repository> {
+  async createRepository(repository: InsertRepository): Promise<Repository> {
     const id = this.currentRepositoryId++;
-    const repository: Repository = { 
-      ...insertRepository, 
+    const newRepository: Repository = {
+      ...repository,
       id,
-      branch: insertRepository.branch || "main",
-      isActive: insertRepository.isActive ?? true,
-      webhookId: insertRepository.webhookId || null,
-      createdAt: new Date()
+      branch: repository.branch || null,
+      isActive: repository.isActive ?? null,
+      webhookId: repository.webhookId || null,
+      createdAt: new Date().toISOString()
     };
-    this.repositories.set(id, repository);
-    return repository;
+    this.repositories.set(id, newRepository);
+    return newRepository;
   }
 
   async updateRepository(id: number, updates: Partial<Repository>): Promise<Repository | undefined> {
@@ -152,18 +168,18 @@ export class MemStorage implements IStorage {
     return Array.from(this.integrations.values()).find(integration => integration.repositoryId === repositoryId);
   }
 
-  async createIntegration(insertIntegration: InsertIntegration): Promise<Integration> {
+  async createIntegration(integration: InsertIntegration): Promise<Integration> {
     const id = this.currentIntegrationId++;
-    const integration: Integration = { 
-      ...insertIntegration, 
+    const newIntegration: Integration = {
+      ...integration,
       id,
-      notificationLevel: insertIntegration.notificationLevel || "all",
-      includeCommitSummaries: insertIntegration.includeCommitSummaries ?? true,
-      isActive: insertIntegration.isActive ?? true,
-      createdAt: new Date()
+      isActive: integration.isActive ?? null,
+      notificationLevel: integration.notificationLevel || null,
+      includeCommitSummaries: integration.includeCommitSummaries ?? null,
+      createdAt: new Date().toISOString()
     };
-    this.integrations.set(id, integration);
-    return integration;
+    this.integrations.set(id, newIntegration);
+    return newIntegration;
   }
 
   async updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined> {
@@ -189,16 +205,16 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.pushedAt.getTime() - a.pushedAt.getTime());
   }
 
-  async createPushEvent(insertPushEvent: InsertPushEvent): Promise<PushEvent> {
+  async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {
     const id = this.currentPushEventId++;
-    const pushEvent: PushEvent = { 
-      ...insertPushEvent, 
+    const newPushEvent: PushEvent = {
+      ...pushEvent,
       id,
-      notificationSent: insertPushEvent.notificationSent ?? false,
-      createdAt: new Date()
+      notificationSent: pushEvent.notificationSent ?? null,
+      createdAt: new Date().toISOString()
     };
-    this.pushEvents.set(id, pushEvent);
-    return pushEvent;
+    this.pushEvents.set(id, newPushEvent);
+    return newPushEvent;
   }
 
   async updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
@@ -222,15 +238,15 @@ export class MemStorage implements IStorage {
     return Array.from(this.slackWorkspaces.values()).find(workspace => workspace.teamId === teamId);
   }
 
-  async createSlackWorkspace(insertSlackWorkspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
+  async createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
     const id = this.currentSlackWorkspaceId++;
-    const slackWorkspace: SlackWorkspace = { 
-      ...insertSlackWorkspace, 
+    const newWorkspace: SlackWorkspace = {
+      ...workspace,
       id,
-      createdAt: new Date()
+      createdAt: new Date().toISOString()
     };
-    this.slackWorkspaces.set(id, slackWorkspace);
-    return slackWorkspace;
+    this.slackWorkspaces.set(id, newWorkspace);
+    return newWorkspace;
   }
 
   async updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
@@ -276,5 +292,5 @@ export class MemStorage implements IStorage {
   }
 }
 
-// Use memory storage for now - database integration can be added later
-export const storage = new MemStorage();
+// Export a singleton instance of DatabaseStorage
+export const storage = new DatabaseStorage();

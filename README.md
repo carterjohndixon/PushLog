@@ -52,12 +52,16 @@ npm install
 ```bash
 # Required for Slack integration
 SLACK_BOT_TOKEN=your_slack_bot_token
-SLACK_CHANNEL_ID=your_default_channel_id
+SLACK_CLIENT_ID=your_slack_client_id
+SLACK_CLIENT_SECRET=your_slack_client_secret
 
 # Optional for GitHub OAuth
 GITHUB_CLIENT_ID=your_github_client_id
 GITHUB_CLIENT_SECRET=your_github_client_secret
 GITHUB_WEBHOOK_SECRET=your_webhook_secret
+
+# Optional: GitHub Personal Access Token (fallback for webhook creation)
+GITHUB_PERSONAL_ACCESS_TOKEN=your_github_pat
 ```
 
 4. Start the development server:
@@ -76,8 +80,13 @@ The application will be available at `http://localhost:5000`
    - `chat:write`
    - `channels:read`
    - `groups:read`
-3. Install the app to your workspace
-4. Copy the Bot User OAuth Token to your environment variables
+   - `team:read`
+3. Set the OAuth redirect URL to your domain + `/api/slack/callback`
+4. Install the app to your workspace
+5. Copy the following credentials to your environment variables:
+   - **Bot User OAuth Token** → `SLACK_BOT_TOKEN`
+   - **Client ID** → `SLACK_CLIENT_ID`
+   - **Client Secret** → `SLACK_CLIENT_SECRET`
 
 ### GitHub Setup (Optional)
 

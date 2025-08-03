@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Github, 
   GitBranch, 
   Bell, 
-  Users, 
+  Users,
   LinkIcon, 
   Plus,
   Settings,
@@ -20,54 +21,191 @@ import {
   Pause,
   Trash2,
   TrendingUp,
-  Clock
+  Clock,
+  AlertTriangle
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
-import type { 
-  DashboardStats, 
-  RecentPushEvent, 
-  ActiveIntegration, 
-  RepositoryCardData 
-} from "@/lib/types";
+import { RepositorySelectModal } from "@/components/repository-select-modal";
+import { IntegrationSetupModal } from "@/components/integration-setup-modal";
 
-// Mock user ID for now - in real app this would come from auth
-const CURRENT_USER_ID = 1;
+interface Repository {
+  id?: number;
+  githubId: string;
+  name: string;
+  fullName: string;
+  owner: string;
+  branch: string;
+  isActive: boolean;
+  isConnected: boolean;
+  private: boolean;
+}
+
+interface DashboardStats {
+  totalRepositories: number;
+  totalPushEvents: number;
+  activeIntegrations: number;
+  dailyPushes: number[];
+  totalNotifications: number;
+}
+
+interface RepositoryCardData {
+  id?: number;
+  githubId: string;
+  name: string;
+  fullName: string;
+  owner: string;
+  branch: string;
+  isActive: boolean;
+  isConnected: boolean;
+  pushEvents?: number;
+  lastPush?: string;
+  private: boolean;
+}
+
+interface ConnectRepositoryData {
+  userId: number;
+  githubId: string;
+  name: string;
+  fullName: string;
+  owner: string;
+  branch: string;
+  isActive: boolean;
+  private: boolean;
+}
+
+interface ActiveIntegration {
+  id: number;
+  repositoryId: number;
+  type: string;
+  name: string;
+  isActive: boolean;
+  lastUsed: string;
+  status: string;
+  repositoryName: string;
+  slackChannelName: string;
+}
 
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
+  const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
+  const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(localStorage.getItem('userId') || '0');
 
-  // Fetch dashboard stats
-  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: [`/api/stats?userId=${CURRENT_USER_ID}`],
-  });
+  // Listen for userId changes in localStorage
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'userId') {
+        setCurrentUserId(e.newValue || '0');
+      }
+    };
 
-  // Fetch user repositories
-  const { data: repositories, isLoading: repositoriesLoading } = useQuery<RepositoryCardData[]>({
-    queryKey: [`/api/repositories?userId=${CURRENT_USER_ID}`],
-  });
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
-  // Fetch user integrations
-  const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
-    queryKey: [`/api/integrations?userId=${CURRENT_USER_ID}`],
-  });
+  useEffect(() => {
+    // Check for error or success in URL hash
+    const hash = window.location.hash;
+    if (hash.startsWith('#error=')) {
+      const error = decodeURIComponent(hash.substring(7));
+      toast({
+        title: "Connection Failed",
+        description: error,
+        variant: "destructive",
+      });
+      // Clean up the URL without reloading
+      window.history.replaceState(null, '', window.location.pathname);
+    } else if (hash.startsWith('#slack=connected')) {
+      toast({
+        title: "Slack Connected",
+        description: "Your Slack workspace has been successfully connected!",
+      });
+      // Clean up the URL without reloading
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [toast]);
+
+  // Fetch user profile to get userId when component mounts
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && currentUserId === '0') {
+      fetch('/api/profile', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success && data.user) {
+          const userId = data.user.id;
+          localStorage.setItem('userId', userId.toString());
+          setCurrentUserId(userId.toString());
+          console.log('Setting userId in localStorage:', userId);
+        }
+      })
+      .catch(error => {
+        console.error('Failed to fetch user profile:', error);
+      });
+    }
+  }, [currentUserId]);
+
+  const handleGitHubConnect = async () => {
+    const token = localStorage.getItem('token');
+    
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect your GitHub account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Use apiRequest to make an authenticated request
+      const response = await apiRequest("GET", "/api/github/connect");
+      
+      // Follow the redirect from the response
+      if (response.redirected) {
+        window.location.href = response.url;
+      } else {
+        throw new Error('No redirect URL received');
+      }
+    } catch (error) {
+      console.error('Failed to initiate GitHub connection:', error);
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to GitHub. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Connect repository mutation
   const connectRepositoryMutation = useMutation({
-    mutationFn: async (repoData: any) => {
-      const response = await apiRequest("POST", "/api/repositories", {
-        ...repoData,
-        userId: CURRENT_USER_ID,
+    mutationFn: async (repository: ConnectRepositoryData) => {
+      const response = await fetch('/api/repositories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify(repository)
       });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${CURRENT_USER_ID}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${CURRENT_USER_ID}`] });
-      toast({
-        title: "Repository Connected",
-        description: "Repository has been successfully connected to PushLog.",
-      });
+      queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+      setIsRepoModalOpen(false);
     },
     onError: (error: any) => {
       toast({
@@ -78,6 +216,126 @@ export default function Dashboard() {
     },
   });
 
+  const handleRepositorySelect = (repository: RepositoryCardData) => {
+    const connectData: ConnectRepositoryData = {
+      userId: parseInt(currentUserId),
+      githubId: repository.githubId,
+      name: repository.name,
+      fullName: repository.fullName,
+      owner: repository.owner,
+      branch: repository.branch,
+      isActive: true,
+      private: repository.private
+    };
+    connectRepositoryMutation.mutate(connectData, {
+      onSuccess: (data) => {
+        // Close modal and refetch data after successful mutation
+        setIsRepoModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+        
+        // Show specific notification for the repository that was just connected
+        if (data.warning) {
+          toast({
+            // TODO: 
+            title: "Repository Connected with Warning",
+            description: data.warning,
+            variant: "default",
+          });
+        } else {
+          toast({
+            title: "Repository Connected",
+            description: `${repository.name} has been successfully connected to PushLog.`,
+          });
+        }
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Connection Failed",
+          description: error.message || "Failed to connect repository.",
+          variant: "destructive",
+        });
+      }
+    });
+  };
+
+  // Fetch dashboard stats
+  const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
+    queryKey: [`/api/stats?userId=${currentUserId}`],
+  });
+
+  // Fetch user repositories
+  const { data: repositories, isLoading: repositoriesLoading, error: repositoriesError } = useQuery<RepositoryCardData[]>({
+    queryKey: [`/api/repositories?userId=${currentUserId}`],
+    queryFn: async () => {
+      const response = await fetch (`/api/repositories?userId=${currentUserId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch repositories');
+      }
+      return response.json();
+    }
+  });
+
+  // Fetch user integrations
+  const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
+    queryKey: [`/api/integrations?userId=${currentUserId}`],
+    queryFn: async () => {
+      const response = await fetch(`/api/integrations?userId=${currentUserId}`);
+      if (!response.ok) throw new Error("Failed to fetch integrations");
+      const data = await response.json();
+      // Map isActive boolean to status string
+      return data.map((integration: any) => ({
+        ...integration,
+        status: integration.isActive ? 'active' : 'paused',
+      }));
+    }
+  });
+
+  // Add after other useQuery hooks
+  const { data: slackWorkspaces, isLoading: slackWorkspacesLoading } = useQuery({
+    queryKey: ["/api/slack/workspaces"],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return [];
+      const response = await fetch('/api/slack/workspaces', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const handleSlackConnect = async () => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect your Slack workspace.",
+        variant: "destructive",
+      });
+      return;
+    }
+    try {
+      const response = await fetch('/api/slack/connect', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to connect Slack');
+      if (data.url) window.location.href = data.url;
+    } catch (error) {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Slack. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Toggle integration status mutation
   const toggleIntegrationMutation = useMutation({
     mutationFn: async ({ integrationId, isActive }: { integrationId: number; isActive: boolean }) => {
@@ -87,7 +345,8 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${CURRENT_USER_ID}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
       toast({
         title: "Integration Updated",
         description: "Integration status has been updated.",
@@ -102,16 +361,30 @@ export default function Dashboard() {
     },
   });
 
-  const handleConnectRepository = (repository: RepositoryCardData) => {
-    connectRepositoryMutation.mutate({
-      githubId: repository.githubId,
-      name: repository.name,
-      fullName: repository.fullName,
-      owner: repository.owner,
-      branch: repository.branch,
-      isActive: true,
-    });
-  };
+  // Delete integration mutation
+  const deleteIntegrationMutation = useMutation({
+    mutationFn: async (integrationId: number) => {
+      const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+      setIsDeleteConfirmationOpen(false);
+      setIntegrationToDelete(null);
+      toast({
+        title: "Integration Deleted",
+        description: "Integration has been successfully removed.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Delete Failed",
+        description: error.message || "Failed to delete integration.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const handleToggleIntegration = (integration: ActiveIntegration) => {
     const newStatus = integration.status === 'active' ? false : true;
@@ -120,6 +393,29 @@ export default function Dashboard() {
       isActive: newStatus,
     });
   };
+
+  const handleDeleteIntegration = (integration: ActiveIntegration) => {
+    setIsDeleteConfirmationOpen(true);
+    setIntegrationToDelete(integration);
+  };
+
+  const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
+
+  // Fetch user profile
+  const { data: userProfile } = useQuery({
+    queryKey: ["/api/profile"],
+    queryFn: async () => {
+      const response = await fetch("/api/profile", {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) {
+        throw new Error("Failed to fetch user profile");
+      }
+      return response.json();
+    }
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -216,13 +512,7 @@ export default function Dashboard() {
                 <Button 
                   size="sm" 
                   className="bg-log-green text-white hover:bg-green-600"
-                  onClick={() => {
-                    // In real app, this would open a repository selection modal
-                    toast({
-                      title: "GitHub Integration",
-                      description: "Please connect your GitHub account first.",
-                    });
-                  }}
+                  onClick={() => setIsRepoModalOpen(true)}
                 >
                   <Plus className="w-4 h-4 mr-1" />
                   Add Repo
@@ -243,61 +533,106 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
-              ) : repositories && repositories.length > 0 ? (
-                <div className="space-y-3">
-                  {repositories.slice(0, 5).map((repo) => (
-                    <div key={repo.githubId} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                          <Github className="text-white w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-graphite">{repo.name}</p>
-                          <p className="text-xs text-steel-gray">
-                            {repo.lastPush ? `Last push: ${repo.lastPush}` : 'No recent activity'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        {repo.isConnected ? (
-                          <>
-                            <div className={`w-2 h-2 rounded-full ${repo.isActive ? 'bg-log-green' : 'bg-steel-gray'}`} />
-                            <Badge variant={repo.isActive ? "default" : "secondary"} className="text-xs">
-                              {repo.isActive ? 'Active' : 'Paused'}
+              ) : repositories && repositories.some(repo => repo.isConnected) ? (
+                <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
+                  {repositories
+                    .filter(repo => repo.isConnected)
+                    .map((repo) => {
+                      // Check if repo has any integration at all
+                      const repoHasIntegration = integrations?.some(
+                        (integration) => integration.repositoryId === repo.id
+                      );
+                      
+                      // Check if repo has an active integration
+                      const repoHasActiveIntegration = integrations?.some(
+                        (integration) => integration.repositoryId === repo.id && integration.status === 'active'
+                      );
+                      
+                      // Determine status
+                      let statusText = 'Connected'; // default for repos with no integration
+                      let statusColor = 'bg-steel-gray';
+                      let badgeVariant: "default" | "secondary" | "outline" = "outline";
+                      
+                      if (repoHasIntegration) {
+                        // Has integration - check if it's active
+                        statusText = repoHasActiveIntegration ? 'Active' : 'Paused';
+                        statusColor = repoHasActiveIntegration ? 'bg-log-green' : 'bg-steel-gray';
+                        badgeVariant = repoHasActiveIntegration ? "default" : "secondary";
+                      }
+                      
+                      return (
+                        <div key={repo.githubId} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
+                              <Github className="text-white w-4 h-4" />
+                            </div>
+                            <div>
+                              <p className="font-medium text-graphite">{repo.name}</p>
+                              <p className="text-xs text-steel-gray">
+                                {repo.lastPush ? `Last push: ${repo.lastPush}` : 'No recent activity'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                            <Badge variant={badgeVariant} className="text-xs">
+                              {statusText}
                             </Badge>
-                          </>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleConnectRepository(repo)}
-                            disabled={connectRepositoryMutation.isPending}
-                          >
-                            Connect
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                  <h3 className="font-medium text-graphite mb-2">No repositories connected</h3>
-                  <p className="text-sm text-steel-gray mb-4">Connect your GitHub account to start monitoring repositories.</p>
-                  <Button className="bg-log-green text-white hover:bg-green-600">
-                    <Github className="w-4 h-4 mr-2" />
-                    Connect GitHub
-                  </Button>
+                  <h3 className="font-medium text-graphite mb-2">No Connected Repositories</h3>
+                  <p className="text-sm text-steel-gray mb-4">
+                    {userProfile?.user?.githubConnected 
+                      ? "Click the 'Add Repo' button above to start monitoring your repositories."
+                      : "Connect your GitHub account to start monitoring repositories."}
+                  </p>
+                  {!userProfile?.user?.githubConnected && (
+                    <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                      <Github className="w-4 h-4 mr-2" />
+                      Connect GitHub
+                    </Button>
+                  )}
                 </div>
               )}
+              {repositoriesError && (
+                  repositoriesError.message.includes("Github connection") || 
+                  repositoriesError.message.includes("Failed to fetch repositories")
+                ) ? (
+                  <div className="text-center py-8">
+                  <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
+                  <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
+                  <p className="text-sm text-steel-gray mb-4">
+                    Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
+                  </p>
+                  <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                    <Github className="w-4 h-4 mr-2" />
+                    Reconnect GitHub
+                  </Button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
           {/* Active Integrations */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg font-semibold text-graphite">Active Integrations</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg font-semibold text-graphite">Active Integrations</CardTitle>
+                <Button 
+                  size="sm" 
+                  className="bg-sky-blue text-white hover:bg-blue-600"
+                  onClick={() => setIsIntegrationModalOpen(true)}
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  Add Integration
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {integrationsLoading ? (
@@ -352,6 +687,15 @@ export default function Dashboard() {
                             <Play className="w-4 h-4" />
                           )}
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteIntegration(integration)}
+                          disabled={deleteIntegrationMutation.isPending}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -360,11 +704,31 @@ export default function Dashboard() {
                 <div className="text-center py-8">
                   <SiSlack className="w-12 h-12 text-steel-gray mx-auto mb-4" />
                   <h3 className="font-medium text-graphite mb-2">No integrations configured</h3>
-                  <p className="text-sm text-steel-gray mb-4">Set up your first integration to start receiving notifications.</p>
-                  <Button className="bg-sky-blue text-white hover:bg-blue-600">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Integration
-                  </Button>
+                  {slackWorkspacesLoading ? (
+                    <p className="text-sm text-steel-gray mb-4">Checking Slack connection...</p>
+                  ) : slackWorkspaces && slackWorkspaces.length === 0 ? (
+                    <>
+                      <p className="text-sm text-steel-gray mb-4">Connect your Slack workspace to start creating integrations.</p>
+                      <Button 
+                        onClick={handleSlackConnect}
+                        className="bg-sky-blue text-white hover:bg-blue-600"
+                      >
+                        <SiSlack className="w-4 h-4 mr-2" />
+                        Connect Slack Workspace
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm text-steel-gray mb-4">Set up your first integration to start receiving notifications.</p>
+                      <Button 
+                        onClick={() => setIsIntegrationModalOpen(true)}
+                        className="bg-sky-blue text-white hover:bg-blue-600"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Create Integration
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -381,12 +745,7 @@ export default function Dashboard() {
               <Button 
                 variant="outline" 
                 className="flex items-center justify-center space-x-2 p-6 h-auto"
-                onClick={() => {
-                  toast({
-                    title: "Coming Soon",
-                    description: "Integration setup wizard is coming soon.",
-                  });
-                }}
+                onClick={() => setIsIntegrationModalOpen(true)}
               >
                 <Plus className="w-5 h-5 text-log-green" />
                 <span>Set Up New Integration</span>
@@ -425,6 +784,83 @@ export default function Dashboard() {
       </main>
       
       <Footer />
+
+      <RepositorySelectModal
+        open={isRepoModalOpen}
+        onOpenChange={setIsRepoModalOpen}
+        onRepositorySelect={handleRepositorySelect}
+      />
+
+      <IntegrationSetupModal
+        open={isIntegrationModalOpen}
+        onOpenChange={setIsIntegrationModalOpen}
+        repositories={repositories || []}
+      />
+
+      <Dialog open={isDeleteConfirmationOpen} onOpenChange={setIsDeleteConfirmationOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center space-x-2">
+              <AlertTriangle className="w-5 h-5 text-red-500" />
+              <DialogTitle>Delete Integration</DialogTitle>
+            </div>
+            <DialogDescription>
+              Are you sure you want to delete this integration? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {integrationToDelete && (
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
+                    <Github className="text-white w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-graphite">{integrationToDelete.repositoryName}</p> 
+                    <p className="text-sm text-steel-gray">Repository</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-sky-blue rounded flex items-center justify-center">
+                    <SiSlack className="text-white w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-graphite">#{integrationToDelete.slackChannelName}</p>
+                    <p className="text-sm text-steel-gray">Slack Channel</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2 text-sm text-steel-gray">
+                <Clock className="w-4 h-4" />
+                <span>Last used: {integrationToDelete.lastUsed || 'Never'}</span>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex justify-end space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsDeleteConfirmationOpen(false)}
+              disabled={deleteIntegrationMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (integrationToDelete) {
+                  deleteIntegrationMutation.mutate(integrationToDelete.id);
+                }
+              }}
+              disabled={deleteIntegrationMutation.isPending}
+            >
+              {deleteIntegrationMutation.isPending ? 'Deleting...' : 'Delete Integration'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

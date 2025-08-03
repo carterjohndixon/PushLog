@@ -4,12 +4,20 @@ import { z } from "zod";
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  githubId: text("github_id"),
+  username: text("username").unique(),
+  email: text("email").unique(),
+  password: text("password"),
+  githubId: text("github_id").unique(),
   githubToken: text("github_token"),
+  googleId: text("google_id").unique(),
+  googleToken: text("google_token"),
   slackUserId: text("slack_user_id"),
-  createdAt: timestamp("created_at").defaultNow(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  verificationToken: text("verification_token"),
+  verificationTokenExpiry: timestamp("verification_token_expiry"),
+  resetPasswordToken: text("reset_password_token"),
+  resetPasswordTokenExpiry: timestamp("reset_password_token_expiry"),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const repositories = pgTable("repositories", {
@@ -22,7 +30,7 @@ export const repositories = pgTable("repositories", {
   branch: text("branch").default("main"),
   isActive: boolean("is_active").default(true),
   webhookId: text("webhook_id"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const integrations = pgTable("integrations", {
@@ -34,7 +42,7 @@ export const integrations = pgTable("integrations", {
   notificationLevel: text("notification_level").default("all"), // all, main_only, tagged_only
   includeCommitSummaries: boolean("include_commit_summaries").default(true),
   isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const pushEvents = pgTable("push_events", {
@@ -47,7 +55,7 @@ export const pushEvents = pgTable("push_events", {
   branch: text("branch").notNull(),
   pushedAt: timestamp("pushed_at").notNull(),
   notificationSent: boolean("notification_sent").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const slackWorkspaces = pgTable("slack_workspaces", {
@@ -56,12 +64,17 @@ export const slackWorkspaces = pgTable("slack_workspaces", {
   teamId: text("team_id").notNull(),
   teamName: text("team_name").notNull(),
   accessToken: text("access_token").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
+  email: true,
   password: true,
+  githubId: true,
+  githubToken: true,
+  googleId: true,
+  googleToken: true,
 });
 
 export const insertRepositorySchema = createInsertSchema(repositories).omit({
@@ -84,8 +97,40 @@ export const insertSlackWorkspaceSchema = createInsertSchema(slackWorkspaces).om
   createdAt: true,
 });
 
-export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = {
+  id: number;
+  username: string | null;
+  email: string | null;
+  password: string | null;
+  githubId: string | null;
+  githubToken: string | null;
+  googleId: string | null;
+  googleToken: string | null;
+  slackUserId: string | null;
+  emailVerified: boolean;
+  verificationToken: string | null;
+  verificationTokenExpiry: string | null;
+  resetPasswordToken: string | null;
+  resetPasswordTokenExpiry: string | null;
+  createdAt: string;
+};
+
+export type InsertUser = {
+  username?: string | null;
+  email?: string | null;
+  password?: string | null;
+  githubId?: string | null;
+  githubToken?: string | null;
+  googleId?: string | null;
+  googleToken?: string | null;
+  slackUserId?: string | null;
+  emailVerified?: boolean;
+  verificationToken?: string | null;
+  verificationTokenExpiry?: string | null;
+  resetPasswordToken?: string | null;
+  resetPasswordTokenExpiry?: string | null;
+};
+
 export type Repository = typeof repositories.$inferSelect;
 export type InsertRepository = z.infer<typeof insertRepositorySchema>;
 export type Integration = typeof integrations.$inferSelect;

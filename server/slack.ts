@@ -1,10 +1,93 @@
 import { WebClient, type ChatPostMessageArguments } from "@slack/web-api";
+import dotenv from "dotenv";
+import crypto from 'crypto';
+
+dotenv.config();
 
 if (!process.env.SLACK_BOT_TOKEN) {
   throw new Error("SLACK_BOT_TOKEN environment variable must be set");
 }
 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
+
+/**
+ * Generate Slack OAuth URL for workspace connection
+ */
+export function generateSlackOAuthUrl(state: string): string {
+  const clientId = process.env.SLACK_CLIENT_ID;
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://7e6d-32-141-233-130.ngrok-free.app/api/slack/callback";
+  
+  if (!clientId) {
+    throw new Error("SLACK_CLIENT_ID environment variable must be set");
+  }
+
+  const scope = "chat:write,channels:read,groups:read,team:read";
+  
+  return `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
+}
+
+/**
+ * Exchange Slack OAuth code for access token
+ */
+export async function exchangeSlackCodeForToken(code: string): Promise<{
+  access_token: string;
+  team: {
+    id: string;
+    name: string;
+  };
+  authed_user: {
+    id: string;
+  };
+}> {
+  const clientId = process.env.SLACK_CLIENT_ID;
+  const clientSecret = process.env.SLACK_CLIENT_SECRET;
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://7e6d-32-141-233-130.ngrok-free.app/api/slack/callback";
+
+  if (!clientId || !clientSecret) {
+    throw new Error("Slack OAuth credentials not configured");
+  }
+
+  const response = await fetch("https://slack.com/api/oauth.v2.access", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: redirectUri,
+    }),
+  });
+
+  const data = await response.json();
+  
+  if (!data.ok) {
+    throw new Error(`Slack OAuth error: ${data.error}`);
+  }
+
+  return data;
+}
+
+/**
+ * Get Slack workspace info
+ */
+export async function getSlackWorkspaceInfo(accessToken: string): Promise<{
+  team: {
+    id: string;
+    name: string;
+    domain: string;
+  };
+}> {
+  const client = new WebClient(accessToken);
+  const response = await client.team.info();
+  
+  if (!response.ok) {
+    throw new Error(`Failed to get workspace info: ${response.error}`);
+  }
+
+  return response as any;
+}
 
 /**
  * Sends a structured message to a Slack channel using the Slack Web API
@@ -74,7 +157,7 @@ export async function sendPushNotification(
           text: "📝 AI Summary: Code changes detected in repository structure and functionality"
         }
       ]
-    });
+    } as any);
   }
 
   return await sendSlackMessage({
@@ -97,6 +180,24 @@ export async function getSlackChannels(): Promise<any[]> {
     return response.channels || [];
   } catch (error) {
     console.error('Error fetching Slack channels:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get list of channels in a specific workspace
+ */
+export async function getSlackChannelsForWorkspace(accessToken: string): Promise<any[]> {
+  try {
+    const client = new WebClient(accessToken);
+    const response = await client.conversations.list({
+      types: "public_channel,private_channel",
+      exclude_archived: true
+    });
+    
+    return response.channels || [];
+  } catch (error) {
+    console.error('Error fetching Slack channels for workspace:', error);
     throw error;
   }
 }

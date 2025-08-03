@@ -10,6 +10,15 @@ import {
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type { IStorage } from "./storage";
+import path from 'path';
+import { fileURLToPath } from 'url';
+import dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env file from the project root (one level up from server directory)
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -19,32 +28,98 @@ if (!connectionString) {
 const client = postgres(connectionString);
 const db = drizzle(client);
 
+// Helper function to convert Drizzle's inferred type to our User type
+function convertToUser(dbUser: typeof users.$inferSelect): User {
+  return {
+    id: dbUser.id,
+    username: dbUser.username,
+    email: dbUser.email,
+    password: dbUser.password,
+    githubId: dbUser.githubId,
+    githubToken: dbUser.githubToken,
+    googleId: dbUser.googleId,
+    googleToken: dbUser.googleToken,
+    slackUserId: dbUser.slackUserId,
+    emailVerified: dbUser.emailVerified ?? false,
+    verificationToken: dbUser.verificationToken,
+    verificationTokenExpiry: dbUser.verificationTokenExpiry?.toISOString() ?? null,
+    resetPasswordToken: dbUser.resetPasswordToken,
+    resetPasswordTokenExpiry: dbUser.resetPasswordTokenExpiry?.toISOString() ?? null,
+    createdAt: dbUser.createdAt
+  };
+}
+
+interface OAuthSession {
+  token: string;
+  state: string;
+  userId: number;
+  expiresAt: Date;
+}
+
 export class DatabaseStorage implements IStorage {
+  private users: Map<number, User>;
+  private oauthSessions: Map<string, OAuthSession>;
+  private nextId: number;
+
+  constructor() {
+    this.users = new Map();
+    this.oauthSessions = new Map();
+    this.nextId = 1;
+  }
+
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0];
+    return result[0] ? convertToUser(result[0]) : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return result[0];
+    return result[0] ? convertToUser(result[0]) : undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    return result[0] ? convertToUser(result[0]) : undefined;
   }
 
   async getUserByGithubId(githubId: string): Promise<User | undefined> {
-    // Since your schema doesn't have githubId, we'll use email or username for now
-    // This would need to be adapted based on how you store GitHub user info
-    return undefined;
+    const result = await db.select().from(users).where(eq(users.githubId, githubId)).limit(1);
+    return result[0] ? convertToUser(result[0]) : undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
-    const result = await db.insert(users).values(user).returning();
-    return result[0];
+    const result = await db.insert(users).values({
+      ...user,
+      verificationTokenExpiry: user.verificationTokenExpiry ? new Date(user.verificationTokenExpiry) : null,
+      resetPasswordTokenExpiry: user.resetPasswordTokenExpiry ? new Date(user.resetPasswordTokenExpiry) : null,
+    }).returning();
+    return convertToUser(result[0]);
   }
 
   async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
-    const result = await db.update(users).set(updates).where(eq(users.id, id)).returning();
-    return result[0];
+    const dbUpdates = {
+      ...updates,
+      verificationTokenExpiry: updates.verificationTokenExpiry ? new Date(updates.verificationTokenExpiry) : null,
+      resetPasswordTokenExpiry: updates.resetPasswordTokenExpiry ? new Date(updates.resetPasswordTokenExpiry) : null,
+    };
+    const result = await db.update(users).set(dbUpdates).where(eq(users.id, id)).returning();
+    return result[0] ? convertToUser(result[0]) : undefined;
+  }
+
+  async getUserById(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0] ? convertToUser(result[0]) : undefined;
+  }
+
+  async getUserByVerificationToken(token: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.verificationToken, token)).limit(1);
+    return result[0] ? convertToUser(result[0]) : undefined;
+  }
+
+  async getUserByResetToken(resetToken: string): Promise<User | null> {
+    const result = await db.select().from(users).where(eq(users.resetPasswordToken, resetToken)).limit(1);
+    return result[0] ? convertToUser(result[0]) : null;
   }
 
   // Repository methods
@@ -103,7 +178,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteIntegration(id: number): Promise<boolean> {
-    const result = await db.delete(integrations).where(eq(integrations.id, id));
+    const result = await db.delete(integrations).where(eq(integrations.id, id)) as any;
     return result.rowCount > 0;
   }
 
@@ -186,6 +261,27 @@ export class DatabaseStorage implements IStorage {
       dailyPushes,
       totalNotifications
     };
+  }
+
+  async storeOAuthSession(session: OAuthSession): Promise<void> {
+    this.oauthSessions.set(session.state, session);
+  }
+
+  async getOAuthSession(state: string): Promise<OAuthSession | null> {
+    const session = this.oauthSessions.get(state);
+    if (!session) return null;
+
+    // Check if session is expired
+    if (session.expiresAt < new Date()) {
+      this.oauthSessions.delete(state);
+      return null;
+    }
+
+    return session;
+  }
+
+  async deleteOAuthSession(state: string): Promise<void> {
+    this.oauthSessions.delete(state);
   }
 }
 
