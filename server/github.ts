@@ -114,6 +114,25 @@ export async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
 }
 
 /**
+ * Validate if a GitHub access token is still valid
+ */
+export async function validateGitHubToken(accessToken: string): Promise<boolean> {
+  try {
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/vnd.github.v3+json",
+      },
+    });
+
+    return response.ok;
+  } catch (error) {
+    console.error('GitHub token validation error:', error);
+    return false;
+  }
+}
+
+/**
  * Get user's repositories from GitHub
  */
 export async function getUserRepositories(accessToken: string): Promise<GitHubRepository[]> {

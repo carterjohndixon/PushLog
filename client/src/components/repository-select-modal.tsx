@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Github } from "lucide-react";
 
 interface GitHubRepository {
-  id: number;
+  id: number; // This could be either GitHub ID or internal database ID depending on connection status
+  githubId?: string; // GitHub ID (only present if connected)
   name: string;
   full_name: string;
   owner: {
@@ -79,14 +80,18 @@ export function RepositorySelectModal({
         if (response.status === 404) {
           throw new Error('No repositories found. Please check your GitHub connection.');
         }
+        // If the error indicates an expired token, invalidate the profile query to refresh connection status
+        if (errorData.error && errorData.error.includes('expired')) {
+          queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+        }
         throw new Error(errorData.error || 'Failed to fetch repositories');
       }
 
       const data = await response.json();
       // Transform the GitHub API response into our expected format
       return (data as GitHubRepository[]).map((repo) => ({
-        id: repo.id,
-        githubId: repo.id.toString(),
+        id: repo.id, // Internal database ID if connected, GitHub ID if not connected
+        githubId: repo.githubId || repo.id.toString(), // GitHub ID
         name: repo.name,
         fullName: repo.full_name,
         owner: repo.owner.login,
@@ -163,80 +168,81 @@ export function RepositorySelectModal({
             <div className="flex flex-col items-center justify-center space-y-4 p-8">
               <Github className="w-12 h-12 text-gray-400" />
               <p className="text-center text-gray-600">{error instanceof Error ? error.message : 'Failed to load repositories'}</p>
-              {error instanceof Error && error.message.includes('No repositories found') && (
-                <div className="text-center">
-                  <p className="text-sm text-gray-500 mb-4">This could mean:</p>
-                  <ul className="text-sm text-gray-500 list-disc list-inside mb-4">
-                    <li>You haven't created any repositories yet</li>
-                    <li>Your GitHub token needs to be refreshed</li>
-                  </ul>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const token = localStorage.getItem('token');
-                        
-                        if (!token) {
-                          toast({
-                            title: "Authentication Required",
-                            description: "Please log in to connect your GitHub account.",
-                            variant: "destructive",
-                          });
-                          onOpenChange(false);
-                          window.location.href = '/login';
-                          return;
-                        }
-
-                        const response = await fetch('/api/github/connect', {
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/json'
-                          }
-                        });
-
-                        const data = await response.json();
-
-                        if (response.status === 401) {
-                          localStorage.removeItem('token');
-                          onOpenChange(false);
-                          window.location.href = '/login';
-                          return;
-                        }
-
-                        if (!response.ok) {
-                          if (response.status === 400 && data.error === "GitHub account already connected") {
+                            {(error instanceof Error && error.message.includes('No repositories found')) || 
+               (error instanceof Error && error.message.includes('expired')) ? (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500 mb-4">This could mean:</p>
+                    <ul className="text-sm text-gray-500 list-disc list-inside mb-4">
+                      <li>You haven't created any repositories yet</li>
+                      <li>Your GitHub token needs to be refreshed</li>
+                    </ul>
+                    <Button
+                      onClick={async () => {
+                        try {
+                          const token = localStorage.getItem('token');
+                          
+                          if (!token) {
                             toast({
-                              title: "GitHub Already Connected",
-                              description: "Try refreshing the page to fetch your repositories.",
-                              variant: "default",
+                              title: "Authentication Required",
+                              description: "Please log in to connect your GitHub account.",
+                              variant: "destructive",
                             });
-                            window.location.reload();
+                            onOpenChange(false);
+                            window.location.href = '/login';
                             return;
                           }
-                          throw new Error(data.error || 'Failed to connect to GitHub');
-                        }
 
-                        if (data.url) {
-                          // Store the state for verification in the callback
-                          if (data.state) {
-                            localStorage.setItem('github_oauth_state', data.state);
+                          const response = await fetch('/api/github/connect', {
+                            headers: {
+                              'Authorization': `Bearer ${token}`,
+                              'Accept': 'application/json'
+                            }
+                          });
+
+                          const data = await response.json();
+
+                          if (response.status === 401) {
+                            localStorage.removeItem('token');
+                            onOpenChange(false);
+                            window.location.href = '/login';
+                            return;
                           }
-                          localStorage.setItem('returnPath', window.location.pathname);
-                          window.location.href = data.url;
+
+                          if (!response.ok) {
+                            if (response.status === 400 && data.error === "GitHub account already connected") {
+                              toast({
+                                title: "GitHub Already Connected",
+                                description: "Try refreshing the page to fetch your repositories.",
+                                variant: "default",
+                              });
+                              window.location.reload();
+                              return;
+                            }
+                            throw new Error(data.error || 'Failed to connect to GitHub');
+                          }
+
+                          if (data.url) {
+                            // Store the state for verification in the callback
+                            if (data.state) {
+                              localStorage.setItem('github_oauth_state', data.state);
+                            }
+                            localStorage.setItem('returnPath', window.location.pathname);
+                            window.location.href = data.url;
+                          }
+                        } catch (error) {
+                          console.error('Failed to connect GitHub:', error);
+                          toast({
+                            title: "Connection Failed",
+                            description: error instanceof Error ? error.message : "Failed to connect to GitHub. Please try again.",
+                            variant: "destructive",
+                          });
                         }
-                      } catch (error) {
-                        console.error('Failed to connect GitHub:', error);
-                        toast({
-                          title: "Connection Failed",
-                          description: error instanceof Error ? error.message : "Failed to connect to GitHub. Please try again.",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    Refresh GitHub Connection
-                  </Button>
-                </div>
-              )}
+                      }}
+                    >
+                      Refresh GitHub Connection
+                    </Button>
+                  </div>
+              ) : null}
             </div>
           ) : (
             <>

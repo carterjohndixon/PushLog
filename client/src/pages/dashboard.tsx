@@ -6,14 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   Github, 
   GitBranch, 
   Bell, 
-  Users,
   LinkIcon, 
   Plus,
   Settings,
@@ -21,24 +19,12 @@ import {
   Pause,
   Trash2,
   TrendingUp,
-  Clock,
-  AlertTriangle
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { IntegrationSetupModal } from "@/components/integration-setup-modal";
-
-interface Repository {
-  id?: number;
-  githubId: string;
-  name: string;
-  fullName: string;
-  owner: string;
-  branch: string;
-  isActive: boolean;
-  isConnected: boolean;
-  private: boolean;
-}
+import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integration-deletion-modal";
+import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
 
 interface DashboardStats {
   totalRepositories: number;
@@ -91,6 +77,7 @@ export default function Dashboard() {
   const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
+  const [isDeleteRepoConfirmationOpen, setIsDeleteRepoConfirmationOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(localStorage.getItem('userId') || '0');
 
   // Listen for userId changes in localStorage
@@ -167,9 +154,16 @@ export default function Dashboard() {
       // Use apiRequest to make an authenticated request
       const response = await apiRequest("GET", "/api/github/connect");
       
-      // Follow the redirect from the response
-      if (response.redirected) {
-        window.location.href = response.url;
+      // Parse the JSON response to get the URL
+      const data = await response.json();
+      
+      if (data.url) {
+        // Store the state for verification in the callback
+        if (data.state) {
+          localStorage.setItem('github_oauth_state', data.state);
+        }
+        localStorage.setItem('returnPath', window.location.pathname);
+        window.location.href = data.url;
       } else {
         throw new Error('No redirect URL received');
       }
@@ -275,6 +269,10 @@ export default function Dashboard() {
       });
       if (!response.ok) {
         const errorData = await response.json();
+        // If the error indicates an expired token, invalidate the profile query to refresh connection status
+        if (errorData.error && errorData.error.includes('expired')) {
+          queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+        }
         throw new Error(errorData.error || 'Failed to fetch repositories');
       }
       return response.json();
@@ -285,7 +283,11 @@ export default function Dashboard() {
   const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
     queryKey: [`/api/integrations?userId=${currentUserId}`],
     queryFn: async () => {
-      const response = await fetch(`/api/integrations?userId=${currentUserId}`);
+      const response = await fetch(`/api/integrations?userId=${currentUserId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       if (!response.ok) throw new Error("Failed to fetch integrations");
       const data = await response.json();
       // Map isActive boolean to status string
@@ -364,26 +366,99 @@ export default function Dashboard() {
   // Delete integration mutation
   const deleteIntegrationMutation = useMutation({
     mutationFn: async (integrationId: number) => {
-      const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
-      return response.json();
+      try {
+        const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      
+        const data = await response.json();
+        console.log('Response data:', data);
+        return data;
+      } catch (error) {
+        console.error('Delete mutation error:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
-      setIsDeleteConfirmationOpen(false);
-      setIntegrationToDelete(null);
-      toast({
-        title: "Integration Deleted",
-        description: "Integration has been successfully removed.",
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+        setIsDeleteConfirmationOpen(false);
+        setIntegrationToDelete(null);
+        toast({
+          title: "Integration Deleted",
+          description: "Integration has been successfully removed.",
+        });
+      },
+      onError: (error: any) => {
+        toast({
+          title: "Delete Failed",
+          description: "Failed to delete integration.",
+          variant: "destructive",
+        });
+      },
+  });
+  
+  // Delete repository mutation
+  const deleteRepositoryMutation = useMutation({
+    mutationFn: async (repoId: number) => {
+      try {
+        const response = await apiRequest("DELETE", `/api/repositories/${repoId}`);
+        // /api/repositories/:id
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+      
+        const data = await response.json();
+        console.log('Response data:', data);
+        return data;
+      } catch (error) {
+        console.error('Delete mutation error:', error);
+        throw error;
+      }
+    },
+    onMutate: async (repoId) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
+      
+      // Snapshot the previous value
+      const previousRepositories = queryClient.getQueryData([`/api/repositories?userId=${currentUserId}`]);
+      
+      // Optimistically update to remove the repository
+      queryClient.setQueryData([`/api/repositories?userId=${currentUserId}`], (old: any) => {
+        if (!old) return old;
+        return old.filter((repo: any) => repo.id !== repoId);
       });
+      
+      // Return a context object with the snapshotted value
+      return { previousRepositories };
     },
-    onError: (error: any) => {
-      toast({
-        title: "Delete Failed",
-        description: error.message || "Failed to delete integration.",
-        variant: "destructive",
-      });
-    },
+      onSuccess: () => {
+        // Invalidate all related queries to ensure real-time updates
+        queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
+        setIsDeleteRepoConfirmationOpen(false);
+        setRepositoryToDelete(null);
+        toast({
+          title: "Repository Deleted",
+          description: "Repository has been successfully removed.",
+        });
+      },
+      onError: (error: any, repoId, context) => {
+        // Rollback the optimistic update
+        if (context?.previousRepositories) {
+          queryClient.setQueryData([`/api/repositories?userId=${currentUserId}`], context.previousRepositories);
+        }
+        
+        toast({
+          title: "Delete Failed",
+          description: "Failed to delete Repository.",
+          variant: "destructive",
+        });
+      },
   });
 
   const handleToggleIntegration = (integration: ActiveIntegration) => {
@@ -399,7 +474,13 @@ export default function Dashboard() {
     setIntegrationToDelete(integration);
   };
 
+  const handleDeleteRepository = (repository: RepositoryCardData) => {
+    setIsDeleteRepoConfirmationOpen(true);
+    setRepositoryToDelete(repository);
+  }
+
   const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
+  const [repositoryToDelete, setRepositoryToDelete] = useState<RepositoryCardData | null>(null);
 
   // Fetch user profile
   const { data: userProfile } = useQuery({
@@ -533,23 +614,34 @@ export default function Dashboard() {
                     </div>
                   ))}
                 </div>
+              ) : repositoriesError ? (
+                // ERROR STATE - Show this FIRST, before checking for empty repos
+                <div className="text-center py-8">
+                  <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
+                  <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
+                  <p className="text-sm text-steel-gray mb-4">
+                    Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
+                  </p>
+                  <p className="text-xs text-gray-400 mb-4">Error: {repositoriesError.message}</p>
+                  <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                    <Github className="w-4 h-4 mr-2" />
+                    Reconnect GitHub
+                  </Button>
+                </div>
               ) : repositories && repositories.some(repo => repo.isConnected) ? (
                 <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
                   {repositories
                     .filter(repo => repo.isConnected)
                     .map((repo) => {
-                      // Check if repo has any integration at all
                       const repoHasIntegration = integrations?.some(
                         (integration) => integration.repositoryId === repo.id
                       );
                       
-                      // Check if repo has an active integration
                       const repoHasActiveIntegration = integrations?.some(
                         (integration) => integration.repositoryId === repo.id && integration.status === 'active'
                       );
                       
-                      // Determine status
-                      let statusText = 'Connected'; // default for repos with no integration
+                      let statusText = 'Connected';
                       let statusColor = 'bg-steel-gray';
                       let badgeVariant: "default" | "secondary" | "outline" = "outline";
                       
@@ -578,6 +670,15 @@ export default function Dashboard() {
                             <Badge variant={badgeVariant} className="text-xs">
                               {statusText}
                             </Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteRepository(repo)}
+                              disabled={deleteRepositoryMutation.isPending}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
                           </div>
                         </div>
                       );
@@ -600,22 +701,6 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
-              {repositoriesError && (
-                  repositoriesError.message.includes("Github connection") || 
-                  repositoriesError.message.includes("Failed to fetch repositories")
-                ) ? (
-                  <div className="text-center py-8">
-                  <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                  <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
-                  <p className="text-sm text-steel-gray mb-4">
-                    Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
-                  </p>
-                  <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
-                    <Github className="w-4 h-4 mr-2" />
-                    Reconnect GitHub
-                  </Button>
-                </div>
-              ) : null}
             </CardContent>
           </Card>
 
@@ -797,70 +882,19 @@ export default function Dashboard() {
         repositories={repositories || []}
       />
 
-      <Dialog open={isDeleteConfirmationOpen} onOpenChange={setIsDeleteConfirmationOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <div className="flex items-center space-x-2">
-              <AlertTriangle className="w-5 h-5 text-red-500" />
-              <DialogTitle>Delete Integration</DialogTitle>
-            </div>
-            <DialogDescription>
-              Are you sure you want to delete this integration? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {integrationToDelete && (
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3 mb-3">
-                  <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                    <Github className="text-white w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-graphite">{integrationToDelete.repositoryName}</p> 
-                    <p className="text-sm text-steel-gray">Repository</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-sky-blue rounded flex items-center justify-center">
-                    <SiSlack className="text-white w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-graphite">#{integrationToDelete.slackChannelName}</p>
-                    <p className="text-sm text-steel-gray">Slack Channel</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2 text-sm text-steel-gray">
-                <Clock className="w-4 h-4" />
-                <span>Last used: {integrationToDelete.lastUsed || 'Never'}</span>
-              </div>
-            </div>
-          )}
-          
-          <div className="flex justify-end space-x-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsDeleteConfirmationOpen(false)}
-              disabled={deleteIntegrationMutation.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (integrationToDelete) {
-                  deleteIntegrationMutation.mutate(integrationToDelete.id);
-                }
-              }}
-              disabled={deleteIntegrationMutation.isPending}
-            >
-              {deleteIntegrationMutation.isPending ? 'Deleting...' : 'Delete Integration'}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <ConfirmRepositoryDeletionModal 
+        open={isDeleteRepoConfirmationOpen}
+        onOpenChange={setIsDeleteRepoConfirmationOpen}
+        repositoryToDelete={repositoryToDelete}
+        deleteRepositoryMutation={deleteRepositoryMutation}
+      />
+
+      <ConfirmIntegrationDeletionModal
+        open={isDeleteConfirmationOpen}
+        onOpenChange={setIsDeleteConfirmationOpen}
+        integrationToDelete={integrationToDelete}
+        deleteIntegrationMutation={deleteIntegrationMutation}
+      />
     </div>
   );
 }

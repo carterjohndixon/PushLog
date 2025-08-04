@@ -179,7 +179,7 @@ export class DatabaseStorage implements IStorage {
 
   async deleteIntegration(id: number): Promise<boolean> {
     const result = await db.delete(integrations).where(eq(integrations.id, id)) as any;
-    return result.rowCount > 0;
+    return true;
   }
 
   // Push event methods

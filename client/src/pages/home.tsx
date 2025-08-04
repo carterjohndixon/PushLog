@@ -79,9 +79,16 @@ export default function Home() {
       // Use apiRequest to make an authenticated request
       const response = await apiRequest("GET", "/api/github/connect");
       
-      // Follow the redirect from the response
-      if (response.redirected) {
-        window.location.href = response.url;
+      // Parse the JSON response to get the URL
+      const data = await response.json();
+      
+      if (data.url) {
+        // Store the state for verification in the callback
+        if (data.state) {
+          localStorage.setItem('github_oauth_state', data.state);
+        }
+        localStorage.setItem('returnPath', window.location.pathname);
+        window.location.href = data.url;
       } else {
         throw new Error('No redirect URL received');
       }

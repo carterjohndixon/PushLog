@@ -11,7 +11,8 @@ import {
   getUserRepositories, 
   createWebhook,
   deleteWebhook,
-  verifyWebhookSignature 
+  verifyWebhookSignature,
+  validateGitHubToken
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -112,12 +113,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Check if user already has GitHub connected
+      // Check if user already has GitHub connected and validate the token
       const user = await databaseStorage.getUserById(userId);
-      if (user?.githubId) {
-        return res.status(400).json({
-          error: "GitHub account already connected"
-        });
+      if (user?.githubId && user?.githubToken) {
+        try {
+          const isValid = await validateGitHubToken(user.githubToken);
+          if (isValid) {
+            return res.status(400).json({
+              error: "GitHub account already connected"
+            });
+          } else {
+            // Token is invalid, clear the connection and allow reconnection
+            console.log(`Invalid GitHub token for user ${userId}, allowing reconnection`);
+            await databaseStorage.updateUser(userId, {
+              githubId: null,
+              githubToken: null
+            });
+          }
+        } catch (error) {
+          console.error('GitHub token validation error:', error);
+          // Clear invalid connection and allow reconnection
+          await databaseStorage.updateUser(userId, {
+            githubId: null,
+            githubToken: null
+          });
+        }
       }
 
       // Generate state for CSRF protection
@@ -503,6 +523,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "No repositories found. Please check your GitHub connection." });
       }
 
+      // Validate GitHub token before fetching repositories
+      try {
+        const isValid = await validateGitHubToken(user.githubToken);
+        if (!isValid) {
+          // Clear invalid connection
+          await databaseStorage.updateUser(userId, {
+            githubId: null,
+            githubToken: null
+          });
+          return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account." });
+        }
+      } catch (validationError) {
+        console.error("GitHub token validation error:", validationError);
+        // Clear invalid connection
+        await databaseStorage.updateUser(userId, {
+          githubId: null,
+          githubToken: null
+        });
+        return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account." });
+      }
+
       try {
         // Fetch repositories from GitHub
         const repositories = await getUserRepositories(user.githubToken);
@@ -510,11 +551,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get already connected repositories
         const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
         
-        // Mark repositories that are already connected
-        const enrichedRepos = repositories.map(repo => ({
-          ...repo,
-          isConnected: connectedRepos.some(connectedRepo => connectedRepo.githubId === repo.id.toString())
-        }));
+        // Mark repositories that are already connected and include internal database ID
+        const enrichedRepos = repositories.map(repo => {
+          const connectedRepo = connectedRepos.find(connectedRepo => connectedRepo.githubId === repo.id.toString());
+          return {
+            ...repo,
+            githubId: repo.id.toString(), // Always include the GitHub ID
+            id: connectedRepo?.id, // Include the internal database ID if connected
+            isConnected: !!connectedRepo
+          };
+        });
 
         res.json(enrichedRepos);
       } catch (githubError) {
@@ -634,39 +680,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error connecting repository:", error);
       res.status(400).json({ error: "Invalid repository data" });
-    }
-  });
-
-  // Disconnect a repository
-  app.delete("/api/repositories/:id", async (req, res) => {
-    try {
-      const repositoryId = parseInt(req.params.id);
-      const repository = await storage.getRepository(repositoryId);
-      
-      if (!repository) {
-        return res.status(404).json({ error: "Repository not found" });
-      }
-
-      const user = await storage.getUser(repository.userId);
-      
-      if (user && user.githubToken && repository.webhookId) {
-        try {
-          await deleteWebhook(
-            user.githubToken,
-            repository.owner,
-            repository.name,
-            repository.webhookId
-          );
-        } catch (webhookError) {
-          console.error("Failed to delete webhook:", webhookError);
-        }
-      }
-
-      await storage.deleteRepository(repositoryId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error disconnecting repository:", error);
-      res.status(500).json({ error: "Failed to disconnect repository" });
     }
   });
 
@@ -849,7 +862,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const enrichedIntegrations = await Promise.all(
         integrations.map(async (integration) => {
           
-          let repository = await storage.getRepository(integration.id);
+          // let repository = await storage.getRepository(integration.id);
+          let repository = await storage.getRepository(integration.repositoryId);
           
           if (!repository) {
             repository = await storage.getRepositoryByGithubId(integration.repositoryId.toString());
@@ -903,6 +917,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting integration:", error);
       res.status(500).json({ error: "Failed to delete integration" });
+    }
+  });
+  
+  // Disconnect a repository
+  app.delete("/api/repositories/:id", async (req, res) => {
+    try {
+      const repositoryId = parseInt(req.params.id);
+      const repository = await storage.getRepository(repositoryId);
+      
+      if (!repository) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
+
+      const user = await storage.getUser(repository.userId);
+      
+      if (user && user.githubToken && repository.webhookId) {
+        try {
+          await deleteWebhook(
+            user.githubToken,
+            repository.owner,
+            repository.name,
+            repository.webhookId
+          );
+        } catch (webhookError) {
+          console.error("Failed to delete webhook:", webhookError);
+        }
+      }
+
+      await storage.deleteRepository(repositoryId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error disconnecting repository:", error);
+      res.status(500).json({ error: "Failed to disconnect repository" });
     }
   });
 
@@ -1042,6 +1089,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Validate GitHub token if user has GitHub connected
+      let githubConnected = false;
+      if (user.githubId && user.githubToken) {
+        try {
+          githubConnected = await validateGitHubToken(user.githubToken);
+          
+          // If token is invalid, clear the GitHub connection
+          if (!githubConnected) {
+            console.log(`Invalid GitHub token for user ${user.id}, clearing connection`);
+            await databaseStorage.updateUser(user.id, {
+              githubId: null,
+              githubToken: null
+            });
+          }
+        } catch (error) {
+          console.error('GitHub token validation error:', error);
+          // Clear invalid connection
+          await databaseStorage.updateUser(user.id, {
+            githubId: null,
+            githubToken: null
+          });
+          githubConnected = false;
+        }
+      }
+
       res.json({
         success: true,
         user: {
@@ -1050,7 +1122,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email || null,
           isUsernameSet: true,
           verifiedEmail: true,
-          githubConnected: !!user.githubId
+          githubConnected
         }
       });
     } catch (error) {
