@@ -57,6 +57,12 @@ export const pushEvents = pgTable("push_events", {
   pushedAt: timestamp("pushed_at").notNull(),
   notificationSent: boolean("notification_sent").default(false),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+  // AI Summary fields
+  aiSummary: text("ai_summary"),
+  aiImpact: text("ai_impact"),
+  aiCategory: text("ai_category"),
+  aiDetails: text("ai_details"),
+  aiGenerated: boolean("ai_generated").notNull().default(false),
 });
 
 export const slackWorkspaces = pgTable("slack_workspaces", {

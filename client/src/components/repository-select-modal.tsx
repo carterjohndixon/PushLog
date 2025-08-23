@@ -59,7 +59,7 @@ export function RepositorySelectModal({
   const queryClient = useQueryClient();
 
   // Fetch repositories only when modal is open
-  const { data: repositories, isLoading, error } = useQuery({
+  const { data: repositories, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/repositories", open], // Include open in the queryKey
     queryFn: async () => {
       if (!open) return []; // Return empty array if modal is closed
@@ -79,6 +79,7 @@ export function RepositorySelectModal({
 
       if (!response.ok) {
         const errorData = await response.json();
+        
         if (response.status === 404) {
           throw new Error('No repositories found. Please check your GitHub connection.');
         }
@@ -90,6 +91,7 @@ export function RepositorySelectModal({
       }
 
       const data = await response.json();
+      
       // Transform the GitHub API response into our expected format
       return (data as GitHubRepository[]).map((repo) => ({
         id: repo.id, // Internal database ID if connected, GitHub ID if not connected
@@ -110,14 +112,25 @@ export function RepositorySelectModal({
     refetchOnMount: false
   });
 
-  // Reset search query when modal closes
+  // Reset search query when modal closes and handle OAuth return
   useEffect(() => {
     if (!open) {
       setSearchQuery("");
       // Remove the query data when modal closes
       queryClient.removeQueries({ queryKey: ["/api/repositories", true] });
+    } else {
+      // When modal opens, refetch repositories to get fresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      
+      // Check if user just returned from GitHub OAuth (check for returnPath)
+      const returnPath = localStorage.getItem('returnPath');
+      if (returnPath && returnPath.includes('/repositories')) {
+        // Clear the return path and refetch data
+        localStorage.removeItem('returnPath');
+        refetch();
+      }
     }
-  }, [open, queryClient]);
+  }, [open, queryClient, refetch]);
 
   // Filter repositories based on search query
   const filteredRepositories = (repositories || []).filter((repo) =>
@@ -169,9 +182,82 @@ export function RepositorySelectModal({
           {error ? (
             <div className="flex flex-col items-center justify-center space-y-4 p-8">
               <Github className="w-12 h-12 text-gray-400" />
-              <p className="text-center text-gray-600">{error instanceof Error ? error.message : 'Failed to load repositories'}</p>
-                            {(error instanceof Error && error.message.includes('No repositories found')) || 
-               (error instanceof Error && error.message.includes('expired')) ? (
+              <p className="text-center text-gray-600">
+                {error instanceof Error && error.message.includes('Authentication required') 
+                  ? 'Please authenticate your account below.' 
+                  : (error instanceof Error ? error.message : 'Failed to load repositories')
+                }
+              </p>
+              
+                              {error instanceof Error && error.message.includes('Authentication required') ? (
+                  <div className="text-center">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const token = localStorage.getItem('token');
+                        
+                        if (!token) {
+                          onOpenChange(false);
+                          window.location.href = '/login';
+                          return;
+                        }
+
+                        const response = await fetch('/api/github/connect', {
+                          headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Accept': 'application/json'
+                          }
+                        });
+
+                        const data = await response.json();
+
+                        if (response.status === 401) {
+                          localStorage.removeItem('token');
+                          onOpenChange(false);
+                          window.location.href = '/login';
+                          return;
+                        }
+
+                        if (!response.ok) {
+                          if (response.status === 400 && data.error === "GitHub account already connected") {
+                            toast({
+                              title: "GitHub Already Connected",
+                              description: "Try refreshing the page to fetch your repositories.",
+                              variant: "default",
+                            });
+                            window.location.reload();
+                            return;
+                          }
+                          throw new Error(data.error || 'Failed to connect to GitHub');
+                        }
+
+                        if (data.url) {
+                          // Store the state for verification in the callback
+                          if (data.state) {
+                            localStorage.setItem('github_oauth_state', data.state);
+                          }
+                          localStorage.setItem('returnPath', window.location.pathname);
+                          window.location.href = data.url;
+                        }
+                      } catch (error) {
+                        console.error('Failed to connect GitHub:', error);
+                        toast({
+                          title: "Connection Failed",
+                          description: error instanceof Error ? error.message : "Failed to connect to GitHub. Please try again.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                    className="bg-log-green text-white hover:bg-green-600"
+                  >
+                    <Github className="w-4 h-4 mr-2" />
+                    Re-authenticate GitHub
+                  </Button>
+                </div>
+              ) : 
+              
+              ((error instanceof Error && error.message.includes('No repositories found')) || 
+               (error instanceof Error && error.message.includes('expired'))) ? (
                   <div className="text-center">
                     <p className="text-sm text-gray-500 mb-4">This could mean:</p>
                     <ul className="text-sm text-gray-500 list-disc list-inside mb-4">
