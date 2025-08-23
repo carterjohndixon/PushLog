@@ -1,10 +1,11 @@
 import { 
-  users, repositories, integrations, pushEvents, slackWorkspaces,
+  users, repositories, integrations, pushEvents, slackWorkspaces, notifications,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
   type PushEvent, type InsertPushEvent,
-  type SlackWorkspace, type InsertSlackWorkspace
+  type SlackWorkspace, type InsertSlackWorkspace,
+  type Notification, type InsertNotification
 } from "@shared/schema";
 import { DatabaseStorage } from './database';
 
@@ -54,6 +55,15 @@ export interface IStorage {
     dailyPushes: number;
     totalNotifications: number;
   }>;
+
+  // Notification methods
+  getNotificationsByUserId(userId: number): Promise<Notification[]>;
+  getUnreadNotificationsByUserId(userId: number): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: number): Promise<Notification | undefined>;
+  markAllNotificationsAsRead(userId: number): Promise<void>;
+  deleteNotification(id: number): Promise<boolean>;
+  deleteAllNotifications(userId: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -62,11 +72,13 @@ export class MemStorage implements IStorage {
   private integrations: Map<number, Integration> = new Map();
   private pushEvents: Map<number, PushEvent> = new Map();
   private slackWorkspaces: Map<number, SlackWorkspace> = new Map();
+  private notifications: Map<number, Notification> = new Map();
   private currentUserId = 1;
   private currentRepositoryId = 1;
   private currentIntegrationId = 1;
   private currentPushEventId = 1;
   private currentSlackWorkspaceId = 1;
+  private currentNotificationId = 1;
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -289,6 +301,64 @@ export class MemStorage implements IStorage {
       dailyPushes,
       totalNotifications
     };
+  }
+
+  // Notification methods
+  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
+    return Array.from(this.notifications.values())
+      .filter(notification => notification.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
+    return Array.from(this.notifications.values())
+      .filter(notification => notification.userId === userId && !notification.isRead)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const id = this.currentNotificationId++;
+    const newNotification: Notification = {
+      ...notification,
+      id,
+      title: notification.title || null,
+      metadata: notification.metadata || null,
+      isRead: notification.isRead ?? false,
+      createdAt: new Date().toISOString()
+    };
+    this.notifications.set(id, newNotification);
+    return newNotification;
+  }
+
+  async markNotificationAsRead(id: number): Promise<Notification | undefined> {
+    const notification = this.notifications.get(id);
+    if (!notification) return undefined;
+    const updatedNotification = { ...notification, isRead: true };
+    this.notifications.set(id, updatedNotification);
+    return updatedNotification;
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    const userNotifications = Array.from(this.notifications.values())
+      .filter(notification => notification.userId === userId);
+    
+    userNotifications.forEach(notification => {
+      this.notifications.set(notification.id, { ...notification, isRead: true });
+    });
+  }
+
+  async deleteNotification(id: number): Promise<boolean> {
+    return this.notifications.delete(id);
+  }
+
+  async deleteAllNotifications(userId: number): Promise<boolean> {
+    const userNotifications = Array.from(this.notifications.values())
+      .filter(notification => notification.userId === userId);
+    
+    userNotifications.forEach(notification => {
+      this.notifications.delete(notification.id);
+    });
+    return true;
   }
 }
 

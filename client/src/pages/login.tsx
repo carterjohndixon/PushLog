@@ -67,16 +67,14 @@ export default function Login() {
     setOauthProvider("GitHub");
     
     const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-    const redirectUri = "https://7e6d-32-141-233-130.ngrok-free.app/api/auth/user";
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://8081fea9884d.ngrok-free.app/api/auth/user"
     const scope = "repo user:email admin:org_hook";
     
-    // Generate and store state for CSRF protection
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
     localStorage.setItem('github_oauth_state', state);
     
-    // Add a small delay to show the loading state
     setTimeout(() => {
       window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
     }, 500);
@@ -87,7 +85,7 @@ export default function Login() {
     setOauthProvider("Google");
     
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI || "https://7e6d-32-141-233-130.ngrok-free.app/api/google/user";
+    const redirectUri = import.meta.env.VITE_GOOGLE_REDIRECT_URI
     const scope = "email profile";
     
     // Add a small delay to show the loading state

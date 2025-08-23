@@ -3,11 +3,13 @@ import { useLocation } from "wouter";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function VerifyEmail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [verifying, setVerifying] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -30,9 +32,16 @@ export default function VerifyEmail() {
             title: "Email Verified",
             description: "Your email has been successfully verified.",
           });
-
-          // Redirect to dashboard after short delay
-          setTimeout(() => setLocation("/dashboard"), 2000);
+          
+          // Small delay to ensure token is stored, then invalidate cache and redirect
+          setTimeout(() => {
+            // Clear all cached queries and invalidate to force fresh data with new token
+            queryClient.clear();
+            queryClient.invalidateQueries();
+            
+            // Redirect to dashboard
+            setLocation("/dashboard");
+          }, 1000);
         } else {
           throw new Error(data.error || "Verification failed");
         }
@@ -50,7 +59,7 @@ export default function VerifyEmail() {
     };
 
     verifyEmail();
-  }, []);
+  }, [queryClient, toast, setLocation]);
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">

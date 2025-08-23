@@ -50,7 +50,7 @@ export function Footer() {
           </div>
         </div>
         <div className="border-t border-gray-700 mt-12 pt-8 text-center text-gray-400">
-          <p>&copy; 2024 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
+          <p>&copy; 2025 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
         </div>
       </div>
     </footer>

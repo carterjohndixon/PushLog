@@ -31,14 +31,16 @@ interface RepositoryCardData {
   id?: number;
   githubId: string;
   name: string;
-  fullName: string;
-  owner: string;
-  branch: string;
-  isActive: boolean;
+  full_name: string; // GitHub API format
+  owner: { login: string }; // GitHub API format
+  default_branch: string; // GitHub API format
+  isActive?: boolean;
   isConnected: boolean;
   pushEvents?: number;
   lastPush?: string;
   private: boolean;
+  // Add other GitHub API fields that might be present
+  [key: string]: any;
 }
 
 interface RepositorySelectModalProps {
@@ -93,9 +95,9 @@ export function RepositorySelectModal({
         id: repo.id, // Internal database ID if connected, GitHub ID if not connected
         githubId: repo.githubId || repo.id.toString(), // GitHub ID
         name: repo.name,
-        fullName: repo.full_name,
-        owner: repo.owner.login,
-        branch: repo.default_branch || 'main',
+        full_name: repo.full_name, // Use GitHub API format
+        owner: repo.owner, // Use GitHub API format
+        default_branch: repo.default_branch || 'main', // Use GitHub API format
         isActive: true,
         isConnected: repo.isConnected || false,
         pushEvents: 0,
@@ -278,7 +280,7 @@ export function RepositorySelectModal({
                         <div className="flex flex-col items-start py-4">
                           <span className="font-medium">{repo.name}</span>
                           <span className="text-sm text-gray-600 group-hover:text-graphite">
-                            {repo.owner}/{repo.name}
+                            {repo.owner.login}/{repo.name}
                           </span>
                         </div>
                       </Button>

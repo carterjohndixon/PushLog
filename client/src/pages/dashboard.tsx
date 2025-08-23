@@ -19,12 +19,16 @@ import {
   Pause,
   Trash2,
   TrendingUp,
+  MoreVertical,
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { IntegrationSetupModal } from "@/components/integration-setup-modal";
 import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integration-deletion-modal";
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
+import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
+import { RepositorySettingsModal } from "@/components/repository-settings-modal";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
 
 interface DashboardStats {
   totalRepositories: number;
@@ -38,14 +42,17 @@ interface RepositoryCardData {
   id?: number;
   githubId: string;
   name: string;
-  fullName: string;
-  owner: string;
-  branch: string;
-  isActive: boolean;
+  full_name: string; // GitHub API format
+  owner: { login: string }; // GitHub API format
+  default_branch: string; // GitHub API format
+  isActive?: boolean;
   isConnected: boolean;
   pushEvents?: number;
   lastPush?: string;
   private: boolean;
+  monitorAllBranches?: boolean;
+  // Add other GitHub API fields that might be present
+  [key: string]: any;
 }
 
 interface ConnectRepositoryData {
@@ -69,6 +76,8 @@ interface ActiveIntegration {
   status: string;
   repositoryName: string;
   slackChannelName: string;
+  notificationLevel: string;
+  includeCommitSummaries: boolean;
 }
 
 export default function Dashboard() {
@@ -78,19 +87,10 @@ export default function Dashboard() {
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [isDeleteRepoConfirmationOpen, setIsDeleteRepoConfirmationOpen] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState(localStorage.getItem('userId') || '0');
-
-  // Listen for userId changes in localStorage
-  useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'userId') {
-        setCurrentUserId(e.newValue || '0');
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  const [isIntegrationSettingsOpen, setIsIntegrationSettingsOpen] = useState(false);
+  const [isRepositorySettingsOpen, setIsRepositorySettingsOpen] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<ActiveIntegration | null>(null);
+  const [selectedRepository, setSelectedRepository] = useState<RepositoryCardData | null>(null);
 
   useEffect(() => {
     // Check for error or success in URL hash
@@ -114,29 +114,7 @@ export default function Dashboard() {
     }
   }, [toast]);
 
-  // Fetch user profile to get userId when component mounts
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token && currentUserId === '0') {
-      fetch('/api/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success && data.user) {
-          const userId = data.user.id;
-          localStorage.setItem('userId', userId.toString());
-          setCurrentUserId(userId.toString());
-          console.log('Setting userId in localStorage:', userId);
-        }
-      })
-      .catch(error => {
-        console.error('Failed to fetch user profile:', error);
-      });
-    }
-  }, [currentUserId]);
+
 
   const handleGitHubConnect = async () => {
     const token = localStorage.getItem('token');
@@ -186,7 +164,10 @@ export default function Dashboard() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
-        body: JSON.stringify(repository)
+        body: JSON.stringify({
+          ...repository,
+          // Remove userId from the request - server will use authenticated user
+        })
       });
 
       if (!response.ok) {
@@ -197,8 +178,8 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsRepoModalOpen(false);
     },
     onError: (error: any) => {
@@ -212,12 +193,12 @@ export default function Dashboard() {
 
   const handleRepositorySelect = (repository: RepositoryCardData) => {
     const connectData: ConnectRepositoryData = {
-      userId: parseInt(currentUserId),
+      userId: 0, // Will be set by server from authenticated user
       githubId: repository.githubId,
       name: repository.name,
-      fullName: repository.fullName,
-      owner: repository.owner,
-      branch: repository.branch,
+      fullName: repository.full_name,
+      owner: repository.owner.login,
+      branch: repository.default_branch,
       isActive: true,
       private: repository.private
     };
@@ -225,8 +206,8 @@ export default function Dashboard() {
       onSuccess: (data) => {
         // Close modal and refetch data after successful mutation
         setIsRepoModalOpen(false);
-        queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
         
         // Show specific notification for the repository that was just connected
         if (data.warning) {
@@ -253,16 +234,35 @@ export default function Dashboard() {
     });
   };
 
+  // Fetch user profile
+  const { data: userProfile } = useQuery({
+    queryKey: ["/api/profile"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/profile");
+      const data = await response.json();
+      return data.user;
+    },
+  });
+
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
-    queryKey: [`/api/stats?userId=${currentUserId}`],
+    queryKey: ['/api/stats'],
+    queryFn: async () => {
+      const response = await fetch('/api/stats', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (!response.ok) throw new Error('Failed to fetch stats');
+      return response.json();
+    }
   });
 
   // Fetch user repositories
   const { data: repositories, isLoading: repositoriesLoading, error: repositoriesError } = useQuery<RepositoryCardData[]>({
-    queryKey: [`/api/repositories?userId=${currentUserId}`],
+    queryKey: ['/api/repositories'],
     queryFn: async () => {
-      const response = await fetch (`/api/repositories?userId=${currentUserId}`, {
+      const response = await fetch('/api/repositories', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -281,20 +281,17 @@ export default function Dashboard() {
 
   // Fetch user integrations
   const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
-    queryKey: [`/api/integrations?userId=${currentUserId}`],
+    queryKey: ['/api/integrations'],
     queryFn: async () => {
-      const response = await fetch(`/api/integrations?userId=${currentUserId}`, {
+      const response = await fetch('/api/integrations', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
       if (!response.ok) throw new Error("Failed to fetch integrations");
       const data = await response.json();
-      // Map isActive boolean to status string
-      return data.map((integration: any) => ({
-        ...integration,
-        status: integration.isActive ? 'active' : 'paused',
-      }));
+      // Server already provides status field, no need to map
+      return data;
     }
   });
 
@@ -347,8 +344,8 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
         title: "Integration Updated",
         description: "Integration status has been updated.",
@@ -381,23 +378,79 @@ export default function Dashboard() {
         throw error;
       }
     },
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
-        setIsDeleteConfirmationOpen(false);
-        setIntegrationToDelete(null);
-        toast({
-          title: "Integration Deleted",
-          description: "Integration has been successfully removed.",
-        });
-      },
-      onError: (error: any) => {
-        toast({
-          title: "Delete Failed",
-          description: "Failed to delete integration.",
-          variant: "destructive",
-        });
-      },
+    onSuccess: () => {
+      setIsDeleteConfirmationOpen(false);
+      setSelectedIntegration(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      toast({
+        title: "Integration Deleted",
+        description: "The integration has been successfully deleted.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Deletion Failed",
+        description: error.message || "Failed to delete integration.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update integration mutation
+  const updateIntegrationMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+      const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      setIsIntegrationSettingsOpen(false);
+      setSelectedIntegration(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      toast({
+        title: "Settings Updated",
+        description: "Integration settings have been successfully updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update integration settings.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update repository mutation
+  const updateRepositoryMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+      const response = await apiRequest("PATCH", `/api/repositories/${id}`, updates);
+      const result = await response.json();
+      return result;
+    },
+    onSuccess: (data, variables) => {
+      setIsRepositorySettingsOpen(false);
+      setSelectedRepository(null);
+      // Force refetch of all related queries
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] }); // Also refresh integrations
+      // Force immediate refetch
+      queryClient.refetchQueries({ queryKey: ['/api/repositories'] });
+      queryClient.refetchQueries({ queryKey: ['/api/stats'] });
+      queryClient.refetchQueries({ queryKey: ['/api/integrations'] });
+      toast({
+        title: "Settings Updated",
+        description: "Repository settings have been successfully updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update repository settings.",
+        variant: "destructive",
+      });
+    },
   });
   
   // Delete repository mutation
@@ -421,13 +474,13 @@ export default function Dashboard() {
     },
     onMutate: async (repoId) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
+      await queryClient.cancelQueries({ queryKey: ['/api/repositories'] });
       
       // Snapshot the previous value
-      const previousRepositories = queryClient.getQueryData([`/api/repositories?userId=${currentUserId}`]);
+      const previousRepositories = queryClient.getQueryData(['/api/repositories']);
       
       // Optimistically update to remove the repository
-      queryClient.setQueryData([`/api/repositories?userId=${currentUserId}`], (old: any) => {
+      queryClient.setQueryData(['/api/repositories'], (old: any) => {
         if (!old) return old;
         return old.filter((repo: any) => repo.id !== repoId);
       });
@@ -437,9 +490,9 @@ export default function Dashboard() {
     },
       onSuccess: () => {
         // Invalidate all related queries to ensure real-time updates
-        queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${currentUserId}`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
-        queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
+        queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
         setIsDeleteRepoConfirmationOpen(false);
         setRepositoryToDelete(null);
         toast({
@@ -450,7 +503,7 @@ export default function Dashboard() {
       onError: (error: any, repoId, context) => {
         // Rollback the optimistic update
         if (context?.previousRepositories) {
-          queryClient.setQueryData([`/api/repositories?userId=${currentUserId}`], context.previousRepositories);
+          queryClient.setQueryData(['/api/repositories'], context.previousRepositories);
         }
         
         toast({
@@ -470,8 +523,18 @@ export default function Dashboard() {
   };
 
   const handleDeleteIntegration = (integration: ActiveIntegration) => {
+    setSelectedIntegration(integration);
     setIsDeleteConfirmationOpen(true);
-    setIntegrationToDelete(integration);
+  };
+
+  const handleIntegrationSettings = (integration: ActiveIntegration) => {
+    setSelectedIntegration(integration);
+    setIsIntegrationSettingsOpen(true);
+  };
+
+  const handleRepositorySettings = (repository: RepositoryCardData) => {
+    setSelectedRepository(repository);
+    setIsRepositorySettingsOpen(true);
   };
 
   const handleDeleteRepository = (repository: RepositoryCardData) => {
@@ -482,27 +545,16 @@ export default function Dashboard() {
   const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
   const [repositoryToDelete, setRepositoryToDelete] = useState<RepositoryCardData | null>(null);
 
-  // Fetch user profile
-  const { data: userProfile } = useQuery({
-    queryKey: ["/api/profile"],
-    queryFn: async () => {
-      const response = await fetch("/api/profile", {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      if (!response.ok) {
-        throw new Error("Failed to fetch user profile");
-      }
-      return response.json();
-    }
-  });
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Email Verification Banner */}
+        {userProfile && !userProfile.emailVerified && (
+          <EmailVerificationBanner />
+        )}
+        
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-graphite">Dashboard</h1>
           <p className="text-steel-gray mt-2">Manage your integrations and monitor repository activity</p>
@@ -615,19 +667,59 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : repositoriesError ? (
-                // ERROR STATE - Show this FIRST, before checking for empty repos
-                <div className="text-center py-8">
-                  <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                  <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
-                  <p className="text-sm text-steel-gray mb-4">
-                    Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
-                  </p>
-                  <p className="text-xs text-gray-400 mb-4">Error: {repositoriesError.message}</p>
-                  <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
-                    <Github className="w-4 h-4 mr-2" />
-                    Reconnect GitHub
-                  </Button>
-                </div>
+                // ERROR STATE - Check if it's a GitHub connection issue or expired token
+                (() => {
+                  const errorMessage = repositoriesError.message;
+                  const isExpiredToken = errorMessage.includes('expired') || errorMessage.includes('token');
+                  const isNoConnection = errorMessage.includes('No repositories found') || errorMessage.includes('GitHub connection');
+                  
+                  if (isExpiredToken) {
+                    // Show expired token message
+                    return (
+                      <div className="text-center py-8">
+                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
+                        <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
+                        <p className="text-sm text-steel-gray mb-4">
+                          Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
+                        </p>
+                        <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                          <Github className="w-4 h-4 mr-2" />
+                          Reconnect GitHub
+                        </Button>
+                      </div>
+                    );
+                  } else if (isNoConnection) {
+                    // Show no GitHub connection message
+                    return (
+                      <div className="text-center py-8">
+                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
+                        <h3 className="font-medium text-graphite mb-2">No Connected Repositories</h3>
+                        <p className="text-sm text-steel-gray mb-4">
+                          Connect your GitHub account to start monitoring repositories.
+                        </p>
+                        <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                          <Github className="w-4 h-4 mr-2" />
+                          Connect GitHub
+                        </Button>
+                      </div>
+                    );
+                  } else {
+                    // Show generic error
+                    return (
+                      <div className="text-center py-8">
+                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
+                        <h3 className="font-medium text-graphite mb-2">Error Loading Repositories</h3>
+                        <p className="text-sm text-steel-gray mb-4">
+                          {repositoriesError.message}
+                        </p>
+                        <Button onClick={() => window.location.reload()} className="bg-log-green text-white hover:bg-green-600">
+                          <Github className="w-4 h-4 mr-2" />
+                          Retry
+                        </Button>
+                      </div>
+                    );
+                  }
+                })()
               ) : repositories && repositories.some(repo => repo.isConnected) ? (
                 <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
                   {repositories
@@ -641,15 +733,24 @@ export default function Dashboard() {
                         (integration) => integration.repositoryId === repo.id && integration.status === 'active'
                       );
                       
+                      // Check if repository itself is active
+                      const isRepositoryActive = repo.isActive !== false; // Default to true if not set
+                      
                       let statusText = 'Connected';
                       let statusColor = 'bg-steel-gray';
                       let badgeVariant: "default" | "secondary" | "outline" = "outline";
                       
                       if (repoHasIntegration) {
-                        // Has integration - check if it's active
-                        statusText = repoHasActiveIntegration ? 'Active' : 'Paused';
-                        statusColor = repoHasActiveIntegration ? 'bg-log-green' : 'bg-steel-gray';
-                        badgeVariant = repoHasActiveIntegration ? "default" : "secondary";
+                        // Has integration - check both repository and integration status
+                        const isActive = isRepositoryActive && repoHasActiveIntegration;
+                        statusText = isActive ? 'Active' : 'Paused';
+                        statusColor = isActive ? 'bg-log-green' : 'bg-steel-gray';
+                        badgeVariant = isActive ? "default" : "secondary";
+                      } else {
+                        // No integration - repository is connected but not active
+                        statusText = isRepositoryActive ? 'Connected' : 'Paused';
+                        statusColor = isRepositoryActive ? 'bg-sky-blue' : 'bg-steel-gray';
+                        badgeVariant = isRepositoryActive ? "outline" : "secondary";
                       }
                       
                       return (
@@ -661,7 +762,10 @@ export default function Dashboard() {
                             <div>
                               <p className="font-medium text-graphite">{repo.name}</p>
                               <p className="text-xs text-steel-gray">
-                                {repo.lastPush ? `Last push: ${repo.lastPush}` : 'No recent activity'}
+                                {repoHasIntegration 
+                                  ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
+                                  : 'No integration configured'
+                                }
                               </p>
                             </div>
                           </div>
@@ -670,6 +774,14 @@ export default function Dashboard() {
                             <Badge variant={badgeVariant} className="text-xs">
                               {statusText}
                             </Badge>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRepositorySettings(repo)}
+                              className="text-steel-gray hover:text-graphite"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -771,6 +883,14 @@ export default function Dashboard() {
                           ) : (
                             <Play className="w-4 h-4" />
                           )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleIntegrationSettings(integration)}
+                          className="text-steel-gray hover:text-graphite"
+                        >
+                          <MoreVertical className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -894,6 +1014,20 @@ export default function Dashboard() {
         onOpenChange={setIsDeleteConfirmationOpen}
         integrationToDelete={integrationToDelete}
         deleteIntegrationMutation={deleteIntegrationMutation}
+      />
+
+      <IntegrationSettingsModal
+        open={isIntegrationSettingsOpen}
+        onOpenChange={setIsIntegrationSettingsOpen}
+        integration={selectedIntegration}
+        updateIntegrationMutation={updateIntegrationMutation}
+      />
+
+      <RepositorySettingsModal
+        open={isRepositorySettingsOpen}
+        onOpenChange={setIsRepositorySettingsOpen}
+        repository={selectedRepository}
+        updateRepositoryMutation={updateRepositoryMutation}
       />
     </div>
   );

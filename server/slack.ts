@@ -15,7 +15,7 @@ const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
  */
 export function generateSlackOAuthUrl(state: string): string {
   const clientId = process.env.SLACK_CLIENT_ID;
-  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://7e6d-32-141-233-130.ngrok-free.app/api/slack/callback";
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://8081fea9884d.ngrok-free.app/api/slack/callback";
   
   if (!clientId) {
     throw new Error("SLACK_CLIENT_ID environment variable must be set");
@@ -41,7 +41,7 @@ export async function exchangeSlackCodeForToken(code: string): Promise<{
 }> {
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
-  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://7e6d-32-141-233-130.ngrok-free.app/api/slack/callback";
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://8081fea9884d.ngrok-free.app/api/slack/callback";
 
   if (!clientId || !clientSecret) {
     throw new Error("Slack OAuth credentials not configured");
@@ -87,6 +87,67 @@ export async function getSlackWorkspaceInfo(accessToken: string): Promise<{
   }
 
   return response as any;
+}
+
+/**
+ * Sends a welcome message when an integration is first created
+ */
+export async function sendIntegrationWelcomeMessage(
+  channelId: string,
+  repositoryName: string,
+  integrationName: string
+): Promise<string | undefined> {
+  const blocks = [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `🎉 *Integration Created Successfully!*`
+      }
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `Your PushLog integration is now active and ready to receive notifications.`
+      }
+    },
+    {
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: `*Repository:*\n${repositoryName}`
+        },
+        {
+          type: "mrkdwn",
+          text: `*Integration:*\n${integrationName}`
+        }
+      ]
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `📡 *What happens next?*\n• You'll receive notifications for all future pushes to this repository\n• Each notification will include commit details and AI-generated summaries\n• You can manage this integration from your PushLog dashboard`
+      }
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: "💡 Tip: You can pause or delete this integration anytime from your dashboard"
+        }
+      ]
+    }
+  ];
+
+  return await sendSlackMessage({
+    channel: channelId,
+    blocks,
+    text: `PushLog integration created for ${repositoryName}` // Fallback text
+  });
 }
 
 /**

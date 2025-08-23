@@ -26,7 +26,6 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
 
     try {
       const user = verifyToken(token);
-      console.log('Authentication successful for user:', user.username);
       req.user = user;
       next();
     } catch (verifyError) {
@@ -37,4 +36,19 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
     console.error('Authentication error:', error);
     return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
   }
+}
+
+export function requireEmailVerification(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  if (!req.user.emailVerified) {
+    return res.status(403).json({ 
+      error: 'Email verification required',
+      message: 'Please verify your email address to access this feature'
+    });
+  }
+
+  next();
 } 

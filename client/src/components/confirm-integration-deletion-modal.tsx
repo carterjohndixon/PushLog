@@ -68,7 +68,12 @@ export function ConfirmIntegrationDeletionModal({
             
             <div className="flex items-center space-x-2 text-sm text-steel-gray">
               <Clock className="w-4 h-4" />
-              <span>Last used: {integrationToDelete.lastUsed || 'Never'}</span>
+              <span>Last used: {integrationToDelete.lastUsed ? 
+                new Date(integrationToDelete.lastUsed).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                }) : 'Never'}</span>
             </div>
           </div>
         )}

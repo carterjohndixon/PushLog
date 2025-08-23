@@ -1,12 +1,13 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
-  users, repositories, integrations, pushEvents, slackWorkspaces,
+  users, repositories, integrations, pushEvents, slackWorkspaces, notifications,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
   type PushEvent, type InsertPushEvent,
-  type SlackWorkspace, type InsertSlackWorkspace
+  type SlackWorkspace, type InsertSlackWorkspace,
+  type Notification, type InsertNotification
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type { IStorage } from "./storage";
@@ -282,6 +283,81 @@ export class DatabaseStorage implements IStorage {
 
   async deleteOAuthSession(state: string): Promise<void> {
     this.oauthSessions.delete(state);
+  }
+
+  // Notification methods
+  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(notifications.createdAt);
+  }
+
+  async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
+      .orderBy(notifications.createdAt);
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const result = await db.insert(notifications).values(notification).returning();
+    return result[0];
+
+    // try {
+    //   console.log('Database: Creating notification with data:', notification);
+      
+    //   // Test database permissions first
+    //   console.log('Database: Testing permissions - checking if we can read from notifications table');
+    //   const existingNotifications = await db.select().from(notifications).limit(1);
+    //   console.log('Database: Can read from notifications table:', existingNotifications.length, 'existing notifications');
+      
+    //   // Try the insert
+    //   const result = await db.insert(notifications).values(notification).returning();
+    //   console.log('Database: Created notification result:', result);
+      
+    //   // Test: Try to read back the notification we just created
+    //   const createdNotification = result[0];
+    //   if (createdNotification) {
+    //     console.log('Database: Testing readback - fetching notification with ID:', createdNotification.id);
+    //     console.log("Current notifications in database:", await db.select().from(notifications));
+    //     const readback = await db.select().from(notifications).where(eq(notifications.id, createdNotification.id));
+    //     console.log('Database: Readback result:', readback);
+    //   }
+      
+    //   return result[0];
+    // } catch (error: any) {
+    //   console.error('Database: Error creating notification:', error);
+    //   console.error('Database: Error details:', {
+    //     message: error.message,
+    //     code: error.code,
+    //     detail: error.detail,
+    //     hint: error.hint
+    //   });
+    //   throw error;
+    // }
+  }
+
+  async markNotificationAsRead(id: number): Promise<Notification | undefined> {
+    const result = await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async markAllNotificationsAsRead(userId: number): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
+  }
+
+  async deleteNotification(id: number): Promise<boolean> {
+    await db.delete(notifications).where(eq(notifications.id, id));
+    return true;
+  }
+
+  async deleteAllNotifications(userId: number): Promise<boolean> {
+    await db.delete(notifications).where(eq(notifications.userId, userId));
+    return true;
   }
 }
 
