@@ -1341,17 +1341,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...(commit.removed || [])
           ];
 
-          // Calculate total changes from all commits in this push
-          const totalAdditions = commits.reduce((sum: number, c: any) => sum + (c.additions || 0), 0);
-          const totalDeletions = commits.reduce((sum: number, c: any) => sum + (c.deletions || 0), 0);
+          // Try to get actual diff stats from GitHub API if webhook data is missing
+          let additions = commit.additions || 0;
+          let deletions = commit.deletions || 0;
+
+          // If we don't have diff data from webhook, try to fetch it from GitHub API
+          if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
+            try {
+              // Get the repository owner and name from full_name
+              const [owner, repoName] = repository.full_name.split('/');
+              
+              // Fetch commit details from GitHub API
+              const githubResponse = await fetch(
+                `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
+                {
+                  headers: {
+                    'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                  }
+                }
+              );
+
+              if (githubResponse.ok) {
+                const commitData = await githubResponse.json();
+                additions = commitData.stats?.additions || 0;
+                deletions = commitData.stats?.deletions || 0;
+                console.log(`Fetched diff stats from GitHub API: +${additions} -${deletions}`);
+              }
+            } catch (apiError) {
+              console.error('Failed to fetch commit stats from GitHub API:', apiError);
+              // Fall back to webhook data
+            }
+          }
 
           const pushData = {
             repositoryName: repository.full_name,
             branch,
             commitMessage: commit.message,
             filesChanged,
-            additions: totalAdditions,
-            deletions: totalDeletions,
+            additions,
+            deletions,
             commitSha: commit.id,
           };
 
