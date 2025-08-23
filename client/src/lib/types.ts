@@ -17,10 +17,14 @@ export interface RecentPushEvent {
 
 export interface ActiveIntegration {
   id: number;
+  repositoryId: number;
   repositoryName: string;
   slackChannelName: string;
   status: 'active' | 'paused' | 'error';
   lastActivity?: string;
+  notificationLevel: string;
+  includeCommitSummaries: boolean;
+  isActive: boolean;
 }
 
 export interface RepositoryCardData {

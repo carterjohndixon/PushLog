@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { handleTokenExpiration } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,10 +21,12 @@ import {
   AlertCircle,
   CheckCircle,
   ChevronDown,
+  MoreVertical,
 } from "lucide-react";
-import { SiSlack, SiGithub } from "react-icons/si";
+import { SiSlack } from "react-icons/si";
 import { IntegrationSetupModal } from "@/components/integration-setup-modal";
 import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integration-deletion-modal";
+import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { ActiveIntegration, RepositoryCardData } from "@/lib/types";
 
@@ -35,6 +38,8 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
+  const [isIntegrationSettingsOpen, setIsIntegrationSettingsOpen] = useState(false);
+  const [selectedIntegration, setSelectedIntegration] = useState<ActiveIntegration | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "paused">("all");
   const [activeTab, setActiveTab] = useState("all");
@@ -53,7 +58,15 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      if (!response.ok) throw new Error('Failed to fetch repositories');
+      if (!response.ok) {
+        const errorData = await response.json();
+        const error = new Error(errorData.error || 'Failed to fetch repositories');
+        // Handle token expiration
+        if (handleTokenExpiration(error, queryClient)) {
+          return []; // Return empty array to prevent further errors
+        }
+        throw error;
+      }
       return response.json();
     }
   });
@@ -67,7 +80,15 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      if (!response.ok) throw new Error("Failed to fetch integrations");
+      if (!response.ok) {
+        const errorData = await response.json();
+        const error = new Error(errorData.error || "Failed to fetch integrations");
+        // Handle token expiration
+        if (handleTokenExpiration(error, queryClient)) {
+          return []; // Return empty array to prevent further errors
+        }
+        throw error;
+      }
       const data = await response.json();
       return data.map((integration: any) => ({
         ...integration,
@@ -86,6 +107,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
         title: "Integration Updated",
@@ -96,6 +118,32 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update integration.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update integration mutation
+  const updateIntegrationMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+      const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      setIsIntegrationSettingsOpen(false);
+      setSelectedIntegration(null);
+      toast({
+        title: "Integration Updated",
+        description: "Integration settings have been successfully updated.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update integration settings.",
         variant: "destructive",
       });
     },
@@ -137,6 +185,11 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   const handleDeleteIntegration = (integration: ActiveIntegration) => {
     setIntegrationToDelete(integration);
     setIsDeleteConfirmationOpen(true);
+  };
+
+  const handleIntegrationSettings = (integration: ActiveIntegration) => {
+    setSelectedIntegration(integration);
+    setIsIntegrationSettingsOpen(true);
   };
 
   const handleSearchSelect = (integration: ActiveIntegration) => {
@@ -203,8 +256,9 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   const IntegrationCard = ({ integration }: { integration: ActiveIntegration }) => (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start space-x-4">
+        <div className="flex flex-col h-full">
+          {/* Top section with main content */}
+          <div className="flex items-start space-x-4 mb-4">
             <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
               integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
             }`}>
@@ -213,57 +267,62 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
               }`} />
             </div>
             <div className="flex-1">
-              <div className="flex items-center space-x-2 mb-1">
+              <div className="mb-2">
                 <h3 className="font-semibold text-graphite">{integration.repositoryName}</h3>
-                <SiGithub className="w-4 h-4 text-steel-gray" />
               </div>
               <p className="text-sm text-steel-gray mb-2">
                 <SiSlack className="w-3 h-3 inline mr-1" />
                 #{integration.slackChannelName}
               </p>
-              <div className="flex items-center space-x-4 text-xs text-steel-gray">
-                <div className="flex items-center space-x-1">
-                  {getStatusIcon(integration.status)}
-                  <span className="capitalize">{integration.status}</span>
+              {integration.lastActivity && (
+                <div className="flex items-center space-x-1 text-xs text-steel-gray">
+                  <Activity className="w-3 h-3" />
+                  <span>Last activity: {integration.lastActivity}</span>
                 </div>
-                {integration.lastActivity && (
-                  <div className="flex items-center space-x-1">
-                    <Activity className="w-3 h-3" />
-                    <span>Last activity: {integration.lastActivity}</span>
-                  </div>
-                )}
-              </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          
+          {/* Bottom section with actions and status */}
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center space-x-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleToggleIntegration(integration)}
+                disabled={toggleIntegrationMutation.isPending}
+                className="hover:bg-gray-100"
+              >
+                {integration.status === 'active' ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleIntegrationSettings(integration)}
+                className="text-steel-gray hover:text-graphite"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleDeleteIntegration(integration)}
+                disabled={deleteIntegrationMutation.isPending}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
             <Badge 
               variant={integration.status === 'active' ? "default" : "secondary"}
               className={`text-xs ${getStatusColor(integration.status)}`}
             >
               {integration.status === 'active' ? 'Active' : 'Paused'}
             </Badge>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleToggleIntegration(integration)}
-              disabled={toggleIntegrationMutation.isPending}
-              className="hover:bg-gray-100"
-            >
-              {integration.status === 'active' ? (
-                <Pause className="w-4 h-4" />
-              ) : (
-                <Play className="w-4 h-4" />
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => handleDeleteIntegration(integration)}
-              disabled={deleteIntegrationMutation.isPending}
-              className="text-red-500 hover:text-red-700 hover:bg-red-50"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
           </div>
         </div>
       </CardContent>
@@ -561,7 +620,19 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
       <IntegrationSetupModal
         open={isIntegrationModalOpen}
         onOpenChange={setIsIntegrationModalOpen}
-        repositories={repositories || []}
+        repositories={repositories?.map(repo => ({
+          ...repo,
+          full_name: `${repo.owner}/${repo.name}`,
+          default_branch: repo.branch || 'main',
+          owner: { login: repo.owner }
+        })) || []}
+      />
+
+      <IntegrationSettingsModal
+        open={isIntegrationSettingsOpen}
+        onOpenChange={setIsIntegrationSettingsOpen}
+        integration={selectedIntegration}
+        updateIntegrationMutation={updateIntegrationMutation}
       />
 
       <ConfirmIntegrationDeletionModal

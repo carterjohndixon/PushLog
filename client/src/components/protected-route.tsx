@@ -52,6 +52,17 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
     if (hash.startsWith('#token=')) {
       const token = hash.substring(7);
       localStorage.setItem('token', token);
+      
+      // Extract userId from the token and store it
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.userId) {
+          localStorage.setItem('userId', payload.userId.toString());
+        }
+      } catch (error) {
+        console.error('Failed to extract userId from token:', error);
+      }
+      
       // Clean up the URL
       window.history.replaceState(null, '', window.location.pathname);
       setIsAuthenticated(true);

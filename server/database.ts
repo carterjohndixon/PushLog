@@ -251,10 +251,19 @@ export class DatabaseStorage implements IStorage {
       event.pushedAt > oneDayAgo
     ).length;
     
-    const totalNotifications = allPushEvents.filter(event => 
+    // Count Slack messages sent (from notifications table)
+    const userNotifications = await this.getNotificationsByUserId(userId);
+    const slackMessagesSent = userNotifications.filter(notification => 
+      notification.type === 'slack_message_sent'
+    ).length;
+    
+    // Also count push events with notifications sent
+    const pushEventNotifications = allPushEvents.filter(event => 
       userRepositories.some(repo => repo.id === event.repositoryId) &&
       event.notificationSent
     ).length;
+    
+    const totalNotifications = slackMessagesSent + pushEventNotifications;
 
     return {
       activeIntegrations,
@@ -301,39 +310,6 @@ export class DatabaseStorage implements IStorage {
   async createNotification(notification: InsertNotification): Promise<Notification> {
     const result = await db.insert(notifications).values(notification).returning();
     return result[0];
-
-    // try {
-    //   console.log('Database: Creating notification with data:', notification);
-      
-    //   // Test database permissions first
-    //   console.log('Database: Testing permissions - checking if we can read from notifications table');
-    //   const existingNotifications = await db.select().from(notifications).limit(1);
-    //   console.log('Database: Can read from notifications table:', existingNotifications.length, 'existing notifications');
-      
-    //   // Try the insert
-    //   const result = await db.insert(notifications).values(notification).returning();
-    //   console.log('Database: Created notification result:', result);
-      
-    //   // Test: Try to read back the notification we just created
-    //   const createdNotification = result[0];
-    //   if (createdNotification) {
-    //     console.log('Database: Testing readback - fetching notification with ID:', createdNotification.id);
-    //     console.log("Current notifications in database:", await db.select().from(notifications));
-    //     const readback = await db.select().from(notifications).where(eq(notifications.id, createdNotification.id));
-    //     console.log('Database: Readback result:', readback);
-    //   }
-      
-    //   return result[0];
-    // } catch (error: any) {
-    //   console.error('Database: Error creating notification:', error);
-    //   console.error('Database: Error details:', {
-    //     message: error.message,
-    //     code: error.code,
-    //     detail: error.detail,
-    //     hint: error.hint
-    //   });
-    //   throw error;
-    // }
   }
 
   async markNotificationAsRead(id: number): Promise<Notification | undefined> {

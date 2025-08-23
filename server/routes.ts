@@ -18,6 +18,7 @@ import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
   sendPushNotification, 
   sendIntegrationWelcomeMessage,
+  sendSlackMessage,
   getSlackChannels, 
   testSlackConnection,
   generateSlackOAuthUrl,
@@ -28,6 +29,7 @@ import {
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
+import { generateCodeSummary, generateSlackMessage } from './ai';
 
 // Extend global type for notification streams
 declare global {
@@ -683,6 +685,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get push events for repositories
+  app.get("/api/push-events", authenticateToken, requireEmailVerification, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Get user's repositories
+      const userRepositories = await storage.getRepositoriesByUserId(userId);
+      const repositoryIds = userRepositories.map(repo => repo.id);
+
+      if (repositoryIds.length === 0) {
+        return res.json([]);
+      }
+
+      // Get push events for all user's repositories
+      const allPushEvents = [];
+      for (const repositoryId of repositoryIds) {
+        const repoEvents = await storage.getPushEventsByRepositoryId(repositoryId);
+        allPushEvents.push(...repoEvents);
+      }
+
+      // Format events for frontend
+      const formattedEvents = allPushEvents.map((event: any) => ({
+        id: event.id,
+        repositoryId: event.repositoryId,
+        branch: event.branch,
+        commitHash: event.commitSha,
+        commitMessage: event.commitMessage,
+        author: event.author,
+        timestamp: event.pushedAt,
+        eventType: 'push'
+      }));
+
+      res.json(formattedEvents);
+    } catch (error) {
+      console.error("Failed to fetch push events:", error);
+      res.status(500).json({ error: "Failed to fetch push events" });
+    }
+  });
+
   // Connect a repository
   app.post("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
@@ -1096,7 +1140,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...integration,
             repositoryName: repository?.name || 'Unknown Repository',
             lastUsed: integration.createdAt, // Use createdAt as lastUsed
-            status: integration.isActive ? 'active' : 'paused'
+            status: integration.isActive ? 'active' : 'paused',
+            notificationLevel: integration.notificationLevel || 'all',
+            includeCommitSummaries: integration.includeCommitSummaries ?? true
           };
         })
       );
@@ -1118,6 +1164,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
+      }
+
+      // If integration is being activated (unpaused), also activate the repository
+      if (updates.isActive === true && integration.repositoryId) {
+        const repository = await storage.getRepository(integration.repositoryId);
+        if (repository && repository.isActive === false) {
+          await storage.updateRepository(integration.repositoryId, { isActive: true });
+          console.log(`Repository ${repository.name} automatically activated due to integration activation`);
+        }
       }
 
       res.json(integration);
@@ -1254,8 +1309,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process each commit
       for (const commit of commits) {
-        // Store push event
-        await storage.createPushEvent({
+        // Store push event first to get the ID
+        const pushEvent = await storage.createPushEvent({
           repositoryId: storedRepo.id,
           integrationId: integration.id,
           commitSha: commit.id,
@@ -1264,26 +1319,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
           branch,
           pushedAt: new Date(commit.timestamp),
           notificationSent: false,
+          aiSummary: null,
+          aiImpact: null,
+          aiCategory: null,
+          aiDetails: null,
+          aiGenerated: false,
         });
 
-        // Send Slack notification
+        // Generate AI summary for the commit with better file change detection
+        let aiSummary = null;
+        let aiImpact = null;
+        let aiCategory = null;
+        let aiDetails = null;
+        let aiGenerated = false;
+
         try {
-          await sendPushNotification(
-            integration.slackChannelId,
-            repository.full_name,
-            commit.message,
-            commit.author.name,
+          // Get more detailed file change information
+          const filesChanged = [
+            ...(commit.added || []),
+            ...(commit.modified || []),
+            ...(commit.removed || [])
+          ];
+
+          // Calculate total changes from all commits in this push
+          const totalAdditions = commits.reduce((sum: number, c: any) => sum + (c.additions || 0), 0);
+          const totalDeletions = commits.reduce((sum: number, c: any) => sum + (c.deletions || 0), 0);
+
+          const pushData = {
+            repositoryName: repository.full_name,
             branch,
-            commit.id,
-            Boolean(integration.includeCommitSummaries)
-          );
+            commitMessage: commit.message,
+            filesChanged,
+            additions: totalAdditions,
+            deletions: totalDeletions,
+            commitSha: commit.id,
+          };
+
+          const summary = await generateCodeSummary(pushData);
+          aiSummary = summary.summary;
+          aiImpact = summary.impact;
+          aiCategory = summary.category;
+          aiDetails = summary.details;
+          aiGenerated = true;
+
+          console.log(`AI summary generated for commit ${commit.id}:`, summary);
+
+          // Update the push event with AI summary
+          await storage.updatePushEvent(pushEvent.id, {
+            aiSummary,
+            aiImpact,
+            aiCategory,
+            aiDetails,
+            aiGenerated: true,
+          });
+        } catch (aiError) {
+          console.error('Failed to generate AI summary:', aiError);
+          // Continue without AI summary
+        }
+
+        // Send Slack notification with AI summary if available
+        try {
+          if (aiGenerated && aiSummary) {
+            // Use AI-enhanced Slack message
+            const pushData = {
+              repositoryName: repository.full_name,
+              branch,
+              commitMessage: commit.message,
+              filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
+              additions: commit.additions || 0,
+              deletions: commit.deletions || 0,
+              commitSha: commit.id,
+            };
+
+                         const summary = { 
+               summary: aiSummary!, 
+               impact: aiImpact as 'low' | 'medium' | 'high', 
+               category: aiCategory!, 
+               details: aiDetails! 
+             };
+             const slackMessage = await generateSlackMessage(pushData, summary);
+             
+             await sendSlackMessage({
+               channel: integration.slackChannelId,
+               text: slackMessage,
+               unfurl_links: false
+             });
+          } else {
+            // Use regular push notification
+            await sendPushNotification(
+              integration.slackChannelId,
+              repository.full_name,
+              commit.message,
+              commit.author.name,
+              branch,
+              commit.id,
+              Boolean(integration.includeCommitSummaries)
+            );
+          }
 
           // Mark notification as sent
-          const pushEvent = await storage.getPushEvent(commit.id);
-          
-          if (pushEvent) {
-            await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
-          }
+          await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
 
           // Store push notification in database
           await storage.createNotification({

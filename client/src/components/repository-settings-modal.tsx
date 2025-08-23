@@ -141,7 +141,8 @@ export function RepositorySettingsModal({
               <div className="space-y-0.5">
                 <Label htmlFor="repository-active">Repository Active</Label>
                 <p className="text-xs text-steel-gray">
-                  Enable or disable monitoring for this repository. When disabled, no push events will be tracked.
+                  Enable or disable monitoring for this repository. When disabled, no push events will be tracked. 
+                  If you have integrations, unpausing them will automatically activate this repository.
                 </p>
               </div>
               <Switch
@@ -185,6 +186,7 @@ export function RepositorySettingsModal({
               {repository?.isActive === false && (
                 <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
                   <p>⚠️ This repository is currently paused. Enable it above to start monitoring.</p>
+                  <p className="mt-1">💡 <strong>Note:</strong> If you have integrations for this repository, unpausing them on the Integrations page will automatically activate this repository.</p>
                 </div>
               )}
             </div>

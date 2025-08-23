@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -20,6 +20,7 @@ interface Integration {
   slackChannelName: string;
   notificationLevel: string;
   includeCommitSummaries: boolean;
+  isActive?: boolean;
 }
 
 interface IntegrationSettingsModalProps {
@@ -37,6 +38,7 @@ export function IntegrationSettingsModal({
 }: IntegrationSettingsModalProps) {
   const [notificationLevel, setNotificationLevel] = useState(integration?.notificationLevel || 'all');
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
+  const [isActive, setIsActive] = useState(integration?.isActive ?? true);
 
   const handleSave = () => {
     if (!integration) return;
@@ -44,17 +46,30 @@ export function IntegrationSettingsModal({
     updateIntegrationMutation.mutate({
       id: integration.id,
       updates: {
+        isActive,
         notificationLevel,
         includeCommitSummaries,
       },
     });
   };
 
+  // Update local state when integration prop changes
+  React.useEffect(() => {
+    if (integration) {
+      setNotificationLevel(integration.notificationLevel || 'all');
+      setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
+      setIsActive(integration.isActive ?? true);
+    }
+  }, [integration]);
+
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
       // Reset form when closing
-      setNotificationLevel(integration?.notificationLevel || 'all');
-      setIncludeCommitSummaries(integration?.includeCommitSummaries ?? true);
+      if (integration) {
+        setNotificationLevel(integration.notificationLevel || 'all');
+        setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
+        setIsActive(integration.isActive ?? true);
+      }
     }
     onOpenChange(newOpen);
   };
@@ -96,6 +111,21 @@ export function IntegrationSettingsModal({
               </div>
             </div>
             
+            {/* Integration Status */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="integration-active">Integration Active</Label>
+                <p className="text-xs text-steel-gray">
+                  Enable or disable this integration. When disabled, no notifications will be sent to Slack.
+                </p>
+              </div>
+              <Switch
+                id="integration-active"
+                checked={isActive}
+                onCheckedChange={setIsActive}
+              />
+            </div>
+            
             {/* Notification Level */}
             <div className="space-y-2">
               <Label htmlFor="notification-level">Notification Level</Label>
@@ -129,6 +159,29 @@ export function IntegrationSettingsModal({
                 checked={includeCommitSummaries}
                 onCheckedChange={setIncludeCommitSummaries}
               />
+            </div>
+
+            {/* Integration Status Indicator */}
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-graphite">Current Status</p>
+                  <p className="text-xs text-steel-gray">
+                    {isActive ? 'Integration is active and sending notifications' : 'Integration is paused and not sending notifications'}
+                  </p>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-log-green' : 'bg-steel-gray'}`} />
+                  <span className="text-xs text-steel-gray">
+                    {isActive ? 'Active' : 'Paused'}
+                  </span>
+                </div>
+              </div>
+              {!isActive && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                  <p>⚠️ This integration is currently paused. Enable it above to start sending notifications to Slack.</p>
+                </div>
+              )}
             </div>
           </div>
         )}
