@@ -20,14 +20,16 @@ interface Repository {
   id?: number;
   githubId: string;
   name: string;
-  fullName: string;
-  owner: string;
-  branch: string;
-  isActive: boolean;
+  full_name: string; // GitHub API format
+  owner: { login: string }; // GitHub API format
+  default_branch: string; // GitHub API format
+  isActive?: boolean;
   isConnected: boolean;
   pushEvents?: number;
   lastPush?: string;
   private: boolean;
+  // Add other GitHub API fields that might be present
+  [key: string]: any;
 }
 
 interface SlackWorkspace {
@@ -127,12 +129,13 @@ export function IntegrationSetupModal({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/integrations?userId=${currentUserId}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/stats?userId=${currentUserId}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] }); // Also refresh repositories
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       onOpenChange(false);
       toast({
         title: "Integration Created",
-        description: "Your repository is now connected to Slack!",
+        description: "Your repository is now connected to Slack and monitoring has been enabled!",
       });
     },
     onError: (error: any) => {
@@ -235,7 +238,8 @@ export function IntegrationSetupModal({
         <DialogHeader>
           <DialogTitle>Create Integration</DialogTitle>
           <DialogDescription>
-            Connect a repository to a Slack channel to receive push notifications
+            Connect a repository to a Slack channel to receive push notifications. 
+            If you select a paused repository, it will automatically start monitoring when you create the integration.
           </DialogDescription>
         </DialogHeader>
         
@@ -251,11 +255,17 @@ export function IntegrationSetupModal({
                 {repositories
                   .filter(repo => repo.isConnected && repo.id)
                   .map((repo) => {
+                    const isPaused = repo.isActive === false;
                     return (
                       <SelectItem key={repo.id} value={repo.id!.toString()}>
                         <div className="flex items-center space-x-2">
                           <Github className="w-4 h-4" />
                           <span>{repo.name}</span>
+                          {isPaused && (
+                            <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded">
+                              Currently paused
+                            </span>
+                          )}
                         </div>
                       </SelectItem>
                     );

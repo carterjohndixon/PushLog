@@ -1,0 +1,375 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "id": "0006_add_monitor_all_branches",
+  "prevId": "0001_volatile_quasimodo",
+  "tables": {
+    "integrations": {
+      "name": "integrations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "user_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "repositoryId": {
+          "name": "repository_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "slackChannelId": {
+          "name": "slack_channel_id",
+          "type": "text",
+          "notNull": true
+        },
+        "slackChannelName": {
+          "name": "slack_channel_name",
+          "type": "text",
+          "notNull": true
+        },
+        "notificationLevel": {
+          "name": "notification_level",
+          "type": "text",
+          "default": "all"
+        },
+        "includeCommitSummaries": {
+          "name": "include_commit_summaries",
+          "type": "boolean",
+          "default": true
+        },
+        "isActive": {
+          "name": "is_active",
+          "type": "boolean",
+          "default": true
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "user_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text"
+        },
+        "message": {
+          "name": "message",
+          "type": "text",
+          "notNull": true
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "text"
+        },
+        "isRead": {
+          "name": "is_read",
+          "type": "boolean",
+          "default": false
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "oauthSessions": {
+      "name": "oauth_sessions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "notNull": true
+        },
+        "userId": {
+          "name": "user_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "expiresAt": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "pushEvents": {
+      "name": "push_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "repositoryId": {
+          "name": "repository_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "integrationId": {
+          "name": "integration_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "commitSha": {
+          "name": "commit_sha",
+          "type": "text",
+          "notNull": true
+        },
+        "commitMessage": {
+          "name": "commit_message",
+          "type": "text",
+          "notNull": true
+        },
+        "author": {
+          "name": "author",
+          "type": "text",
+          "notNull": true
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "notNull": true
+        },
+        "pushedAt": {
+          "name": "pushed_at",
+          "type": "timestamp",
+          "notNull": true
+        },
+        "notificationSent": {
+          "name": "notification_sent",
+          "type": "boolean",
+          "default": false
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "repositories": {
+      "name": "repositories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "user_id",
+          "type": "type",
+          "notNull": true
+        },
+        "githubId": {
+          "name": "github_id",
+          "type": "text",
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "notNull": true
+        },
+        "fullName": {
+          "name": "full_name",
+          "type": "text",
+          "notNull": true
+        },
+        "owner": {
+          "name": "owner",
+          "type": "text",
+          "notNull": true
+        },
+        "branch": {
+          "name": "branch",
+          "type": "text",
+          "default": "main"
+        },
+        "isActive": {
+          "name": "is_active",
+          "type": "boolean",
+          "default": true
+        },
+        "monitorAllBranches": {
+          "name": "monitor_all_branches",
+          "type": "boolean",
+          "default": false
+        },
+        "webhookId": {
+          "name": "webhook_id",
+          "type": "text"
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "slackWorkspaces": {
+      "name": "slack_workspaces",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "userId": {
+          "name": "user_id",
+          "type": "integer",
+          "notNull": true
+        },
+        "teamId": {
+          "name": "team_id",
+          "type": "text",
+          "notNull": true
+        },
+        "teamName": {
+          "name": "team_name",
+          "type": "text",
+          "notNull": true
+        },
+        "accessToken": {
+          "name": "access_token",
+          "type": "text",
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    },
+    "users": {
+      "name": "users",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text"
+        },
+        "email": {
+          "name": "email",
+          "type": "text"
+        },
+        "password": {
+          "name": "user_id",
+          "type": "text"
+        },
+        "githubId": {
+          "name": "github_id",
+          "type": "text"
+        },
+        "githubToken": {
+          "name": "github_token",
+          "type": "text"
+        },
+        "googleId": {
+          "name": "google_id",
+          "type": "text"
+        },
+        "googleToken": {
+          "name": "google_token",
+          "type": "text"
+        },
+        "slackUserId": {
+          "name": "slack_user_id",
+          "type": "text"
+        },
+        "emailVerified": {
+          "name": "email_verified",
+          "type": "boolean",
+          "notNull": true,
+          "default": false
+        },
+        "verificationToken": {
+          "name": "verification_token",
+          "type": "text"
+        },
+        "verificationTokenExpiry": {
+          "name": "verification_token_expiry",
+          "type": "timestamp"
+        },
+        "resetPasswordToken": {
+          "name": "reset_password_token",
+          "type": "text"
+        },
+        "resetPasswordTokenExpiry": {
+          "name": "reset_password_token_expiry",
+          "type": "timestamp"
+        },
+        "createdAt": {
+          "name": "created_at",
+          "type": "timestamp",
+          "notNull": true,
+          "default": "now()"
+        }
+      }
+    }
+  }
+}

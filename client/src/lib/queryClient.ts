@@ -1,7 +1,20 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Global function to handle token expiration
+function handleTokenExpiration() {
+  console.log('Token expired, redirecting to login');
+  localStorage.removeItem('token');
+  window.location.href = '/login';
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    // Handle 401 Unauthorized globally
+    if (res.status === 401) {
+      handleTokenExpiration();
+      throw new Error('Token expired');
+    }
+    
     const text = await res.text();
     throw new Error(text || res.statusText);
   }
@@ -58,8 +71,13 @@ export const getQueryFn: <T>(options: {
       headers
     });
 
-    if (unauthorizedBehavior === "returnNull" && res.status === 401) {
-      return null;
+    // Handle 401 Unauthorized globally
+    if (res.status === 401) {
+      if (unauthorizedBehavior === "returnNull") {
+        return null;
+      }
+      handleTokenExpiration();
+      throw new Error('Token expired');
     }
 
     await throwIfResNotOk(res);
@@ -72,7 +90,7 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
+      staleTime: 5 * 60 * 1000, // 5 minutes instead of Infinity
       retry: false,
     },
     mutations: {

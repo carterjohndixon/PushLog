@@ -13,8 +13,16 @@ interface Repository {
   id?: number;
   githubId: string;
   name: string;
-  owner: string;
+  full_name: string; // GitHub API format
+  owner: { login: string }; // GitHub API format
+  default_branch: string; // GitHub API format
+  isActive?: boolean;
+  isConnected: boolean;
+  pushEvents?: number;
   lastPush?: string;
+  private: boolean;
+  // Add other GitHub API fields that might be present
+  [key: string]: any;
 }
 
 interface ConfirmRepositoryDeletionModalProps {

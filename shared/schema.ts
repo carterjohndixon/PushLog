@@ -29,6 +29,7 @@ export const repositories = pgTable("repositories", {
   owner: text("owner").notNull(),
   branch: text("branch").default("main"),
   isActive: boolean("is_active").default(true),
+  monitorAllBranches: boolean("monitor_all_branches").default(false),
   webhookId: text("webhook_id"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
@@ -67,6 +68,17 @@ export const slackWorkspaces = pgTable("slack_workspaces", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  type: text("type").notNull(), // 'push_event', 'slack_message_sent', 'email_verification'
+  title: text("title"),
+  message: text("message").notNull(),
+  metadata: text("metadata"), // JSON string for additional data
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -93,6 +105,11 @@ export const insertPushEventSchema = createInsertSchema(pushEvents).omit({
 });
 
 export const insertSlackWorkspaceSchema = createInsertSchema(slackWorkspaces).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
   id: true,
   createdAt: true,
 });
@@ -139,3 +156,5 @@ export type PushEvent = typeof pushEvents.$inferSelect;
 export type InsertPushEvent = z.infer<typeof insertPushEventSchema>;
 export type SlackWorkspace = typeof slackWorkspaces.$inferSelect;
 export type InsertSlackWorkspace = z.infer<typeof insertSlackWorkspaceSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;

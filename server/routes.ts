@@ -1,10 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { z } from "zod";
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { generateToken, verifyToken } from './jwt';
-import { authenticateToken } from './middleware/auth';
+import { authenticateToken, requireEmailVerification } from './middleware/auth';
 import { 
   exchangeCodeForToken, 
   getGitHubUser, 
@@ -17,6 +17,7 @@ import {
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
   sendPushNotification, 
+  sendIntegrationWelcomeMessage,
   getSlackChannels, 
   testSlackConnection,
   generateSlackOAuthUrl,
@@ -27,7 +28,6 @@ import {
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
-import crypto from 'crypto';
 
 // Extend global type for notification streams
 declare global {
@@ -101,7 +101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add GitHub connection initiation endpoint
-  app.get("/api/github/connect", authenticateToken, async (req, res) => {
+  app.get("/api/github/connect", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       // User will be available from authenticateToken middleware
       const userId = req.user?.userId;
@@ -154,7 +154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build the GitHub OAuth URL
       const clientId = process.env.GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://7e6d-32-141-233-130.ngrok-free.app/api/auth/user";
+      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://8081fea9884d.ngrok-free.app/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
@@ -290,8 +290,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Try to find existing user
       let user = await databaseStorage.getUserByEmail(googleUser.email);
-
+      let isNewUser = false;
+      
       if (!user) {
+        isNewUser = true;
+        
         // Generate a unique username from email
         let baseUsername = googleUser.email.split('@')[0];
         let username = baseUsername;
@@ -312,13 +315,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        // Create new user if they don't exist
+        // Generate email verification token for new Google users
+        const verificationToken = crypto.randomBytes(32).toString('hex');
+        const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+        // Create new user if they don't exist (unverified initially)
         user = await databaseStorage.createUser({
           username: username, // Use the unique username we generated
           email: googleUser.email,
           googleId: googleUser.id,
           googleToken: token,
+          emailVerified: false, // Google OAuth users still need to verify email
+          verificationToken,
+          verificationTokenExpiry: verificationTokenExpiry.toISOString(),
         });
+
+        // Send verification email for new Google OAuth users
+        try {
+          await sendVerificationEmail(googleUser.email, verificationToken);
+          
+          // Create notification for email verification
+          try {
+            await storage.createNotification({
+              userId: user.id,
+              type: 'email_verification',
+              title: 'Email Verification Required',
+              message: 'Please check your email and verify your address to access all features'
+            });
+          } catch (notificationError) {
+            console.error('Failed to create verification notification:', notificationError);
+          }
+        } catch (emailError) {
+          console.error('Failed to send verification email to Google OAuth user:', emailError);
+          // Don't fail the OAuth flow if email sending fails
+        }
       } else {
         // Update existing user's Google token
         user = await databaseStorage.updateUser(user.id, {
@@ -474,6 +504,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         verificationTokenExpiry: null
       });
 
+      // Remove any existing email verification notifications
+      try {
+        const existingNotifications = await storage.getNotificationsByUserId(user.id);
+        const emailVerificationNotifications = existingNotifications.filter(n => n.type === 'email_verification');
+        
+        for (const notification of emailVerificationNotifications) {
+          await storage.deleteNotification(notification.id);
+        }
+      } catch (notificationError) {
+        console.error("Error removing email verification notifications:", notificationError);
+        // Don't fail the verification process if notification cleanup fails
+      }
+
       // Generate new JWT with emailVerified: true
       const newToken = generateToken({
         userId: user.id,
@@ -495,6 +538,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Resend verification email
+  app.post("/api/resend-verification", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (user.emailVerified) {
+        return res.status(400).json({ error: "Email is already verified" });
+      }
+
+      if (!user.email) {
+        return res.status(400).json({ error: "No email address associated with account" });
+      }
+
+      // Generate new verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      // Update user with new verification token
+      await databaseStorage.updateUser(userId, {
+        verificationToken,
+        verificationTokenExpiry: verificationTokenExpiry.toISOString()
+      });
+
+      // Send verification email
+      await sendVerificationEmail(user.email, verificationToken);
+
+      // Create notification for resend email
+      console.log(`Creating notification for user ${userId}`);
+      let notification;
+      try {
+        const notificationData = {
+          userId,
+          type: 'email_verification',
+          title: 'Verification Email Resent',
+          message: 'A new verification email has been sent to your inbox.'
+        };
+        console.log('Notification data being sent to database:', notificationData);
+        notification = await storage.createNotification(notificationData);
+        console.log('Created notification:', notification);
+      } catch (error) {
+        console.error('Error creating notification:', error);
+        return res.status(500).json({ error: "Failed to create notification" });
+      }
+
+      // Broadcast the notification via SSE for real-time updates
+      broadcastNotification(userId, notification);
+
+      res.status(200).json({
+        success: true,
+        message: "Verification email sent successfully"
+      });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      res.status(500).json({ error: "Failed to send verification email" });
+    }
+  });
+
   // Add logout route
   app.post("/api/logout", (req, res) => {
     req.session.destroy((err) => {
@@ -506,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user repositories
-  app.get("/api/repositories", authenticateToken, async (req, res) => {
+  app.get("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
       if (!userId) {
@@ -558,7 +666,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...repo,
             githubId: repo.id.toString(), // Always include the GitHub ID
             id: connectedRepo?.id, // Include the internal database ID if connected
-            isConnected: !!connectedRepo
+            isConnected: !!connectedRepo,
+            isActive: connectedRepo?.isActive ?? true, // Include the isActive field from database
+            monitorAllBranches: connectedRepo?.monitorAllBranches ?? false // Include the monitorAllBranches field from database
           };
         });
 
@@ -574,7 +684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Connect a repository
-  app.post("/api/repositories", async (req, res) => {
+  app.post("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       console.log('Repository connection request:', {
         body: req.body,
@@ -584,16 +694,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      const schema = insertRepositorySchema.extend({
-        userId: z.number(),
-      });
+      const schema = insertRepositorySchema;
 
       const validatedData = schema.parse(req.body);
       
       // Log storage type
       console.log('Using database storage');
       
-      const user = await storage.getUser(validatedData.userId);
+      const user = await storage.getUser(req.user!.userId);
 
       console.log('Connecting repository for user:', {
         userId: validatedData.userId,
@@ -612,7 +720,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create webhook URL
-      const domain = process.env.APP_URL || "https://7e6d-32-141-233-130.ngrok-free.app";
+      const domain = process.env.APP_URL || "https://8081fea9884d.ngrok-free.app";
       const webhookUrl = `${domain}/api/webhooks/github`;
       console.log(`github webhookURL: ${webhookUrl}`)
 
@@ -660,6 +768,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const repository = await storage.createRepository({
           ...validatedData,
+          userId: req.user!.userId,
           webhookId: webhook.id.toString(),
         });
 
@@ -671,7 +780,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const errorMessage = webhookError instanceof Error ? webhookError.message : "Unknown error occurred";
         
         // Still create the repository without webhook, but inform the user
-        const repository = await storage.createRepository(validatedData);
+        const repository = await storage.createRepository({
+          ...validatedData,
+          userId: req.user!.userId,
+        });
         res.json({
           ...repository,
           warning: `Repository connected but webhook creation failed: ${errorMessage}. Push notifications will not work until webhooks are configured. You may need to reconnect your GitHub account to get updated permissions.`
@@ -683,14 +795,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get Slack channels
-  app.get("/api/slack/channels", async (req, res) => {
+  // Update repository
+  app.patch("/api/repositories/:id", authenticateToken, async (req, res) => {
     try {
-      const channels = await getSlackChannels();
-      res.json(channels);
+      const repositoryId = parseInt(req.params.id);
+      const updates = req.body;
+      
+      const repository = await storage.updateRepository(repositoryId, updates);
+      
+      if (!repository) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
+
+      // If repository isActive status is being updated, also update related integrations
+      if (updates.hasOwnProperty('isActive')) {
+        // Get all integrations for this user and filter by repository ID
+        const userId = req.user?.userId;
+        if (userId) {
+          const userIntegrations = await storage.getIntegrationsByUserId(userId);
+          const relatedIntegrations = userIntegrations.filter(integration => integration.repositoryId === repositoryId);
+          
+          // Update all integrations for this repository to match the repository's active status
+          for (const integration of relatedIntegrations) {
+            await storage.updateIntegration(integration.id, {
+              isActive: updates.isActive
+            });
+          }
+        }
+      }
+
+      res.json(repository);
     } catch (error) {
-      console.error("Error fetching Slack channels:", error);
-      res.status(500).json({ error: "Failed to fetch Slack channels" });
+      console.error("Error updating repository:", error);
+      res.status(500).json({ error: "Failed to update repository" });
+    }
+  });
+
+  // Disconnect a repository
+  app.delete("/api/repositories/:id", async (req, res) => {
+    try {
+      const repositoryId = parseInt(req.params.id);
+      const repository = await storage.getRepository(repositoryId);
+      
+      if (!repository) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
+
+      const user = await storage.getUser(repository.userId);
+      
+      if (user && user.githubToken && repository.webhookId) {
+        try {
+          await deleteWebhook(
+            user.githubToken,
+            repository.owner,
+            repository.name,
+            repository.webhookId
+          );
+        } catch (webhookError) {
+          console.error("Failed to delete webhook:", webhookError);
+        }
+      }
+
+      await storage.deleteRepository(repositoryId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error disconnecting repository:", error);
+      res.status(500).json({ error: "Failed to disconnect repository" });
     }
   });
 
@@ -706,7 +876,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add Slack connection initiation endpoint
-  app.get("/api/slack/connect", authenticateToken, async (req, res) => {
+  app.get("/api/slack/connect", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
       
@@ -792,7 +962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user's Slack workspaces
-  app.get("/api/slack/workspaces", authenticateToken, async (req, res) => {
+  app.get("/api/slack/workspaces", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
       
@@ -809,7 +979,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get channels for a specific workspace
-  app.get("/api/slack/workspaces/:workspaceId/channels", authenticateToken, async (req, res) => {
+  app.get("/api/slack/workspaces/:workspaceId/channels", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
       const workspaceId = parseInt(req.params.workspaceId);
@@ -833,10 +1003,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create integration
-  app.post("/api/integrations", async (req, res) => {
+  app.post("/api/integrations", authenticateToken, async (req, res) => {
     try {
+      const userId = req.user!.userId;
       const validatedData = insertIntegrationSchema.parse(req.body);
-      const integration = await storage.createIntegration(validatedData);
+      
+      // Auto-enable the repository when creating an integration
+      // This makes sense because if someone is creating an integration, they want to monitor the repository
+      const repository = await storage.getRepository(validatedData.repositoryId);
+      if (repository && repository.isActive === false) {
+        await storage.updateRepository(validatedData.repositoryId, { isActive: true });
+      }
+      
+      const integration = await storage.createIntegration({
+        ...validatedData,
+        userId: userId
+      });
+      
+      // Send welcome message to Slack if integration is active
+      if (integration.isActive) {
+        try {
+          // Get repository info for the welcome message (get fresh data after update)
+          const updatedRepository = await storage.getRepository(integration.repositoryId);
+          
+          if (updatedRepository) {
+            await sendIntegrationWelcomeMessage(
+              integration.slackChannelId,
+              updatedRepository.name,
+              integration.slackChannelName
+            );
+            
+            // Store notification in database
+            await storage.createNotification({
+              userId: integration.userId,
+              type: 'slack_message_sent',
+              title: 'Slack Message Sent',
+              message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`
+            });
+            
+            // Also broadcast via SSE for real-time updates
+            broadcastNotification(integration.userId, {
+              type: 'slack_message_sent',
+              title: 'Slack Message Sent',
+              message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`,
+              createdAt: new Date().toISOString()
+            });
+          }
+        } catch (slackError) {
+          console.error("Failed to send welcome message:", slackError);
+          // Don't fail the integration creation if Slack message fails
+        }
+      }
+      
       res.json(integration);
     } catch (error) {
       console.error("Error creating integration:", error);
@@ -844,19 +1062,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user integrations
-  app.get("/api/integrations", async (req, res) => {
+  // Get user stats
+  app.get("/api/stats", authenticateToken, async (req, res) => {
     try {
-      const userId = req.query.userId as string;
-      
-      if (!userId) {
-        return res.status(400).json({ error: "User ID required" });
-      }
+      const userId = req.user!.userId;
+      const stats = await storage.getStatsForUser(userId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching stats:", error);
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
 
-      const integrations = await storage.getIntegrationsByUserId(parseInt(userId));
-      
-      // Debug: Log all repositories
-      const allRepositories = await storage.getRepositoriesByUserId(parseInt(userId));
+  // Get user integrations
+  app.get("/api/integrations", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+
+      const integrations = await storage.getIntegrationsByUserId(userId);
       
       // Enrich integrations with repository names
       const enrichedIntegrations = await Promise.all(
@@ -872,6 +1095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return {
             ...integration,
             repositoryName: repository?.name || 'Unknown Repository',
+            lastUsed: integration.createdAt, // Use createdAt as lastUsed
             status: integration.isActive ? 'active' : 'paused'
           };
         })
@@ -885,7 +1109,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update integration
-  app.patch("/api/integrations/:id", async (req, res) => {
+  app.patch("/api/integrations/:id", authenticateToken, async (req, res) => {
     try {
       const integrationId = parseInt(req.params.id);
       const updates = req.body;
@@ -1061,14 +1285,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
           }
 
-          // Broadcast notification to connected clients
-          const notification = {
+          // Store push notification in database
+          await storage.createNotification({
+            userId: storedRepo.userId,
+            type: 'push_event',
+            title: 'New Push Event',
+            message: `New push to ${repository.name} by ${commit.author.name}`
+          });
+          
+          // Store Slack notification in database
+          await storage.createNotification({
+            userId: storedRepo.userId,
+            type: 'slack_message_sent',
+            title: 'Slack Message Sent',
+            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`
+          });
+          
+          // Also broadcast via SSE for real-time updates
+          const pushNotification = {
             id: `push_${pushEvent?.id || Date.now()}`,
             type: 'push_event',
+            title: 'New Push Event',
             message: `New push to ${repository.name} by ${commit.author.name}`,
             createdAt: new Date().toISOString()
           };
-          broadcastNotification(storedRepo.userId, notification);
+          broadcastNotification(storedRepo.userId, pushNotification);
+          
+          const slackNotification = {
+            id: `slack_${pushEvent?.id || Date.now()}`,
+            type: 'slack_message_sent',
+            title: 'Slack Message Sent',
+            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
+            createdAt: new Date().toISOString()
+          };
+          broadcastNotification(storedRepo.userId, slackNotification);
         } catch (slackError) {
           console.error("Failed to send Slack notification:", slackError);
         }
@@ -1120,8 +1370,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           id: user.id,
           username: user.username || '',
           email: user.email || null,
-          isUsernameSet: true,
-          verifiedEmail: true,
+          isUsernameSet: !!user.username,
+          emailVerified: !!user.emailVerified,
           githubConnected
         }
       });
@@ -1136,39 +1386,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.userId;
       
-      // Get user's repositories
-      const repositories = await storage.getRepositoriesByUserId(userId);
+      // Get unread notifications from database
+      const unreadNotifications = await storage.getUnreadNotificationsByUserId(userId);
       
-      // Get user's email verification status
+      // Get user's email verification status from JWT token first, fallback to database
+      const jwtEmailVerified = req.user!.emailVerified;
       const user = await databaseStorage.getUserById(userId);
       if (!user) {
         throw new Error("User not found");
       }
 
-      // Get unread push event notifications
-      const pushNotifications = (await Promise.all(
-        repositories.map(async (repo) => {
-          const events = await storage.getPushEventsByRepositoryId(repo.id);
-          return events
-            .filter(event => !event.notificationSent)
-            .map(event => ({
-              id: `push_${event.id}`,
-              type: 'push_event',
-              message: `New push to ${repo.name} by ${event.author}`,
-              createdAt: new Date(event.pushedAt).toISOString()
-            }));
-        })
-      )).flat();
+
 
       // Add email verification notification if needed and user was created via regular signup
-      const notifications = [...pushNotifications];
-      if (!user.emailVerified && !user.githubId && !user.googleId) {
-        notifications.unshift({
-          id: `email_${userId}`,
-          type: 'email_verification',
-          message: 'Please verify your email address to fully activate your account',
-          createdAt: new Date(user.createdAt || Date.now()).toISOString()
-        });
+      // Use JWT token status as it's more up-to-date than database
+      let notifications = [...unreadNotifications];
+      
+      if (jwtEmailVerified) {
+        // User is verified - remove only "Email Verification Required" notifications
+        // Keep other email verification notifications like "Verification Email Resent"
+        const requiredEmailNotifications = notifications.filter(n => 
+          n.type === 'email_verification' && 
+          n.title === 'Email Verification Required'
+        );
+        
+        for (const notification of requiredEmailNotifications) {
+          try {
+            await storage.deleteNotification(notification.id);
+          } catch (error) {
+            console.error('Error deleting required email verification notification:', error);
+          }
+        }
+        
+        // Filter out only the required email verification notifications from the response
+        notifications = notifications.filter(n => 
+          !(n.type === 'email_verification' && n.title === 'Email Verification Required')
+        );
+      } else if (!user.githubId && !user.googleId) {
+        // User is not verified and signed up via regular signup
+        const emailNotificationExists = unreadNotifications.some(n => n.type === 'email_verification');
+        if (!emailNotificationExists) {
+          const emailNotification = await storage.createNotification({
+            userId,
+            type: 'email_verification',
+            title: 'Email Verification Required',
+            message: 'Please verify your email address to fully activate your account'
+          });
+          notifications.unshift(emailNotification);
+        }
       }
 
       res.json({
@@ -1178,6 +1443,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching unread notifications:", error);
       res.status(500).json({ error: "Failed to fetch unread notifications" });
+    }
+  });
+
+  // Get all notifications (both sent and unsent)
+  app.get("/api/notifications/all", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      
+      // Get all notifications from database
+      const allNotifications = await storage.getNotificationsByUserId(userId);
+      
+      // Get user's email verification status from JWT token first, fallback to database
+      const jwtEmailVerified = req.user!.emailVerified;
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) {
+        throw new Error("User not found");
+      }
+      // Add email verification notification if needed and user was created via regular signup
+      // Use JWT token status as it's more up-to-date than database
+      let notifications = [...allNotifications];
+      
+      if (jwtEmailVerified) {
+        // User is verified - remove only "Email Verification Required" notifications
+        // Keep other email verification notifications like "Verification Email Resent"
+        const requiredEmailNotifications = notifications.filter(n => 
+          n.type === 'email_verification' && 
+          n.title === 'Email Verification Required'
+        );
+        
+        for (const notification of requiredEmailNotifications) {
+          try {
+            await storage.deleteNotification(notification.id);
+          } catch (error) {
+            console.error('Error deleting required email verification notification:', error);
+          }
+        }
+        
+        // Filter out only the required email verification notifications from the response
+        notifications = notifications.filter(n => 
+          !(n.type === 'email_verification' && n.title === 'Email Verification Required')
+        );
+      } else if (!user.githubId && !user.googleId) {
+        // User is not verified and signed up via regular signup
+        const emailNotificationExists = allNotifications.some(n => n.type === 'email_verification');
+        if (!emailNotificationExists) {
+          const emailNotification = await storage.createNotification({
+            userId,
+            type: 'email_verification',
+            title: 'Email Verification Required',
+            message: 'Please verify your email address to fully activate your account'
+          });
+          notifications.unshift(emailNotification);
+        }
+      }
+
+      // Sort notifications by createdAt (newest first)
+      notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      res.json({
+        count: notifications.length,
+        notifications
+      });
+    } catch (error) {
+      console.error("Error fetching all notifications:", error);
+      res.status(500).json({ error: "Failed to fetch all notifications" });
+    }
+  });
+
+  // Mark all notifications as read
+  app.post("/api/notifications/mark-read", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      await storage.markAllNotificationsAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notifications as read:", error);
+      res.status(500).json({ error: "Failed to mark notifications as read" });
+    }
+  });
+
+  // Delete a specific notification
+  app.delete("/api/notifications/:id", authenticateToken, async (req, res) => {
+    try {
+      const notificationId = parseInt(req.params.id);
+      const success = await storage.deleteNotification(notificationId);
+      if (success) {
+        res.json({ success: true });
+      } else {
+        res.status(404).json({ error: "Notification not found" });
+      }
+    } catch (error) {
+      console.error("Error deleting notification:", error);
+      res.status(500).json({ error: "Failed to delete notification" });
+    }
+  });
+
+  // Clear all notifications for a user
+  app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      await storage.deleteAllNotifications(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
+      res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
 

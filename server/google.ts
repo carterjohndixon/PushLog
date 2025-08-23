@@ -60,7 +60,6 @@ export async function getGoogleUser(accessToken: string): Promise<GoogleUser> {
   }
 
   const userData = await response.json();
-  console.log('Google User Data:', userData);
 
   return userData;
 } 

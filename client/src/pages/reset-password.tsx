@@ -3,19 +3,63 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EyeIcon, EyeOffIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
+interface PasswordRequirement {
+  name: string;
+  regex: RegExp;
+  message: string;
+}
+
+const passwordRequirements: PasswordRequirement[] = [
+  {
+    name: "minLength",
+    regex: /.{8,}/,
+    message: "At least 8 characters"
+  },
+  {
+    name: "hasUpperCase",
+    regex: /[A-Z]/,
+    message: "One uppercase letter"
+  },
+  {
+    name: "hasLowerCase",
+    regex: /[a-z]/,
+    message: "One lowercase letter"
+  },
+  {
+    name: "hasNumber",
+    regex: /[0-9]/,
+    message: "One number"
+  },
+  {
+    name: "hasSpecialChar",
+    regex: /[!@#$%^&*(),.?":{}|<>]/,
+    message: "One special character"
+  }
+];
+
 export default function ResetPassword() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [showPassword, setShowPassword] = React.useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = React.useState(false);
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordFocused, setPasswordFocused] = React.useState(false);
+
+  const passwordStrength = React.useMemo(() => {
+    return passwordRequirements.map(req => ({
+      ...req,
+      isMet: req.regex.test(password)
+    }));
+  }, [password]);
+
+  const isPasswordValid = passwordStrength.every(req => req.isMet);
+  const doPasswordsMatch = password === confirmPassword && password !== "";
 
   const resetPasswordMutation = useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
@@ -50,6 +94,15 @@ export default function ResetPassword() {
       toast({
         title: "Missing Fields",
         description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!isPasswordValid) {
+      toast({
+        title: "Invalid Password",
+        description: "Please meet all password requirements.",
         variant: "destructive",
       });
       return;
@@ -90,39 +143,76 @@ export default function ResetPassword() {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-gray-50 shadow-lg rounded-xl p-6 space-y-4">
-          <div className="relative">
+          <div className="mb-6 space-y-2">
             <Label htmlFor="password" className="text-graphite">New Password</Label>
-            <Input 
-              onChange={(e) => setPassword(e.target.value)} 
-              type={showPassword ? "text" : "password"} 
-              id="password" 
-              placeholder="••••••••" 
-              required 
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(prev => !prev)}
-              className="absolute right-2 top-[70%] transform -translate-y-1/2 text-graphite hover:text-black"
-            >
-              {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-            </button>
+            <div className="relative">
+              <Input 
+                onChange={(e) => setPassword(e.target.value)} 
+                onFocus={() => setPasswordFocused(true)}
+                onBlur={() => setPasswordFocused(false)}
+                type={showPassword ? "text" : "password"} 
+                id="password" 
+                placeholder="••••••••" 
+                required 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-graphite hover:text-black"
+              >
+                {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
+            
+            {/* Password requirements list */}
+            <div className={`space-y-2 text-sm transition-all duration-200 ${passwordFocused || password ? 'opacity-100 max-h-40' : 'opacity-0 max-h-0 overflow-hidden'}`}>
+              {passwordStrength.map((requirement) => (
+                <div key={requirement.name} className="flex items-center space-x-2">
+                  {requirement.isMet ? (
+                    <Check className="w-4 h-4 text-green-500" />
+                  ) : (
+                    <X className="w-4 h-4 text-red-500" />
+                  )}
+                  <span className={requirement.isMet ? "text-green-700" : "text-red-700"}>
+                    {requirement.message}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="relative">
+
+          <div className="mb-6 space-y-2">
             <Label htmlFor="confirmPassword" className="text-graphite">Confirm New Password</Label>
-            <Input 
-              onChange={(e) => setConfirmPassword(e.target.value)} 
-              type={showConfirmPassword ? "text" : "password"} 
-              id="confirmPassword" 
-              placeholder="••••••••" 
-              required 
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(prev => !prev)}
-              className="absolute right-2 top-[70%] transform -translate-y-1/2 text-graphite hover:text-black"
-            >
-              {showConfirmPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
-            </button>
+            <div className="relative">
+              <Input 
+                onChange={(e) => setConfirmPassword(e.target.value)} 
+                type={showPassword ? "text" : "password"}
+                id="confirmPassword" 
+                placeholder="••••••••" 
+                required 
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(prev => !prev)}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-graphite hover:text-black"
+              >
+                {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              </button>
+            </div>
+            
+            {/* Password match indicator */}
+            {confirmPassword && (
+              <div className="flex items-center space-x-2 text-sm">
+                {doPasswordsMatch ? (
+                  <Check className="w-4 h-4 text-green-500" />
+                ) : (
+                  <X className="w-4 h-4 text-red-500" />
+                )}
+                <span className={doPasswordsMatch ? "text-green-700" : "text-red-700"}>
+                  {doPasswordsMatch ? "Passwords match" : "Passwords don't match"}
+                </span>
+              </div>
+            )}
           </div>
           <Button 
             type="submit"

@@ -1,14 +1,49 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  pageName?: string;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+// Token validation function with countdown
+function validateTokenWithCountdown() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expirationTime = payload.exp * 1000;
+    const currentTime = Date.now();
+    const timeRemaining = expirationTime - currentTime;
+    
+    if (timeRemaining > 0) {
+      // If token will expire in the next 5 minutes, redirect
+      if (timeRemaining <= 300000) {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+        return false;
+      }
+      return true;
+    } else {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+      return false;
+    }
+  } catch (error) {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+    return false;
+  }
+}
+
+export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,12 +65,13 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       return;
     }
 
-    // Verify token is valid
+    // Verify token is valid and get user profile
     apiRequest("GET", "/api/profile")
       .then(response => response.json())
       .then(data => {
         if (data.success) {
           setIsAuthenticated(true);
+          setUserProfile(data.user || data); // Store the profile data
         } else {
           localStorage.removeItem('token');
           setLocation('/login');
@@ -50,6 +86,22 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       });
   }, [setLocation]);
 
+  // Add token validation with countdown (runs every 2 seconds)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const interval = setInterval(() => {
+      validateTokenWithCountdown();
+    }, 2 * 1000);
+
+    // Run validation immediately
+    validateTokenWithCountdown();
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
@@ -60,7 +112,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-graphite mb-2">
-                Loading Dashboard...
+                Loading {pageName}...
               </h3>
               <p className="text-sm text-steel-gray">
                 Please wait while we load your data.
@@ -72,5 +124,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  return isAuthenticated ? <>{children}</> : null;
+  return isAuthenticated ? (
+    <>
+      {React.cloneElement(children as React.ReactElement, { userProfile })}
+    </>
+  ) : null;
 } 
