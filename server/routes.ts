@@ -1309,7 +1309,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Process each commit
       for (const commit of commits) {
-        // Generate AI summary for the commit
+        // Store push event first to get the ID
+        const pushEvent = await storage.createPushEvent({
+          repositoryId: storedRepo.id,
+          integrationId: integration.id,
+          commitSha: commit.id,
+          commitMessage: commit.message,
+          author: commit.author.name,
+          branch,
+          pushedAt: new Date(commit.timestamp),
+          notificationSent: false,
+          aiSummary: null,
+          aiImpact: null,
+          aiCategory: null,
+          aiDetails: null,
+          aiGenerated: false,
+        });
+
+        // Generate AI summary for the commit with better file change detection
         let aiSummary = null;
         let aiImpact = null;
         let aiCategory = null;
@@ -1317,14 +1334,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let aiGenerated = false;
 
         try {
-          // Only generate AI summary if user has AI features enabled (we'll add this check later)
+          // Get more detailed file change information
+          const filesChanged = [
+            ...(commit.added || []),
+            ...(commit.modified || []),
+            ...(commit.removed || [])
+          ];
+
+          // Calculate total changes from all commits in this push
+          const totalAdditions = commits.reduce((sum: number, c: any) => sum + (c.additions || 0), 0);
+          const totalDeletions = commits.reduce((sum: number, c: any) => sum + (c.deletions || 0), 0);
+
           const pushData = {
             repositoryName: repository.full_name,
             branch,
             commitMessage: commit.message,
-            filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
-            additions: commit.additions || 0,
-            deletions: commit.deletions || 0,
+            filesChanged,
+            additions: totalAdditions,
+            deletions: totalDeletions,
             commitSha: commit.id,
           };
 
@@ -1336,27 +1363,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiGenerated = true;
 
           console.log(`AI summary generated for commit ${commit.id}:`, summary);
+
+          // Update the push event with AI summary
+          await storage.updatePushEvent(pushEvent.id, {
+            aiSummary,
+            aiImpact,
+            aiCategory,
+            aiDetails,
+            aiGenerated: true,
+          });
         } catch (aiError) {
           console.error('Failed to generate AI summary:', aiError);
           // Continue without AI summary
         }
-
-        // Store push event with AI summary
-        await storage.createPushEvent({
-          repositoryId: storedRepo.id,
-          integrationId: integration.id,
-          commitSha: commit.id,
-          commitMessage: commit.message,
-          author: commit.author.name,
-          branch,
-          pushedAt: new Date(commit.timestamp),
-          notificationSent: false,
-          aiSummary,
-          aiImpact,
-          aiCategory,
-          aiDetails,
-          aiGenerated,
-        });
 
         // Send Slack notification with AI summary if available
         try {
@@ -1399,11 +1418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Mark notification as sent
-          const pushEvent = await storage.getPushEvent(commit.id);
-          
-          if (pushEvent) {
-            await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
-          }
+          await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
 
           // Store push notification in database
           await storage.createNotification({

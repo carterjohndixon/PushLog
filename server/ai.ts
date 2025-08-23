@@ -92,25 +92,25 @@ Respond with only valid JSON:
 
 export async function generateSlackMessage(pushData: PushEventData, summary: CodeSummary): Promise<string> {
   const impactEmoji = {
-    low: '🟢',
-    medium: '🟡', 
-    high: '🔴'
+    low: ':large_green_circle:',
+    medium: ':large_yellow_circle:', 
+    high: ':red_circle:'
   };
 
-  const categoryEmoji = {
-    feature: '✨',
-    bugfix: '🐛',
-    refactor: '🔧',
-    docs: '📚',
-    test: '🧪',
-    other: '📝'
+  const categoryEmoji: Record<string, string> = {
+    feature: ':sparkles:',
+    bugfix: ':bug:',
+    refactor: ':wrench:',
+    docs: ':books:',
+    test: ':test_tube:',
+    other: ':memo:'
   };
 
   return `*${pushData.repositoryName}* - ${pushData.branch} branch
 
 ${impactEmoji[summary.impact]} *${summary.summary}*
 
-${categoryEmoji[summary.category]} **${summary.category.toUpperCase()}** | 📊 +${pushData.additions} -${pushData.deletions} lines
+${categoryEmoji[summary.category]} **${summary.category.toUpperCase()}** | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
 ${summary.details}
 
 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
