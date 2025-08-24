@@ -1509,6 +1509,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiCategory = null;
       let aiDetails = null;
       let aiGenerated = false;
+      let finalAdditions = commit.additions || 0;
+      let finalDeletions = commit.deletions || 0;
 
       try {
         // Get more detailed file change information
@@ -1551,9 +1553,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
             if (githubResponse.ok) {
               const commitData = await githubResponse.json();
-              additions = commitData.stats?.additions || 0;
-              deletions = commitData.stats?.deletions || 0;
-              console.log(`✅ Fetched diff stats from GitHub API: +${additions} -${deletions}`);
+              finalAdditions = commitData.stats?.additions || 0;
+              finalDeletions = commitData.stats?.deletions || 0;
+              console.log(`✅ Fetched diff stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
               console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
             } else {
               const errorText = await githubResponse.text();
@@ -1599,19 +1601,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without AI summary
       }
 
-      // Send Slack notification with AI summary if available
-      try {
-        if (aiGenerated && aiSummary) {
-          // Use AI-enhanced Slack message
-          const pushData = {
-            repositoryName: repository.full_name,
-            branch,
-            commitMessage: commit.message,
-            filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
-            additions: commit.additions || 0,
-            deletions: commit.deletions || 0,
-            commitSha: commit.id,
-          };
+              // Send Slack notification with AI summary if available
+        try {
+          if (aiGenerated && aiSummary) {
+            // Use AI-enhanced Slack message with corrected stats
+            const pushData = {
+              repositoryName: repository.full_name,
+              branch,
+              commitMessage: commit.message,
+              filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
+              additions: finalAdditions, // Use the corrected GitHub API data
+              deletions: finalDeletions, // Use the corrected GitHub API data
+              commitSha: commit.id,
+            };
 
           const summary = { 
             summary: aiSummary!, 
