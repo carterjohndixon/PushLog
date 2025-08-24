@@ -1386,10 +1386,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: "Pull request not merged, skipping" });
       }
       
-      // Only process PRs that merge to main/master branch
-      if (pull_request.base.ref !== 'main' && pull_request.base.ref !== 'master') {
-        return res.status(200).json({ message: `PR merged to ${pull_request.base.ref} branch ignored, only processing main/master` });
-      }
+      // Extract branch name from PR base branch
+      const branch = pull_request.base.ref;
       
       // For merged PR, we'll process the merge commit
       const mergeCommit = pull_request.merge_commit_sha;
@@ -1428,13 +1426,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: "Integration not active" });
       }
 
-      // Extract branch name from PR base branch
-      const branch = pull_request.base.ref;
-      
-      // Check notification level
-      if (integration.notificationLevel === 'main_only' && branch !== storedRepo.branch) {
-        return res.status(200).json({ message: "Branch filtered out" });
+      // Check notification level before processing
+      if (integration.notificationLevel === 'main_only') {
+        // Only process PRs that merge to main/master branch
+        if (branch !== 'main' && branch !== 'master') {
+          return res.status(200).json({ message: `PR merged to ${branch} branch ignored due to 'main_only' notification level` });
+        }
       }
+      // If notificationLevel is 'all', process PRs to any branch
 
       // Process the single merge commit
       const commit = processCommit;
