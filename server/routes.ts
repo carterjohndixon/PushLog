@@ -1373,42 +1373,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid signature" });
       }
 
-      // Handle both push and pull_request events
-      const { repository, commits, ref, pusher, pull_request, action } = req.body;
+      // Only process pull_request events, specifically when PRs are merged to main
+      const { repository, pull_request, action } = req.body;
       
-      // For pull_request events, only process when PR is merged
-      if (pull_request) {
-        if (action !== 'closed' || !pull_request.merged) {
-          return res.status(200).json({ message: "Pull request not merged, skipping" });
-        }
-        
-        // For merged PR, we'll process the merge commit
-        const mergeCommit = pull_request.merge_commit_sha;
-        if (!mergeCommit) {
-          return res.status(200).json({ message: "No merge commit found" });
-        }
-        
-        // Create a commits array from the PR data
-        const prCommits = [{
-          id: mergeCommit,
-          message: pull_request.title,
-          author: { name: pull_request.user.login },
-          timestamp: pull_request.merged_at,
-          added: [],
-          modified: [],
-          removed: [],
-          additions: pull_request.additions || 0,
-          deletions: pull_request.deletions || 0
-        }];
-        
-        // Override variables for PR processing
-        req.body.commits = prCommits;
-        req.body.ref = `refs/heads/${pull_request.base.ref}`;
+      // Check if this is a pull_request event
+      if (!pull_request) {
+        return res.status(200).json({ message: "Not a pull request event, skipping" });
       }
       
-      const processCommits = req.body.commits;
-      if (!repository || !processCommits || processCommits.length === 0) {
-        return res.status(200).json({ message: "No commits to process" });
+      // Only process when PR is merged (not just closed)
+      if (action !== 'closed' || !pull_request.merged) {
+        return res.status(200).json({ message: "Pull request not merged, skipping" });
+      }
+      
+      // Only process PRs that merge to main/master branch
+      if (pull_request.base.ref !== 'main' && pull_request.base.ref !== 'master') {
+        return res.status(200).json({ message: `PR merged to ${pull_request.base.ref} branch ignored, only processing main/master` });
+      }
+      
+      // For merged PR, we'll process the merge commit
+      const mergeCommit = pull_request.merge_commit_sha;
+      if (!mergeCommit) {
+        return res.status(200).json({ message: "No merge commit found" });
+      }
+      
+      // Create a single commit object from the PR data
+      const processCommit = {
+        id: mergeCommit,
+        message: pull_request.title,
+        author: { name: pull_request.user.login },
+        timestamp: pull_request.merged_at,
+        added: [],
+        modified: [],
+        removed: [],
+        additions: pull_request.additions || 0,
+        deletions: pull_request.deletions || 0
+      };
+      
+      if (!repository) {
+        return res.status(200).json({ message: "No repository information found" });
       }
 
       // Find the repository in our database
@@ -1425,209 +1428,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: "Integration not active" });
       }
 
-      // Extract branch name from ref
-      const branch = ref.replace('refs/heads/', '');
+      // Extract branch name from PR base branch
+      const branch = pull_request.base.ref;
       
       // Check notification level
       if (integration.notificationLevel === 'main_only' && branch !== storedRepo.branch) {
         return res.status(200).json({ message: "Branch filtered out" });
       }
 
-      // Process each commit
-      for (const commit of processCommits) {
-        // Store push event first to get the ID
-        const pushEvent = await storage.createPushEvent({
-          repositoryId: storedRepo.id,
-          integrationId: integration.id,
-          commitSha: commit.id,
-          commitMessage: commit.message,
-          author: commit.author.name,
-          branch,
-          pushedAt: new Date(commit.timestamp),
-          notificationSent: false,
-          aiSummary: null,
-          aiImpact: null,
-          aiCategory: null,
-          aiDetails: null,
-          aiGenerated: false,
-        });
+      // Process the single merge commit
+      const commit = processCommit;
+      
+      // Store push event first to get the ID
+      const pushEvent = await storage.createPushEvent({
+        repositoryId: storedRepo.id,
+        integrationId: integration.id,
+        commitSha: commit.id,
+        commitMessage: commit.message,
+        author: commit.author.name,
+        branch,
+        pushedAt: new Date(commit.timestamp),
+        notificationSent: false,
+        aiSummary: null,
+        aiImpact: null,
+        aiCategory: null,
+        aiDetails: null,
+        aiGenerated: false,
+      });
 
-        // Generate AI summary for the commit with better file change detection
-        let aiSummary = null;
-        let aiImpact = null;
-        let aiCategory = null;
-        let aiDetails = null;
-        let aiGenerated = false;
+      // Generate AI summary for the commit with better file change detection
+      let aiSummary = null;
+      let aiImpact = null;
+      let aiCategory = null;
+      let aiDetails = null;
+      let aiGenerated = false;
 
-        try {
-          // Get more detailed file change information
-          const filesChanged = [
-            ...(commit.added || []),
-            ...(commit.modified || []),
-            ...(commit.removed || [])
-          ];
+      try {
+        // Get more detailed file change information
+        const filesChanged = [
+          ...(commit.added || []),
+          ...(commit.modified || []),
+          ...(commit.removed || [])
+        ];
 
-          // Try to get actual diff stats from GitHub API if webhook data is missing
-          let additions = commit.additions || 0;
-          let deletions = commit.deletions || 0;
+        // Try to get actual diff stats from GitHub API if webhook data is missing
+        let additions = commit.additions || 0;
+        let deletions = commit.deletions || 0;
 
-          console.log(`🔍 Debug - Commit ${commit.id}:`);
-          console.log(`  - Webhook additions: ${commit.additions || 0}`);
-          console.log(`  - Webhook deletions: ${commit.deletions || 0}`);
-          console.log(`  - Files changed: ${filesChanged.length}`);
-          console.log(`  - Files: ${filesChanged.join(', ')}`);
+        console.log(`🔍 Debug - Commit ${commit.id}:`);
+        console.log(`  - Webhook additions: ${commit.additions || 0}`);
+        console.log(`  - Webhook deletions: ${commit.deletions || 0}`);
+        console.log(`  - Files changed: ${filesChanged.length}`);
+        console.log(`  - Files: ${filesChanged.join(', ')}`);
 
-          // If we don't have diff data from webhook, try to fetch it from GitHub API
-          if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
-            try {
-              // Get the repository owner and name from full_name
-              const [owner, repoName] = repository.full_name.split('/');
-              
-              console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${commit.id}`);
-              
-              // Fetch commit details from GitHub API
-              const githubResponse = await fetch(
-                `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
-                {
-                  headers: {
-                    'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                  }
+        // If we don't have diff data from webhook, try to fetch it from GitHub API
+        if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
+          try {
+            // Get the repository owner and name from full_name
+            const [owner, repoName] = repository.full_name.split('/');
+            
+            console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${commit.id}`);
+            
+            // Fetch commit details from GitHub API
+            const githubResponse = await fetch(
+              `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
+              {
+                headers: {
+                  'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
+                  'Accept': 'application/vnd.github.v3+json'
                 }
-              );
-
-              console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
-
-              if (githubResponse.ok) {
-                const commitData = await githubResponse.json();
-                additions = commitData.stats?.additions || 0;
-                deletions = commitData.stats?.deletions || 0;
-                console.log(`✅ Fetched diff stats from GitHub API: +${additions} -${deletions}`);
-                console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
-              } else {
-                const errorText = await githubResponse.text();
-                console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
               }
-            } catch (apiError) {
-              console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
-              // Fall back to webhook data
-            }
-          } else {
-            console.log(`ℹ️ Using webhook data: +${additions} -${deletions}`);
-          }
+            );
 
+            console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
+
+            if (githubResponse.ok) {
+              const commitData = await githubResponse.json();
+              additions = commitData.stats?.additions || 0;
+              deletions = commitData.stats?.deletions || 0;
+              console.log(`✅ Fetched diff stats from GitHub API: +${additions} -${deletions}`);
+              console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
+            } else {
+              const errorText = await githubResponse.text();
+              console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
+            }
+          } catch (apiError) {
+            console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
+            // Fall back to webhook data
+          }
+        } else {
+          console.log(`ℹ️ Using webhook data: +${additions} -${deletions}`);
+        }
+
+        const pushData = {
+          repositoryName: repository.full_name,
+          branch,
+          commitMessage: commit.message,
+          filesChanged,
+          additions,
+          deletions,
+          commitSha: commit.id,
+        };
+
+        const summary = await generateCodeSummary(pushData);
+        aiSummary = summary.summary;
+        aiImpact = summary.impact;
+        aiCategory = summary.category;
+        aiDetails = summary.details;
+        aiGenerated = true;
+
+        console.log(`AI summary generated for commit ${commit.id}:`, summary);
+
+        // Update the push event with AI summary
+        await storage.updatePushEvent(pushEvent.id, {
+          aiSummary,
+          aiImpact,
+          aiCategory,
+          aiDetails,
+          aiGenerated: true,
+        });
+      } catch (aiError) {
+        console.error('Failed to generate AI summary:', aiError);
+        // Continue without AI summary
+      }
+
+      // Send Slack notification with AI summary if available
+      try {
+        if (aiGenerated && aiSummary) {
+          // Use AI-enhanced Slack message
           const pushData = {
             repositoryName: repository.full_name,
             branch,
             commitMessage: commit.message,
-            filesChanged,
-            additions,
-            deletions,
+            filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
+            additions: commit.additions || 0,
+            deletions: commit.deletions || 0,
             commitSha: commit.id,
           };
 
-          const summary = await generateCodeSummary(pushData);
-          aiSummary = summary.summary;
-          aiImpact = summary.impact;
-          aiCategory = summary.category;
-          aiDetails = summary.details;
-          aiGenerated = true;
-
-          console.log(`AI summary generated for commit ${commit.id}:`, summary);
-
-          // Update the push event with AI summary
-          await storage.updatePushEvent(pushEvent.id, {
-            aiSummary,
-            aiImpact,
-            aiCategory,
-            aiDetails,
-            aiGenerated: true,
+          const summary = { 
+            summary: aiSummary!, 
+            impact: aiImpact as 'low' | 'medium' | 'high', 
+            category: aiCategory!, 
+            details: aiDetails! 
+          };
+          const slackMessage = await generateSlackMessage(pushData, summary);
+          
+          await sendSlackMessage({
+            channel: integration.slackChannelId,
+            text: slackMessage,
+            unfurl_links: false
           });
-        } catch (aiError) {
-          console.error('Failed to generate AI summary:', aiError);
-          // Continue without AI summary
+        } else {
+          // Use regular push notification
+          await sendPushNotification(
+            integration.slackChannelId,
+            repository.full_name,
+            commit.message,
+            commit.author.name,
+            branch,
+            commit.id,
+            Boolean(integration.includeCommitSummaries)
+          );
         }
 
-        // Send Slack notification with AI summary if available
-        try {
-          if (aiGenerated && aiSummary) {
-            // Use AI-enhanced Slack message
-            const pushData = {
-              repositoryName: repository.full_name,
-              branch,
-              commitMessage: commit.message,
-              filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
-              additions: commit.additions || 0,
-              deletions: commit.deletions || 0,
-              commitSha: commit.id,
-            };
+        // Mark notification as sent
+        await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
 
-                         const summary = { 
-               summary: aiSummary!, 
-               impact: aiImpact as 'low' | 'medium' | 'high', 
-               category: aiCategory!, 
-               details: aiDetails! 
-             };
-             const slackMessage = await generateSlackMessage(pushData, summary);
-             
-             await sendSlackMessage({
-               channel: integration.slackChannelId,
-               text: slackMessage,
-               unfurl_links: false
-             });
-          } else {
-            // Use regular push notification
-            await sendPushNotification(
-              integration.slackChannelId,
-              repository.full_name,
-              commit.message,
-              commit.author.name,
-              branch,
-              commit.id,
-              Boolean(integration.includeCommitSummaries)
-            );
-          }
-
-          // Mark notification as sent
-          await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
-
-          // Store push notification in database
-          await storage.createNotification({
-            userId: storedRepo.userId,
-            type: 'push_event',
-            title: 'New Push Event',
-            message: `New push to ${repository.name} by ${commit.author.name}`
-          });
-          
-          // Store Slack notification in database
-          await storage.createNotification({
-            userId: storedRepo.userId,
-            type: 'slack_message_sent',
-            title: 'Slack Message Sent',
-            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`
-          });
-          
-          // Also broadcast via SSE for real-time updates
-          const pushNotification = {
-            id: `push_${pushEvent?.id || Date.now()}`,
-            type: 'push_event',
-            title: 'New Push Event',
-            message: `New push to ${repository.name} by ${commit.author.name}`,
-            createdAt: new Date().toISOString()
-          };
-          broadcastNotification(storedRepo.userId, pushNotification);
-          
-          const slackNotification = {
-            id: `slack_${pushEvent?.id || Date.now()}`,
-            type: 'slack_message_sent',
-            title: 'Slack Message Sent',
-            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
-            createdAt: new Date().toISOString()
-          };
-          broadcastNotification(storedRepo.userId, slackNotification);
-        } catch (slackError) {
-          console.error("Failed to send Slack notification:", slackError);
-        }
+        // Store push notification in database
+        await storage.createNotification({
+          userId: storedRepo.userId,
+          type: 'push_event',
+          title: 'New Push Event',
+          message: `New push to ${repository.name} by ${commit.author.name}`
+        });
+        
+        // Store Slack notification in database
+        await storage.createNotification({
+          userId: storedRepo.userId,
+          type: 'slack_message_sent',
+          title: 'Slack Message Sent',
+          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`
+        });
+        
+        // Also broadcast via SSE for real-time updates
+        const pushNotification = {
+          id: `push_${pushEvent?.id || Date.now()}`,
+          type: 'push_event',
+          title: 'New Push Event',
+          message: `New push to ${repository.name} by ${commit.author.name}`,
+          createdAt: new Date().toISOString()
+        };
+        broadcastNotification(storedRepo.userId, pushNotification);
+        
+        const slackNotification = {
+          id: `slack_${pushEvent?.id || Date.now()}`,
+          type: 'slack_message_sent',
+          title: 'Slack Message Sent',
+          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
+          createdAt: new Date().toISOString()
+        };
+        broadcastNotification(storedRepo.userId, slackNotification);
+      } catch (slackError) {
+        console.error("Failed to send Slack notification:", slackError);
       }
 
       res.status(200).json({ message: "Webhook processed successfully" });
