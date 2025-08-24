@@ -1364,27 +1364,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
     try {
+      console.log("🔔 Webhook received!");
+      console.log("📋 Headers:", JSON.stringify(req.headers, null, 2));
+      console.log("📦 Body:", JSON.stringify(req.body, null, 2));
+      
       const signature = req.headers['x-hub-signature-256'] as string;
       const payload = JSON.stringify(req.body);
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        console.log("❌ Invalid webhook signature");
         return res.status(401).json({ error: "Invalid signature" });
       }
+      console.log("✅ Webhook signature verified");
 
       // Only process pull_request events, specifically when PRs are merged to main
       const { repository, pull_request, action } = req.body;
       
+      console.log("🔍 Event type: pull_request");
+      console.log("🔍 Action:", action);
+      console.log("🔍 Merged:", pull_request?.merged);
+      console.log("🔍 Repository:", repository?.full_name);
+      
       // Check if this is a pull_request event
       if (!pull_request) {
+        console.log("❌ Not a pull request event, skipping");
         return res.status(200).json({ message: "Not a pull request event, skipping" });
       }
       
       // Only process when PR is merged (not just closed)
       if (action !== 'closed' || !pull_request.merged) {
+        console.log("❌ Pull request not merged, skipping. Action:", action, "Merged:", pull_request.merged);
         return res.status(200).json({ message: "Pull request not merged, skipping" });
       }
+      
+      console.log("✅ PR is merged, proceeding with processing");
       
       // Extract branch name from PR base branch
       const branch = pull_request.base.ref;
@@ -1413,18 +1428,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find the repository in our database
+      console.log("🔍 Looking for repository with GitHub ID:", repository.id.toString());
       const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
       
       if (!storedRepo || !storedRepo.isActive) {
+        console.log("❌ Repository not found or not active:", { 
+          found: !!storedRepo, 
+          active: storedRepo?.isActive,
+          githubId: repository.id.toString()
+        });
         return res.status(200).json({ message: "Repository not active" });
       }
+      console.log("✅ Repository found:", storedRepo.name);
 
       // Get the integration for this repository
+      console.log("🔍 Looking for integration for repository ID:", storedRepo.id);
       const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
       
       if (!integration || !integration.isActive) {
+        console.log("❌ Integration not found or not active:", {
+          found: !!integration,
+          active: integration?.isActive,
+          repositoryId: storedRepo.id
+        });
         return res.status(200).json({ message: "Integration not active" });
       }
+      console.log("✅ Integration found:", integration.slackChannelName);
 
       // Check notification level before processing
       if (integration.notificationLevel === 'main_only') {
