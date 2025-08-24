@@ -186,23 +186,24 @@ export class DatabaseStorage implements IStorage {
   // Push event methods
   async getPushEvent(id: number): Promise<PushEvent | undefined> {
     const result = await db.select().from(pushEvents).where(eq(pushEvents.id, id)).limit(1);
-    return result[0];
+    return result[0] as PushEvent | undefined;
   }
 
   async getPushEventsByRepositoryId(repositoryId: number): Promise<PushEvent[]> {
-    return await db.select().from(pushEvents)
+    const result = await db.select().from(pushEvents)
       .where(eq(pushEvents.repositoryId, repositoryId))
       .orderBy(pushEvents.pushedAt);
+    return result as PushEvent[];
   }
 
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {
     const result = await db.insert(pushEvents).values(pushEvent).returning();
-    return result[0];
+    return result[0] as PushEvent;
   }
 
   async updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
     const result = await db.update(pushEvents).set(updates).where(eq(pushEvents.id, id)).returning();
-    return result[0];
+    return result[0] as PushEvent | undefined;
   }
 
   // Slack workspace methods
