@@ -1266,6 +1266,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test endpoint to re-process a specific push event with AI
+  app.post("/api/test-ai-summary/:pushEventId", authenticateToken, async (req, res) => {
+    try {
+      const pushEventId = parseInt(req.params.pushEventId);
+      const userId = req.user!.userId;
+      
+      console.log(`🧪 Testing AI summary for push event ${pushEventId}`);
+      
+      // Get user's first active integration for testing
+      const userIntegrations = await storage.getIntegrationsByUserId(userId);
+      const activeIntegration = userIntegrations.find(integration => integration.isActive);
+      
+      if (!activeIntegration) {
+        return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
+      }
+      
+      // For now, let's just test the GitHub API with a known commit
+      const testPushData = {
+        repositoryName: "carterjohndixon/PushLog",
+        branch: "main",
+        commitMessage: "Test commit for AI summary",
+        filesChanged: ["server/ai.ts", "server/routes.ts"],
+        additions: 0,
+        deletions: 0,
+        commitSha: "77975ce720ad61f5566d3c745ef595e2242274f2", // Use your recent commit SHA
+      };
+      
+      // Try to fetch actual stats from GitHub API
+      try {
+        const [owner, repoName] = testPushData.repositoryName.split('/');
+        console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${testPushData.commitSha}`);
+        
+        const githubResponse = await fetch(
+          `https://api.github.com/repos/${owner}/${repoName}/commits/${testPushData.commitSha}`,
+          {
+            headers: {
+              'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
+              'Accept': 'application/vnd.github.v3+json'
+            }
+          }
+        );
+        
+        console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
+        
+        if (githubResponse.ok) {
+          const commitData = await githubResponse.json();
+          testPushData.additions = commitData.stats?.additions || 0;
+          testPushData.deletions = commitData.stats?.deletions || 0;
+          console.log(`✅ Fetched diff stats from GitHub API: +${testPushData.additions} -${testPushData.deletions}`);
+          console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
+        } else {
+          const errorText = await githubResponse.text();
+          console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
+        }
+      } catch (apiError) {
+        console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
+      }
+      
+      // Generate AI summary
+      const summary = await generateCodeSummary(testPushData);
+      
+      console.log(`✅ AI summary generated for test:`, summary);
+      
+      // Send to Slack
+      try {
+        const slackMessage = await generateSlackMessage(testPushData, summary);
+        
+        await sendSlackMessage({
+          channel: activeIntegration.slackChannelId,
+          text: slackMessage,
+          unfurl_links: false
+        });
+        
+        console.log(`✅ Slack message sent to channel ${activeIntegration.slackChannelId}`);
+        console.log(`📨 Message: ${slackMessage}`);
+        
+      } catch (slackError) {
+        console.error("❌ Failed to send Slack message:", slackError);
+      }
+      
+      res.json({
+        success: true,
+        pushEventId,
+        summary,
+        pushData: testPushData,
+        slackMessage: await generateSlackMessage(testPushData, summary)
+      });
+      
+    } catch (error) {
+      console.error("Error testing AI summary:", error);
+      res.status(500).json({ error: "Failed to test AI summary" });
+    }
+  });
+
   // GitHub webhook endpoint
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
@@ -1279,9 +1373,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid signature" });
       }
 
-      const { repository, commits, ref, pusher } = req.body;
+      // Handle both push and pull_request events
+      const { repository, commits, ref, pusher, pull_request, action } = req.body;
       
-      if (!repository || !commits || commits.length === 0) {
+      // For pull_request events, only process when PR is merged
+      if (pull_request) {
+        if (action !== 'closed' || !pull_request.merged) {
+          return res.status(200).json({ message: "Pull request not merged, skipping" });
+        }
+        
+        // For merged PR, we'll process the merge commit
+        const mergeCommit = pull_request.merge_commit_sha;
+        if (!mergeCommit) {
+          return res.status(200).json({ message: "No merge commit found" });
+        }
+        
+        // Create a commits array from the PR data
+        const prCommits = [{
+          id: mergeCommit,
+          message: pull_request.title,
+          author: { name: pull_request.user.login },
+          timestamp: pull_request.merged_at,
+          added: [],
+          modified: [],
+          removed: [],
+          additions: pull_request.additions || 0,
+          deletions: pull_request.deletions || 0
+        }];
+        
+        // Override variables for PR processing
+        req.body.commits = prCommits;
+        req.body.ref = `refs/heads/${pull_request.base.ref}`;
+      }
+      
+      const processCommits = req.body.commits;
+      if (!repository || !processCommits || processCommits.length === 0) {
         return res.status(200).json({ message: "No commits to process" });
       }
 
@@ -1308,7 +1434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Process each commit
-      for (const commit of commits) {
+      for (const commit of processCommits) {
         // Store push event first to get the ID
         const pushEvent = await storage.createPushEvent({
           repositoryId: storedRepo.id,
@@ -1345,11 +1471,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let additions = commit.additions || 0;
           let deletions = commit.deletions || 0;
 
+          console.log(`🔍 Debug - Commit ${commit.id}:`);
+          console.log(`  - Webhook additions: ${commit.additions || 0}`);
+          console.log(`  - Webhook deletions: ${commit.deletions || 0}`);
+          console.log(`  - Files changed: ${filesChanged.length}`);
+          console.log(`  - Files: ${filesChanged.join(', ')}`);
+
           // If we don't have diff data from webhook, try to fetch it from GitHub API
           if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
             try {
               // Get the repository owner and name from full_name
               const [owner, repoName] = repository.full_name.split('/');
+              
+              console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${commit.id}`);
               
               // Fetch commit details from GitHub API
               const githubResponse = await fetch(
@@ -1362,16 +1496,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 }
               );
 
+              console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
+
               if (githubResponse.ok) {
                 const commitData = await githubResponse.json();
                 additions = commitData.stats?.additions || 0;
                 deletions = commitData.stats?.deletions || 0;
-                console.log(`Fetched diff stats from GitHub API: +${additions} -${deletions}`);
+                console.log(`✅ Fetched diff stats from GitHub API: +${additions} -${deletions}`);
+                console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
+              } else {
+                const errorText = await githubResponse.text();
+                console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
               }
             } catch (apiError) {
-              console.error('Failed to fetch commit stats from GitHub API:', apiError);
+              console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
               // Fall back to webhook data
             }
+          } else {
+            console.log(`ℹ️ Using webhook data: +${additions} -${deletions}`);
           }
 
           const pushData = {
