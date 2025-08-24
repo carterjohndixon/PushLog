@@ -11,6 +11,9 @@ A SaaS platform that connects GitHub and Slack to automatically send intelligent
 - **AI-Powered Summaries**: Generate intelligent code change summaries
 - **Dashboard Management**: Monitor integrations and repository activity
 - **Custom Branding**: Clean green and blue color scheme with wood log theme
+- **PR Merge Detection**: Smart webhook triggers for merged pull requests only
+- **Branch Filtering**: Configurable notification levels (main-only or all branches)
+- **Real-time Testing**: Comprehensive webhook testing and validation tools
 
 ## Color Scheme
 
