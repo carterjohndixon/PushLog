@@ -642,7 +642,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             githubId: null,
             githubToken: null
           });
-          return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account." });
+          return res.status(401).json({ 
+            error: "GitHub token has expired. Please reconnect your GitHub account.",
+            redirectTo: "/login"
+          });
         }
       } catch (validationError) {
         console.error("GitHub token validation error:", validationError);
@@ -651,7 +654,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           githubId: null,
           githubToken: null
         });
-        return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account." });
+        return res.status(401).json({ 
+          error: "GitHub token has expired. Please reconnect your GitHub account.",
+          redirectTo: "/login"
+        });
       }
 
       try {

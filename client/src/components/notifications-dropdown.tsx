@@ -43,11 +43,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
   return (
     <>
-      <DropdownMenu onOpenChange={(open) => {
-        if (open) {
-          markAsViewed();
-        }
-      }}>
+      <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
@@ -56,8 +52,10 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         >
           <Bell className="text-steel-gray hover:text-graphite transition-colors" />
           {hasUnread && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-log-green text-white text-xs rounded-full flex items-center justify-center">
-              {count}
+            <span className={`absolute -top-1 -right-1 bg-log-green text-white text-xs rounded-full flex items-center justify-center ${
+              count >= 10 ? 'w-5 h-5 px-1' : 'w-4 h-4'
+            }`}>
+              {count > 99 ? '99+' : count}
             </span>
           )}
         </Button>
@@ -134,15 +132,22 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         {notifications.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <div className="p-2">
+            <div className="p-2 flex justify-between items-center">
               <Button
                 variant="ghost"
                 size="sm"
-                className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-                onClick={clearAllNotifications}
+                className="text-xs text-steel-gray hover:text-graphite"
+                onClick={() => markAsViewed()}
               >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear all notifications
+                Mark all as read
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs text-red-600 hover:text-red-700"
+                onClick={() => clearAllNotifications()}
+              >
+                Clear all
               </Button>
             </div>
           </>
