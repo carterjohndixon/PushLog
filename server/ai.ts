@@ -65,7 +65,7 @@ Respond with only valid JSON:
         }
       ],
       temperature: 0.3,
-      max_completion_tokens: 300,
+      max_completion_tokens: 350,
     });
 
     const response = completion.choices[0]?.message?.content;
