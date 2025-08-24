@@ -22,12 +22,8 @@ import {
   TrendingUp,
   MoreVertical,
   ExternalLink,
-  CheckCircle,
   Activity,
-  Calendar,
   MessageSquare,
-  Users,
-  Zap
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
@@ -169,7 +165,8 @@ export default function Dashboard() {
     },
   });
 
-  const handleRepositorySelect = (repository: RepositoryCardData) => {
+  const handleRepositorySelect = (repository: any) => {
+    // Convert from GitHub API format to our internal format
     const connectData: ConnectRepositoryData = {
       userId: 0, // Will be set by server from authenticated user
       githubId: repository.githubId,
@@ -1026,13 +1023,33 @@ export default function Dashboard() {
       <IntegrationSetupModal
         open={isIntegrationModalOpen}
         onOpenChange={setIsIntegrationModalOpen}
-        repositories={repositories || []}
+        repositories={(repositories || []).map(repo => ({
+          id: repo.id,
+          githubId: repo.githubId,
+          name: repo.name,
+          full_name: repo.fullName,
+          owner: { login: repo.owner },
+          default_branch: repo.branch,
+          isActive: repo.isActive,
+          isConnected: repo.isConnected,
+          private: repo.private
+        }))}
       />
 
       <ConfirmRepositoryDeletionModal 
         open={isDeleteRepoConfirmationOpen}
         onOpenChange={setIsDeleteRepoConfirmationOpen}
-        repositoryToDelete={repositoryToDelete}
+        repositoryToDelete={repositoryToDelete ? {
+          id: repositoryToDelete.id,
+          githubId: repositoryToDelete.githubId,
+          name: repositoryToDelete.name,
+          full_name: repositoryToDelete.fullName,
+          owner: { login: repositoryToDelete.owner },
+          default_branch: repositoryToDelete.branch,
+          isActive: repositoryToDelete.isActive,
+          isConnected: repositoryToDelete.isConnected,
+          private: repositoryToDelete.private
+        } : null}
         deleteRepositoryMutation={deleteRepositoryMutation}
       />
 
@@ -1053,7 +1070,17 @@ export default function Dashboard() {
       <RepositorySettingsModal
         open={isRepositorySettingsOpen}
         onOpenChange={setIsRepositorySettingsOpen}
-        repository={selectedRepository}
+        repository={selectedRepository ? {
+          id: selectedRepository.id,
+          githubId: selectedRepository.githubId,
+          name: selectedRepository.name,
+          full_name: selectedRepository.fullName,
+          owner: { login: selectedRepository.owner },
+          default_branch: selectedRepository.branch,
+          isActive: selectedRepository.isActive,
+          isConnected: selectedRepository.isConnected,
+          private: selectedRepository.private
+        } : null}
         updateRepositoryMutation={updateRepositoryMutation}
       />
 

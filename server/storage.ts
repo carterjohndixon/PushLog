@@ -148,6 +148,7 @@ export class MemStorage implements IStorage {
       id,
       branch: repository.branch || null,
       isActive: repository.isActive ?? null,
+      monitorAllBranches: repository.monitorAllBranches ?? null,
       webhookId: repository.webhookId || null,
       createdAt: new Date().toISOString()
     };
@@ -223,6 +224,11 @@ export class MemStorage implements IStorage {
       ...pushEvent,
       id,
       notificationSent: pushEvent.notificationSent ?? null,
+      aiSummary: pushEvent.aiSummary ?? null,
+      aiImpact: pushEvent.aiImpact ?? null,
+      aiCategory: pushEvent.aiCategory ?? null,
+      aiDetails: pushEvent.aiDetails ?? null,
+      aiGenerated: pushEvent.aiGenerated ?? false,
       createdAt: new Date().toISOString()
     };
     this.pushEvents.set(id, newPushEvent);
