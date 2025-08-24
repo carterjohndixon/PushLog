@@ -4,7 +4,12 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 function handleTokenExpiration() {
   console.log('Token expired, redirecting to login');
   localStorage.removeItem('token');
-  window.location.href = '/login';
+  localStorage.removeItem('userId');
+  
+  // Clear any cached data
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
 }
 
 async function throwIfResNotOk(res: Response) {
