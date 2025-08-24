@@ -1364,67 +1364,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
     try {
+      console.log("🔔 Webhook received!");
+      console.log("📋 Headers:", JSON.stringify(req.headers, null, 2));
+      console.log("📦 Body:", JSON.stringify(req.body, null, 2));
+      
       const signature = req.headers['x-hub-signature-256'] as string;
       const payload = JSON.stringify(req.body);
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        console.log("❌ Invalid webhook signature");
         return res.status(401).json({ error: "Invalid signature" });
       }
+      console.log("✅ Webhook signature verified");
 
-      // Only process pull_request events, specifically when PRs are merged to main
-      const { repository, pull_request, action } = req.body;
+      // Handle both push and pull_request events
+      const eventType = req.headers['x-github-event'];
+      console.log("🔍 Event type:", eventType);
       
-      // Check if this is a pull_request event
-      if (!pull_request) {
-        return res.status(200).json({ message: "Not a pull request event, skipping" });
+      let branch, commit, repository;
+      
+      if (eventType === 'pull_request') {
+        // Handle pull_request events (PR merges)
+        const { pull_request, action } = req.body;
+        console.log("🔍 Action:", action);
+        console.log("🔍 Merged:", pull_request?.merged);
+        
+        if (!pull_request) {
+          console.log("❌ Not a pull request event, skipping");
+          return res.status(200).json({ message: "Not a pull request event, skipping" });
+        }
+        
+        // Only process when PR is merged (not just closed)
+        if (action !== 'closed' || !pull_request.merged) {
+          console.log("❌ Pull request not merged, skipping. Action:", action, "Merged:", pull_request.merged);
+          return res.status(200).json({ message: "Pull request not merged, skipping" });
+        }
+        
+        console.log("✅ PR is merged, proceeding with processing");
+        branch = pull_request.base.ref;
+        commit = {
+          id: pull_request.merge_commit_sha,
+          message: pull_request.title,
+          author: { name: pull_request.user.login },
+          timestamp: pull_request.merged_at,
+          additions: pull_request.additions || 0,
+          deletions: pull_request.deletions || 0
+        };
+        repository = req.body.repository;
+        
+      } else if (eventType === 'push') {
+        // Handle push events (direct pushes to main)
+        const { ref, commits, repository: repo } = req.body;
+        console.log("🔍 Push to branch:", ref);
+        console.log("🔍 Number of commits:", commits?.length);
+        
+        // Extract branch name from ref
+        branch = ref.replace('refs/heads/', '');
+        
+        // Only process pushes to main branch
+        if (branch !== 'main' && branch !== 'master') {
+          console.log("❌ Push to non-main branch, skipping:", branch);
+          return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
+        }
+        
+        if (!commits || commits.length === 0) {
+          console.log("❌ No commits in push, skipping");
+          return res.status(200).json({ message: "No commits to process" });
+        }
+        
+        console.log("✅ Push to main branch, proceeding with processing");
+        commit = commits[0]; // Process the first commit
+        repository = repo;
+        
+      } else {
+        console.log("❌ Unsupported event type:", eventType);
+        return res.status(200).json({ message: `Unsupported event type: ${eventType}` });
       }
-      
-      // Only process when PR is merged (not just closed)
-      if (action !== 'closed' || !pull_request.merged) {
-        return res.status(200).json({ message: "Pull request not merged, skipping" });
-      }
-      
-      // Extract branch name from PR base branch
-      const branch = pull_request.base.ref;
-      
-      // For merged PR, we'll process the merge commit
-      const mergeCommit = pull_request.merge_commit_sha;
-      if (!mergeCommit) {
-        return res.status(200).json({ message: "No merge commit found" });
-      }
-      
-      // Create a single commit object from the PR data
-      const processCommit = {
-        id: mergeCommit,
-        message: pull_request.title,
-        author: { name: pull_request.user.login },
-        timestamp: pull_request.merged_at,
-        added: [],
-        modified: [],
-        removed: [],
-        additions: pull_request.additions || 0,
-        deletions: pull_request.deletions || 0
-      };
       
       if (!repository) {
         return res.status(200).json({ message: "No repository information found" });
       }
 
       // Find the repository in our database
+      console.log("🔍 Looking for repository with GitHub ID:", repository.id.toString());
       const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
       
       if (!storedRepo || !storedRepo.isActive) {
+        console.log("❌ Repository not found or not active:", { 
+          found: !!storedRepo, 
+          active: storedRepo?.isActive,
+          githubId: repository.id.toString()
+        });
         return res.status(200).json({ message: "Repository not active" });
       }
+      console.log("✅ Repository found:", storedRepo.name);
 
       // Get the integration for this repository
+      console.log("🔍 Looking for integration for repository ID:", storedRepo.id);
       const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
       
       if (!integration || !integration.isActive) {
+        console.log("❌ Integration not found or not active:", {
+          found: !!integration,
+          active: integration?.isActive,
+          repositoryId: storedRepo.id
+        });
         return res.status(200).json({ message: "Integration not active" });
       }
+      console.log("✅ Integration found:", integration.slackChannelName);
 
       // Check notification level before processing
       if (integration.notificationLevel === 'main_only') {
@@ -1435,8 +1484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // If notificationLevel is 'all', process PRs to any branch
 
-      // Process the single merge commit
-      const commit = processCommit;
+      // Process the commit (either from PR merge or direct push)
       
       // Store push event first to get the ID
       const pushEvent = await storage.createPushEvent({
