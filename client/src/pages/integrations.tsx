@@ -624,7 +624,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
           ...repo,
           full_name: `${repo.owner}/${repo.name}`,
           default_branch: repo.branch || 'main',
-          owner: { login: repo.owner }
+          owner: { login: typeof repo.owner === 'string' ? repo.owner : (repo.owner as any)?.login || 'Unknown' }
         })) || []}
       />
 
