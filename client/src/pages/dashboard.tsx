@@ -24,6 +24,7 @@ import {
   ExternalLink,
   Activity,
   MessageSquare,
+  CreditCard,
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
@@ -33,6 +34,7 @@ import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deleti
 import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { AiCreditsModal } from "@/components/ai-credits-modal";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DashboardStats, RepositoryCardData, ActiveIntegration } from "@/lib/types";
@@ -57,6 +59,7 @@ export default function Dashboard() {
   const [isDeleteRepoConfirmationOpen, setIsDeleteRepoConfirmationOpen] = useState(false);
   const [isIntegrationSettingsOpen, setIsIntegrationSettingsOpen] = useState(false);
   const [isRepositorySettingsOpen, setIsRepositorySettingsOpen] = useState(false);
+  const [isAiCreditsModalOpen, setIsAiCreditsModalOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<ActiveIntegration | null>(null);
   const [selectedRepository, setSelectedRepository] = useState<RepositoryCardData | null>(null);
 
@@ -506,6 +509,29 @@ export default function Dashboard() {
       },
   });
 
+  // Purchase credits mutation
+  const purchaseCreditsMutation = useMutation({
+    mutationFn: async ({ packageId }: { packageId: string }) => {
+      const response = await apiRequest("POST", "/api/payments/create-payment-intent", {
+        packageId,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Redirect to Stripe Checkout
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Payment Failed",
+        description: error.message || "Failed to initiate payment.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleToggleIntegration = (integration: ActiveIntegration) => {
     const newStatus = integration.status === 'active' ? false : true;
     toggleIntegrationMutation.mutate({
@@ -553,7 +579,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card 
             className="cursor-pointer hover:shadow-md transition-shadow"
             onClick={() => setIsActiveIntegrationsModalOpen(true)}
@@ -633,6 +659,27 @@ export default function Dashboard() {
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Bell className="text-sky-blue w-6 h-6" />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card 
+            className="cursor-pointer hover:shadow-md transition-shadow"
+            onClick={() => setIsAiCreditsModalOpen(true)}
+          >
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-steel-gray">AI Credits</p>
+                  {statsLoading ? (
+                    <Skeleton className="h-8 w-8 mt-1" />
+                  ) : (
+                    <p className="text-2xl font-bold text-purple-600">{userProfile?.aiCredits?.toLocaleString() || '0'}</p>
+                  )}
+                </div>
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                  <CreditCard className="text-purple-600 w-6 h-6" />
                 </div>
               </div>
             </CardContent>
@@ -877,7 +924,14 @@ export default function Dashboard() {
                 </div>
               ) : integrations && integrations.length > 0 ? (
                 <div className="space-y-4">
-                  {integrations.map((integration) => (
+                  {integrations
+                    .sort((a, b) => {
+                      // Active integrations first, then paused ones
+                      if (a.status === 'active' && b.status !== 'active') return -1;
+                      if (a.status !== 'active' && b.status === 'active') return 1;
+                      return 0;
+                    })
+                    .map((integration) => (
                     <div key={integration.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
@@ -1360,6 +1414,14 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AI Credits Modal */}
+      <AiCreditsModal
+        open={isAiCreditsModalOpen}
+        onOpenChange={setIsAiCreditsModalOpen}
+        currentCredits={userProfile?.aiCredits || 0}
+        purchaseCreditsMutation={purchaseCreditsMutation}
+      />
     </div>
   );
 }

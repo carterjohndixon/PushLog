@@ -17,6 +17,10 @@ export const users = pgTable("users", {
   verificationTokenExpiry: timestamp("verification_token_expiry"),
   resetPasswordToken: text("reset_password_token"),
   resetPasswordTokenExpiry: timestamp("reset_password_token_expiry"),
+  // AI Credits and Settings
+  aiCredits: integer("ai_credits").default(1000), // Free credits for new users
+  stripeCustomerId: text("stripe_customer_id"),
+  preferredAiModel: text("preferred_ai_model").default("gpt-3.5-turbo"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -43,6 +47,9 @@ export const integrations = pgTable("integrations", {
   notificationLevel: text("notification_level").default("all"), // all, main_only, tagged_only
   includeCommitSummaries: boolean("include_commit_summaries").default(true),
   isActive: boolean("is_active").default(true),
+  // AI Settings
+  aiModel: text("ai_model").default("gpt-3.5-turbo"), // gpt-3.5-turbo, gpt-4, etc.
+  maxTokens: integer("max_tokens").default(350), // Maximum tokens for AI response
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -85,6 +92,27 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+export const aiUsage = pgTable("ai_usage", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  integrationId: integer("integration_id").notNull(),
+  pushEventId: integer("push_event_id").notNull(),
+  model: text("model").notNull(), // gpt-3.5-turbo, gpt-4, etc.
+  tokensUsed: integer("tokens_used").notNull(),
+  cost: integer("cost").notNull(), // Cost in cents
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  amount: integer("amount").notNull(), // Amount in cents
+  credits: integer("credits").notNull(), // Credits purchased
+  status: text("status").notNull(), // succeeded, failed, pending
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -120,6 +148,16 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertAiUsageSchema = createInsertSchema(aiUsage).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type User = {
   id: number;
   username: string | null;
@@ -135,6 +173,9 @@ export type User = {
   verificationTokenExpiry: string | null;
   resetPasswordToken: string | null;
   resetPasswordTokenExpiry: string | null;
+  aiCredits: number;
+  stripeCustomerId: string | null;
+  preferredAiModel: string;
   createdAt: string;
 };
 
@@ -164,3 +205,7 @@ export type SlackWorkspace = typeof slackWorkspaces.$inferSelect;
 export type InsertSlackWorkspace = z.infer<typeof insertSlackWorkspaceSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type AiUsage = typeof aiUsage.$inferSelect;
+export type InsertAiUsage = z.infer<typeof insertAiUsageSchema>;
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;

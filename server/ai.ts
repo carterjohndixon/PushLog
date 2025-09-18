@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { calculateTokenCost } from './stripe';
 
 dotenv.config();
 
@@ -24,7 +25,17 @@ export interface CodeSummary {
   details: string;
 }
 
-export async function generateCodeSummary(pushData: PushEventData): Promise<CodeSummary> {
+export interface AiUsageResult {
+  summary: CodeSummary;
+  tokensUsed: number;
+  cost: number; // in cents
+}
+
+export async function generateCodeSummary(
+  pushData: PushEventData, 
+  model: string = 'gpt-3.5-turbo',
+  maxTokens: number = 350
+): Promise<AiUsageResult> {
   try {
     const prompt = `
 You are a code review assistant. Analyze this git push and provide a concise, helpful summary.
@@ -53,7 +64,7 @@ Respond with only valid JSON:
 `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: model,
       messages: [
         {
           role: "system",
@@ -65,7 +76,7 @@ Respond with only valid JSON:
         }
       ],
       temperature: 0.3,
-      max_completion_tokens: 350,
+      max_completion_tokens: maxTokens,
     });
 
     const response = completion.choices[0]?.message?.content;
@@ -76,16 +87,28 @@ Respond with only valid JSON:
     // Parse the JSON response
     const summary = JSON.parse(response) as CodeSummary;
     
-    return summary;
+    // Calculate usage and cost
+    const tokensUsed = completion.usage?.total_tokens || 0;
+    const cost = calculateTokenCost(model, tokensUsed);
+    
+    return {
+      summary,
+      tokensUsed,
+      cost
+    };
   } catch (error) {
     console.error('Error generating code summary:', error);
     
     // Fallback summary if AI fails
     return {
-      summary: `Updated ${pushData.filesChanged.length} files with ${pushData.additions} additions and ${pushData.deletions} deletions`,
-      impact: 'medium',
-      category: 'other',
-      details: `Changes made to ${pushData.filesChanged.join(', ')}`
+      summary: {
+        summary: `Updated ${pushData.filesChanged.length} files with ${pushData.additions} additions and ${pushData.deletions} deletions`,
+        impact: 'medium',
+        category: 'other',
+        details: `Changes made to ${pushData.filesChanged.join(', ')}`
+      },
+      tokensUsed: 0,
+      cost: 0
     };
   }
 }

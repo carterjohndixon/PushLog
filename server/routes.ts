@@ -30,6 +30,7 @@ import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema"
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
+import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
 
 // Extend global type for notification streams
 declare global {
@@ -1337,7 +1338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Send to Slack
       try {
-        const slackMessage = await generateSlackMessage(testPushData, summary);
+        const slackMessage = await generateSlackMessage(testPushData, summary.summary);
         
         await sendSlackMessage({
           channel: activeIntegration.slackChannelId,
@@ -1357,7 +1358,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pushEventId,
         summary,
         pushData: testPushData,
-        slackMessage: await generateSlackMessage(testPushData, summary)
+        slackMessage: await generateSlackMessage(testPushData, summary.summary)
       });
       
     } catch (error) {
@@ -1586,10 +1587,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         const summary = await generateCodeSummary(pushData);
-        aiSummary = summary.summary;
-        aiImpact = summary.impact;
-        aiCategory = summary.category;
-        aiDetails = summary.details;
+        aiSummary = summary.summary as any;
+        aiImpact = summary.summary.impact;
+        aiCategory = summary.summary.category;
+        aiDetails = summary.summary.details;
         aiGenerated = true;
 
         console.log(`AI summary generated for commit ${commit.id}:`, summary);
@@ -1736,7 +1737,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email || null,
           isUsernameSet: !!user.username,
           emailVerified: !!user.emailVerified,
-          githubConnected
+          githubConnected,
+          aiCredits: user.aiCredits || 0,
         }
       });
     } catch (error) {
@@ -2054,6 +2056,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Reset password error:", error);
       res.status(500).json("Failed to reset password");
     }
+  });
+
+  // Payment routes
+  app.post("/api/payments/create-payment-intent", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { packageId } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      if (!packageId) {
+        return res.status(400).json({ error: "Package ID is required" });
+      }
+
+      // Get user
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Create or get Stripe customer
+      let customerId = user.stripeCustomerId;
+      if (!customerId) {
+        const customer = await createStripeCustomer(user.email || '', user.username || '');
+        customerId = customer.id;
+        await databaseStorage.updateUser(userId, { stripeCustomerId: customerId });
+      }
+
+      // Create payment intent
+      const paymentIntent = await createPaymentIntent(customerId as string, packageId);
+
+      res.json({
+        clientSecret: paymentIntent.client_secret,
+        url: (paymentIntent as any).url
+      });
+    } catch (error) {
+      console.error("Create payment intent error:", error);
+      res.status(500).json({ error: "Failed to create payment intent" });
+    }
+  });
+
+  // Test payment processing endpoint (for development/testing)
+  app.post("/api/payments/process-test-payment", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { paymentIntentId, packageId, cardDetails } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Validate test card number
+      if (cardDetails.number.replace(/\s/g, '') !== '4242424242424242') {
+        return res.status(400).json({ error: "Invalid test card number. Use 4242 4242 4242 4242" });
+      }
+
+      // Get user
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Get package info
+      const creditPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+      if (!creditPackage) {
+        return res.status(400).json({ error: "Invalid package" });
+      }
+
+      // Add credits to user
+      const newCredits = (user.aiCredits || 0) + creditPackage.credits;
+      await databaseStorage.updateUser(userId, {
+        aiCredits: newCredits
+      });
+
+      // Record payment
+      await databaseStorage.createPayment({
+        userId: userId,
+        stripePaymentIntentId: `test_${Date.now()}`,
+        amount: creditPackage.price,
+        credits: creditPackage.credits,
+        status: 'succeeded'
+      });
+
+      console.log(`Test payment succeeded for user ${userId}: ${creditPackage.credits} credits added`);
+
+      res.json({
+        success: true,
+        creditsAdded: creditPackage.credits,
+        newBalance: newCredits
+      });
+    } catch (error) {
+      console.error("Test payment error:", error);
+      res.status(500).json({ error: "Failed to process test payment" });
+    }
+  });
+
+  // Stripe webhook for payment confirmation
+  app.post("/api/payments/webhook", async (req, res) => {
+    const sig = req.headers['stripe-signature'];
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+    if (!endpointSecret) {
+      console.error("Stripe webhook secret not configured");
+      return res.status(500).json({ error: "Webhook secret not configured" });
+    }
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig as string, endpointSecret);
+    } catch (err: any) {
+      console.error("Webhook signature verification failed:", err);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    // Handle the event
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object;
+      
+      try {
+        // Get user by customer ID
+        const user = await databaseStorage.getUserByStripeCustomerId(paymentIntent.customer as string);
+        if (!user) {
+          console.error("User not found for customer:", paymentIntent.customer);
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        // Get package info from metadata
+        const packageId = paymentIntent.metadata.packageId;
+        const credits = parseInt(paymentIntent.metadata.credits);
+
+        // Add credits to user
+        await databaseStorage.updateUser(user.id, {
+          aiCredits: (user.aiCredits || 0) + credits
+        });
+
+        // Record payment
+        await databaseStorage.createPayment({
+          userId: user.id,
+          stripePaymentIntentId: paymentIntent.id,
+          amount: paymentIntent.amount,
+          credits: credits,
+          status: 'succeeded'
+        });
+
+        console.log(`Payment succeeded for user ${user.id}: ${credits} credits added`);
+      } catch (error) {
+        console.error("Error processing payment:", error);
+        return res.status(500).json({ error: "Failed to process payment" });
+      }
+    }
+
+    res.json({ received: true });
   });
 
   const httpServer = createServer(app);

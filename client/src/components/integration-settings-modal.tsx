@@ -10,9 +10,31 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Settings, Github} from "lucide-react";
 import { SiSlack as SlackIcon } from "react-icons/si";
 import { UseMutationResult } from "@tanstack/react-query";
+
+const AI_MODELS = [
+  {
+    id: 'gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    description: 'Fast and cost-effective for most use cases',
+    costPerToken: 0.002
+  },
+  {
+    id: 'gpt-4',
+    name: 'GPT-4',
+    description: 'Most capable model for complex analysis',
+    costPerToken: 0.03
+  },
+  {
+    id: 'gpt-4-turbo',
+    name: 'GPT-4 Turbo',
+    description: 'Latest model with extended context',
+    costPerToken: 0.01
+  }
+];
 
 interface Integration {
   id: number;
@@ -21,6 +43,8 @@ interface Integration {
   notificationLevel: string;
   includeCommitSummaries: boolean;
   isActive?: boolean;
+  aiModel?: string;
+  maxTokens?: number;
 }
 
 interface IntegrationSettingsModalProps {
@@ -39,6 +63,9 @@ export function IntegrationSettingsModal({
   const [notificationLevel, setNotificationLevel] = useState(integration?.notificationLevel || 'all');
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
+  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-3.5-turbo');
+  const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
+  const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
 
   const handleSave = () => {
     if (!integration) return;
@@ -49,16 +76,21 @@ export function IntegrationSettingsModal({
         isActive,
         notificationLevel,
         includeCommitSummaries,
+        aiModel,
+        maxTokens,
       },
     });
   };
 
   // Update local state when integration prop changes
-  React.useEffect(() => {
+  React.  useEffect(() => {
     if (integration) {
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
+      setAiModel(integration.aiModel || 'gpt-3.5-turbo');
+      setMaxTokens(integration.maxTokens || 350);
+      setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
   }, [integration]);
 
@@ -69,6 +101,9 @@ export function IntegrationSettingsModal({
         setNotificationLevel(integration.notificationLevel || 'all');
         setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
         setIsActive(integration.isActive ?? true);
+        setAiModel(integration.aiModel || 'gpt-3.5-turbo');
+        setMaxTokens(integration.maxTokens || 350);
+        setMaxTokensInput(integration.maxTokens?.toString() || '350');
       }
     }
     onOpenChange(newOpen);
@@ -76,8 +111,8 @@ export function IntegrationSettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <div className="flex items-center space-x-2">
             <Settings className="w-5 h-5 text-sky-blue" />
             <DialogTitle>Integration Settings</DialogTitle>
@@ -88,7 +123,7 @@ export function IntegrationSettingsModal({
         </DialogHeader>
         
         {integration && (
-          <div className="space-y-6">
+          <div className="flex-1 overflow-y-auto space-y-6 px-1 py-2 pr-3">
             {/* Integration Info */}
             <div className="p-4 bg-gray-50 rounded-lg space-y-3">
               <div className="flex items-center space-x-3">
@@ -161,6 +196,65 @@ export function IntegrationSettingsModal({
               />
             </div>
 
+            {/* AI Model Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="ai-model">AI Model</Label>
+              <Select value={aiModel} onValueChange={setAiModel}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select AI model" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_MODELS.map((model) => (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{model.name}</span>
+                        <span className="text-xs text-steel-gray">
+                          ${model.costPerToken}/1K tokens • {model.description}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-steel-gray">
+                Choose the AI model for generating commit summaries. Higher-end models provide better analysis but cost more.
+              </p>
+            </div>
+
+            {/* Max Tokens */}
+            <div className="space-y-2">
+              <Label htmlFor="max-tokens">Max Response Length</Label>
+              <Input
+                id="max-tokens"
+                type="number"
+                min="50"
+                max="2000"
+                value={maxTokensInput}
+                onChange={(e) => {
+                  setMaxTokensInput(e.target.value);
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || parseInt(value) < 50) {
+                    setMaxTokens(350);
+                    setMaxTokensInput('350');
+                  } else if (parseInt(value) > 2000) {
+                    setMaxTokens(2000);
+                    setMaxTokensInput('2000');
+                  } else {
+                    const numValue = parseInt(value);
+                    if (!isNaN(numValue)) {
+                      setMaxTokens(numValue);
+                    }
+                  }
+                }}
+                className="w-full"
+              />
+              <p className="text-xs text-steel-gray">
+                Maximum number of tokens for AI responses (50-2000). Higher values allow for more detailed summaries but cost more.
+              </p>
+            </div>
+
             {/* Integration Status Indicator */}
             <div className="p-3 bg-gray-50 rounded-lg">
               <div className="flex items-center justify-between">
@@ -186,7 +280,7 @@ export function IntegrationSettingsModal({
           </div>
         )}
         
-        <div className="flex justify-end space-x-2">
+        <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t">
           <Button 
             variant="outline" 
             onClick={() => handleOpenChange(false)}

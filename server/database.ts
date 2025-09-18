@@ -1,13 +1,15 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
-  users, repositories, integrations, pushEvents, slackWorkspaces, notifications,
+  users, repositories, integrations, pushEvents, slackWorkspaces, notifications, aiUsage, payments,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
   type PushEvent, type InsertPushEvent,
   type SlackWorkspace, type InsertSlackWorkspace,
-  type Notification, type InsertNotification
+  type Notification, type InsertNotification,
+  type AiUsage, type InsertAiUsage,
+  type Payment, type InsertPayment
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type { IStorage } from "./storage";
@@ -46,6 +48,9 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     verificationTokenExpiry: dbUser.verificationTokenExpiry?.toISOString() ?? null,
     resetPasswordToken: dbUser.resetPasswordToken,
     resetPasswordTokenExpiry: dbUser.resetPasswordTokenExpiry?.toISOString() ?? null,
+    aiCredits: dbUser.aiCredits ?? 1000,
+    stripeCustomerId: dbUser.stripeCustomerId,
+    preferredAiModel: dbUser.preferredAiModel ?? 'gpt-3.5-turbo',
     createdAt: dbUser.createdAt
   };
 }
@@ -71,22 +76,22 @@ export class DatabaseStorage implements IStorage {
   // User methods
   async getUser(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserByGithubId(githubId: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.githubId, githubId)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async createUser(user: InsertUser): Promise<User> {
@@ -105,47 +110,47 @@ export class DatabaseStorage implements IStorage {
       resetPasswordTokenExpiry: updates.resetPasswordTokenExpiry ? new Date(updates.resetPasswordTokenExpiry) : null,
     };
     const result = await db.update(users).set(dbUpdates).where(eq(users.id, id)).returning();
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserById(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.verificationToken, token)).limit(1);
-    return result[0] ? convertToUser(result[0]) : undefined;
+    return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
   async getUserByResetToken(resetToken: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.resetPasswordToken, resetToken)).limit(1);
-    return result[0] ? convertToUser(result[0]) : null;
+    return result[0] ? convertToUser(result[0] as any) : null;
   }
 
   // Repository methods
   async getRepository(id: number): Promise<Repository | undefined> {
     const result = await db.select().from(repositories).where(eq(repositories.id, id)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async getRepositoriesByUserId(userId: number): Promise<Repository[]> {
-    return await db.select().from(repositories).where(eq(repositories.userId, userId));
+    return await db.select().from(repositories).where(eq(repositories.userId, userId)) as any;
   }
 
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {
     const result = await db.select().from(repositories).where(eq(repositories.githubId, githubId)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async createRepository(repository: InsertRepository): Promise<Repository> {
     const result = await db.insert(repositories).values(repository).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async updateRepository(id: number, updates: Partial<Repository>): Promise<Repository | undefined> {
     const result = await db.update(repositories).set(updates).where(eq(repositories.id, id)).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async deleteRepository(id: number): Promise<boolean> {
@@ -156,26 +161,26 @@ export class DatabaseStorage implements IStorage {
   // Integration methods
   async getIntegration(id: number): Promise<Integration | undefined> {
     const result = await db.select().from(integrations).where(eq(integrations.id, id)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async getIntegrationsByUserId(userId: number): Promise<Integration[]> {
-    return await db.select().from(integrations).where(eq(integrations.userId, userId));
+    return await db.select().from(integrations).where(eq(integrations.userId, userId)) as any;
   }
 
   async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
     const result = await db.select().from(integrations).where(eq(integrations.repositoryId, repositoryId)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async createIntegration(integration: InsertIntegration): Promise<Integration> {
     const result = await db.insert(integrations).values(integration).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined> {
     const result = await db.update(integrations).set(updates).where(eq(integrations.id, id)).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async deleteIntegration(id: number): Promise<boolean> {
@@ -209,7 +214,7 @@ export class DatabaseStorage implements IStorage {
   // Slack workspace methods
   async getSlackWorkspace(id: number): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async getSlackWorkspacesByUserId(userId: number): Promise<SlackWorkspace[]> {
@@ -218,17 +223,17 @@ export class DatabaseStorage implements IStorage {
 
   async getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId)).limit(1);
-    return result[0];
+    return result[0] as any;
   }
 
   async createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
     const result = await db.insert(slackWorkspaces).values(workspace).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
     const result = await db.update(slackWorkspaces).set(updates).where(eq(slackWorkspaces.id, id)).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   // Analytics methods
@@ -299,18 +304,18 @@ export class DatabaseStorage implements IStorage {
   async getNotificationsByUserId(userId: number): Promise<Notification[]> {
     return await db.select().from(notifications)
       .where(eq(notifications.userId, userId))
-      .orderBy(notifications.createdAt);
+      .orderBy(notifications.createdAt) as any;
   }
 
   async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
     return await db.select().from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
-      .orderBy(notifications.createdAt);
+      .orderBy(notifications.createdAt) as any;
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
     const result = await db.insert(notifications).values(notification).returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async markNotificationAsRead(id: number): Promise<Notification | undefined> {
@@ -318,7 +323,7 @@ export class DatabaseStorage implements IStorage {
       .set({ isRead: true })
       .where(eq(notifications.id, id))
       .returning();
-    return result[0];
+    return result[0] as any;
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<void> {
@@ -335,6 +340,31 @@ export class DatabaseStorage implements IStorage {
   async deleteAllNotifications(userId: number): Promise<boolean> {
     await db.delete(notifications).where(eq(notifications.userId, userId));
     return true;
+  }
+
+  // AI Usage methods
+  async createAiUsage(usage: InsertAiUsage): Promise<AiUsage> {
+    const [result] = await db.insert(aiUsage).values(usage).returning();
+    return result as any;
+  }
+
+  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
+    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)) as any;
+  }
+
+  // Payment methods
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const [result] = await db.insert(payments).values(payment).returning();
+    return result as any;
+  }
+
+  async getPaymentsByUserId(userId: number): Promise<Payment[]> {
+    return await db.select().from(payments).where(eq(payments.userId, userId)) as any;
+  }
+
+  async getUserByStripeCustomerId(customerId: string): Promise<User | null> {
+    const [result] = await db.select().from(users).where(eq(users.stripeCustomerId, customerId));
+    return result ? convertToUser(result as any) : null;
   }
 }
 
