@@ -1,19 +1,24 @@
 # PushLog
 
-A SaaS platform that connects GitHub and Slack to automatically send intelligent code push notifications with custom branding.
+A web-based SaaS platform that connects your GitHub and Slack accounts to automatically send intelligent code push notifications with AI-powered summaries.
 
 ![PushLog Logo](./attached_assets/PushLog.png)
 
+## What is PushLog?
+
+PushLog is a **web application** that you can access directly in your browser. Simply visit the website, connect your GitHub and Slack accounts, and start receiving intelligent notifications about your code pushes automatically.
+
 ## Features
 
-- **GitHub Integration**: Connect repositories and automatically detect code pushes
-- **Slack Notifications**: Send formatted push summaries to designated Slack channels
-- **AI-Powered Summaries**: Generate intelligent code change summaries
-- **Dashboard Management**: Monitor integrations and repository activity
-- **Custom Branding**: Clean green and blue color scheme with wood log theme
-- **PR Merge Detection**: Smart webhook triggers for merged pull requests only
-- **Branch Filtering**: Configurable notification levels (main-only or all branches)
-- **Real-time Testing**: Comprehensive webhook testing and validation tools
+- **🌐 Web-Based**: Access directly from your browser - no installation required
+- **🔗 GitHub Integration**: Connect your repositories and automatically detect code pushes
+- **💬 Slack Notifications**: Send formatted push summaries to your designated Slack channels
+- **🤖 AI-Powered Summaries**: Generate intelligent code change summaries using GPT models
+- **📊 Dashboard Management**: Monitor integrations and repository activity from a clean dashboard
+- **🎨 Custom Branding**: Clean green and blue color scheme with wood log theme
+- **🔀 Branch Filtering**: Configurable notification levels (main-only, all branches, or tagged releases)
+- **⚡ Real-time Testing**: Comprehensive webhook testing and validation tools
+- **💳 Credit System**: Purchase AI credits to power your intelligent summaries
 
 ## Color Scheme
 
@@ -21,81 +26,45 @@ A SaaS platform that connects GitHub and Slack to automatically send intelligent
 - **Background**: White #FFFFFF
 - **Text**: Graphite #333333
 - **Accent**: Sky Blue #00BFFF or Steel Gray #9E9E9E
-
+b
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS, Vite
 - **Backend**: Node.js, Express, TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
 - **UI Components**: Radix UI, shadcn/ui
-- **Data Management**: In-memory storage with TypeScript interfaces
+- **Authentication**: JWT tokens with email verification
+- **AI Integration**: OpenAI API (GPT-3.5, GPT-4)
+- **Payments**: Stripe for credit purchases
 - **Integrations**: GitHub API, Slack Web API
 
 ## Getting Started
 
-### Prerequisites
+PushLog is a hosted web service - no installation or setup required!
 
-- Node.js 20+
-- Slack Bot Token
-- GitHub OAuth App credentials (optional for full functionality)
+## How to Use PushLog
 
-### Installation
+1. **Visit the Website**: Go to [PushLog.app](https://pushlog.app)
+2. **Create Account**: Sign up with your email or GitHub account
+3. **Connect GitHub**: Authorize PushLog to access your repositories
+4. **Connect Slack**: Authorize PushLog to send messages to your workspace
+5. **Create Integration**: Select a repository and Slack channel to connect
+6. **Configure Settings**: Choose your preferred AI model and notification settings
+7. **Purchase Credits**: Buy AI credits to power intelligent summaries
+8. **Start Coding**: PushLog will automatically send smart notifications to your Slack!
 
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/pushlog.git
-cd pushlog
-```
+## How It Works
 
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Set up environment variables:
-```bash
-# Required for Slack integration
-SLACK_BOT_TOKEN=your_slack_bot_token
-SLACK_CLIENT_ID=your_slack_client_id
-SLACK_CLIENT_SECRET=your_slack_client_secret
-
-# Optional for GitHub OAuth
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-
-# Optional: GitHub Personal Access Token (fallback for webhook creation)
-GITHUB_PERSONAL_ACCESS_TOKEN=your_github_pat
-```
-
-4. Start the development server:
-```bash
-npm run dev
-```
-
-The application will be available at `http://localhost:5000`
-
-## Configuration
-
-### Slack Setup
-
-1. Create a Slack app at https://api.slack.com/apps
-2. Add the following OAuth scopes:
-   - `chat:write`
-   - `channels:read`
-   - `groups:read`
-   - `team:read`
-3. Set the OAuth redirect URL to your domain + `/api/slack/callback`
-4. Install the app to your workspace
-5. Copy the following credentials to your environment variables:
-   - **Bot User OAuth Token** → `SLACK_BOT_TOKEN`
-   - **Client ID** → `SLACK_CLIENT_ID`
-   - **Client Secret** → `SLACK_CLIENT_SECRET`
-
-### GitHub Setup (Optional)
-
-1. Create a GitHub OAuth App in your GitHub settings
-2. Set the authorization callback URL to your domain + `/auth/github/callback`
-3. Copy the Client ID and Client Secret to your environment variables
+1. **Sign Up**: Users create an account and verify their email
+2. **Connect Accounts**: Link GitHub and Slack accounts via OAuth
+3. **Create Integration**: Select a repository and Slack channel to connect
+4. **Configure Settings**: Choose AI model, notification level, and token limits
+5. **Purchase Credits**: Buy AI credits to power intelligent summaries
+6. **Automatic Notifications**: When you push code, PushLog:
+   - Detects the push via GitHub webhooks
+   - Generates an AI-powered summary of the changes
+   - Sends a formatted notification to your Slack channel
+   - Deducts credits based on AI usage
 
 ## Project Structure
 
@@ -103,15 +72,18 @@ The application will be available at `http://localhost:5000`
 ├── client/                 # Frontend React application
 │   ├── src/
 │   │   ├── components/    # Reusable UI components
-│   │   ├── pages/        # Application pages
+│   │   ├── pages/        # Application pages (dashboard, integrations, etc.)
 │   │   ├── lib/          # Utilities and types
 │   │   └── App.tsx       # Main application component
 ├── server/                # Backend Express application
 │   ├── routes.ts         # API route handlers
-│   ├── storage.ts        # In-memory data storage
-│   ├── slack.ts          # Slack integration
-│   └── github.ts         # GitHub integration
+│   ├── database.ts       # Database operations with Drizzle ORM
+│   ├── ai.ts            # OpenAI integration
+│   ├── stripe.ts        # Payment processing
+│   ├── slack.ts         # Slack integration
+│   └── github.ts        # GitHub integration
 ├── shared/               # Shared TypeScript schemas
+├── migrations/           # Database migration files
 └── attached_assets/      # Brand assets and logos
 ```
 
@@ -125,38 +97,18 @@ The application will be available at `http://localhost:5000`
 - `GET /api/slack/channels` - Get Slack channels
 - `POST /api/webhooks/github` - GitHub webhook endpoint
 
-## Deployment
+## Pricing
 
-This is a personal project designed for private use. The application can be deployed on any Node.js hosting platform or nginx server.
+PushLog uses a credit-based system for AI-powered summaries:
 
-### Environment Variables for Production
+- **Starter Pack**: $5.00 for 1,000 credits
+- **Professional Pack**: $20.00 for 5,000 credits  
+- **Enterprise Pack**: $50.00 for 15,000 credits
 
-```bash
-NODE_ENV=production
-CLIENT_URL=https://yourdomain.com
-SLACK_BOT_TOKEN=your_production_slack_token
-SLACK_CHANNEL_ID=your_production_channel_id
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-```
+Credits are used when AI generates summaries of your code pushes. Different AI models use different amounts of credits:
+- **GPT-3.5 Turbo**: ~350 credits per summary
+- **GPT-4**: ~1,000 credits per summary
 
-### Environment Variables for Production
+## Privacy
 
-```bash
-NODE_ENV=production
-CLIENT_URL=https://yourdomain.com
-SLACK_BOT_TOKEN=your_production_slack_token
-SLACK_CHANNEL_ID=your_production_channel_id
-GITHUB_CLIENT_ID=your_github_client_id
-GITHUB_CLIENT_SECRET=your_github_client_secret
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-```
-
-## License
-
-This is a personal project for private use only. Not intended for distribution or commercial use.
-
-## Support
-
-This is a personal project. No external support provided.
+Your code and data are secure. PushLog only accesses the information necessary to provide intelligent summaries and never stores your actual code content.
