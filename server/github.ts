@@ -222,7 +222,7 @@ export async function createWebhook(
           body: JSON.stringify({
             name: "web",
             active: true,
-            events: ["pull_request"],
+            events: ["push"],
             config: {
               url: webhookUrl,
               content_type: "json",
