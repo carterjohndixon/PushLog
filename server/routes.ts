@@ -1587,7 +1587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         const summary = await generateCodeSummary(pushData);
-        aiSummary = summary.summary as any;
+        aiSummary = summary.summary.summary;
         aiImpact = summary.summary.impact;
         aiCategory = summary.summary.category;
         aiDetails = summary.summary.details;

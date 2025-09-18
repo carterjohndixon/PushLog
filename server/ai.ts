@@ -129,11 +129,15 @@ export async function generateSlackMessage(pushData: PushEventData, summary: Cod
     other: ':memo:'
   };
 
+  // Ensure impact is a valid key, default to medium if not
+  const impact = (summary.impact && impactEmoji[summary.impact]) ? summary.impact : 'medium';
+  const category = summary.category || 'other';
+
   return `*${pushData.repositoryName}* - ${pushData.branch} branch
 
-${impactEmoji[summary.impact]} *${summary.summary}*
+${impactEmoji[impact]} *${summary.summary}*
 
-${categoryEmoji[summary.category]} **${summary.category.toUpperCase()}** | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
+${categoryEmoji[category]} **${category.toUpperCase()}** | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
 ${summary.details}
 
 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
