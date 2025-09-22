@@ -1427,6 +1427,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       console.log(`✅ AI summary generated for test using ${aiModel}:`, summary);
+      if (summary.actualModel && summary.actualModel !== aiModel) {
+        console.log(`⚠️  Model mismatch! Requested: ${aiModel}, Actual: ${summary.actualModel}`);
+      }
       
       // Send to Slack
       try {
@@ -1695,6 +1698,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiGenerated = true;
 
         console.log(`✅ AI summary generated for commit ${commit.id} using ${aiModel}:`, summary);
+        if (summary.actualModel && summary.actualModel !== aiModel) {
+          console.log(`⚠️  Model mismatch! Requested: ${aiModel}, Actual: ${summary.actualModel}`);
+        }
 
         // Update the push event with AI summary
         await storage.updatePushEvent(pushEvent.id, {

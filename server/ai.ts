@@ -29,6 +29,7 @@ export interface AiUsageResult {
   summary: CodeSummary;
   tokensUsed: number;
   cost: number; // in cents
+  actualModel?: string; // The actual model used by OpenAI
 }
 
 export async function generateCodeSummary(
@@ -63,6 +64,8 @@ Focus on:
 Respond with only valid JSON:
 `;
 
+    console.log(`🔍 OpenAI API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
+    
     const completion = await openai.chat.completions.create({
       model: model,
       messages: [
@@ -79,6 +82,10 @@ Respond with only valid JSON:
       max_completion_tokens: maxTokens,
     });
 
+    // Log the actual model used by OpenAI (in case of model fallback)
+    const actualModel = completion.model;
+    console.log(`✅ OpenAI API Response - Actual Model Used: ${actualModel}`);
+    
     const response = completion.choices[0]?.message?.content;
     if (!response) {
       throw new Error('No response from OpenAI');
@@ -91,10 +98,13 @@ Respond with only valid JSON:
     const tokensUsed = completion.usage?.total_tokens || 0;
     const cost = calculateTokenCost(model, tokensUsed);
     
+    console.log(`📊 OpenAI Usage - Tokens: ${tokensUsed}, Cost: $${(cost/100).toFixed(4)}`);
+    
     return {
       summary,
       tokensUsed,
-      cost
+      cost,
+      actualModel // Include the actual model used
     };
   } catch (error) {
     console.error('Error generating code summary:', error);
