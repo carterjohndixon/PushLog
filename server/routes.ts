@@ -1702,6 +1702,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`⚠️  Model mismatch! Requested: ${aiModel}, Actual: ${summary.actualModel}`);
         }
 
+        // Deduct AI credits from user
+        try {
+          const user = await databaseStorage.getUserById(storedRepo.userId);
+          if (user) {
+            const currentCredits = user.aiCredits || 0;
+            const creditsToDeduct = Math.ceil(summary.tokensUsed / 10); // 1 credit per 10 tokens
+            
+            if (currentCredits >= creditsToDeduct) {
+              const newCredits = currentCredits - creditsToDeduct;
+              await databaseStorage.updateUser(user.id, { aiCredits: newCredits });
+              
+              console.log(`💰 Credits deducted: ${creditsToDeduct} (${summary.tokensUsed} tokens) - Remaining: ${newCredits}`);
+              
+              // Check if credits are low (less than 50)
+              if (newCredits < 50) {
+                await storage.createNotification({
+                  userId: user.id,
+                  type: 'low_credits',
+                  title: 'Low AI Credits',
+                  message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`
+                });
+                
+                // Broadcast notification for real-time updates
+                broadcastNotification(user.id, {
+                  type: 'low_credits',
+                  title: 'Low AI Credits',
+                  message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`,
+                  createdAt: new Date().toISOString()
+                });
+              }
+            } else {
+              console.log(`❌ Insufficient credits: ${currentCredits} available, ${creditsToDeduct} needed`);
+              
+              // Create notification for insufficient credits
+              await storage.createNotification({
+                userId: user.id,
+                type: 'no_credits',
+                title: 'No AI Credits',
+                message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.'
+              });
+              
+              // Broadcast notification for real-time updates
+              broadcastNotification(user.id, {
+                type: 'no_credits',
+                title: 'No AI Credits',
+                message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.',
+                createdAt: new Date().toISOString()
+              });
+              
+              // Skip AI processing for this push
+              aiGenerated = false;
+              aiSummary = null;
+              aiImpact = null;
+              aiCategory = null;
+              aiDetails = null;
+            }
+          }
+        } catch (creditError) {
+          console.error('Error processing credits:', creditError);
+          // Continue with AI processing even if credit deduction fails
+        }
+
         // Update the push event with AI summary
         await storage.updatePushEvent(pushEvent.id, {
           aiSummary,

@@ -4,7 +4,7 @@ import { apiRequest } from '@/lib/queryClient';
 
 interface Notification {
   id: number;
-  type: 'email_verification' | 'push_event' | 'slack_message_sent';
+  type: 'email_verification' | 'push_event' | 'slack_message_sent' | 'low_credits' | 'no_credits';
   title?: string;
   message: string;
   createdAt: string;
@@ -67,6 +67,15 @@ export function useNotifications() {
           // Add new notification to the list
           setNotifications(prev => [data.data, ...prev]);
           setUnreadCount(prev => prev + 1);
+          
+          // Handle credit-related notifications with toast
+          if (data.data.type === 'low_credits' || data.data.type === 'no_credits') {
+            // Dispatch custom event for credit notifications
+            const creditEvent = new CustomEvent('credit-notification', {
+              detail: data.data
+            });
+            window.dispatchEvent(creditEvent);
+          }
           
           // Invalidate the query to refetch from database
           queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
