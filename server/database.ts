@@ -11,7 +11,7 @@ import {
   type AiUsage, type InsertAiUsage,
   type Payment, type InsertPayment
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -365,6 +365,17 @@ export class DatabaseStorage implements IStorage {
   async getUserByStripeCustomerId(customerId: string): Promise<User | null> {
     const [result] = await db.select().from(users).where(eq(users.stripeCustomerId, customerId));
     return result ? convertToUser(result as any) : null;
+  }
+
+  async getDatabaseHealth(): Promise<string> {
+    try {
+      // Simple query to test database connection
+      await db.execute(sql`SELECT 1`);
+      return "healthy";
+    } catch (error) {
+      console.error("Database health check failed:", error);
+      return "unhealthy";
+    }
   }
 }
 

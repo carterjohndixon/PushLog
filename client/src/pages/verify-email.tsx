@@ -21,7 +21,19 @@ export default function VerifyEmail() {
           throw new Error("Verification token is missing");
         }
 
-        const response = await apiRequest("GET", `/api/verify-email?token=${token}`);
+        // Use fetch directly to avoid apiRequest's error handling
+        const response = await fetch(`/api/verify-email?token=${token}`, {
+          method: "GET",
+          headers: {
+            "Accept": "application/json"
+          }
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Verification failed");
+        }
+        
         const data = await response.json();
 
         if (data.success) {

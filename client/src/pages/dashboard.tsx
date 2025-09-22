@@ -89,6 +89,22 @@ export default function Dashboard() {
       // Clean up the URL without reloading
       window.history.replaceState(null, '', window.location.pathname);
     }
+
+    // Check for OAuth error messages in URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    const message = urlParams.get('message');
+    
+    if (error === 'github_already_connected' && message) {
+      toast({
+        title: "GitHub Account Already Connected",
+        description: decodeURIComponent(message),
+        variant: "destructive",
+      });
+      
+      // Clean up the URL
+      window.history.replaceState(null, '', window.location.pathname);
+    }
   }, [toast]);
 
 
@@ -319,9 +335,22 @@ export default function Dashboard() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to connect Slack');
-      if (data.url) window.location.href = data.url;
+      
+      console.log('Slack connect response:', { status: response.status, data });
+      
+      if (!response.ok) {
+        console.error('Slack connect error:', data);
+        throw new Error(data.error || 'Failed to connect Slack');
+      }
+      
+      if (data.url) {
+        console.log('Redirecting to Slack OAuth:', data.url);
+        window.location.href = data.url;
+      } else {
+        throw new Error('No OAuth URL received from server');
+      }
     } catch (error) {
+      console.error('Slack connection error:', error);
       toast({
         title: "Connection Failed",
         description: "Failed to connect to Slack. Please try again.",

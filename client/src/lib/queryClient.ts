@@ -14,13 +14,21 @@ function handleTokenExpiration() {
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    // Handle 401 Unauthorized globally
+    const text = await res.text();
+    
+    // Handle 401 Unauthorized globally, but only for authenticated routes
     if (res.status === 401) {
+      // Check if this is a login/signup request - don't redirect for these
+      const url = res.url;
+      if (url.includes('/api/login') || url.includes('/api/signup')) {
+        throw new Error(text || 'Invalid credentials');
+      }
+      
+      // For other authenticated routes, handle token expiration
       handleTokenExpiration();
       throw new Error('Token expired');
     }
     
-    const text = await res.text();
     throw new Error(text || res.statusText);
   }
 }

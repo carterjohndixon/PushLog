@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from 'bcryptjs';
@@ -31,10 +31,22 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
+import { body, validationResult } from "express-validator";
 
 // Extend global type for notification streams
 declare global {
   var notificationStreams: Map<number, any> | undefined;
+}
+
+// Helper function to get user ID from OAuth state
+async function getUserIdFromOAuthState(state: string): Promise<number | null> {
+  try {
+    const session = await databaseStorage.getOAuthSession(state);
+    return session ? session.userId : null;
+  } catch (error) {
+    console.error('Error getting user from OAuth state:', error);
+    return null;
+  }
 }
 
 const SALT_ROUNDS = 10;
@@ -50,14 +62,60 @@ function broadcastNotification(userId: number, notification: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Login route
-  app.post("/api/login", async (req, res) => {
-    try {
-      const { identifier, password } = req.body;
+  // Health check endpoints
+  app.get("/health", (req, res) => {
+    res.status(200).json({ 
+      status: "healthy", 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  });
 
-      if (!identifier || !password) {
-        return res.status(400).send("Email/username and password are required");
+  app.get("/health/detailed", async (req, res) => {
+    try {
+      // Check database connection
+      const dbCheck = await databaseStorage.getDatabaseHealth();
+      
+      // Check external services
+      const services = {
+        database: dbCheck,
+        github: "unknown", // Could add actual GitHub API check
+        slack: "unknown",  // Could add actual Slack API check
+        stripe: "unknown"  // Could add actual Stripe API check
+      };
+
+      const isHealthy = dbCheck === "healthy";
+      
+      res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? "healthy" : "unhealthy",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        services
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Login route
+  app.post("/api/login", [
+    body('identifier').trim().isLength({ min: 1 }).withMessage('Email/username is required'),
+    body('password').isLength({ min: 1 }).withMessage('Password is required')
+  ], async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: errors.array() 
+        });
       }
+
+      const { identifier, password } = req.body;
 
       // Try to find user by email or username
       let user = await databaseStorage.getUserByEmail(identifier);
@@ -186,37 +244,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: githubUser.email
         });
 
-        // Try to find existing user by GitHub ID or email
-        let user = await databaseStorage.getUserByGithubId(githubUser.id.toString());
-        console.log('Found user by GitHub ID:', user);
+        // Check if there's a current session/user trying to connect
+        const currentUserId = req.query.state ? await getUserIdFromOAuthState(req.query.state as string) : null;
         
-        if (!user && githubUser.email) {
-          user = await databaseStorage.getUserByEmail(githubUser.email);
-          console.log('Found user by email:', user);
-        }
-
-        if (!user) {
-          console.log('Creating new user...');
-          // Create new user if they don't exist
-          user = await databaseStorage.createUser({
-            username: githubUser.login,
-            email: githubUser.email,
-            githubId: githubUser.id.toString(),
-            githubToken: token,
-            emailVerified: true // GitHub users are considered verified
-          });
-          console.log('Created new user:', user);
+        let user;
+        if (currentUserId) {
+          // User is already logged in and trying to connect GitHub
+          const currentUser = await databaseStorage.getUserById(currentUserId);
+          if (currentUser) {
+            // Check if GitHub account is already connected to another user
+            const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+            if (existingUser && existingUser.id !== currentUser.id) {
+              console.log('GitHub account already connected to another user:', existingUser.id);
+              return res.redirect(`/dashboard?error=github_already_connected&message=${encodeURIComponent('This GitHub account is already connected to another PushLog account. Please use a different GitHub account or contact support.')}`);
+            }
+            
+            // Update current user's GitHub connection
+            user = await databaseStorage.updateUser(currentUser.id, {
+              githubId: githubUser.id.toString(),
+              githubToken: token,
+              email: githubUser.email || currentUser.email,
+              emailVerified: true
+            });
+            console.log('Updated current user with GitHub:', user);
+          }
         } else {
-          console.log('Updating existing user...');
-          // Update existing user's GitHub connection
-          user = await databaseStorage.updateUser(user.id, {
-            githubId: githubUser.id.toString(),
-            githubToken: token,
-            email: githubUser.email || user.email,
-            emailVerified: true, // Mark as verified since we have GitHub email
-            username: user.username || githubUser.login // Keep existing username if set, otherwise use GitHub username
-          });
-          console.log('Updated user:', user);
+          // No current session - check if user already exists with this GitHub ID
+          const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+          if (existingUser) {
+            // Log in existing user
+            console.log('Logging in existing user with GitHub:', existingUser.id);
+            user = await databaseStorage.updateUser(existingUser.id, {
+              githubToken: token, // Update token in case it changed
+              email: githubUser.email || existingUser.email,
+              emailVerified: true
+            });
+            console.log('Updated existing user with new token:', user);
+          } else {
+            // Create new user
+            console.log('Creating new user...');
+            user = await databaseStorage.createUser({
+              username: githubUser.login,
+              email: githubUser.email,
+              githubId: githubUser.id.toString(),
+              githubToken: token,
+              emailVerified: true
+            });
+            console.log('Created new user:', user);
+          }
         }
 
         if (!user || !user.id) {
@@ -383,13 +458,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create signup for user and create user
-  app.post("/api/signup", async (req, res) => {
+  app.post("/api/signup", [
+    body('username').trim().isLength({ min: 3, max: 30 }).withMessage('Username must be 3-30 characters'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+  ], async (req: Request, res: Response) => {
     try {
-      const { username, email, password } = req.body;
-
-      if (!username || !email || !password) {
-        return res.status(400).send("Username, email, and password are required");
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: errors.array() 
+        });
       }
+
+      const { username, email, password } = req.body;
 
       // Validate password requirements
       const passwordRequirements = {
@@ -1331,10 +1414,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
       }
       
-      // Generate AI summary
-      const summary = await generateCodeSummary(testPushData);
+      // Generate AI summary using the integration's model settings
+      const aiModel = activeIntegration.aiModel || 'gpt-3.5-turbo';
+      const maxTokens = activeIntegration.maxTokens || 350;
       
-      console.log(`✅ AI summary generated for test:`, summary);
+      console.log(`🧪 Testing AI model: ${aiModel} with max tokens: ${maxTokens}`);
+      
+      const summary = await generateCodeSummary(
+        testPushData, 
+        aiModel,
+        maxTokens
+      );
+      
+      console.log(`✅ AI summary generated for test using ${aiModel}:`, summary);
       
       // Send to Slack
       try {
@@ -1586,14 +1678,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           commitSha: commit.id,
         };
 
-        const summary = await generateCodeSummary(pushData);
+        const aiModel = integration.aiModel || 'gpt-3.5-turbo';
+        const maxTokens = integration.maxTokens || 350;
+        
+        console.log(`🤖 Using AI model: ${aiModel} with max tokens: ${maxTokens}`);
+        
+        const summary = await generateCodeSummary(
+          pushData, 
+          aiModel,
+          maxTokens
+        );
         aiSummary = summary.summary.summary;
         aiImpact = summary.summary.impact;
         aiCategory = summary.summary.category;
         aiDetails = summary.summary.details;
         aiGenerated = true;
 
-        console.log(`AI summary generated for commit ${commit.id}:`, summary);
+        console.log(`✅ AI summary generated for commit ${commit.id} using ${aiModel}:`, summary);
 
         // Update the push event with AI summary
         await storage.updatePushEvent(pushEvent.id, {

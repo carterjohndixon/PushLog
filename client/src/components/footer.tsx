@@ -30,7 +30,7 @@ export function Footer() {
               </a>
             </div>
           </div>
-          <div>
+          {/* <div>
             <h4 className="font-semibold mb-4">Product</h4>
             <ul className="space-y-2 text-gray-400">
               <li><a href="#" className="hover:text-white transition-colors">Features</a></li>
@@ -47,7 +47,7 @@ export function Footer() {
               <li><a href="#" className="hover:text-white transition-colors">Status Page</a></li>
               <li><a href="#" className="hover:text-white transition-colors">Security</a></li>
             </ul>
-          </div>
+          </div> */}
         </div>
         <div className="border-t border-gray-700 mt-12 pt-8 text-center text-gray-400">
           <p>&copy; 2025 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>

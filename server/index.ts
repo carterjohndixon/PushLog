@@ -3,6 +3,11 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import compression from "compression";
+import morgan from "morgan";
+import * as Sentry from "@sentry/node";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import pkg from 'pg';
@@ -16,7 +21,27 @@ const __dirname = path.dirname(__filename);
 
 // Load .env file from the project root (one level up from server directory)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+// Initialize Sentry for error tracking
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: process.env.NODE_ENV || 'development',
+    tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+    integrations: [Sentry.expressIntegration()],
+  });
+}
+
 const app = express();
+
+// Trust proxy for ngrok and production deployments
+if (process.env.NODE_ENV === 'production') {
+  // In production, trust first proxy (your hosting provider)
+  app.set('trust proxy', 1);
+} else {
+  // In development with ngrok, trust all proxies
+  app.set('trust proxy', true);
+}
 
 // Create PostgreSQL pool
 const pool = new Pool({
@@ -30,14 +55,64 @@ const sessionStore = new PostgresqlStore({
   tableName: 'user_sessions'
 });
 
-// Middleware
-app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
-  credentials: true
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://api.github.com", "https://slack.com"],
+    },
+  },
+  crossOriginEmbedderPolicy: false
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/', limiter);
+
+// Stricter rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/login', authLimiter);
+app.use('/api/signup', authLimiter);
+
+// Compression
+app.use(compression());
+
+// CORS configuration
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://pushlog.ai', 'https://www.pushlog.ai'] 
+    : ['https://8081fea9884d.ngrok-free.app'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+// Body parsing
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+
+// Logging
+if (process.env.NODE_ENV === 'production') {
+  app.use(morgan('combined'));
+} else {
+  app.use(morgan('dev'));
+}
 
 // Session configuration
 app.use(session({
@@ -88,6 +163,11 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
+
+    // Log error to Sentry
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(err);
+    }
 
     res.status(status).json({ message });
     throw err;
