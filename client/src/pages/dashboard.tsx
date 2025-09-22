@@ -737,7 +737,7 @@ export default function Dashboard() {
                   </div>
                   {!statsLoading && userProfile?.aiCredits && userProfile.aiCredits < 50 && (
                     <div className="group relative">
-                      <AlertTriangle className="text-red-500 w-5 h-5 cursor-help" />
+                      <AlertTriangle className="text-red-500 w-5 h-5 cursor-default" />
                       <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         Credits are low! Consider purchasing more.
                       </div>
