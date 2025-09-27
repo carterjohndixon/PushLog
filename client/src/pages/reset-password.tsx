@@ -63,12 +63,19 @@ export default function ResetPassword() {
 
   const resetPasswordMutation = useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
-      const response = await apiRequest("POST", "/api/reset-password", data);
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(typeof result === 'string' ? result : 'Failed to reset password');
+      try {
+        const response = await apiRequest("POST", "/api/reset-password", data);
+        return await response.json();
+      } catch (error) {
+        // The apiRequest function throws an error with the raw text response
+        // We need to parse it to get the clean error message
+        const errorMessage = error instanceof Error ? error.message : 'Failed to reset password';
+        
+        // If the error message is wrapped in quotes, remove them
+        const cleanMessage = errorMessage.replace(/^"(.*)"$/, '$1');
+        
+        throw new Error(cleanMessage);
       }
-      return result;
     },
     onSuccess: (data) => {
       toast({

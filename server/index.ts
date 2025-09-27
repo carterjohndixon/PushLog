@@ -63,32 +63,71 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://api.github.com", "https://slack.com"],
+      connectSrc: ["'self'", "https://api.github.com", "https://slack.com", "https://api.stripe.com"],
+      frameSrc: ["'self'", "https://js.stripe.com"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
   },
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  hsts: {
+    maxAge: 31536000,
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  xssFilter: true,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }
 }));
 
 // Rate limiting
+const isDevelopment = process.env.NODE_ENV !== 'production';
+const isLoadTesting = process.env.LOAD_TESTING === 'true';
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: isLoadTesting ? 10000 : (isDevelopment ? 1000 : 100), // More permissive in dev/load testing
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health' || req.path === '/health/detailed';
+  },
 });
 app.use('/api/', limiter);
 
 // Stricter rate limiting for auth endpoints
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // limit each IP to 5 requests per windowMs
+  max: isLoadTesting ? 100 : (isDevelopment ? 20 : 5), // More permissive in dev/load testing
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
 });
 app.use('/api/login', authLimiter);
 app.use('/api/signup', authLimiter);
+
+// Rate limiting for password reset
+const passwordResetLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3, // limit each IP to 3 password reset attempts per hour
+  message: 'Too many password reset attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/forgot-password', passwordResetLimiter);
+app.use('/api/reset-password', passwordResetLimiter);
+
+// Rate limiting for payment endpoints
+const paymentLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 10, // limit each IP to 10 payment attempts per 5 minutes
+  message: 'Too many payment attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/payments/', paymentLimiter);
 
 // Compression
 app.use(compression());
@@ -103,9 +142,20 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+// Body parsing with security limits
+app.use(express.json({ 
+  limit: '1mb', // Reduced from 10mb for security
+  verify: (req, res, buf) => {
+    // Prevent JSON parsing attacks
+    if (buf.length > 1024 * 1024) { // 1MB limit
+      throw new Error('Request body too large');
+    }
+  }
+}));
+app.use(express.urlencoded({ 
+  extended: false, 
+  limit: '1mb' // Reduced from 10mb for security
+}));
 
 // Logging
 if (process.env.NODE_ENV === 'production') {
@@ -115,15 +165,21 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Session configuration
+const sessionSecret = process.env.SESSION_SECRET;
+if (!sessionSecret) {
+  throw new Error('SESSION_SECRET environment variable is required');
+}
+
 app.use(session({
   store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
   cookie: {
     secure: process.env.NODE_ENV === 'production',
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000
+    maxAge: 24 * 60 * 60 * 1000,
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
   }
 }));
 
@@ -194,3 +250,4 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
   });
 })();
+

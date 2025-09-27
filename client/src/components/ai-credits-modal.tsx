@@ -259,7 +259,7 @@ export function AiCreditsModal({
                     <Label htmlFor="card-number">Card Number</Label>
                     <Input
                       id="card-number"
-                      placeholder="4242 4242 4242 4242"
+                      // placeholder="4242 4242 4242 4242"
                       value={cardDetails.number}
                       onChange={(e) => setCardDetails({...cardDetails, number: e.target.value})}
                       className="font-mono"
@@ -270,7 +270,7 @@ export function AiCreditsModal({
                       <Label htmlFor="expiry-month">Month</Label>
                       <Input
                         id="expiry-month"
-                        placeholder="12"
+                        // placeholder="12"
                         value={cardDetails.expiryMonth}
                         onChange={(e) => setCardDetails({...cardDetails, expiryMonth: e.target.value})}
                         maxLength={2}
@@ -280,7 +280,7 @@ export function AiCreditsModal({
                       <Label htmlFor="expiry-year">Year</Label>
                       <Input
                         id="expiry-year"
-                        placeholder="25"
+                        // placeholder="25"
                         value={cardDetails.expiryYear}
                         onChange={(e) => setCardDetails({...cardDetails, expiryYear: e.target.value})}
                         maxLength={2}
@@ -294,7 +294,7 @@ export function AiCreditsModal({
                     <Input
                       id="cvc"
                       type="password"
-                      placeholder="123"
+                      // placeholder="123"
                       value={cardDetails.cvc}
                       onChange={(e) => setCardDetails({...cardDetails, cvc: e.target.value})}
                       maxLength={4}
@@ -304,7 +304,7 @@ export function AiCreditsModal({
                     <Label htmlFor="zip">ZIP Code</Label>
                     <Input
                       id="zip"
-                      placeholder="12345"
+                      // placeholder="12345"
                       value={cardDetails.zip}
                       onChange={(e) => setCardDetails({...cardDetails, zip: e.target.value})}
                     />
@@ -312,11 +312,13 @@ export function AiCreditsModal({
                 </div>
                 
                 {/* Test Card Info */}
+                {/* 
                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-sm">
                   <p className="font-medium text-yellow-800">Test Mode</p>
                   <p className="text-yellow-700">Use card number: 4242 4242 4242 4242</p>
                   <p className="text-yellow-700">Month: 12, Year: 25, CVC: 123</p>
                 </div>
+                  */}
               </form>
             </div>
           </div>
