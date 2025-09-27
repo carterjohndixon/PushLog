@@ -818,8 +818,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Connect a repository
-  app.post("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {
+  app.post("/api/repositories", [
+    body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Repository name is required and must be 1-100 characters'),
+    body('owner').trim().isLength({ min: 1, max: 100 }).withMessage('Repository owner is required and must be 1-100 characters'),
+    body('githubId').isInt({ min: 1 }).withMessage('Valid GitHub ID is required'),
+    body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
+    body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
+  ], authenticateToken, requireEmailVerification, async (req: any, res: any) => {
     try {
+      // Validate input
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: errors.array() 
+        });
+      }
+
       console.log('Repository connection request:', {
         body: req.body,
         headers: {
@@ -930,10 +945,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update repository
-  app.patch("/api/repositories/:id", authenticateToken, async (req, res) => {
+  app.patch("/api/repositories/:id", [
+    body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
+    body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
+  ], authenticateToken, async (req: any, res: any) => {
     try {
+      // Validate input
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ 
+          error: "Validation failed", 
+          details: errors.array() 
+        });
+      }
+
       const repositoryId = parseInt(req.params.id);
+      if (isNaN(repositoryId) || repositoryId <= 0) {
+        return res.status(400).json({ error: "Invalid repository ID" });
+      }
+      
       const updates = req.body;
+      
+      // First verify user owns this repository
+      const existingRepository = await storage.getRepository(repositoryId);
+      if (!existingRepository) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
+      
+      if (existingRepository.userId !== req.user!.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
       
       const repository = await storage.updateRepository(repositoryId, updates);
       
@@ -966,13 +1007,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Disconnect a repository
-  app.delete("/api/repositories/:id", async (req, res) => {
+  app.delete("/api/repositories/:id", authenticateToken, async (req, res) => {
     try {
       const repositoryId = parseInt(req.params.id);
       const repository = await storage.getRepository(repositoryId);
       
       if (!repository) {
         return res.status(404).json({ error: "Repository not found" });
+      }
+
+      // Verify user owns this repository
+      if (repository.userId !== req.user!.userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const user = await storage.getUser(repository.userId);
@@ -1125,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const workspace = await databaseStorage.getSlackWorkspace(workspaceId);
       
       if (!workspace || workspace.userId !== userId) {
-        return res.status(404).json({ error: "Workspace not found" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const channels = await getSlackChannelsForWorkspace(workspace.accessToken);
@@ -1250,6 +1296,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrationId = parseInt(req.params.id);
       const updates = req.body;
       
+      // First verify user owns this integration
+      const existingIntegration = await storage.getIntegration(integrationId);
+      if (!existingIntegration) {
+        return res.status(404).json({ error: "Integration not found" });
+      }
+      
+      if (existingIntegration.userId !== req.user!.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const integration = await storage.updateIntegration(integrationId, updates);
       
       if (!integration) {
@@ -1273,9 +1329,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete integration
-  app.delete("/api/integrations/:id", async (req, res) => {
+  app.delete("/api/integrations/:id", authenticateToken, async (req, res) => {
     try {
       const integrationId = parseInt(req.params.id);
+      
+      // First get the integration to verify ownership
+      const integration = await storage.getIntegration(integrationId);
+      if (!integration) {
+        return res.status(404).json({ error: "Integration not found" });
+      }
+      
+      // Verify user owns this integration
+      if (integration.userId !== req.user!.userId) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+      
       const success = await storage.deleteIntegration(integrationId);
       
       if (!success) {
@@ -1288,50 +1356,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Failed to delete integration" });
     }
   });
-  
-  // Disconnect a repository
-  app.delete("/api/repositories/:id", async (req, res) => {
+
+  // Get user stats (authenticated version)
+  app.get("/api/stats", authenticateToken, async (req, res) => {
     try {
-      const repositoryId = parseInt(req.params.id);
-      const repository = await storage.getRepository(repositoryId);
-      
-      if (!repository) {
-        return res.status(404).json({ error: "Repository not found" });
-      }
-
-      const user = await storage.getUser(repository.userId);
-      
-      if (user && user.githubToken && repository.webhookId) {
-        try {
-          await deleteWebhook(
-            user.githubToken,
-            repository.owner,
-            repository.name,
-            repository.webhookId
-          );
-        } catch (webhookError) {
-          console.error("Failed to delete webhook:", webhookError);
-        }
-      }
-
-      await storage.deleteRepository(repositoryId);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error disconnecting repository:", error);
-      res.status(500).json({ error: "Failed to disconnect repository" });
-    }
-  });
-
-  // Get user stats
-  app.get("/api/stats", async (req, res) => {
-    try {
-      const userId = req.query.userId as string;
-      
-      if (!userId) {
-        return res.status(400).json({ error: "User ID required" });
-      }
-
-      const stats = await storage.getStatsForUser(parseInt(userId));
+      const userId = req.user!.userId;
+      const stats = await storage.getStatsForUser(userId);
       res.json(stats);
     } catch (error) {
       console.error("Error fetching stats:", error);
@@ -1339,13 +1369,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get push events
-  app.get("/api/push-events", async (req, res) => {
+  // Get push events (authenticated version)
+  app.get("/api/push-events", authenticateToken, async (req, res) => {
     try {
       const repositoryId = req.query.repositoryId as string;
       
       if (!repositoryId) {
         return res.status(400).json({ error: "Repository ID required" });
+      }
+
+      // Verify user owns this repository
+      const repository = await storage.getRepository(parseInt(repositoryId));
+      if (!repository || repository.userId !== req.user!.userId) {
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const pushEvents = await storage.getPushEventsByRepositoryId(parseInt(repositoryId));
@@ -2062,6 +2098,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/notifications/:id", authenticateToken, async (req, res) => {
     try {
       const notificationId = parseInt(req.params.id);
+      const userId = req.user!.userId;
+      
+      // Get all user notifications to verify ownership
+      const userNotifications = await storage.getNotificationsByUserId(userId);
+      const notification = userNotifications.find(n => n.id === notificationId);
+      
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      
       const success = await storage.deleteNotification(notificationId);
       if (success) {
         res.json({ success: true });
