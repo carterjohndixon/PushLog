@@ -159,8 +159,9 @@ export function useNotifications() {
       await apiRequest("DELETE", "/api/notifications/clear-all");
       setNotifications([]);
       setUnreadCount(0);
-      // Invalidate the query to ensure UI updates properly
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
+      
+      // Force a refetch to ensure UI is in sync with server
+      await queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
       console.error('Error clearing notifications:', error);
     }
