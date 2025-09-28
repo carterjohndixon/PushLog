@@ -215,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build the GitHub OAuth URL
       const clientId = process.env.GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://8081fea9884d.ngrok-free.app/api/auth/user";
+      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://pushlog.ai/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
@@ -869,7 +869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create webhook URL
-      const domain = process.env.APP_URL || "https://8081fea9884d.ngrok-free.app";
+      const domain = process.env.APP_URL || "https://pushlog.ai";
       const webhookUrl = `${domain}/api/webhooks/github`;
       console.log(`github webhookURL: ${webhookUrl}`)
 

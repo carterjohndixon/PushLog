@@ -14,7 +14,7 @@ const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
  */
 export function generateSlackOAuthUrl(state: string): string {
   const clientId = process.env.SLACK_CLIENT_ID;
-  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://8081fea9884d.ngrok-free.app/api/slack/callback";
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://pushlog.ai/api/slack/callback";
   
   if (!clientId) {
     throw new Error("SLACK_CLIENT_ID environment variable must be set");
@@ -40,7 +40,7 @@ export async function exchangeSlackCodeForToken(code: string): Promise<{
 }> {
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
-  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://8081fea9884d.ngrok-free.app/api/slack/callback";
+  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://pushlog.ai/api/slack/callback";
 
   if (!clientId || !clientSecret) {
     throw new Error("Slack OAuth credentials not configured");
