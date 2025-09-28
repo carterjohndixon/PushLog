@@ -44,7 +44,7 @@ PushLog is a hosted web service - no installation or setup required!
 
 ## How to Use PushLog
 
-1. **Visit the Website**: Go to [PushLog.app](https://pushlog.app)
+1. **Visit the Website**: Go to [PushLog.app](https://pushlog.ai)
 2. **Create Account**: Sign up with your email or GitHub account
 3. **Connect GitHub**: Authorize PushLog to access your repositories
 4. **Connect Slack**: Authorize PushLog to send messages to your workspace
