@@ -60,7 +60,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-80 max-h-[50vh] overflow-y-auto">
         {notifications.map((notification) => (
           <div 
             key={notification.id} 
