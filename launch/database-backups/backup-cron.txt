@@ -1,6 +1,0 @@
-# PushLog Database Backup Cron Job
-# Run daily at 2 AM
-0 2 * * * cd /Users/carterdixon_1/Desktop/React/PushLog && ./backup-database.sh >> ./backups/backup.log 2>&1
-
-# Run weekly full backup on Sundays at 3 AM
-0 3 * * 0 cd /Users/carterdixon_1/Desktop/React/PushLog && ./backup-database.sh >> ./backups/backup.log 2>&1
