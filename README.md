@@ -66,37 +66,6 @@ PushLog is a hosted web service - no installation or setup required!
    - Sends a formatted notification to your Slack channel
    - Deducts credits based on AI usage
 
-## Project Structure
-
-```
-├── client/                 # Frontend React application
-│   ├── src/
-│   │   ├── components/    # Reusable UI components
-│   │   ├── pages/        # Application pages (dashboard, integrations, etc.)
-│   │   ├── lib/          # Utilities and types
-│   │   └── App.tsx       # Main application component
-├── server/                # Backend Express application
-│   ├── routes.ts         # API route handlers
-│   ├── database.ts       # Database operations with Drizzle ORM
-│   ├── ai.ts            # OpenAI integration
-│   ├── stripe.ts        # Payment processing
-│   ├── slack.ts         # Slack integration
-│   └── github.ts        # GitHub integration
-├── shared/               # Shared TypeScript schemas
-├── migrations/           # Database migration files
-└── attached_assets/      # Brand assets and logos
-```
-
-## API Endpoints
-
-- `POST /api/auth/github` - GitHub OAuth callback
-- `GET /api/repositories` - Get user repositories
-- `POST /api/repositories` - Connect a repository
-- `GET /api/integrations` - Get user integrations
-- `POST /api/integrations` - Create new integration
-- `GET /api/slack/channels` - Get Slack channels
-- `POST /api/webhooks/github` - GitHub webhook endpoint
-
 ## Pricing
 
 PushLog uses a credit-based system for AI-powered summaries:
