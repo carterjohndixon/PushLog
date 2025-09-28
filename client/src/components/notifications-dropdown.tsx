@@ -145,7 +145,10 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 variant="ghost"
                 size="sm"
                 className="text-xs text-red-600 hover:text-red-700"
-                onClick={() => clearAllNotifications()}
+                onClick={() => {
+                  console.log('Clear All button clicked');
+                  clearAllNotifications();
+                }}
               >
                 Clear all
               </Button>
