@@ -2122,12 +2122,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Clear all notifications for a user
   app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
+    // try {
+    //   const notificationId = parseInt(req.params.id);
+    //   const userId = req.user!.userId;
+      
+    //   // Get all user notifications to verify ownership
+    //   const userNotifications = await storage.getNotificationsByUserId(userId);
+    //   const notification = userNotifications.find(n => n.id === notificationId);
+      
+    //   if (!notification) {
+    //     return res.status(404).json({ error: "Notification not found" });
+    //   }
+      
+    //   const success = await storage.deleteNotification(notificationId);
+    //   if (success) {
+    //     res.json({ success: true });
+    //   } else {
+    //     res.status(404).json({ error: "Notification not found" });
+    //   }
+    // } catch (error) {
+    //   console.error("Error deleting notification:", error);
+    //   res.status(500).json({ error: "Failed to delete notification" });
+    // }
+
     try {
       const userId = req.user!.userId;
-      await storage.deleteAllNotifications(userId);
-      res.json({ success: true });
+      console.log(`🗑️ [SERVER] Clearing all notifications for user ${userId}`);
+      
+      // Get current notification count before deletion
+      const currentNotifications = await storage.getNotificationsByUserId(userId);
+      console.log(`📊 [SERVER] Current notifications count for user ${userId}:`, currentNotifications.length);
+      
+      // Delete all notifications
+      const result = await storage.deleteAllNotifications(userId);
+      console.log(`✅ [SERVER] Delete operation result:`, result);
+      
+      // Verify deletion by checking count again
+      const remainingNotifications = await storage.getNotificationsByUserId(userId);
+      console.log(`🔍 [SERVER] Remaining notifications after deletion:`, remainingNotifications.length);
+      
+      res.json({ success: true, deletedCount: currentNotifications.length });
     } catch (error) {
-      console.error("Error clearing notifications:", error);
+      console.error("❌ [SERVER] Error clearing notifications:", error);
       res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
