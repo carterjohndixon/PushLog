@@ -102,9 +102,10 @@ export default function Home() {
     }
   };
 
+  // TODO: Implement Slack OAuth flow
   const handleSlackConnect = () => {
     // Slack OAuth flow would be implemented here
-    console.log("Slack OAuth flow initiated");
+    return;
   };
 
   return (
