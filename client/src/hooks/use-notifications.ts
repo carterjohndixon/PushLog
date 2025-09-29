@@ -156,6 +156,9 @@ export function useNotifications() {
 
   const clearAllNotifications = async () => {
     try {
+      await apiRequest("DELETE", `/api/notifications/${notificationId}`);
+      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      setUnreadCount(prev => Math.max(0, prev - 1));
       await apiRequest("DELETE", "/api/notifications/clear-all");
       setNotifications([]);
       setUnreadCount(0);

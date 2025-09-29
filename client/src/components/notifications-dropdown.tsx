@@ -60,8 +60,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 max-h-[50vh] overflow-y-auto">
-        {notifications.map((notification) => (
+      <DropdownMenuContent align="end" className="w-80 max-h-[50vh] flex flex-col">
+        <div className="flex-1 overflow-y-auto">
+          {notifications.map((notification) => (
           <div 
             key={notification.id} 
             className={`flex items-center justify-between p-4 [&:hover]:!bg-gray-50 ${
@@ -129,10 +130,11 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             No new notifications
           </div>
         )}
+        </div>
         {notifications.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <div className="p-2 flex justify-between items-center">
+            <div className="p-2 flex justify-between items-center bg-white border-t">
               <Button
                 variant="ghost"
                 size="sm"
