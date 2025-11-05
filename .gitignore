@@ -61,20 +61,3 @@ vite.config.ts.*
 # Don't show package.json and package-lock.json in server
 server/package.json
 server/package-lock.json
-
-# Test scripts
-test/
-
-# Database backup files (keep scripts, ignore actual backups)
-launch/database-backups/backups/
-launch/database-backups/*.sql
-launch/database-backups/*.dump
-launch/README.md
-
-# Keep deployment files in git
-!launch/
-!launch/*.md
-!launch/*.js
-!launch/*.sh
-!launch/*.txt
-!launch/*.config.js

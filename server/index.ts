@@ -136,7 +136,7 @@ app.use(compression());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? ['https://pushlog.ai', 'https://www.pushlog.ai'] 
-    : ['https://pushlog.ai'],
+    : ['https://8081fea9884d.ngrok-free.app'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

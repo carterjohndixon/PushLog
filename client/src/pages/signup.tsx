@@ -129,7 +129,7 @@ export default function Signup() {
     setOauthProvider("GitHub");
     
     const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://8081fea9884d.ngrok-free.app/api/auth/user"
     const scope = "repo user:email admin:org_hook";
     
     // Generate and store state for CSRF protection

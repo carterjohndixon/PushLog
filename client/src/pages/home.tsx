@@ -135,13 +135,13 @@ export default function Home() {
                 <Github className="mr-2 w-5 h-5" />
                 {user ? 'Connect GitHub' : 'Get Started'}
               </Button>
-              <Button 
+              {/* <Button 
                 variant="outline"
                 className="border-2 border-sky-blue text-sky-blue px-8 py-4 rounded-lg hover:bg-sky-blue hover:text-white transition-colors font-semibold text-lg"
               >
                 <Play className="mr-2 w-5 h-5" />
                 Watch Demo
-              </Button>
+              </Button> */}
             </div>
           </div>
 

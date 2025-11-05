@@ -2,6 +2,7 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 // Global function to handle token expiration
 function handleTokenExpiration() {
+  console.log('Token expired, redirecting to login');
   localStorage.removeItem('token');
   localStorage.removeItem('userId');
   

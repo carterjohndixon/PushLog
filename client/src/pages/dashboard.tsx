@@ -363,12 +363,15 @@ export default function Dashboard() {
       });
       const data = await response.json();
       
+      console.log('Slack connect response:', { status: response.status, data });
+      
       if (!response.ok) {
         console.error('Slack connect error:', data);
         throw new Error(data.error || 'Failed to connect Slack');
       }
       
       if (data.url) {
+        console.log('Redirecting to Slack OAuth:', data.url);
         window.location.href = data.url;
       } else {
         throw new Error('No OAuth URL received from server');
@@ -419,6 +422,7 @@ export default function Dashboard() {
         }
       
         const data = await response.json();
+        console.log('Response data:', data);
         return data;
       } catch (error) {
         console.error('Delete mutation error:', error);
@@ -512,6 +516,7 @@ export default function Dashboard() {
         }
       
         const data = await response.json();
+        console.log('Response data:', data);
         return data;
       } catch (error) {
         console.error('Delete mutation error:', error);

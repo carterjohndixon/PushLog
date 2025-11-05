@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { fileURLToPath } from "url";
+import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +10,7 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   plugins: [
     react(),
+    runtimeErrorOverlay(),
   ],
   resolve: {
       alias: {
@@ -65,15 +67,6 @@ export default defineConfig({
         strict: true,
         deny: ["**/.*"],
       },
-      allowedHosts: [
-        "localhost",
-        "127.0.0.1",
-        "pushlog.ai",
-        "www.pushlog.ai",
-        "0cfcd911cf03.ngrok-free.app",
-        ".ngrok-free.app",
-        ".ngrok.io"
-      ],
     },
     // Optimize dependencies
     optimizeDeps: {

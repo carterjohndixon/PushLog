@@ -84,6 +84,7 @@ Respond with only valid JSON:
 
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
+    console.log(`✅ OpenAI API Response - Actual Model Used: ${actualModel}`);
     
     const response = completion.choices[0]?.message?.content;
     if (!response) {
@@ -96,6 +97,8 @@ Respond with only valid JSON:
     // Calculate usage and cost
     const tokensUsed = completion.usage?.total_tokens || 0;
     const cost = calculateTokenCost(model, tokensUsed);
+    
+    console.log(`📊 OpenAI Usage - Tokens: ${tokensUsed}, Cost: $${(cost/100).toFixed(4)}`);
     
     return {
       summary,

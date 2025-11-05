@@ -18,7 +18,7 @@ export function Footer() {
               Streamline your development workflow with intelligent GitHub and Slack integration. 
               Keep your team synchronized with automated notifications and AI-powered code summaries.
             </p>
-            {/* <div className="flex space-x-4">
+            <div className="flex space-x-4">
               <a href="#" className="text-gray-400 hover:text-log-green transition-colors">
                 <Github className="w-5 h-5" />
               </a>
@@ -28,7 +28,7 @@ export function Footer() {
               <a href="#" className="text-gray-400 hover:text-log-green transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
-            </div> */}
+            </div>
           </div>
           {/* <div>
             <h4 className="font-semibold mb-4">Product</h4>

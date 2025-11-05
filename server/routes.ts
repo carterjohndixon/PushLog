@@ -156,6 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
+      console.log("Login error:", error);
       res.status(500).send("An error occurred while trying to log in");
     }
   });
@@ -184,6 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           } else {
             // Token is invalid, clear the connection and allow reconnection
+            console.log(`Invalid GitHub token for user ${userId}, allowing reconnection`);
             await databaseStorage.updateUser(userId, {
               githubId: null,
               githubToken: null
@@ -213,7 +215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build the GitHub OAuth URL
       const clientId = process.env.GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://pushlog.ai/api/auth/user";
+      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://8081fea9884d.ngrok-free.app/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
@@ -236,6 +238,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const token = await exchangeCodeForToken(code);
         const githubUser = await getGitHubUser(token);
 
+        console.log('GitHub user data:', {
+          id: githubUser.id,
+          login: githubUser.login,
+          email: githubUser.email
+        });
+
         // Check if there's a current session/user trying to connect
         const currentUserId = req.query.state ? await getUserIdFromOAuthState(req.query.state as string) : null;
         
@@ -247,6 +255,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Check if GitHub account is already connected to another user
             const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
             if (existingUser && existingUser.id !== currentUser.id) {
+              console.log('GitHub account already connected to another user:', existingUser.id);
               return res.redirect(`/dashboard?error=github_already_connected&message=${encodeURIComponent('This GitHub account is already connected to another PushLog account. Please use a different GitHub account or contact support.')}`);
             }
             
@@ -257,19 +266,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               email: githubUser.email || currentUser.email,
               emailVerified: true
             });
+            console.log('Updated current user with GitHub:', user);
           }
         } else {
           // No current session - check if user already exists with this GitHub ID
           const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
           if (existingUser) {
             // Log in existing user
+            console.log('Logging in existing user with GitHub:', existingUser.id);
             user = await databaseStorage.updateUser(existingUser.id, {
               githubToken: token, // Update token in case it changed
               email: githubUser.email || existingUser.email,
               emailVerified: true
             });
+            console.log('Updated existing user with new token:', user);
           } else {
             // Create new user
+            console.log('Creating new user...');
             user = await databaseStorage.createUser({
               username: githubUser.login,
               email: githubUser.email,
@@ -277,6 +290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               githubToken: token,
               emailVerified: true
             });
+            console.log('Created new user:', user);
           }
         }
 
@@ -287,6 +301,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!user) {
           throw new Error("Failed to create or update user");
         }
+
+        console.log('GitHub OAuth successful. User details:', {
+          userId: user.id,
+          username: user.username,
+          githubId: user.githubId
+        });
 
         // Generate JWT token
         const jwtToken = generateToken({
@@ -537,6 +557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
+      console.log("Signup error:", error);
       res.status(500).send("Failed to create account");
     }
   });
@@ -638,6 +659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await sendVerificationEmail(user.email, verificationToken);
 
       // Create notification for resend email
+      console.log(`Creating notification for user ${userId}`);
       let notification;
       try {
         const notificationData = {
@@ -646,7 +668,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Verification Email Resent',
           message: 'A new verification email has been sent to your inbox.'
         };
+        console.log('Notification data being sent to database:', notificationData);
         notification = await storage.createNotification(notificationData);
+        console.log('Created notification:', notification);
       } catch (error) {
         console.error('Error creating notification:', error);
         return res.status(500).json({ error: "Failed to create notification" });
@@ -811,12 +835,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      console.log('Repository connection request:', {
+        body: req.body,
+        headers: {
+          authorization: !!req.headers.authorization,
+          contentType: req.headers['content-type']
+        }
+      });
+
       const schema = insertRepositorySchema;
 
       const validatedData = schema.parse(req.body);
       
+      // Log storage type
+      console.log('Using database storage');
+      
       const user = await storage.getUser(req.user!.userId);
 
+      console.log('Connecting repository for user:', {
+        userId: validatedData.userId,
+        hasUser: !!user,
+        githubId: user?.githubId,
+        hasGithubToken: !!user?.githubToken,
+        userDetails: user
+      });
+      
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
@@ -826,8 +869,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create webhook URL
-      const domain = process.env.APP_URL || "https://pushlog.ai";
+      const domain = process.env.APP_URL || "https://8081fea9884d.ngrok-free.app";
       const webhookUrl = `${domain}/api/webhooks/github`;
+      console.log(`github webhookURL: ${webhookUrl}`)
 
       try {
         // First check if user has access to the repository
@@ -843,6 +887,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const repoData = await repoCheckResponse.json();
+        console.log('Repository access confirmed:', {
+          name: repoData.name,
+          permissions: repoData.permissions,
+          private: repoData.private
+        });
 
         // Check if user has admin permissions (required for webhooks)
         if (!repoData.permissions?.admin) {
@@ -1268,6 +1317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const repository = await storage.getRepository(integration.repositoryId);
         if (repository && repository.isActive === false) {
           await storage.updateRepository(integration.repositoryId, { isActive: true });
+          console.log(`Repository ${repository.name} automatically activated due to integration activation`);
         }
       }
 
@@ -1348,6 +1398,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pushEventId = parseInt(req.params.pushEventId);
       const userId = req.user!.userId;
       
+      console.log(`🧪 Testing AI summary for push event ${pushEventId}`);
+      
       // Get user's first active integration for testing
       const userIntegrations = await storage.getIntegrationsByUserId(userId);
       const activeIntegration = userIntegrations.find(integration => integration.isActive);
@@ -1370,6 +1422,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try to fetch actual stats from GitHub API
       try {
         const [owner, repoName] = testPushData.repositoryName.split('/');
+        console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${testPushData.commitSha}`);
         
         const githubResponse = await fetch(
           `https://api.github.com/repos/${owner}/${repoName}/commits/${testPushData.commitSha}`,
@@ -1381,10 +1434,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         );
         
+        console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
+        
         if (githubResponse.ok) {
           const commitData = await githubResponse.json();
           testPushData.additions = commitData.stats?.additions || 0;
           testPushData.deletions = commitData.stats?.deletions || 0;
+          console.log(`✅ Fetched diff stats from GitHub API: +${testPushData.additions} -${testPushData.deletions}`);
+          console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
         } else {
           const errorText = await githubResponse.text();
           console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
@@ -1397,12 +1454,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const aiModel = activeIntegration.aiModel || 'gpt-3.5-turbo';
       const maxTokens = activeIntegration.maxTokens || 350;
       
+      console.log(`🧪 Testing AI model: ${aiModel} with max tokens: ${maxTokens}`);
+      
       const summary = await generateCodeSummary(
         testPushData, 
         aiModel,
         maxTokens
       );
-
+      
+      console.log(`✅ AI summary generated for test using ${aiModel}:`, summary);
+      if (summary.actualModel && summary.actualModel !== aiModel) {
+        console.log(`⚠️  Model mismatch! Requested: ${aiModel}, Actual: ${summary.actualModel}`);
+      }
+      
       // Send to Slack
       try {
         const slackMessage = await generateSlackMessage(testPushData, summary.summary);
@@ -1412,6 +1476,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           text: slackMessage,
           unfurl_links: false
         });
+        
+        console.log(`✅ Slack message sent to channel ${activeIntegration.slackChannelId}`);
+        console.log(`📨 Message: ${slackMessage}`);
+        
       } catch (slackError) {
         console.error("❌ Failed to send Slack message:", slackError);
       }
@@ -1434,33 +1502,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
     try {
+      console.log("🔔 Webhook received!");
+      console.log("📋 Headers:", JSON.stringify(req.headers, null, 2));
+      console.log("📦 Body:", JSON.stringify(req.body, null, 2));
+      
       const signature = req.headers['x-hub-signature-256'] as string;
       const payload = JSON.stringify(req.body);
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        console.log("❌ Invalid webhook signature");
         return res.status(401).json({ error: "Invalid signature" });
       }
+      console.log("✅ Webhook signature verified");
 
       // Handle both push and pull_request events
       const eventType = req.headers['x-github-event'];
+      console.log("🔍 Event type:", eventType);
       
       let branch, commit, repository;
       
       if (eventType === 'pull_request') {
         // Handle pull_request events (PR merges)
         const { pull_request, action } = req.body;
+        console.log("🔍 Action:", action);
+        console.log("🔍 Merged:", pull_request?.merged);
         
         if (!pull_request) {
+          console.log("❌ Not a pull request event, skipping");
           return res.status(200).json({ message: "Not a pull request event, skipping" });
         }
         
         // Only process when PR is merged (not just closed)
         if (action !== 'closed' || !pull_request.merged) {
+          console.log("❌ Pull request not merged, skipping. Action:", action, "Merged:", pull_request.merged);
           return res.status(200).json({ message: "Pull request not merged, skipping" });
         }
         
+        console.log("✅ PR is merged, proceeding with processing");
         branch = pull_request.base.ref;
         commit = {
           id: pull_request.merge_commit_sha,
@@ -1475,23 +1555,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (eventType === 'push') {
         // Handle push events (direct pushes to main)
         const { ref, commits, repository: repo } = req.body;
+        console.log("🔍 Push to branch:", ref);
+        console.log("🔍 Number of commits:", commits?.length);
         
         // Extract branch name from ref
         branch = ref.replace('refs/heads/', '');
         
         // Only process pushes to main branch
         if (branch !== 'main' && branch !== 'master') {
+          console.log("❌ Push to non-main branch, skipping:", branch);
           return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
         }
         
         if (!commits || commits.length === 0) {
+          console.log("❌ No commits in push, skipping");
           return res.status(200).json({ message: "No commits to process" });
         }
         
+        console.log("✅ Push to main branch, proceeding with processing");
         commit = commits[0]; // Process the first commit
         repository = repo;
         
       } else {
+        console.log("❌ Unsupported event type:", eventType);
         return res.status(200).json({ message: `Unsupported event type: ${eventType}` });
       }
       
@@ -1500,18 +1586,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Find the repository in our database
+      console.log("🔍 Looking for repository with GitHub ID:", repository.id.toString());
       const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
       
       if (!storedRepo || !storedRepo.isActive) {
+        console.log("❌ Repository not found or not active:", { 
+          found: !!storedRepo, 
+          active: storedRepo?.isActive,
+          githubId: repository.id.toString()
+        });
         return res.status(200).json({ message: "Repository not active" });
       }
+      console.log("✅ Repository found:", storedRepo.name);
 
       // Get the integration for this repository
+      console.log("🔍 Looking for integration for repository ID:", storedRepo.id);
       const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
       
       if (!integration || !integration.isActive) {
+        console.log("❌ Integration not found or not active:", {
+          found: !!integration,
+          active: integration?.isActive,
+          repositoryId: storedRepo.id
+        });
         return res.status(200).json({ message: "Integration not active" });
       }
+      console.log("✅ Integration found:", integration.slackChannelName);
 
       // Check notification level before processing
       if (integration.notificationLevel === 'main_only') {
@@ -1520,6 +1620,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(200).json({ message: `PR merged to ${branch} branch ignored due to 'main_only' notification level` });
         }
       }
+      // If notificationLevel is 'all', process PRs to any branch
+
+      // Process the commit (either from PR merge or direct push)
       
       // Store push event first to get the ID
       const pushEvent = await storage.createPushEvent({
@@ -1559,11 +1662,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let additions = commit.additions || 0;
         let deletions = commit.deletions || 0;
 
+        console.log(`🔍 Debug - Commit ${commit.id}:`);
+        console.log(`  - Webhook additions: ${commit.additions || 0}`);
+        console.log(`  - Webhook deletions: ${commit.deletions || 0}`);
+        console.log(`  - Files changed: ${filesChanged.length}`);
+        console.log(`  - Files: ${filesChanged.join(', ')}`);
+
         // If we don't have diff data from webhook, try to fetch it from GitHub API
         if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
           try {
             // Get the repository owner and name from full_name
             const [owner, repoName] = repository.full_name.split('/');
+            
+            console.log(`🔍 Debug - Fetching from GitHub API: ${owner}/${repoName}/commits/${commit.id}`);
             
             // Fetch commit details from GitHub API
             const githubResponse = await fetch(
@@ -1576,11 +1687,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               }
             );
 
+            console.log(`🔍 Debug - GitHub API response status: ${githubResponse.status}`);
+
             if (githubResponse.ok) {
               const commitData = await githubResponse.json();
               finalAdditions = commitData.stats?.additions || 0;
               finalDeletions = commitData.stats?.deletions || 0;
-
+              console.log(`✅ Fetched diff stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
+              console.log(`🔍 Debug - Full commit data:`, JSON.stringify(commitData.stats, null, 2));
             } else {
               const errorText = await githubResponse.text();
               console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
@@ -1590,6 +1704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Fall back to webhook data
           }
         } else {
+          console.log(`ℹ️ Using webhook data: +${additions} -${deletions}`);
         }
 
         const pushData = {
@@ -1605,6 +1720,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const aiModel = integration.aiModel || 'gpt-3.5-turbo';
         const maxTokens = integration.maxTokens || 350;
         
+        console.log(`🤖 Using AI model: ${aiModel} with max tokens: ${maxTokens}`);
+        
         const summary = await generateCodeSummary(
           pushData, 
           aiModel,
@@ -1616,6 +1733,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiDetails = summary.summary.details;
         aiGenerated = true;
 
+        console.log(`✅ AI summary generated for commit ${commit.id} using ${aiModel}:`, summary);
+        if (summary.actualModel && summary.actualModel !== aiModel) {
+          console.log(`⚠️  Model mismatch! Requested: ${aiModel}, Actual: ${summary.actualModel}`);
+        }
+
         // Deduct AI credits from user
         try {
           const user = await databaseStorage.getUserById(storedRepo.userId);
@@ -1626,6 +1748,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (currentCredits >= creditsToDeduct) {
               const newCredits = currentCredits - creditsToDeduct;
               await databaseStorage.updateUser(user.id, { aiCredits: newCredits });
+              
+              console.log(`💰 Credits deducted: ${creditsToDeduct} (${summary.tokensUsed} tokens) - Remaining: ${newCredits}`);
               
               // Check if credits are low (less than 50)
               if (newCredits < 50) {
@@ -1645,6 +1769,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
               }
             } else {
+              console.log(`❌ Insufficient credits: ${currentCredits} available, ${creditsToDeduct} needed`);
+              
               // Create notification for insufficient credits
               await storage.createNotification({
                 userId: user.id,
@@ -1791,6 +1917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // If token is invalid, clear the GitHub connection
           if (!githubConnected) {
+            console.log(`Invalid GitHub token for user ${user.id}, clearing connection`);
             await databaseStorage.updateUser(user.id, {
               githubId: null,
               githubToken: null
@@ -1967,31 +2094,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Clear all notifications for a user (MUST come before /:id route)
-  app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
-    try {
-      const userId = req.user!.userId;
-      console.log(`🗑️ [SERVER] Clearing all notifications for user ${userId}`);
-      
-      // Get current notification count before deletion
-      const currentNotifications = await storage.getNotificationsByUserId(userId);
-      console.log(`📊 [SERVER] Current notifications count for user ${userId}:`, currentNotifications.length);
-      
-      // Delete all notifications
-      const result = await storage.deleteAllNotifications(userId);
-      console.log(`✅ [SERVER] Delete operation result:`, result);
-      
-      // Verify deletion by checking count again
-      const remainingNotifications = await storage.getNotificationsByUserId(userId);
-      console.log(`🔍 [SERVER] Remaining notifications after deletion:`, remainingNotifications.length);
-      
-      res.json({ success: true, deletedCount: currentNotifications.length });
-    } catch (error) {
-      console.error("❌ [SERVER] Error clearing notifications:", error);
-      res.status(500).json({ error: "Failed to clear notifications" });
-    }
-  });
-
   // Delete a specific notification
   app.delete("/api/notifications/:id", authenticateToken, async (req, res) => {
     try {
@@ -2015,6 +2117,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting notification:", error);
       res.status(500).json({ error: "Failed to delete notification" });
+    }
+  });
+
+  // Clear all notifications for a user
+  app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      await storage.deleteAllNotifications(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error clearing notifications:", error);
+      res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
 
