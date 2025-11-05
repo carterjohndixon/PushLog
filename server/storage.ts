@@ -103,7 +103,6 @@ export class MemStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.currentUserId++;
-    console.log('Creating user with ID:', id);
     const user: User = { 
       ...insertUser, 
       id, 
@@ -115,8 +114,6 @@ export class MemStorage implements IStorage {
       createdAt: new Date().toISOString()
     } as any;
     this.users.set(id, user);
-    console.log('Created user:', user);
-    console.log('Current users in storage:', Array.from(this.users.entries()));
     return user;
   }
 
@@ -189,6 +186,8 @@ export class MemStorage implements IStorage {
       isActive: integration.isActive ?? null,
       notificationLevel: integration.notificationLevel || null,
       includeCommitSummaries: integration.includeCommitSummaries ?? null,
+      aiModel: integration.aiModel ?? null,
+      maxTokens: integration.maxTokens ?? null,
       createdAt: new Date().toISOString()
     };
     this.integrations.set(id, newIntegration);

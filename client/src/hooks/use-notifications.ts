@@ -156,11 +156,33 @@ export function useNotifications() {
 
   const clearAllNotifications = async () => {
     try {
-      await apiRequest("DELETE", "/api/notifications/clear-all");
+      console.log('🗑️ Starting to clear all notifications...');
+      console.log('📊 Current notifications count:', notifications.length);
+      console.log('📊 Current unread count:', unreadCount);
+      
+      // Make the API request to clear all notifications
+      const response = await apiRequest("DELETE", "/api/notifications/clear-all");
+      console.log('✅ API request successful, response:', response);
+      
+      // Update local state immediately
       setNotifications([]);
       setUnreadCount(0);
+      console.log('🔄 Local state updated - notifications cleared');
+      
+      // Force a refetch to ensure UI is in sync with server
+      await queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
+      console.log('🔄 Query cache invalidated');
+      
+      // Refetch to verify the clear worked
+      const verifyResponse = await apiRequest("GET", "/api/notifications/all");
+      const verifyData = await verifyResponse.json();
+      console.log('🔍 Verification fetch result:', verifyData);
+      
+      setNotifications(verifyData.notifications || []);
+      setUnreadCount(verifyData.count || 0);
+      console.log('✅ Clear all notifications completed successfully');
     } catch (error) {
-      console.error('Error clearing notifications:', error);
+      console.error('❌ Error clearing notifications:', error);
     }
   };
 

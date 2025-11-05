@@ -19,6 +19,17 @@ export function Footer() {
               Keep your team synchronized with automated notifications and AI-powered code summaries.
             </p>
             <div className="flex space-x-4">
+              <a 
+                href="https://github.com/carterjohndixon/PushLog" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-log-green transition-colors"
+                aria-label="View source code on GitHub"
+              >
+                <Github className="w-5 h-5" />
+              </a>
+            </div>
+            {/* <div className="flex space-x-4">
               <a href="#" className="text-gray-400 hover:text-log-green transition-colors">
                 <Github className="w-5 h-5" />
               </a>
@@ -28,7 +39,7 @@ export function Footer() {
               <a href="#" className="text-gray-400 hover:text-log-green transition-colors">
                 <Linkedin className="w-5 h-5" />
               </a>
-            </div>
+            </div> */}
           </div>
           {/* <div>
             <h4 className="font-semibold mb-4">Product</h4>

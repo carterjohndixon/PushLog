@@ -21,12 +21,12 @@
     "test:ai-performance": "node ai-performance-test.js",
     "test:load": "node load-test.js",
     "test:all-performance": "npm run test:performance && npm run test:database && npm run test:ai-performance && npm run test:load",
-    "fix:ai-integration": "node fix-ai-integration.js",
-    "fix:rate-limiting": "node fix-rate-limiting.js",
-    "fix:all-issues": "node fix-all-issues.js",
-    "test:webhooks": "node test-webhooks.js",
-    "test:existing-webhooks": "node test-existing-webhooks.js",
-    "test:webhooks-manual": "node test-webhooks-manual.js"
+    "setup:database-backup": "node setup-database-backup.js",
+    "fix:supabase-security": "node fix-supabase-security.js",
+    "test:security": "node test-security.js",
+    "get:supabase-credentials": "node get-supabase-credentials.js",
+    "enable:leaked-password-protection": "node enable-leaked-password-protection.js",
+    "check:supabase-security": "node check-supabase-security-status.js"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.4",
@@ -122,19 +122,19 @@
     "@replit/vite-plugin-cartographer": "^0.2.7",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
     "@tailwindcss/typography": "^0.5.15",
-    "@tailwindcss/vite": "^4.1.3",
+    "@tailwindcss/vite": "^4.1.13",
     "@types/compression": "^1.8.1",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/express": "4.17.21",
     "@types/express-session": "^1.18.1",
     "@types/morgan": "^1.9.10",
-    "@types/node": "20.16.11",
+    "@types/node": "^24.5.2",
     "@types/passport": "^1.0.16",
     "@types/passport-local": "^1.0.38",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@types/ws": "^8.5.13",
-    "@vitejs/plugin-react": "^4.3.2",
+    "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
     "drizzle-kit": "^0.30.6",
@@ -145,7 +145,7 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "vite": "^5.4.14"
+    "vite": "^7.1.7"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

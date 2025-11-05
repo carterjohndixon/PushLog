@@ -338,7 +338,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAllNotifications(userId: number): Promise<boolean> {
-    await db.delete(notifications).where(eq(notifications.userId, userId));
+    console.log(`🗄️ [DATABASE] Deleting all notifications for user ${userId}`);
+    
+    // Get count before deletion
+    const beforeCount = await db.select().from(notifications).where(eq(notifications.userId, userId));
+    console.log(`📊 [DATABASE] Notifications before deletion:`, beforeCount.length);
+    
+    // Perform deletion
+    const result = await db.delete(notifications).where(eq(notifications.userId, userId));
+    console.log(`✅ [DATABASE] Delete operation result:`, result);
+    
+    // Verify deletion
+    const afterCount = await db.select().from(notifications).where(eq(notifications.userId, userId));
+    console.log(`🔍 [DATABASE] Notifications after deletion:`, afterCount.length);
+    
     return true;
   }
 
