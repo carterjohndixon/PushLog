@@ -42,11 +42,17 @@ interface GitHubWebhook {
  * Exchange OAuth code for access token
  */
 export async function exchangeCodeForToken(code: string): Promise<string> {
-  const clientId = process.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
+  const clientId = process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
   const clientSecret = process.env.GITHUB_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error("GitHub OAuth credentials not configured");
+    console.error("GitHub OAuth configuration error:", {
+      hasClientId: !!clientId,
+      hasClientSecret: !!clientSecret,
+      clientIdEnv: process.env.GITHUB_CLIENT_ID ? "set" : "missing",
+      clientSecretEnv: process.env.GITHUB_CLIENT_SECRET ? "set" : "missing"
+    });
+    throw new Error("GitHub OAuth credentials not configured. Please check GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables.");
   }
 
   const response = await fetch("https://github.com/login/oauth/access_token", {
@@ -161,11 +167,6 @@ export async function createWebhook(
 ): Promise<GitHubWebhook> {
   // Debug: Check if PAT is available
   const pat = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-  console.log('createWebhook called with PAT available:', {
-    hasPat: !!pat,
-    patLength: pat ? pat.length : 0,
-    patPrefix: pat ? pat.substring(0, 4) : 'none'
-  });
   // Try with OAuth token first
   try {
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks`, {
@@ -204,13 +205,7 @@ export async function createWebhook(
   } catch (oauthError) {
     // If OAuth fails, try with PAT if available
     const pat = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-    console.log('OAuth webhook creation failed, checking for PAT...', {
-      hasPat: !!pat,
-      patLength: pat ? pat.length : 0,
-      patPrefix: pat ? pat.substring(0, 4) : 'none'
-    });
     if (pat) {
-      console.log('OAuth webhook creation failed, trying with PAT...');
       try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks`, {
           method: "POST",

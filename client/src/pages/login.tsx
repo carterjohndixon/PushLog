@@ -19,6 +19,22 @@ export default function Login() {
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
 
+  // Check for error messages from OAuth redirects
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get('error');
+    
+    if (error) {
+      toast({
+        title: "Authentication Failed",
+        description: decodeURIComponent(error),
+        variant: "destructive",
+      });
+      // Clean up the URL without reloading
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [toast]);
+
   const loginMutation = useMutation({
       mutationFn: async (loginData: any) => {
         const response = await apiRequest("POST", "/api/login", {
@@ -67,7 +83,7 @@ export default function Login() {
     setOauthProvider("GitHub");
     
     const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://8081fea9884d.ngrok-free.app/api/auth/user"
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
     const scope = "repo user:email admin:org_hook";
     
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
