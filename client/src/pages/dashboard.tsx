@@ -727,17 +727,18 @@ export default function Dashboard() {
                     {statsLoading ? (
                       <Skeleton className="h-8 w-8 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold text-purple-600">{userProfile?.aiCredits?.toLocaleString() || '0'}</p>
+                      <p className="text-2xl font-bold text-purple-600">∞</p>
                     )}
                   </div>
-                  {!statsLoading && userProfile?.aiCredits && userProfile.aiCredits < 50 && (
+                  {/* REAL PAYMENT VERSION: */}
+                  {/* {!statsLoading && userProfile?.aiCredits && userProfile.aiCredits < 50 && (
                     <div className="group relative">
                       <AlertTriangle className="text-red-500 w-5 h-5 cursor-default" />
                       <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
                         Credits are low! Consider purchasing more.
                       </div>
                     </div>
-                  )}
+                  )} */}
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <CreditCard className="text-purple-600 w-6 h-6" />
