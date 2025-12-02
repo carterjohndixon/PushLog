@@ -1593,6 +1593,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             // Fall back to webhook data
           }
         } else {
+          // Use webhook data when available
+          finalAdditions = additions;
+          finalDeletions = deletions;
         }
 
         const pushData = {
