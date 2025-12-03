@@ -1567,7 +1567,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
         // For push webhooks, these fields are undefined. For PR webhooks, they're provided.
         const hasWebhookStats = additions !== undefined && deletions !== undefined;
-        console.log(`📊 hasWebhookStats: ${hasWebhookStats}`);
 
         // If we don't have diff data from webhook, try to fetch it from GitHub API
         if (!hasWebhookStats && filesChanged.length > 0) {
@@ -1599,8 +1598,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               finalDeletions = deletions || 0;
             }
           } catch (apiError) {
-            console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
-            // Fall back to webhook data (even if 0)
             finalAdditions = additions || 0;
             finalDeletions = deletions || 0;
           }
@@ -1608,10 +1605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
-          console.log(`📋 Using webhook stats: +${finalAdditions} -${finalDeletions}`);
         }
-
-        console.log(`✅ Final stats for Slack: +${finalAdditions} -${finalDeletions}`);
 
         const pushData = {
           repositoryName: repository.full_name,
