@@ -1565,14 +1565,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let deletions = commit.deletions;
         
         // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
-        const hasWebhookStats = additions !== undefined && deletions !== undefined && (additions > 0 || deletions > 0);
+        // For push webhooks, these fields are undefined. For PR webhooks, they're provided.
+        const hasWebhookStats = additions !== undefined && deletions !== undefined;
+        console.log(`📊 hasWebhookStats: ${hasWebhookStats}`);
 
         // If we don't have diff data from webhook, try to fetch it from GitHub API
         if (!hasWebhookStats && filesChanged.length > 0) {
           try {
             // Get the repository owner and name from full_name
             const [owner, repoName] = repository.full_name.split('/');
-            
             // Fetch commit details from GitHub API
             const githubResponse = await fetch(
               `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
@@ -1607,7 +1608,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
+          console.log(`📋 Using webhook stats: +${finalAdditions} -${finalDeletions}`);
         }
+
+        console.log(`✅ Final stats for Slack: +${finalAdditions} -${finalDeletions}`);
 
         const pushData = {
           repositoryName: repository.full_name,
@@ -1988,19 +1992,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      console.log(`🗑️ [SERVER] Clearing all notifications for user ${userId}`);
       
       // Get current notification count before deletion
       const currentNotifications = await storage.getNotificationsByUserId(userId);
-      console.log(`📊 [SERVER] Current notifications count for user ${userId}:`, currentNotifications.length);
       
       // Delete all notifications
       const result = await storage.deleteAllNotifications(userId);
-      console.log(`✅ [SERVER] Delete operation result:`, result);
       
       // Verify deletion by checking count again
       const remainingNotifications = await storage.getNotificationsByUserId(userId);
-      console.log(`🔍 [SERVER] Remaining notifications after deletion:`, remainingNotifications.length);
       
       res.json({ success: true, deletedCount: currentNotifications.length });
     } catch (error) {
@@ -2259,8 +2259,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'succeeded'
       });
 
-      console.log(`Test payment succeeded for user ${userId}: ${creditPackage.credits} credits added`);
-
       res.json({
         success: true,
         creditsAdded: creditPackage.credits,
@@ -2320,8 +2318,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           credits: credits,
           status: 'succeeded'
         });
-
-        console.log(`Payment succeeded for user ${user.id}: ${credits} credits added`);
       } catch (error) {
         console.error("Error processing payment:", error);
         return res.status(500).json({ error: "Failed to process payment" });
