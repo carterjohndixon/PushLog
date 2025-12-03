@@ -1559,11 +1559,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ];
 
         // Try to get actual diff stats from GitHub API if webhook data is missing
-        let additions = commit.additions || 0;
-        let deletions = commit.deletions || 0;
+        // Note: GitHub push webhooks don't include additions/deletions in commit objects
+        // Only pull request events include these fields, so we need to fetch from API for push events
+        let additions = commit.additions;
+        let deletions = commit.deletions;
+        
+        // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
+        const hasWebhookStats = additions !== undefined && deletions !== undefined && (additions > 0 || deletions > 0);
 
         // If we don't have diff data from webhook, try to fetch it from GitHub API
-        if ((additions === 0 && deletions === 0) && filesChanged.length > 0) {
+        if (!hasWebhookStats && filesChanged.length > 0) {
           try {
             // Get the repository owner and name from full_name
             const [owner, repoName] = repository.full_name.split('/');
@@ -1583,19 +1588,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const commitData = await githubResponse.json();
               finalAdditions = commitData.stats?.additions || 0;
               finalDeletions = commitData.stats?.deletions || 0;
+              console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
 
             } else {
               const errorText = await githubResponse.text();
               console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
+              // If API fails and we have webhook data, use it (even if 0)
+              finalAdditions = additions || 0;
+              finalDeletions = deletions || 0;
             }
           } catch (apiError) {
             console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
-            // Fall back to webhook data
+            // Fall back to webhook data (even if 0)
+            finalAdditions = additions || 0;
+            finalDeletions = deletions || 0;
           }
         } else {
-          // Use webhook data when available
-          finalAdditions = additions;
-          finalDeletions = deletions;
+          // Use webhook data when available (from pull request events)
+          finalAdditions = additions || 0;
+          finalDeletions = deletions || 0;
         }
 
         const pushData = {
