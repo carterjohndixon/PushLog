@@ -1526,15 +1526,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GitHub webhook endpoint
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
+    // Log immediately when webhook is received
+    console.log('🔔 [WEBHOOK] GitHub webhook received');
     try {
       const signature = req.headers['x-hub-signature-256'] as string;
+      const eventType = req.headers['x-github-event'];
       const payload = JSON.stringify(req.body);
+      
+      console.log(`🔔 [WEBHOOK] Event type: ${eventType}, Has signature: ${!!signature}`);
+      
+      // Log to file immediately
+      try {
+        const logFile = path.join(process.cwd(), 'webhook-debug.log');
+        const initialLog = JSON.stringify({
+          timestamp: new Date().toISOString(),
+          commitId: 'unknown',
+          repository: 'unknown',
+          source: 'webhook_received',
+          additions: 0,
+          deletions: 0,
+          notes: `Webhook received: eventType=${eventType}, hasSignature=${!!signature}`
+        }) + '\n';
+        fs.appendFileSync(logFile, initialLog, 'utf-8');
+        console.log(`✅ [WEBHOOK] Logged to ${logFile}`);
+      } catch (logError) {
+        console.error('❌ [WEBHOOK] Failed to write initial log:', logError);
+      }
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        console.error('❌ [WEBHOOK] Invalid signature');
         return res.status(401).json({ error: "Invalid signature" });
       }
+      
+      console.log('✅ [WEBHOOK] Signature verified');
 
       // Handle both push and pull_request events
       const eventType = req.headers['x-github-event'];
