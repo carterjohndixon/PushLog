@@ -1749,18 +1749,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             finalAdditions = additions || 0;
             finalDeletions = deletions || 0;
           }
-        } else {
-          // Log why we're not fetching from API
-          logWebhookDebug({
-            timestamp: new Date().toISOString(),
-            commitId: commit.id,
-            repository: repository.full_name,
-            source: 'skip_api_fetch',
-            additions: additions ?? 0,
-            deletions: deletions ?? 0,
-            notes: `Skipping API fetch: hasWebhookStats=${hasWebhookStats}, filesChanged.length=${filesChanged.length}`
-          });
-        } else if (hasWebhookStats) {
+        } else if (hasWebhookStats && filesChanged.length === 0) {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
@@ -1771,9 +1760,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commitId: commit.id,
             repository: repository.full_name,
             source: 'webhook',
-            additions: finalAdditions,
+            additions: finalAdditions,s
             deletions: finalDeletions,
             notes: `Using webhook data (PR event)`
+          });
+        } else {
+          // Log why we're not fetching from API
+          logWebhookDebug({
+            timestamp: new Date().toISOString(),
+            commitId: commit.id,
+            repository: repository.full_name,
+            source: 'skip_api_fetch',
+            additions: additions ?? 0,
+            deletions: deletions ?? 0,
+            notes: `Skipping API fetch: hasWebhookStats=${hasWebhookStats}, filesChanged.length=${filesChanged.length}`
           });
         }
         
