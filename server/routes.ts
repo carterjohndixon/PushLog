@@ -3,6 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { generateToken, verifyToken } from './jwt';
 import { authenticateToken, requireEmailVerification } from './middleware/auth';
 import { 
@@ -36,6 +38,25 @@ import { body, validationResult } from "express-validator";
 // Extend global type for notification streams
 declare global {
   var notificationStreams: Map<number, any> | undefined;
+}
+
+// Helper function to log webhook debug info to file
+function logWebhookDebug(data: {
+  timestamp: string;
+  commitId: string;
+  repository: string;
+  source: string; // 'webhook' | 'github_api' | 'slack_message'
+  additions: number;
+  deletions: number;
+  notes?: string;
+}) {
+  try {
+    const logFile = path.join(process.cwd(), 'webhook-debug.log');
+    const logEntry = JSON.stringify(data) + '\n';
+    fs.appendFileSync(logFile, logEntry, 'utf-8');
+  } catch (error) {
+    console.error('Failed to write webhook debug log:', error);
+  }
 }
 
 // Helper function to get user ID from OAuth state
@@ -1589,6 +1610,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
               finalAdditions = commitData.stats?.additions || 0;
               finalDeletions = commitData.stats?.deletions || 0;
               console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
+              
+              // Log to file
+              logWebhookDebug({
+                timestamp: new Date().toISOString(),
+                commitId: commit.id,
+                repository: repository.full_name,
+                source: 'github_api',
+                additions: finalAdditions,
+                deletions: finalDeletions,
+                notes: `Fetched from GitHub API for commit ${commit.id}`
+              });
 
             } else {
               const errorText = await githubResponse.text();
@@ -1605,7 +1637,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
+          
+          // Log webhook data
+          logWebhookDebug({
+            timestamp: new Date().toISOString(),
+            commitId: commit.id,
+            repository: repository.full_name,
+            source: 'webhook',
+            additions: finalAdditions,
+            deletions: finalDeletions,
+            notes: `Using webhook data (PR event)`
+          });
         }
+        
+        // Log final values before creating pushData
+        logWebhookDebug({
+          timestamp: new Date().toISOString(),
+          commitId: commit.id,
+          repository: repository.full_name,
+          source: 'before_pushdata',
+          additions: finalAdditions,
+          deletions: finalDeletions,
+          notes: `Final values before creating pushData object`
+        });
 
         const pushData = {
           repositoryName: repository.full_name,
@@ -1722,7 +1776,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: aiCategory!, 
             details: aiDetails! 
           };
+          
+          // Log values being passed to generateSlackMessage
+          logWebhookDebug({
+            timestamp: new Date().toISOString(),
+            commitId: commit.id,
+            repository: repository.full_name,
+            source: 'before_slack_generation',
+            additions: pushData.additions,
+            deletions: pushData.deletions,
+            notes: `Values in pushData object being passed to generateSlackMessage`
+          });
+          
           const slackMessage = await generateSlackMessage(pushData, summary);
+          
+          // Log the final Slack message to see what's actually being sent
+          logWebhookDebug({
+            timestamp: new Date().toISOString(),
+            commitId: commit.id,
+            repository: repository.full_name,
+            source: 'slack_message',
+            additions: pushData.additions,
+            deletions: pushData.deletions,
+            notes: `Slack message preview: ${slackMessage.substring(0, 200)}...`
+          });
           
           await sendSlackMessage({
             channel: integration.slackChannelId,
