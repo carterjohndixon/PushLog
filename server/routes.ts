@@ -82,7 +82,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Verify GitHub webhook signature (primary security)
       const signature = req.headers['x-hub-signature-256'] as string;
-      const webhookSecret = process.env.DEPLOY_SECRET || process.env.GITHUB_WEBHOOK_SECRET || '';
+      const deploySecret = process.env.DEPLOY_SECRET || '';
+      const githubWebhookSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
+      const webhookSecret = deploySecret || githubWebhookSecret;
+      
+      console.log(`🔍 Deployment webhook: Has signature: ${!!signature}, Has DEPLOY_SECRET: ${!!deploySecret}, Has GITHUB_WEBHOOK_SECRET: ${!!githubWebhookSecret}`);
       
       if (signature && webhookSecret) {
         const payload = JSON.stringify(req.body);
@@ -92,11 +96,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       } else if (!signature) {
         // Fallback: Check for custom header if no GitHub signature
-        const deploySecret = process.env.DEPLOY_SECRET || '';
         const providedSecret = req.headers['x-deploy-secret'] as string;
         
         if (!deploySecret || providedSecret !== deploySecret) {
-          console.log('❌ Deployment webhook: Invalid secret (no signature or header)');
+          console.log(`❌ Deployment webhook: Invalid secret (no signature or header). Expected: ${deploySecret ? 'SET' : 'NOT SET'}, Got: ${providedSecret ? 'SET' : 'NOT SET'}`);
           return res.status(401).json({ error: 'Unauthorized' });
         }
       } else {
