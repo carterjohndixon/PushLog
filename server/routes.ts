@@ -1563,8 +1563,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('✅ [WEBHOOK] Signature verified');
 
       // Handle both push and pull_request events
-      const eventType = req.headers['x-github-event'];
-      
       let branch, commit, repository;
       
       if (eventType === 'pull_request') {
