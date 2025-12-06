@@ -64,6 +64,8 @@ fi
 log_info "New changes detected. Pulling latest code..."
 git pull origin "$BRANCH" || {
     log_error "Failed to pull from GitHub"
+    log_info "Git pull error details. Checking git status..."
+    git status || true
     exit 1
 }
 
@@ -90,14 +92,16 @@ log_info "Restarting PM2 application..."
 }
 
 # Wait a moment for the app to start
-sleep 2
+sleep 3
 
-# Check if PM2 process is running
-if pm2 list | grep -q "pushlog.*online"; then
+# Check if PM2 process is running (use full path)
+if /usr/bin/pm2 list | grep -q "pushlog.*online"; then
     log_success "Deployment completed successfully!"
     log_info "Application is running"
 else
     log_error "Application failed to start. Check PM2 logs: pm2 logs pushlog"
+    log_info "PM2 status:"
+    /usr/bin/pm2 list || true
     exit 1
 fi
 
