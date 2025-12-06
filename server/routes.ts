@@ -1760,7 +1760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commitId: commit.id,
             repository: repository.full_name,
             source: 'webhook',
-            additions: finalAdditions,s
+            additions: finalAdditions,
             deletions: finalDeletions,
             notes: `Using webhook data (PR event)`
           });
