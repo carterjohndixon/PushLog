@@ -86,12 +86,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const githubWebhookSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
       const webhookSecret = deploySecret || githubWebhookSecret;
       
-      console.log(`🔍 Deployment webhook: Has signature: ${!!signature}, Has DEPLOY_SECRET: ${!!deploySecret}, Has GITHUB_WEBHOOK_SECRET: ${!!githubWebhookSecret}`);
-      
       if (signature && webhookSecret) {
         const payload = JSON.stringify(req.body);
         if (!verifyWebhookSignature(payload, signature, webhookSecret)) {
-          console.log('❌ Deployment webhook: Invalid GitHub signature');
           return res.status(401).json({ error: 'Unauthorized' });
         }
       } else if (!signature) {
@@ -99,15 +96,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const providedSecret = req.headers['x-deploy-secret'] as string;
         
         if (!deploySecret || providedSecret !== deploySecret) {
-          console.log(`❌ Deployment webhook: Invalid secret (no signature or header). Expected: ${deploySecret ? 'SET' : 'NOT SET'}, Got: ${providedSecret ? 'SET' : 'NOT SET'}`);
           return res.status(401).json({ error: 'Unauthorized' });
         }
       } else {
-        console.log('❌ Deployment webhook: No secret configured');
         return res.status(401).json({ error: 'Unauthorized' });
       }
-
-      console.log('🚀 Deployment webhook triggered');
 
       // Get deployment script path
       const appDir = process.env.APP_DIR || '/var/www/pushlog';
@@ -130,16 +123,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer for output
       }).then(({ stdout, stderr }) => {
-        console.log('✅ Deployment completed');
-        console.log('Deployment stdout:', stdout);
         if (stderr) {
           console.error('Deployment stderr:', stderr);
         }
       }).catch((error) => {
-        console.error('❌ Deployment failed:', error);
-        console.error('Error details:', error.message);
-        if (error.stdout) console.error('stdout:', error.stdout);
-        if (error.stderr) console.error('stderr:', error.stderr);
+        console.error('Deployment failed:', error.message);
       });
 
       // Respond immediately (deployment runs in background)
