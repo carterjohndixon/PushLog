@@ -1588,15 +1588,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
         // For push webhooks, these fields are undefined. For PR webhooks, they're provided.
         const hasWebhookStats = additions !== undefined && deletions !== undefined;
+        
+        // Log debug info about the condition check
+        logWebhookDebug({
+          timestamp: new Date().toISOString(),
+          commitId: commit.id,
+          repository: repository.full_name,
+          source: 'condition_check',
+          additions: additions ?? -1, // Use -1 to indicate undefined
+          deletions: deletions ?? -1, // Use -1 to indicate undefined
+          notes: `hasWebhookStats: ${hasWebhookStats}, filesChanged.length: ${filesChanged.length}, willFetchFromAPI: ${!hasWebhookStats && filesChanged.length > 0}`
+        });
 
         // If we don't have diff data from webhook, try to fetch it from GitHub API
         if (!hasWebhookStats && filesChanged.length > 0) {
           try {
             // Get the repository owner and name from full_name
             const [owner, repoName] = repository.full_name.split('/');
+            const apiUrl = `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`;
+            const hasToken = !!process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+            
+            logWebhookDebug({
+              timestamp: new Date().toISOString(),
+              commitId: commit.id,
+              repository: repository.full_name,
+              source: 'github_api_fetch_start',
+              additions: 0,
+              deletions: 0,
+              notes: `Fetching from: ${apiUrl}, hasToken: ${hasToken}`
+            });
+            
             // Fetch commit details from GitHub API
             const githubResponse = await fetch(
-              `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
+              apiUrl,
               {
                 headers: {
                   'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
@@ -1625,14 +1649,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } else {
               const errorText = await githubResponse.text();
               console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
+              
+              // Log API error
+              logWebhookDebug({
+                timestamp: new Date().toISOString(),
+                commitId: commit.id,
+                repository: repository.full_name,
+                source: 'github_api_error',
+                additions: 0,
+                deletions: 0,
+                notes: `GitHub API error ${githubResponse.status}: ${errorText.substring(0, 200)}`
+              });
+              
               // If API fails and we have webhook data, use it (even if 0)
               finalAdditions = additions || 0;
               finalDeletions = deletions || 0;
             }
           } catch (apiError) {
+            // Log fetch error
+            logWebhookDebug({
+              timestamp: new Date().toISOString(),
+              commitId: commit.id,
+              repository: repository.full_name,
+              source: 'github_api_fetch_error',
+              additions: 0,
+              deletions: 0,
+              notes: `Fetch error: ${apiError instanceof Error ? apiError.message : String(apiError)}`
+            });
+            
             finalAdditions = additions || 0;
             finalDeletions = deletions || 0;
           }
+        } else {
+          // Log why we're not fetching from API
+          logWebhookDebug({
+            timestamp: new Date().toISOString(),
+            commitId: commit.id,
+            repository: repository.full_name,
+            source: 'skip_api_fetch',
+            additions: additions ?? 0,
+            deletions: deletions ?? 0,
+            notes: `Skipping API fetch: hasWebhookStats=${hasWebhookStats}, filesChanged.length=${filesChanged.length}`
+          });
         } else {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
