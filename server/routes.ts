@@ -1646,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             
             // Fetch commit details from GitHub API
             const githubResponse = await fetch(
-              apiUrl,
+              `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
               {
                 headers: {
                   'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
