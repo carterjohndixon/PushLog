@@ -49,7 +49,6 @@ Thumbs.db
 # Logs
 logs
 *.log
-webhook-debug.log
 
 # Temporary files
 *.tmp

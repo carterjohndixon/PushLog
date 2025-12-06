@@ -44,25 +44,6 @@ declare global {
   var notificationStreams: Map<number, any> | undefined;
 }
 
-// Helper function to log webhook debug info to file
-function logWebhookDebug(data: {
-  timestamp: string;
-  commitId: string;
-  repository: string;
-  source: string; // 'webhook' | 'github_api' | 'slack_message'
-  additions: number;
-  deletions: number;
-  notes?: string;
-}) {
-  try {
-    const logFile = path.join(process.cwd(), 'webhook-debug.log');
-    const logEntry = JSON.stringify(data) + '\n';
-    fs.appendFileSync(logFile, logEntry, 'utf-8');
-  } catch (error) {
-    console.error('Failed to write webhook debug log:', error);
-  }
-}
-
 // Helper function to get user ID from OAuth state
 async function getUserIdFromOAuthState(state: string): Promise<number | null> {
   try {
@@ -1526,41 +1507,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GitHub webhook endpoint
   // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
   app.post("/api/webhooks/github", async (req, res) => {
-    // Log immediately when webhook is received
-    console.log('🔔 [WEBHOOK] GitHub webhook received');
     try {
       const signature = req.headers['x-hub-signature-256'] as string;
-      const eventType = req.headers['x-github-event'];
       const payload = JSON.stringify(req.body);
-      
-      console.log(`🔔 [WEBHOOK] Event type: ${eventType}, Has signature: ${!!signature}`);
-      
-      // Log to file immediately
-      try {
-        const logFile = path.join(process.cwd(), 'webhook-debug.log');
-        const initialLog = JSON.stringify({
-          timestamp: new Date().toISOString(),
-          commitId: 'unknown',
-          repository: 'unknown',
-          source: 'webhook_received',
-          additions: 0,
-          deletions: 0,
-          notes: `Webhook received: eventType=${eventType}, hasSignature=${!!signature}`
-        }) + '\n';
-        fs.appendFileSync(logFile, initialLog, 'utf-8');
-        console.log(`✅ [WEBHOOK] Logged to ${logFile}`);
-      } catch (logError) {
-        console.error('❌ [WEBHOOK] Failed to write initial log:', logError);
-      }
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
-        console.error('❌ [WEBHOOK] Invalid signature');
         return res.status(401).json({ error: "Invalid signature" });
       }
-      
-      console.log('✅ [WEBHOOK] Signature verified');
 
       // Handle both push and pull_request events
       let branch, commit, repository;
@@ -1655,17 +1610,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiGenerated: false,
       });
 
-      // Log at the start of processing
-      logWebhookDebug({
-        timestamp: new Date().toISOString(),
-        commitId: commit.id,
-        repository: repository.full_name,
-        source: 'webhook_start',
-        additions: commit.additions ?? -1,
-        deletions: commit.deletions ?? -1,
-        notes: `Starting webhook processing. commit.added: ${commit.added?.length || 0}, commit.modified: ${commit.modified?.length || 0}, commit.removed: ${commit.removed?.length || 0}`
-      });
-
       // Generate AI summary for the commit with better file change detection
       let aiSummary = null;
       let aiImpact = null;
@@ -1682,17 +1626,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...(commit.modified || []),
           ...(commit.removed || [])
         ];
-        
-        // Log files changed immediately
-        logWebhookDebug({
-          timestamp: new Date().toISOString(),
-          commitId: commit.id,
-          repository: repository.full_name,
-          source: 'files_changed',
-          additions: 0,
-          deletions: 0,
-          notes: `filesChanged array: ${JSON.stringify(filesChanged)}, length: ${filesChanged.length}`
-        });
 
         // Try to get actual diff stats from GitHub API if webhook data is missing
         // Note: GitHub push webhooks don't include additions/deletions in commit objects
@@ -1703,35 +1636,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
         // For push webhooks, these fields are undefined. For PR webhooks, they're provided.
         const hasWebhookStats = additions !== undefined && deletions !== undefined;
-        
-        // Log debug info about the condition check
-        logWebhookDebug({
-          timestamp: new Date().toISOString(),
-          commitId: commit.id,
-          repository: repository.full_name,
-          source: 'condition_check',
-          additions: additions ?? -1, // Use -1 to indicate undefined
-          deletions: deletions ?? -1, // Use -1 to indicate undefined
-          notes: `hasWebhookStats: ${hasWebhookStats}, filesChanged.length: ${filesChanged.length}, willFetchFromAPI: ${!hasWebhookStats && filesChanged.length > 0}`
-        });
 
         // If we don't have diff data from webhook, try to fetch it from GitHub API
         if (!hasWebhookStats && filesChanged.length > 0) {
           try {
             // Get the repository owner and name from full_name
             const [owner, repoName] = repository.full_name.split('/');
-            const apiUrl = `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`;
-            const hasToken = !!process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-            
-            logWebhookDebug({
-              timestamp: new Date().toISOString(),
-              commitId: commit.id,
-              repository: repository.full_name,
-              source: 'github_api_fetch_start',
-              additions: 0,
-              deletions: 0,
-              notes: `Fetching from: ${apiUrl}, hasToken: ${hasToken}`
-            });
             
             // Fetch commit details from GitHub API
             const githubResponse = await fetch(
@@ -1749,90 +1659,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
               finalAdditions = commitData.stats?.additions || 0;
               finalDeletions = commitData.stats?.deletions || 0;
               console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
-              
-              // Log to file
-              logWebhookDebug({
-                timestamp: new Date().toISOString(),
-                commitId: commit.id,
-                repository: repository.full_name,
-                source: 'github_api',
-                additions: finalAdditions,
-                deletions: finalDeletions,
-                notes: `Fetched from GitHub API for commit ${commit.id}`
-              });
 
             } else {
               const errorText = await githubResponse.text();
               console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
-              
-              // Log API error
-              logWebhookDebug({
-                timestamp: new Date().toISOString(),
-                commitId: commit.id,
-                repository: repository.full_name,
-                source: 'github_api_error',
-                additions: 0,
-                deletions: 0,
-                notes: `GitHub API error ${githubResponse.status}: ${errorText.substring(0, 200)}`
-              });
               
               // If API fails and we have webhook data, use it (even if 0)
               finalAdditions = additions || 0;
               finalDeletions = deletions || 0;
             }
           } catch (apiError) {
-            // Log fetch error
-            logWebhookDebug({
-              timestamp: new Date().toISOString(),
-              commitId: commit.id,
-              repository: repository.full_name,
-              source: 'github_api_fetch_error',
-              additions: 0,
-              deletions: 0,
-              notes: `Fetch error: ${apiError instanceof Error ? apiError.message : String(apiError)}`
-            });
-            
+            console.error('Failed to fetch commit stats from GitHub API:', apiError);
             finalAdditions = additions || 0;
             finalDeletions = deletions || 0;
           }
-        } else if (hasWebhookStats && filesChanged.length === 0) {
+        } else {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
-          
-          // Log webhook data
-          logWebhookDebug({
-            timestamp: new Date().toISOString(),
-            commitId: commit.id,
-            repository: repository.full_name,
-            source: 'webhook',
-            additions: finalAdditions,
-            deletions: finalDeletions,
-            notes: `Using webhook data (PR event)`
-          });
-        } else {
-          // Log why we're not fetching from API
-          logWebhookDebug({
-            timestamp: new Date().toISOString(),
-            commitId: commit.id,
-            repository: repository.full_name,
-            source: 'skip_api_fetch',
-            additions: additions ?? 0,
-            deletions: deletions ?? 0,
-            notes: `Skipping API fetch: hasWebhookStats=${hasWebhookStats}, filesChanged.length=${filesChanged.length}`
-          });
         }
-        
-        // Log final values before creating pushData
-        logWebhookDebug({
-          timestamp: new Date().toISOString(),
-          commitId: commit.id,
-          repository: repository.full_name,
-          source: 'before_pushdata',
-          additions: finalAdditions,
-          deletions: finalDeletions,
-          notes: `Final values before creating pushData object`
-        });
 
         const pushData = {
           repositoryName: repository.full_name,
@@ -1950,29 +1795,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             details: aiDetails! 
           };
           
-          // Log values being passed to generateSlackMessage
-          logWebhookDebug({
-            timestamp: new Date().toISOString(),
-            commitId: commit.id,
-            repository: repository.full_name,
-            source: 'before_slack_generation',
-            additions: pushData.additions,
-            deletions: pushData.deletions,
-            notes: `Values in pushData object being passed to generateSlackMessage`
-          });
-          
           const slackMessage = await generateSlackMessage(pushData, summary);
-          
-          // Log the final Slack message to see what's actually being sent
-          logWebhookDebug({
-            timestamp: new Date().toISOString(),
-            commitId: commit.id,
-            repository: repository.full_name,
-            source: 'slack_message',
-            additions: pushData.additions,
-            deletions: pushData.deletions,
-            notes: `Slack message preview: ${slackMessage.substring(0, 200)}...`
-          });
           
           await sendSlackMessage({
             channel: integration.slackChannelId,

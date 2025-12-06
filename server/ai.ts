@@ -1,29 +1,8 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { calculateTokenCost } from './stripe';
-import fs from 'fs';
-import path from 'path';
 
 dotenv.config();
-
-// Helper function to log webhook debug info to file
-function logWebhookDebug(data: {
-  timestamp: string;
-  commitId: string;
-  repository: string;
-  source: string;
-  additions: number;
-  deletions: number;
-  notes?: string;
-}) {
-  try {
-    const logFile = path.join(process.cwd(), 'webhook-debug.log');
-    const logEntry = JSON.stringify(data) + '\n';
-    fs.appendFileSync(logFile, logEntry, 'utf-8');
-  } catch (error) {
-    console.error('Failed to write webhook debug log:', error);
-  }
-}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -161,18 +140,7 @@ export async function generateSlackMessage(pushData: PushEventData, summary: Cod
   const impact = (summary.impact && impactEmoji[summary.impact]) ? summary.impact : 'medium';
   const category = summary.category || 'other';
 
-  // Log what values are being used in the Slack message
-  logWebhookDebug({
-    timestamp: new Date().toISOString(),
-    commitId: pushData.commitSha,
-    repository: pushData.repositoryName,
-    source: 'generateSlackMessage',
-    additions: pushData.additions,
-    deletions: pushData.deletions,
-    notes: `Inside generateSlackMessage - using additions: ${pushData.additions}, deletions: ${pushData.deletions}`
-  });
-
-  const message = `*${pushData.repositoryName}* - ${pushData.branch} branch
+  return `*${pushData.repositoryName}* - ${pushData.branch} branch
 
 ${impactEmoji[impact]} *${summary.summary}*
 
@@ -180,18 +148,5 @@ ${categoryEmoji[category]} **${category.toUpperCase()}** | :bar_chart: +${pushDa
 ${summary.details}
 
 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
-
-  // Log the final message string to verify what's being sent
-  logWebhookDebug({
-    timestamp: new Date().toISOString(),
-    commitId: pushData.commitSha,
-    repository: pushData.repositoryName,
-    source: 'slack_message_final',
-    additions: pushData.additions,
-    deletions: pushData.deletions,
-    notes: `Final Slack message: ${message.substring(0, 300)}...`
-  });
-
-  return message;
 }
 // Test commit to verify Slack message fix
