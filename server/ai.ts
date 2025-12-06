@@ -140,13 +140,13 @@ export async function generateSlackMessage(pushData: PushEventData, summary: Cod
   const impact = (summary.impact && impactEmoji[summary.impact]) ? summary.impact : 'medium';
   const category = summary.category || 'other';
 
-  return `*${pushData.repositoryName}* - ${pushData.branch} branch
+  return `🚀 *${pushData.repositoryName}* - ${pushData.branch} branch 🚀
 
 ${impactEmoji[impact]} *${summary.summary}*
 
 ${categoryEmoji[category]} **${category.toUpperCase()}** | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
 ${summary.details}
 
-<https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
+🔗 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
 }
 // Test commit to verify Slack message fix
