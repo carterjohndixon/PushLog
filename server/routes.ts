@@ -80,24 +80,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Deployment webhook endpoint (secured with secret token)
   app.post("/api/webhooks/deploy", async (req, res) => {
     try {
-      // Verify deployment secret token
-      const deploySecret = process.env.DEPLOY_SECRET || '';
-      const providedSecret = req.headers['x-deploy-secret'] as string;
-      
-      if (!deploySecret || providedSecret !== deploySecret) {
-        console.log('❌ Deployment webhook: Invalid secret');
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
-      // Verify GitHub webhook signature if present (optional extra security)
+      // Verify GitHub webhook signature (primary security)
       const signature = req.headers['x-hub-signature-256'] as string;
-      if (signature) {
-        const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
+      const webhookSecret = process.env.DEPLOY_SECRET || process.env.GITHUB_WEBHOOK_SECRET || '';
+      
+      if (signature && webhookSecret) {
         const payload = JSON.stringify(req.body);
-        if (webhookSecret && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        if (!verifyWebhookSignature(payload, signature, webhookSecret)) {
           console.log('❌ Deployment webhook: Invalid GitHub signature');
-          return res.status(401).json({ error: 'Invalid signature' });
+          return res.status(401).json({ error: 'Unauthorized' });
         }
+      } else if (!signature) {
+        // Fallback: Check for custom header if no GitHub signature
+        const deploySecret = process.env.DEPLOY_SECRET || '';
+        const providedSecret = req.headers['x-deploy-secret'] as string;
+        
+        if (!deploySecret || providedSecret !== deploySecret) {
+          console.log('❌ Deployment webhook: Invalid secret (no signature or header)');
+          return res.status(401).json({ error: 'Unauthorized' });
+        }
+      } else {
+        console.log('❌ Deployment webhook: No secret configured');
+        return res.status(401).json({ error: 'Unauthorized' });
       }
 
       console.log('🚀 Deployment webhook triggered');

@@ -4,7 +4,7 @@ import cors from "cors";
 import session from "express-session";
 import pgSession from "connect-pg-simple";
 import helmet from "helmet";
-import rateLimit, { ipKeyGenerator } from "express-rate-limit";
+import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
@@ -90,8 +90,10 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  // Use the built-in IP key generator which handles IPv6 and trust proxy correctly
-  keyGenerator: ipKeyGenerator,
+  // Skip validation for trust proxy - we're behind nginx which sets X-Forwarded-For correctly
+  validate: {
+    trustProxy: false, // Disable validation since we trust nginx
+  },
   skip: (req) => {
     // Skip rate limiting for health checks
     return req.path === '/health' || req.path === '/health/detailed';
@@ -106,7 +108,9 @@ const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: ipKeyGenerator,
+  validate: {
+    trustProxy: false,
+  },
 });
 app.use('/api/login', authLimiter);
 app.use('/api/signup', authLimiter);
@@ -118,7 +122,9 @@ const passwordResetLimiter = rateLimit({
   message: 'Too many password reset attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: ipKeyGenerator,
+  validate: {
+    trustProxy: false,
+  },
 });
 app.use('/api/forgot-password', passwordResetLimiter);
 app.use('/api/reset-password', passwordResetLimiter);
@@ -130,7 +136,9 @@ const paymentLimiter = rateLimit({
   message: 'Too many payment attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: ipKeyGenerator,
+  validate: {
+    trustProxy: false,
+  },
 });
 app.use('/api/payments/', paymentLimiter);
 
