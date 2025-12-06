@@ -78,30 +78,48 @@ npm install || {
 
 # Build the application
 log_info "Building application..."
-npm run build || {
-    log_error "Build failed"
+log_info "Running: npm run build"
+npm run build
+BUILD_EXIT_CODE=$?
+
+if [ $BUILD_EXIT_CODE -ne 0 ]; then
+    log_error "Build failed with exit code: $BUILD_EXIT_CODE"
     exit 1
-}
+fi
+
+log_info "Build completed successfully"
 
 # Restart PM2 application
 log_info "Restarting PM2 application..."
 # Use full path to PM2
-/usr/bin/pm2 restart pushlog || {
-    log_error "Failed to restart PM2 application"
+log_info "Running: /usr/bin/pm2 restart pushlog"
+/usr/bin/pm2 restart pushlog
+PM2_RESTART_EXIT_CODE=$?
+
+if [ $PM2_RESTART_EXIT_CODE -ne 0 ]; then
+    log_error "PM2 restart command failed with exit code: $PM2_RESTART_EXIT_CODE"
+    log_info "Checking PM2 status..."
+    /usr/bin/pm2 list || true
     exit 1
-}
+fi
+
+log_info "PM2 restart command completed successfully"
 
 # Wait a moment for the app to start
 sleep 3
 
 # Check if PM2 process is running (use full path)
-if /usr/bin/pm2 list | grep -q "pushlog.*online"; then
+log_info "Checking PM2 status..."
+PM2_STATUS=$(/usr/bin/pm2 list 2>&1)
+log_info "PM2 list output: $PM2_STATUS"
+
+if echo "$PM2_STATUS" | grep -q "pushlog.*online"; then
     log_success "Deployment completed successfully!"
     log_info "Application is running"
 else
     log_error "Application failed to start. Check PM2 logs: pm2 logs pushlog"
     log_info "PM2 status:"
-    /usr/bin/pm2 list || true
+    echo "$PM2_STATUS"
     exit 1
 fi
 
