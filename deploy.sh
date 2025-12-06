@@ -83,10 +83,28 @@ npm run build || {
 
 # Restart PM2 application
 log_info "Restarting PM2 application..."
-pm2 restart pushlog || {
-    log_error "Failed to restart PM2 application"
-    exit 1
-}
+# Use full path to pm2 or ensure it's in PATH
+if command -v pm2 > /dev/null 2>&1; then
+    pm2 restart pushlog || {
+        log_error "Failed to restart PM2 application"
+        # Try with full path
+        /usr/bin/pm2 restart pushlog || {
+            log_error "Failed to restart PM2 even with full path"
+            exit 1
+        }
+    }
+else
+    log_error "PM2 command not found in PATH"
+    log_info "Trying common PM2 locations..."
+    if [ -f "$HOME/.nvm/versions/node/$(node -v | cut -d'v' -f2)/bin/pm2" ]; then
+        "$HOME/.nvm/versions/node/$(node -v | cut -d'v' -f2)/bin/pm2" restart pushlog || exit 1
+    elif [ -f "/usr/local/bin/pm2" ]; then
+        /usr/local/bin/pm2 restart pushlog || exit 1
+    else
+        log_error "Could not find PM2. Please ensure PM2 is installed and in PATH"
+        exit 1
+    fi
+fi
 
 # Wait a moment for the app to start
 sleep 2

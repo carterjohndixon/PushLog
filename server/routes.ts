@@ -125,16 +125,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         env: {
           ...process.env,
           APP_DIR: appDir,
-          DEPLOY_BRANCH: req.body.ref?.replace('refs/heads/', '') || 'main'
-        }
+          DEPLOY_BRANCH: req.body.ref?.replace('refs/heads/', '') || 'main',
+          PATH: process.env.PATH // Ensure PATH includes PM2
+        },
+        maxBuffer: 1024 * 1024 * 10 // 10MB buffer for output
       }).then(({ stdout, stderr }) => {
         console.log('✅ Deployment completed');
-        console.log('Deployment output:', stdout);
+        console.log('Deployment stdout:', stdout);
         if (stderr) {
           console.error('Deployment stderr:', stderr);
         }
       }).catch((error) => {
         console.error('❌ Deployment failed:', error);
+        console.error('Error details:', error.message);
+        if (error.stdout) console.error('stdout:', error.stdout);
+        if (error.stderr) console.error('stderr:', error.stderr);
       });
 
       // Respond immediately (deployment runs in background)
