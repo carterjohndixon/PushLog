@@ -5,6 +5,10 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 import { generateToken, verifyToken } from './jwt';
 import { authenticateToken, requireEmailVerification } from './middleware/auth';
 import { 
@@ -90,6 +94,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  });
+
+  // Deployment webhook endpoint (secured with secret token)
+  app.post("/api/webhooks/deploy", async (req, res) => {
+    try {
+      // Verify deployment secret token
+      const deploySecret = process.env.DEPLOY_SECRET || '';
+      const providedSecret = req.headers['x-deploy-secret'] as string;
+      
+      if (!deploySecret || providedSecret !== deploySecret) {
+        console.log('❌ Deployment webhook: Invalid secret');
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Verify GitHub webhook signature if present (optional extra security)
+      const signature = req.headers['x-hub-signature-256'] as string;
+      if (signature) {
+        const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
+        const payload = JSON.stringify(req.body);
+        if (webhookSecret && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+          console.log('❌ Deployment webhook: Invalid GitHub signature');
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+      }
+
+      console.log('🚀 Deployment webhook triggered');
+
+      // Get deployment script path
+      const appDir = process.env.APP_DIR || '/var/www/pushlog';
+      const deployScript = path.join(appDir, 'deploy.sh');
+
+      // Check if deploy script exists
+      if (!fs.existsSync(deployScript)) {
+        console.error(`❌ Deploy script not found: ${deployScript}`);
+        return res.status(500).json({ error: 'Deploy script not found' });
+      }
+
+      // Execute deployment script asynchronously (don't wait for it to finish)
+      execAsync(`bash ${deployScript}`, {
+        cwd: appDir,
+        env: {
+          ...process.env,
+          APP_DIR: appDir,
+          DEPLOY_BRANCH: req.body.ref?.replace('refs/heads/', '') || 'main'
+        }
+      }).then(({ stdout, stderr }) => {
+        console.log('✅ Deployment completed');
+        console.log('Deployment output:', stdout);
+        if (stderr) {
+          console.error('Deployment stderr:', stderr);
+        }
+      }).catch((error) => {
+        console.error('❌ Deployment failed:', error);
+      });
+
+      // Respond immediately (deployment runs in background)
+      res.status(200).json({ 
+        message: 'Deployment started',
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('❌ Deployment webhook error:', error);
+      res.status(500).json({ error: 'Deployment failed' });
+    }
   });
 
   app.get("/health/detailed", async (req, res) => {
@@ -1691,7 +1760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             deletions: deletions ?? 0,
             notes: `Skipping API fetch: hasWebhookStats=${hasWebhookStats}, filesChanged.length=${filesChanged.length}`
           });
-        } else {
+        } else if (hasWebhookStats) {
           // Use webhook data when available (from pull request events)
           finalAdditions = additions || 0;
           finalDeletions = deletions || 0;
