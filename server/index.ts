@@ -90,6 +90,16 @@ const limiter = rateLimit({
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  // Use a custom key generator that's secure with trust proxy
+  keyGenerator: (req) => {
+    // Use the first IP from X-Forwarded-For if available, otherwise use the direct connection IP
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim();
+      return ips || req.ip || req.socket.remoteAddress || 'unknown';
+    }
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
   skip: (req) => {
     // Skip rate limiting for health checks
     return req.path === '/health' || req.path === '/health/detailed';
@@ -104,6 +114,14 @@ const authLimiter = rateLimit({
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim();
+      return ips || req.ip || req.socket.remoteAddress || 'unknown';
+    }
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
 });
 app.use('/api/login', authLimiter);
 app.use('/api/signup', authLimiter);
@@ -115,6 +133,14 @@ const passwordResetLimiter = rateLimit({
   message: 'Too many password reset attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim();
+      return ips || req.ip || req.socket.remoteAddress || 'unknown';
+    }
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
 });
 app.use('/api/forgot-password', passwordResetLimiter);
 app.use('/api/reset-password', passwordResetLimiter);
@@ -126,6 +152,14 @@ const paymentLimiter = rateLimit({
   message: 'Too many payment attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req) => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim();
+      return ips || req.ip || req.socket.remoteAddress || 'unknown';
+    }
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
 });
 app.use('/api/payments/', paymentLimiter);
 
