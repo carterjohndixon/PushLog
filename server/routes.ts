@@ -1631,6 +1631,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiGenerated: false,
       });
 
+      // Log at the start of processing
+      logWebhookDebug({
+        timestamp: new Date().toISOString(),
+        commitId: commit.id,
+        repository: repository.full_name,
+        source: 'webhook_start',
+        additions: commit.additions ?? -1,
+        deletions: commit.deletions ?? -1,
+        notes: `Starting webhook processing. commit.added: ${commit.added?.length || 0}, commit.modified: ${commit.modified?.length || 0}, commit.removed: ${commit.removed?.length || 0}`
+      });
+
       // Generate AI summary for the commit with better file change detection
       let aiSummary = null;
       let aiImpact = null;
@@ -1647,6 +1658,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...(commit.modified || []),
           ...(commit.removed || [])
         ];
+        
+        // Log files changed immediately
+        logWebhookDebug({
+          timestamp: new Date().toISOString(),
+          commitId: commit.id,
+          repository: repository.full_name,
+          source: 'files_changed',
+          additions: 0,
+          deletions: 0,
+          notes: `filesChanged array: ${JSON.stringify(filesChanged)}, length: ${filesChanged.length}`
+        });
 
         // Try to get actual diff stats from GitHub API if webhook data is missing
         // Note: GitHub push webhooks don't include additions/deletions in commit objects
