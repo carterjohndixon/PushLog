@@ -67,9 +67,9 @@ git pull origin "$BRANCH" || {
     exit 1
 }
 
-# Install/update dependencies
+# Install/update dependencies (including devDependencies needed for build)
 log_info "Installing dependencies..."
-npm ci --production || {
+npm install || {
     log_error "Failed to install dependencies"
     exit 1
 }
