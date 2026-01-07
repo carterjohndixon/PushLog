@@ -17,6 +17,7 @@ const ResetPassword = lazy(() => import("@/pages/reset-password"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Integrations = lazy(() => import("@/pages/integrations"));
 const Repositories = lazy(() => import("@/pages/repositories"));
+const Carter = lazy(() => import("@/pages/carter"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Loading component for lazy-loaded pages
@@ -61,6 +62,8 @@ function Router() {
           <Repositories />
         </ProtectedRoute>
       </Route>
+      
+      <Route path="/carter" component={Carter} />
       
       <Route component={NotFound} />
     </Switch>
