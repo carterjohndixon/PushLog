@@ -1,5 +1,5 @@
 import { Logo } from "./logo";
-import { Github, Twitter, Linkedin } from "lucide-react";
+import { Github, Twitter, Linkedin, User } from "lucide-react";
 
 export function Footer() {
   return (
@@ -27,6 +27,15 @@ export function Footer() {
                 aria-label="View source code on GitHub"
               >
                 <Github className="w-5 h-5" />
+              </a>
+              <a 
+                href="https://carter.pushlog.ai" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-gray-400 hover:text-log-green transition-colors"
+                aria-label="View profile"
+              >
+                <User className="w-5 h-5" />
               </a>
             </div>
             {/* <div className="flex space-x-4">
