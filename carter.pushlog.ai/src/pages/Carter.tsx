@@ -9,7 +9,7 @@ export default function Carter() {
           {/* Profile Image */}
           <div className="mb-8">
             <img 
-              src="../../../attached_assets/me.jpg" 
+              src="/me.jpg" 
               alt="Carter" 
               className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto object-cover shadow-lg border-4 border-log-green"
             />
