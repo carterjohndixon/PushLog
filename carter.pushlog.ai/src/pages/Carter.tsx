@@ -16,6 +16,24 @@ export default function Carter() {
             </div>
           </div>
 
+          {/* Profile Image */}
+          <div className="mb-8">
+            <img 
+              src="/assets/me.jpg" 
+              alt="Carter" 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto object-cover shadow-lg border-4 border-log-green"
+            />
+          </div>
+
+          {/* Profile Image */}
+          <div className="mb-8">
+            <img 
+              src="/assets/me.jpg" 
+              alt="Carter" 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto object-cover shadow-lg border-4 border-log-green"
+            />
+          </div>
+
           {/* Main Heading */}
           <h2 className="text-5xl md:text-6xl font-bold text-graphite mb-6">
             Hey, I'm <span className="text-log-green">Carter</span>
