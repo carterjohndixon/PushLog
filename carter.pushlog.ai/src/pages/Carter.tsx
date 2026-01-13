@@ -6,14 +6,22 @@ export default function Carter() {
       {/* Hero Section */}
       <section className="container mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="max-w-4xl mx-auto text-center">
-          {/* Logo/Title */}
+          {/* Profile Image */}
           <div className="mb-8">
-            <h1 className="text-4xl md:text-5xl font-bold text-graphite mb-2">
-              PushLog
-            </h1>
-            <div className="w-16 h-16 bg-log-green rounded-lg mx-auto mb-4 flex items-center justify-center">
-              <Code className="text-white text-2xl w-8 h-8" />
-            </div>
+            <img 
+              src="/me.jpg" 
+              alt="Carter" 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto mb-4 object-cover shadow-lg border-4 border-log-green"
+            />
+          </div>
+
+          {/* Profile Image */}
+          <div className="mb-8">
+            <img 
+              src="/assets/me.jpg" 
+              alt="Carter" 
+              className="w-32 h-32 md:w-40 md:h-40 rounded-full mx-auto object-cover shadow-lg border-4 border-log-green"
+            />
           </div>
 
           {/* Profile Image */}
