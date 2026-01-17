@@ -179,10 +179,10 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
   let page = 1;
   
   // Fetch all pages of repos with affiliation parameter to include org repos
-  // type=all ensures we get both public and private repos
+  // Note: affiliation already includes all repos (public and private) if token has 'repo' scope
   while (true) {
     const response = await fetch(
-      `https://api.github.com/user/repos?sort=updated&per_page=100&page=${page}&affiliation=owner,collaborator,organization_member&type=all`,
+      `https://api.github.com/user/repos?sort=updated&per_page=100&page=${page}&affiliation=owner,collaborator,organization_member`,
       {
         headers: {
           "Authorization": `Bearer ${accessToken}`,
