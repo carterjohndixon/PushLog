@@ -413,12 +413,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         if (!user || !user.id) {
+          console.error("Failed to create/update user. User object:", user);
           throw new Error('Failed to create or update user properly');
         }
 
-        if (!user) {
-          throw new Error("Failed to create or update user");
-        }
+        console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
 
         // Generate JWT token
         const jwtToken = generateToken({
@@ -432,6 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // For OAuth callback, redirect to dashboard with token in hash
         const redirectUrl = `/dashboard#token=${jwtToken}`;
+        console.log(`Redirecting to dashboard with token for user ${user.id}`);
         return res.redirect(redirectUrl);
       }
 

@@ -86,6 +86,7 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
 
   // Log the scopes returned by GitHub
   console.log("GitHub OAuth token exchange successful. Scopes granted:", data.scope || "none");
+  console.log("Full GitHub OAuth response:", JSON.stringify(data, null, 2));
   
   return data.access_token;
 }
@@ -219,28 +220,11 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
     const repos = await response.json();
     if (repos.length === 0) break;
     
-    // Debug: Log private repo count
-    const privateCount = repos.filter((r: any) => r.private).length;
-    if (privateCount > 0) {
-      console.log(`Fetched ${repos.length} repos (${privateCount} private) on page ${page}`);
-    } else if (page === 1) {
-      console.log(`Fetched ${repos.length} repos (0 private) on page ${page}`);
-    }
-    
     allRepos.push(...repos);
     if (repos.length < 100) break; // Last page
     page++;
   }
-
-  const totalPrivate = allRepos.filter((r: any) => r.private).length;
-  console.log(`Total repos fetched: ${allRepos.length} (${totalPrivate} private)`);
   
-  if (totalPrivate === 0 && hasRepoScope) {
-    console.log("ℹ️  No private repos found. This may be normal if you don't have any private repositories.");
-  } else if (totalPrivate === 0 && !hasRepoScope) {
-    console.warn("⚠️  No private repos found. This is likely because your token lacks the 'repo' scope.");
-  }
-
   return allRepos;
 }
 
