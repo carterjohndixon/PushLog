@@ -412,6 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           } else {
             // Check if user exists with this username (from previous signup)
+            console.log(`Checking for existing user with username: ${githubUser.login}`);
             const existingUserByUsername = await databaseStorage.getUserByUsername(githubUser.login);
             if (existingUserByUsername) {
               // User exists with this username but no GitHub connection - update it
@@ -424,8 +425,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
               console.log(`Updated user ${existingUserByUsername.id} with GitHub connection`);
             } else {
-              // Create new user
-              console.log(`Creating new user for GitHub user ${githubUser.login}`);
+              // Create new user - but wrap in try-catch to handle race conditions
+              console.log(`No existing user found, creating new user for GitHub user ${githubUser.login}`);
               try {
                 user = await databaseStorage.createUser({
                   username: githubUser.login,
@@ -436,11 +437,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 });
                 console.log(`Created new user ${user?.id}`);
               } catch (createError: any) {
-                // If username already exists (race condition), try to find and update
-                if (createError.message && createError.message.includes('users_username_key')) {
-                  console.log(`Username conflict detected, finding existing user`);
+                // If username already exists (race condition or check missed it), find and update
+                console.error(`Error creating user:`, createError.message);
+                if (createError.message && (createError.message.includes('users_username_key') || createError.message.includes('duplicate key'))) {
+                  console.log(`Username conflict detected, finding existing user by username: ${githubUser.login}`);
                   const conflictUser = await databaseStorage.getUserByUsername(githubUser.login);
                   if (conflictUser) {
+                    console.log(`Found conflicting user ${conflictUser.id}, updating with GitHub connection`);
                     user = await databaseStorage.updateUser(conflictUser.id, {
                       githubId: githubUser.id.toString(),
                       githubToken: token,
@@ -449,6 +452,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     });
                     console.log(`Updated existing user ${conflictUser.id} with GitHub connection`);
                   } else {
+                    console.error(`Username conflict but couldn't find user - this shouldn't happen`);
                     throw createError;
                   }
                 } else {
