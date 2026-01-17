@@ -128,7 +128,7 @@ export default function Signup() {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
     
-    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
+    const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
     const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
     const scope = "repo user:email admin:org_hook";
     
