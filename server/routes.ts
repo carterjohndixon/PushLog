@@ -369,11 +369,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Check if there's a current session/user trying to connect
-        const currentUserId = req.query.state ? await getUserIdFromOAuthState(req.query.state as string) : null;
+        const state = req.query.state as string;
+        const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
+        console.log(`OAuth callback - state: ${state}, currentUserId: ${currentUserId}`);
         
         let user;
         if (currentUserId) {
           // User is already logged in and trying to connect GitHub
+          console.log(`User ${currentUserId} is connecting GitHub account`);
           const currentUser = await databaseStorage.getUserById(currentUserId);
           if (currentUser) {
             // Check if GitHub account is already connected to another user
@@ -389,12 +392,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               email: githubUser.email || currentUser.email,
               emailVerified: true
             });
+            console.log(`Updated user ${currentUser.id} with GitHub connection`);
           }
         } else {
+          // No current session - this is a login flow
+          console.log(`No current session - checking for existing user with GitHub ID ${githubUser.id}`);
           // No current session - check if user already exists with this GitHub ID
           const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
           if (existingUser) {
             // Log in existing user
+            console.log(`Found existing user ${existingUser.id}, logging in`);
             user = await databaseStorage.updateUser(existingUser.id, {
               githubToken: token, // Update token in case it changed
               email: githubUser.email || existingUser.email,
@@ -402,6 +409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           } else {
             // Create new user
+            console.log(`Creating new user for GitHub user ${githubUser.login}`);
             user = await databaseStorage.createUser({
               username: githubUser.login,
               email: githubUser.email,
@@ -409,6 +417,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               githubToken: token,
               emailVerified: true
             });
+            console.log(`Created new user ${user?.id}`);
           }
         }
 
