@@ -296,15 +296,17 @@ export function IntegrationSetupModal({
                     ))}
                   </SelectContent>
                 </Select>
-                <Button 
-                  onClick={handleSlackConnect} 
-                  variant="outline" 
-                  size="sm"
-                  className="w-full border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
-                >
-                  <SiSlack className="w-4 h-4 mr-2" />
-                  Add Another Workspace
-                </Button>
+                <div className="pt-2 border-t">
+                  <Button 
+                    onClick={handleSlackConnect} 
+                    variant="outline" 
+                    size="sm"
+                    className="w-full border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white text-xs"
+                  >
+                    <SiSlack className="w-3 h-3 mr-2" />
+                    Add Another Workspace
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
