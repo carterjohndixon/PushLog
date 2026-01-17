@@ -301,20 +301,29 @@ export function IntegrationSetupModal({
             </Select>
           </div>
 
-          {/* Slack Workspace Selection */}
-          <div className="space-y-2">
+          {/* Slack Workspace Section */}
+          <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
             <div className="flex items-center justify-between">
-              <Label htmlFor="workspace">Slack Workspace</Label>
+              <div>
+                <Label htmlFor="workspace" className="text-base font-semibold">Slack Workspace</Label>
+                <p className="text-xs text-gray-500 mt-1">
+                  {workspaces && workspaces.length > 0 
+                    ? `Connected to ${workspaces.length} workspace${workspaces.length > 1 ? 's' : ''}`
+                    : "No workspaces connected yet"}
+                </p>
+              </div>
               <Button 
                 onClick={handleSlackConnect} 
-                variant="outline" 
-                size="sm"
-                className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white text-xs"
+                className="bg-sky-blue text-white hover:bg-blue-600"
+                size="default"
               >
-                <SiSlack className="w-3 h-3 mr-1" />
-                {workspaces && workspaces.length > 0 ? "Add Another" : "Connect"}
+                <SiSlack className="w-4 h-4 mr-2" />
+                {workspaces && workspaces.length > 0 ? "Add Another" : "Connect Workspace"}
               </Button>
             </div>
+            
+            {/* Slack Workspace Selection */}
+            <div className="space-y-2">
             {workspacesLoading ? (
               <div className="text-sm text-gray-500">Loading workspaces...</div>
             ) : workspaces && workspaces.length > 0 ? (
@@ -334,12 +343,11 @@ export function IntegrationSetupModal({
                 </SelectContent>
               </Select>
             ) : (
-              <div className="space-y-2">
-                <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded-md">
-                  No Slack workspaces connected. Click "Connect" above to add one.
-                </div>
+              <div className="text-sm text-gray-500 p-3 bg-white rounded-md border">
+                No Slack workspaces connected. Click "Connect Workspace" above to add one.
               </div>
             )}
+            </div>
           </div>
 
           {/* Slack Channel Selection */}
