@@ -12,7 +12,7 @@ const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 /**
  * Generate Slack OAuth URL for workspace connection
  */
-export function generateSlackOAuthUrl(state: string): string {
+export function generateSlackOAuthUrl(state: string, isPopup: boolean = false): string {
   const clientId = process.env.SLACK_CLIENT_ID;
   const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://pushlog.ai/api/slack/callback";
   
@@ -22,7 +22,10 @@ export function generateSlackOAuthUrl(state: string): string {
 
   const scope = "chat:write,channels:read,groups:read,team:read";
   
-  return `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scope}&redirect_uri=${redirectUri}&state=${state}`;
+  // Add popup parameter to redirect URI so callback knows it's in a popup
+  const finalRedirectUri = isPopup ? `${redirectUri}?popup=true` : redirectUri;
+  
+  return `https://slack.com/oauth/v2/authorize?client_id=${clientId}&scope=${scope}&redirect_uri=${encodeURIComponent(finalRedirectUri)}&state=${state}`;
 }
 
 /**

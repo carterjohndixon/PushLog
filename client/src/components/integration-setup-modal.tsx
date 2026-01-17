@@ -160,7 +160,7 @@ export function IntegrationSetupModal({
     }
 
     try {
-      const response = await fetch('/api/slack/connect', {
+      const response = await fetch('/api/slack/connect?popup=true', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -173,7 +173,34 @@ export function IntegrationSetupModal({
       }
 
       if (data.url) {
-        window.location.href = data.url;
+        // Open in popup window for easier account switching
+        const width = 600;
+        const height = 700;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        
+        const popup = window.open(
+          data.url,
+          'slack-oauth',
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+
+        // Listen for the popup to close (user completed OAuth)
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed);
+            // Refresh workspaces after OAuth completes
+            queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+          }
+        }, 500);
+
+        // Also listen for messages from the popup (if we add postMessage)
+        window.addEventListener('message', (event) => {
+          if (event.data === 'slack-connected') {
+            queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+            if (popup) popup.close();
+          }
+        });
       }
     } catch (error) {
       console.error('Failed to connect Slack:', error);
@@ -298,7 +325,7 @@ export function IntegrationSetupModal({
                 </Select>
                 <div className="pt-2 border-t space-y-2">
                   <p className="text-xs text-gray-500">
-                    To connect a different Slack account (e.g., work vs personal), log out of Slack in your browser first, then click below.
+                    Click below to connect another Slack workspace. In the popup window, you can switch to a different Slack account if needed.
                   </p>
                   <Button 
                     onClick={handleSlackConnect} 

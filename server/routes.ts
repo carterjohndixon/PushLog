@@ -1225,8 +1225,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
       });
 
+      // Check if this is a popup request (client can send popup=true query param)
+      const isPopup = req.query.popup === 'true';
+      
       // Build the Slack OAuth URL
-      const url = generateSlackOAuthUrl(state);
+      const url = generateSlackOAuthUrl(state, isPopup);
       
       // Send the URL back to the client
       res.json({ url, state });
@@ -1279,10 +1282,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Clean up session
       await databaseStorage.deleteOAuthSession(state as string);
 
+      // Check if this is a popup request (via query param)
+      const isPopup = req.query.popup === 'true';
+      
+      if (isPopup) {
+        // Return HTML that closes popup and notifies parent
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Slack Connected</title></head>
+            <body>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage('slack-connected', '*');
+                  window.close();
+                } else {
+                  window.location.href = '/dashboard#slack=connected';
+                }
+              </script>
+              <p>Slack workspace connected! This window will close automatically...</p>
+            </body>
+          </html>
+        `);
+      }
+
       // Redirect to dashboard with success
       res.redirect(`/dashboard#slack=connected`);
     } catch (error) {
       console.error('Slack OAuth callback error:', error);
+      
+      const isPopup = req.query.popup === 'true';
+      if (isPopup) {
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+            <head><title>Slack Connection Failed</title></head>
+            <body>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage('slack-error', '*');
+                  window.close();
+                } else {
+                  window.location.href = '/dashboard#error=${encodeURIComponent('Failed to connect Slack workspace')}';
+                }
+              </script>
+              <p>Failed to connect Slack workspace. This window will close automatically...</p>
+            </body>
+          </html>
+        `);
+      }
+      
       res.redirect(`/dashboard#error=${encodeURIComponent('Failed to connect Slack workspace')}`);
     }
   });
