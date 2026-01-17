@@ -86,6 +86,10 @@ export default function Login() {
     const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
     const scope = "repo user:email admin:org_hook";
     
+    // Log what we're using (for debugging)
+    console.log("Frontend GitHub OAuth - Client ID:", clientId.substring(0, 10) + "...");
+    console.log("Frontend GitHub OAuth - Redirect URI:", redirectUri);
+    
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
