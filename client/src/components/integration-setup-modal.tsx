@@ -280,21 +280,32 @@ export function IntegrationSetupModal({
             {workspacesLoading ? (
               <div className="text-sm text-gray-500">Loading workspaces...</div>
             ) : workspaces && workspaces.length > 0 ? (
-              <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a workspace" />
-                </SelectTrigger>
-                <SelectContent>
-                  {workspaces.map((workspace) => (
-                    <SelectItem key={workspace.id} value={workspace.id.toString()}>
-                      <div className="flex items-center space-x-2">
-                        <SiSlack className="w-4 h-4" />
-                        <span>{workspace.teamName}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a workspace" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workspaces.map((workspace) => (
+                      <SelectItem key={workspace.id} value={workspace.id.toString()}>
+                        <div className="flex items-center space-x-2">
+                          <SiSlack className="w-4 h-4" />
+                          <span>{workspace.teamName}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button 
+                  onClick={handleSlackConnect} 
+                  variant="outline" 
+                  size="sm"
+                  className="w-full border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
+                >
+                  <SiSlack className="w-4 h-4 mr-2" />
+                  Add Another Workspace
+                </Button>
+              </div>
             ) : (
               <div className="space-y-2">
                 <div className="text-sm text-gray-500">No Slack workspaces connected</div>

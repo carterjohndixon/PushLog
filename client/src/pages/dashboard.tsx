@@ -1068,14 +1068,42 @@ export default function Dashboard() {
                     </>
                   ) : (
                     <>
-                      <p className="text-sm text-steel-gray mb-4">Set up your first integration to start receiving notifications.</p>
-                      <Button 
-                        onClick={() => setIsIntegrationModalOpen(true)}
-                        className="bg-sky-blue text-white hover:bg-blue-600"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Integration
-                      </Button>
+                      <div className="mb-4">
+                        <p className="text-sm text-steel-gray mb-3">
+                          {slackWorkspaces && slackWorkspaces.length > 0 
+                            ? `Connected to ${slackWorkspaces.length} Slack workspace${slackWorkspaces.length > 1 ? 's' : ''}:`
+                            : 'Set up your first integration to start receiving notifications.'}
+                        </p>
+                        {slackWorkspaces && slackWorkspaces.length > 0 && (
+                          <div className="space-y-2 mb-4">
+                            {slackWorkspaces.map((workspace: any) => (
+                              <div key={workspace.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                                <div className="flex items-center space-x-2">
+                                  <SiSlack className="w-4 h-4 text-sky-blue" />
+                                  <span className="text-sm font-medium text-graphite">{workspace.teamName}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={() => setIsIntegrationModalOpen(true)}
+                          className="bg-sky-blue text-white hover:bg-blue-600"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Create Integration
+                        </Button>
+                        <Button 
+                          onClick={handleSlackConnect}
+                          variant="outline"
+                          className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
+                        >
+                          <SiSlack className="w-4 h-4 mr-2" />
+                          Add Workspace
+                        </Button>
+                      </div>
                     </>
                   )}
                 </div>
