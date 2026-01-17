@@ -303,48 +303,41 @@ export function IntegrationSetupModal({
 
           {/* Slack Workspace Selection */}
           <div className="space-y-2">
-            <Label htmlFor="workspace">Slack Workspace</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="workspace">Slack Workspace</Label>
+              <Button 
+                onClick={handleSlackConnect} 
+                variant="outline" 
+                size="sm"
+                className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white text-xs"
+              >
+                <SiSlack className="w-3 h-3 mr-1" />
+                {workspaces && workspaces.length > 0 ? "Add Another" : "Connect"}
+              </Button>
+            </div>
             {workspacesLoading ? (
               <div className="text-sm text-gray-500">Loading workspaces...</div>
             ) : workspaces && workspaces.length > 0 ? (
-              <div className="space-y-2">
-                <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a workspace" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {workspaces.map((workspace) => (
-                      <SelectItem key={workspace.id} value={workspace.id.toString()}>
-                        <div className="flex items-center space-x-2">
-                          <SiSlack className="w-4 h-4" />
-                          <span>{workspace.teamName}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <div className="pt-2 border-t space-y-2">
-                  <p className="text-xs text-gray-500">
-                    Click below to connect another Slack workspace. In the popup window, you can switch to a different Slack account if needed.
-                  </p>
-                  <Button 
-                    onClick={handleSlackConnect} 
-                    variant="outline" 
-                    size="sm"
-                    className="w-full border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white text-xs"
-                  >
-                    <SiSlack className="w-3 h-3 mr-2" />
-                    Add Another Workspace
-                  </Button>
-                </div>
-              </div>
+              <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a workspace" />
+                </SelectTrigger>
+                <SelectContent>
+                  {workspaces.map((workspace) => (
+                    <SelectItem key={workspace.id} value={workspace.id.toString()}>
+                      <div className="flex items-center space-x-2">
+                        <SiSlack className="w-4 h-4" />
+                        <span>{workspace.teamName}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <div className="space-y-2">
-                <div className="text-sm text-gray-500">No Slack workspaces connected</div>
-                <Button onClick={handleSlackConnect} className="bg-sky-blue text-white hover:bg-blue-600">
-                  <SiSlack className="w-4 h-4 mr-2" />
-                  Connect Slack Workspace
-                </Button>
+                <div className="text-sm text-gray-500 p-3 bg-gray-50 rounded-md">
+                  No Slack workspaces connected. Click "Connect" above to add one.
+                </div>
               </div>
             )}
           </div>
