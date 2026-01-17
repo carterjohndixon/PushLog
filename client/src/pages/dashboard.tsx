@@ -1087,22 +1087,27 @@ export default function Dashboard() {
                           </div>
                         )}
                       </div>
-                      <div className="flex gap-2">
-                        <Button 
-                          onClick={() => setIsIntegrationModalOpen(true)}
-                          className="bg-sky-blue text-white hover:bg-blue-600"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create Integration
-                        </Button>
-                        <Button 
-                          onClick={handleSlackConnect}
-                          variant="outline"
-                          className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
-                        >
-                          <SiSlack className="w-4 h-4 mr-2" />
-                          Add Workspace
-                        </Button>
+                      <div className="space-y-2">
+                        <div className="flex gap-2">
+                          <Button 
+                            onClick={() => setIsIntegrationModalOpen(true)}
+                            className="bg-sky-blue text-white hover:bg-blue-600"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Create Integration
+                          </Button>
+                          <Button 
+                            onClick={handleSlackConnect}
+                            variant="outline"
+                            className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
+                          >
+                            <SiSlack className="w-4 h-4 mr-2" />
+                            Add Workspace
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          💡 Tip: To connect a different Slack account (e.g., work vs personal), log out of Slack in your browser first, then click "Add Workspace".
+                        </p>
                       </div>
                     </>
                   )}

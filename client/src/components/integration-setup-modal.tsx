@@ -296,7 +296,10 @@ export function IntegrationSetupModal({
                     ))}
                   </SelectContent>
                 </Select>
-                <div className="pt-2 border-t">
+                <div className="pt-2 border-t space-y-2">
+                  <p className="text-xs text-gray-500">
+                    To connect a different Slack account (e.g., work vs personal), log out of Slack in your browser first, then click below.
+                  </p>
                   <Button 
                     onClick={handleSlackConnect} 
                     variant="outline" 
