@@ -18,7 +18,8 @@ import {
   createWebhook,
   deleteWebhook,
   verifyWebhookSignature,
-  validateGitHubToken
+  validateGitHubToken,
+  getGitHubTokenScopes
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -250,9 +251,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const isValid = await validateGitHubToken(user.githubToken);
           if (isValid) {
-            return res.status(400).json({
-              error: "GitHub account already connected"
-            });
+            // Check if token has the 'repo' scope
+            const scopes = await getGitHubTokenScopes(user.githubToken);
+            const hasRepoScope = scopes.includes("repo");
+            
+            if (hasRepoScope) {
+              // Token is valid and has repo scope, already connected properly
+              return res.status(400).json({
+                error: "GitHub account already connected"
+              });
+            } else {
+              // Token is valid but missing repo scope, clear and allow reconnection
+              console.log("GitHub token missing 'repo' scope, clearing connection to allow reconnection");
+              await databaseStorage.updateUser(userId, {
+                githubId: null,
+                githubToken: null
+              });
+            }
           } else {
             // Token is invalid, clear the connection and allow reconnection
             await databaseStorage.updateUser(userId, {
