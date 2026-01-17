@@ -139,21 +139,37 @@ export async function validateGitHubToken(accessToken: string): Promise<boolean>
 }
 
 /**
- * Get user's repositories from GitHub
+ * Get user's repositories from GitHub (including organization repos)
  */
 export async function getUserRepositories(accessToken: string): Promise<GitHubRepository[]> {
-  const response = await fetch("https://api.github.com/user/repos?sort=updated&per_page=100", {
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Accept": "application/vnd.github.v3+json",
-    },
-  });
+  const allRepos: GitHubRepository[] = [];
+  let page = 1;
+  
+  // Fetch all pages of repos with affiliation parameter to include org repos
+  while (true) {
+    const response = await fetch(
+      `https://api.github.com/user/repos?sort=updated&per_page=100&page=${page}&affiliation=owner,collaborator,organization_member`,
+      {
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Accept": "application/vnd.github.v3+json",
+        },
+      }
+    );
 
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.statusText}`);
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.statusText}`);
+    }
+
+    const repos = await response.json();
+    if (repos.length === 0) break;
+    
+    allRepos.push(...repos);
+    if (repos.length < 100) break; // Last page
+    page++;
   }
 
-  return await response.json();
+  return allRepos;
 }
 
 /**
