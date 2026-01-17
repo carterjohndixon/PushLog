@@ -297,8 +297,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
       });
 
-      // Build the GitHub OAuth URL
-      const clientId = process.env.GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
+      // Build the GitHub OAuth URL (use OAuth App, not GitHub App)
+      const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://pushlog.ai/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       

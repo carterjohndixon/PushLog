@@ -42,17 +42,20 @@ interface GitHubWebhook {
  * Exchange OAuth code for access token
  */
 export async function exchangeCodeForToken(code: string): Promise<string> {
-  const clientId = process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Iv23lixttif7N6Na9P9b";
-  const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+  // Use OAuth App credentials for user authentication
+  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
+  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
     console.error("GitHub OAuth configuration error:", {
       hasClientId: !!clientId,
       hasClientSecret: !!clientSecret,
-      clientIdEnv: process.env.GITHUB_CLIENT_ID ? "set" : "missing",
-      clientSecretEnv: process.env.GITHUB_CLIENT_SECRET ? "set" : "missing"
+      oauthClientIdEnv: process.env.GITHUB_OAUTH_CLIENT_ID ? "set" : "missing",
+      oauthClientSecretEnv: process.env.GITHUB_OAUTH_CLIENT_SECRET ? "set" : "missing",
+      fallbackClientIdEnv: process.env.GITHUB_CLIENT_ID ? "set" : "missing",
+      fallbackClientSecretEnv: process.env.GITHUB_CLIENT_SECRET ? "set" : "missing"
     });
-    throw new Error("GitHub OAuth credentials not configured. Please check GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables.");
+    throw new Error("GitHub OAuth credentials not configured. Please check GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET environment variables.");
   }
 
   const response = await fetch("https://github.com/login/oauth/access_token", {
