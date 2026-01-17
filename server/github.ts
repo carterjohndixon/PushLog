@@ -45,6 +45,9 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
   // Use OAuth App credentials for user authentication
   const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
   const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+  
+  console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...");
+  console.log("GitHub OAuth token exchange - Client Secret present:", !!clientSecret);
 
   if (!clientId || !clientSecret) {
     console.error("GitHub OAuth configuration error:", {

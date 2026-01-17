@@ -302,6 +302,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://pushlog.ai/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       
+      console.log("GitHub OAuth connect - Client ID:", clientId.substring(0, 10) + "...");
+      console.log("GitHub OAuth connect - Redirect URI:", redirectUri);
+      
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
       
       // Instead of redirecting, send the URL and state back to the client
