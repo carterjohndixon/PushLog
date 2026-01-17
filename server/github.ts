@@ -120,6 +120,29 @@ export async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
 }
 
 /**
+ * Get the scopes for a GitHub access token
+ */
+export async function getGitHubTokenScopes(accessToken: string): Promise<string[]> {
+  try {
+    const response = await fetch("https://api.github.com/user", {
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Accept": "application/vnd.github.v3+json",
+      },
+    });
+
+    const scopesHeader = response.headers.get("x-oauth-scopes");
+    if (scopesHeader) {
+      return scopesHeader.split(", ").map(s => s.trim());
+    }
+    return [];
+  } catch (error) {
+    console.error('Error getting GitHub token scopes:', error);
+    return [];
+  }
+}
+
+/**
  * Validate if a GitHub access token is still valid
  */
 export async function validateGitHubToken(accessToken: string): Promise<boolean> {
@@ -142,6 +165,16 @@ export async function validateGitHubToken(accessToken: string): Promise<boolean>
  * Get user's repositories from GitHub (including organization repos)
  */
 export async function getUserRepositories(accessToken: string): Promise<GitHubRepository[]> {
+  // Check token scopes first
+  const scopes = await getGitHubTokenScopes(accessToken);
+  console.log(`GitHub token scopes: ${scopes.join(", ")}`);
+  
+  const hasRepoScope = scopes.includes("repo");
+  if (!hasRepoScope) {
+    console.warn("⚠️  WARNING: GitHub token does not have 'repo' scope. Private repos will not be accessible.");
+    console.warn("⚠️  User needs to re-authenticate with GitHub to get 'repo' scope.");
+  }
+
   const allRepos: GitHubRepository[] = [];
   let page = 1;
   
@@ -161,6 +194,12 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`GitHub API error: ${response.status} ${response.statusText}`, errorText);
+      
+      // If 403 and no repo scope, provide helpful error
+      if (response.status === 403 && !hasRepoScope) {
+        throw new Error("GitHub token missing 'repo' scope. Please reconnect your GitHub account to grant access to private repositories.");
+      }
+      
       throw new Error(`GitHub API error: ${response.statusText}`);
     }
 
@@ -171,6 +210,8 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
     const privateCount = repos.filter((r: any) => r.private).length;
     if (privateCount > 0) {
       console.log(`Fetched ${repos.length} repos (${privateCount} private) on page ${page}`);
+    } else if (page === 1) {
+      console.log(`Fetched ${repos.length} repos (0 private) on page ${page}`);
     }
     
     allRepos.push(...repos);
@@ -180,6 +221,12 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
 
   const totalPrivate = allRepos.filter((r: any) => r.private).length;
   console.log(`Total repos fetched: ${allRepos.length} (${totalPrivate} private)`);
+  
+  if (totalPrivate === 0 && hasRepoScope) {
+    console.log("ℹ️  No private repos found. This may be normal if you don't have any private repositories.");
+  } else if (totalPrivate === 0 && !hasRepoScope) {
+    console.warn("⚠️  No private repos found. This is likely because your token lacks the 'repo' scope.");
+  }
 
   return allRepos;
 }

@@ -815,8 +815,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         res.json(enrichedRepos);
-      } catch (githubError) {
+      } catch (githubError: any) {
         console.error("Failed to fetch GitHub repositories:", githubError);
+        
+        // Check if error is about missing repo scope
+        if (githubError.message && githubError.message.includes("repo' scope")) {
+          return res.status(403).json({ 
+            error: "Your GitHub token is missing the 'repo' scope required to access private repositories. Please disconnect and reconnect your GitHub account to grant the necessary permissions.",
+            requiresReauth: true
+          });
+        }
+        
         return res.status(404).json({ error: "No repositories found. Please check your GitHub connection." });
       }
     } catch (error) {
