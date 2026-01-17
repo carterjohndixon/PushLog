@@ -327,7 +327,16 @@ export function IntegrationSetupModal({
             {workspacesLoading ? (
               <div className="text-sm text-gray-500">Loading workspaces...</div>
             ) : workspaces && workspaces.length > 0 ? (
-              <Select value={selectedWorkspace} onValueChange={setSelectedWorkspace}>
+              <Select 
+                value={selectedWorkspace} 
+                onValueChange={(value) => {
+                  if (value === '__add_new__') {
+                    handleSlackConnect();
+                  } else {
+                    setSelectedWorkspace(value);
+                  }
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a workspace" />
                 </SelectTrigger>
@@ -340,6 +349,13 @@ export function IntegrationSetupModal({
                       </div>
                     </SelectItem>
                   ))}
+                  <div className="border-t my-1" />
+                  <SelectItem value="__add_new__" className="text-sky-blue font-medium">
+                    <div className="flex items-center space-x-2">
+                      <SiSlack className="w-4 h-4" />
+                      <span>+ Add Another Workspace</span>
+                    </div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             ) : (
