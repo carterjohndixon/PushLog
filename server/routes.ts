@@ -302,10 +302,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Check if this is a GitHub OAuth callback
       const code = req.query.code as string;
+      const error = req.query.error as string;
+      
+      if (error) {
+        console.error("GitHub OAuth error from callback:", error, req.query.error_description);
+        return res.redirect(`/dashboard?error=github_oauth_error&message=${encodeURIComponent(error)}`);
+      }
+      
       if (code) {
+        console.log("GitHub OAuth callback received, exchanging code for token...");
         // Handle GitHub OAuth
-        const token = await exchangeCodeForToken(code);
-        const githubUser = await getGitHubUser(token);
+        let token: string;
+        try {
+          token = await exchangeCodeForToken(code);
+          console.log("Successfully exchanged code for token");
+        } catch (tokenError) {
+          console.error("Failed to exchange code for token:", tokenError);
+          throw new Error(`Failed to exchange GitHub authorization code: ${tokenError instanceof Error ? tokenError.message : 'Unknown error'}`);
+        }
+        
+        let githubUser;
+        try {
+          githubUser = await getGitHubUser(token);
+          console.log("Successfully fetched GitHub user:", githubUser.login);
+        } catch (userError) {
+          console.error("Failed to get GitHub user:", userError);
+          throw new Error(`Failed to fetch GitHub user info: ${userError instanceof Error ? userError.message : 'Unknown error'}`);
+        }
 
         // Check if there's a current session/user trying to connect
         const currentUserId = req.query.state ? await getUserIdFromOAuthState(req.query.state as string) : null;

@@ -71,7 +71,17 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
   const data = await response.json();
   
   if (data.error) {
-    throw new Error(`GitHub OAuth error: ${data.error_description}`);
+    console.error("GitHub OAuth token exchange error:", {
+      error: data.error,
+      error_description: data.error_description,
+      error_uri: data.error_uri
+    });
+    throw new Error(`GitHub OAuth error: ${data.error_description || data.error}`);
+  }
+
+  if (!data.access_token) {
+    console.error("GitHub OAuth response missing access_token:", data);
+    throw new Error("GitHub OAuth response missing access token");
   }
 
   return data.access_token;
