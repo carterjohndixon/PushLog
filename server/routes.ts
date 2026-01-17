@@ -312,6 +312,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Disconnect GitHub account
+  app.post("/api/github/disconnect", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      // Clear GitHub connection
+      await databaseStorage.updateUser(userId, {
+        githubId: null,
+        githubToken: null
+      });
+
+      console.log(`GitHub disconnected for user ${userId}`);
+      res.json({ success: true, message: "GitHub account disconnected successfully" });
+    } catch (error) {
+      console.error('Failed to disconnect GitHub:', error);
+      res.status(500).json({ error: 'Failed to disconnect GitHub account' });
+    }
+  });
+
   // Get current user info or handle GitHub OAuth
   app.get("/api/auth/user", async (req, res) => {
     try {

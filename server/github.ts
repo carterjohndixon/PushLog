@@ -84,6 +84,9 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
     throw new Error("GitHub OAuth response missing access token");
   }
 
+  // Log the scopes returned by GitHub
+  console.log("GitHub OAuth token exchange successful. Scopes granted:", data.scope || "none");
+  
   return data.access_token;
 }
 
