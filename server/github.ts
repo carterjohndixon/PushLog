@@ -146,9 +146,10 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
   let page = 1;
   
   // Fetch all pages of repos with affiliation parameter to include org repos
+  // type=all ensures we get both public and private repos
   while (true) {
     const response = await fetch(
-      `https://api.github.com/user/repos?sort=updated&per_page=100&page=${page}&affiliation=owner,collaborator,organization_member`,
+      `https://api.github.com/user/repos?sort=updated&per_page=100&page=${page}&affiliation=owner,collaborator,organization_member&type=all`,
       {
         headers: {
           "Authorization": `Bearer ${accessToken}`,
@@ -158,16 +159,27 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
     );
 
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`GitHub API error: ${response.status} ${response.statusText}`, errorText);
       throw new Error(`GitHub API error: ${response.statusText}`);
     }
 
     const repos = await response.json();
     if (repos.length === 0) break;
     
+    // Debug: Log private repo count
+    const privateCount = repos.filter((r: any) => r.private).length;
+    if (privateCount > 0) {
+      console.log(`Fetched ${repos.length} repos (${privateCount} private) on page ${page}`);
+    }
+    
     allRepos.push(...repos);
     if (repos.length < 100) break; // Last page
     page++;
   }
+
+  const totalPrivate = allRepos.filter((r: any) => r.private).length;
+  console.log(`Total repos fetched: ${allRepos.length} (${totalPrivate} private)`);
 
   return allRepos;
 }
