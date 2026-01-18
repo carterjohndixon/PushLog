@@ -19,6 +19,7 @@ const Integrations = lazy(() => import("@/pages/integrations"));
 const Repositories = lazy(() => import("@/pages/repositories"));
 const Carter = lazy(() => import("@/pages/carter"));
 const Policy = lazy(() => import("@/pages/policy"));
+const Terms = lazy(() => import("@/pages/terms"));
 const Settings = lazy(() => import("@/pages/settings"));
 const Support = lazy(() => import("@/pages/support"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -68,6 +69,7 @@ function Router() {
       
       <Route path="/carter" component={Carter} />
       <Route path="/policy" component={Policy} />
+      <Route path="/terms" component={Terms} />
       <Route path="/support" component={Support} />
       <Route path="/settings">
         <ProtectedRoute pageName="settings">

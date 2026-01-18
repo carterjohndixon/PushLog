@@ -81,6 +81,12 @@ export function Footer() {
                 Support
               </Link>
               <Link 
+                href="/terms" 
+                className="hover:text-log-green transition-colors text-sm"
+              >
+                Terms of Service
+              </Link>
+              <Link 
                 href="/policy" 
                 className="hover:text-log-green transition-colors text-sm"
               >
