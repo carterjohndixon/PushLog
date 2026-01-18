@@ -238,6 +238,7 @@ export function IntegrationSetupModal({
     const integrationData = {
       userId: parseInt(currentUserId || '0'),
       repositoryId: repository.id,
+      slackWorkspaceId: workspace.id,
       slackChannelId: channel.id,
       slackChannelName: channel.name,
       notificationLevel,

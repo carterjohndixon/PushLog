@@ -3,12 +3,6 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-if (!process.env.SLACK_BOT_TOKEN) {
-  throw new Error("SLACK_BOT_TOKEN environment variable must be set");
-}
-
-const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
-
 /**
  * Generate Slack OAuth URL for workspace connection
  */
@@ -95,6 +89,7 @@ export async function getSlackWorkspaceInfo(accessToken: string): Promise<{
  * Sends a welcome message when an integration is first created
  */
 export async function sendIntegrationWelcomeMessage(
+  accessToken: string,
   channelId: string,
   repositoryName: string,
   integrationName: string
@@ -145,7 +140,7 @@ export async function sendIntegrationWelcomeMessage(
     }
   ];
 
-  return await sendSlackMessage({
+  return await sendSlackMessage(accessToken, {
     channel: channelId,
     blocks,
     text: `PushLog integration created for ${repositoryName}` // Fallback text
@@ -154,12 +149,16 @@ export async function sendIntegrationWelcomeMessage(
 
 /**
  * Sends a structured message to a Slack channel using the Slack Web API
+ * @param accessToken - The OAuth access token for the workspace
+ * @param message - The message to send
  */
 export async function sendSlackMessage(
+  accessToken: string,
   message: ChatPostMessageArguments
 ): Promise<string | undefined> {
   try {
-    const response = await slack.chat.postMessage(message);
+    const client = new WebClient(accessToken);
+    const response = await client.chat.postMessage(message);
     return response.ts;
   } catch (error) {
     console.error('Error sending Slack message:', error);
@@ -171,6 +170,7 @@ export async function sendSlackMessage(
  * Send a formatted push notification to Slack
  */
 export async function sendPushNotification(
+  accessToken: string,
   channelId: string,
   repositoryName: string,
   commitMessage: string,
@@ -223,28 +223,11 @@ export async function sendPushNotification(
     } as any);
   }
 
-  return await sendSlackMessage({
+  return await sendSlackMessage(accessToken, {
     channel: channelId,
     blocks,
     text: `New push to ${repositoryName} by ${author}` // Fallback text
   });
-}
-
-/**
- * Get list of channels in the workspace
- */
-export async function getSlackChannels(): Promise<any[]> {
-  try {
-    const response = await slack.conversations.list({
-      types: "public_channel,private_channel",
-      exclude_archived: true
-    });
-    
-    return response.channels || [];
-  } catch (error) {
-    console.error('Error fetching Slack channels:', error);
-    throw error;
-  }
 }
 
 /**
@@ -266,11 +249,12 @@ export async function getSlackChannelsForWorkspace(accessToken: string): Promise
 }
 
 /**
- * Test Slack connection
+ * Test Slack connection with a specific access token
  */
-export async function testSlackConnection(): Promise<boolean> {
+export async function testSlackConnection(accessToken: string): Promise<boolean> {
   try {
-    const response = await slack.auth.test();
+    const client = new WebClient(accessToken);
+    const response = await client.auth.test();
     return response.ok === true;
   } catch (error) {
     console.error('Error testing Slack connection:', error);

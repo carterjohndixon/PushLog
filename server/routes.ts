@@ -26,7 +26,6 @@ import {
   sendPushNotification, 
   sendIntegrationWelcomeMessage,
   sendSlackMessage,
-  getSlackChannels, 
   testSlackConnection,
   generateSlackOAuthUrl,
   exchangeSlackCodeForToken,
@@ -1190,11 +1189,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test Slack connection
+  // Test Slack connection - checks if OAuth is configured
   app.get("/api/slack/test", async (req, res) => {
     try {
-      const isConnected = await testSlackConnection();
-      res.json({ connected: isConnected });
+      // Check if Slack OAuth credentials are configured
+      const isConfigured = !!(process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET);
+      res.json({ connected: isConfigured });
     } catch (error) {
       console.error("Error testing Slack connection:", error);
       res.status(500).json({ connected: false, error: "Connection test failed" });
@@ -1396,33 +1396,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Send welcome message to Slack if integration is active
-      if (integration.isActive) {
+      if (integration.isActive && integration.slackWorkspaceId) {
         try {
-          // Get repository info for the welcome message (get fresh data after update)
-          const updatedRepository = await storage.getRepository(integration.repositoryId);
+          // Get workspace to get the access token
+          const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
           
-          if (updatedRepository) {
-            await sendIntegrationWelcomeMessage(
-              integration.slackChannelId,
-              updatedRepository.name,
-              integration.slackChannelName
-            );
+          if (workspace) {
+            // Get repository info for the welcome message (get fresh data after update)
+            const updatedRepository = await storage.getRepository(integration.repositoryId);
             
-            // Store notification in database
-            await storage.createNotification({
-              userId: integration.userId,
-              type: 'slack_message_sent',
-              title: 'Slack Message Sent',
-              message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`
-            });
-            
-            // Also broadcast via SSE for real-time updates
-            broadcastNotification(integration.userId, {
-              type: 'slack_message_sent',
-              title: 'Slack Message Sent',
-              message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`,
-              createdAt: new Date().toISOString()
-            });
+            if (updatedRepository) {
+              await sendIntegrationWelcomeMessage(
+                workspace.accessToken,
+                integration.slackChannelId,
+                updatedRepository.name,
+                integration.slackChannelName
+              );
+              
+              // Store notification in database
+              await storage.createNotification({
+                userId: integration.userId,
+                type: 'slack_message_sent',
+                title: 'Slack Message Sent',
+                message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`
+              });
+              
+              // Also broadcast via SSE for real-time updates
+              broadcastNotification(integration.userId, {
+                type: 'slack_message_sent',
+                title: 'Slack Message Sent',
+                message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`,
+                createdAt: new Date().toISOString()
+              });
+            }
           }
         } catch (slackError) {
           console.error("Failed to send welcome message:", slackError);
@@ -1649,13 +1655,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send to Slack
       try {
-        const slackMessage = await generateSlackMessage(testPushData, summary.summary);
-        
-        await sendSlackMessage({
-          channel: activeIntegration.slackChannelId,
-          text: slackMessage,
-          unfurl_links: false
-        });
+        // Get workspace access token
+        if (activeIntegration.slackWorkspaceId) {
+          const workspace = await databaseStorage.getSlackWorkspace(activeIntegration.slackWorkspaceId);
+          if (workspace) {
+            const slackMessage = await generateSlackMessage(testPushData, summary.summary);
+            
+            await sendSlackMessage(workspace.accessToken, {
+              channel: activeIntegration.slackChannelId,
+              text: slackMessage,
+              unfurl_links: false
+            });
+          }
+        }
       } catch (slackError) {
         console.error("❌ Failed to send Slack message:", slackError);
       }
@@ -1947,6 +1959,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               // Send Slack notification with AI summary if available
         try {
+          // Get workspace access token for sending Slack messages
+          let workspaceToken: string | null = null;
+          if (integration.slackWorkspaceId) {
+            const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
+            workspaceToken = workspace?.accessToken || null;
+          }
+          
+          if (!workspaceToken) {
+            console.error(`No workspace token found for integration ${integration.id}`);
+            throw new Error('No workspace access token available');
+          }
+
           if (aiGenerated && aiSummary) {
             // Use AI-enhanced Slack message with corrected stats
             const pushData = {
@@ -1968,7 +1992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const slackMessage = await generateSlackMessage(pushData, summary);
           
-          await sendSlackMessage({
+          await sendSlackMessage(workspaceToken, {
             channel: integration.slackChannelId,
             text: slackMessage,
             unfurl_links: false
@@ -1976,6 +2000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else {
           // Use regular push notification
           await sendPushNotification(
+            workspaceToken,
             integration.slackChannelId,
             repository.full_name,
             commit.message,

@@ -42,6 +42,7 @@ export const integrations = pgTable("integrations", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
   repositoryId: integer("repository_id").notNull(),
+  slackWorkspaceId: integer("slack_workspace_id"), // Links to slack_workspaces table
   slackChannelId: text("slack_channel_id").notNull(),
   slackChannelName: text("slack_channel_name").notNull(),
   notificationLevel: text("notification_level").default("all"), // all, main_only, tagged_only
