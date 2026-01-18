@@ -27,7 +27,7 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <p>
-              PushLog is a personal project created and operated by Carter Dixon. This policy explains how we collect, 
+              PushLog is a personal project created and operated by Carter Dixon. This policy explains how I collect, 
               use, store, and protect your personal information when you use the service.
               </p>
               <p>
@@ -40,9 +40,9 @@ export default function Policy() {
           {/* Data We Collect */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                 <Database className="w-5 h-5 text-log-green" />
-                Data We Collect
+                Data I Collect
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -64,7 +64,7 @@ export default function Policy() {
                   <li><strong>Google:</strong> OAuth access tokens and Google user ID (if used for authentication)</li>
                 </ul>
                 <p className="text-sm text-steel-gray mt-2 italic">
-                  ⚠️ <strong>Note:</strong> OAuth tokens are stored in our database to enable API access. These tokens are encrypted at rest by our database provider (Supabase).
+                  ⚠️ <strong>Note:</strong> OAuth tokens are stored in my database to enable API access. These tokens are encrypted at rest by my database provider (Supabase).
                 </p>
               </div>
 
@@ -101,8 +101,8 @@ export default function Policy() {
                   <li>AI credit balance and usage</li>
                 </ul>
                 <p className="text-sm text-steel-gray mt-2">
-                  <strong>Note:</strong> We do NOT store credit card numbers or payment details. All payment processing is handled 
-                  securely by Stripe. We only store transaction metadata.
+                  <strong>Note:</strong> I do NOT store credit card numbers or payment details. All payment processing is handled 
+                  securely by Stripe. I only store transaction metadata.
                 </p>
               </div>
 
@@ -122,17 +122,17 @@ export default function Policy() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Eye className="w-5 h-5 text-sky-blue" />
-                How We Use Your Data
+                How I Use Your Data
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <ul className="list-disc list-inside space-y-2 ml-4">
-                <li>To provide and maintain our service (GitHub webhook monitoring, Slack notifications)</li>
+                <li>To provide and maintain my service (GitHub webhook monitoring, Slack notifications)</li>
                 <li>To authenticate and authorize access to your account</li>
                 <li>To generate AI-powered summaries of your code changes using OpenAI</li>
                 <li>To process payments and manage AI credit purchases</li>
                 <li>To send you email notifications (verification, password resets, service updates)</li>
-                <li>To improve our service and troubleshoot issues</li>
+                <li>To improve my service and troubleshoot issues</li>
                 <li>To comply with legal obligations</li>
               </ul>
             </CardContent>
@@ -155,23 +155,23 @@ export default function Policy() {
                     Located in cloud infrastructure (region may vary).
                   </li>
                   <li>
-                    <strong>GitHub:</strong> We access your repositories via GitHub API using OAuth tokens you authorize. 
-                    We create webhooks to monitor push events. We do not share your data with GitHub beyond what's necessary for API access.
+                    <strong>GitHub:</strong> I access your repositories via GitHub API using OAuth tokens you authorize. 
+                    I create webhooks to monitor push events. I do not share your data with GitHub beyond what's necessary for API access.
                   </li>
                   <li>
-                    <strong>Slack:</strong> We send notifications to your Slack channels using OAuth tokens you authorize. 
-                    We access workspace and channel information. We do not share your data with Slack beyond what's necessary for API access.
+                    <strong>Slack:</strong> I send notifications to your Slack channels using OAuth tokens you authorize. 
+                    I access workspace and channel information. I do not share your data with Slack beyond what's necessary for API access.
                   </li>
                   <li>
-                    <strong>OpenAI:</strong> We send commit messages, file change metadata, and code statistics to OpenAI's API 
+                    <strong>OpenAI:</strong> I send commit messages, file change metadata, and code statistics to OpenAI's API 
                     to generate AI summaries. <strong>File contents are NOT sent.</strong> OpenAI's privacy policy applies to this data.
                   </li>
                   <li>
-                    <strong>Stripe:</strong> Payment processing. We share transaction metadata with Stripe. Credit card information 
-                    is handled entirely by Stripe and never stored by us.
+                    <strong>Stripe:</strong> Payment processing. I share transaction metadata with Stripe. Credit card information 
+                    is handled entirely by Stripe and never stored by me.
                   </li>
                   <li>
-                    <strong>Email Service Provider:</strong> We use an email service to send verification emails and password resets. 
+                    <strong>Email Service Provider:</strong> I use an email service to send verification emails and password resets. 
                     Your email address is shared with this provider for delivery purposes only.
                   </li>
                 </ul>
@@ -179,8 +179,8 @@ export default function Policy() {
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                 <p className="text-sm text-yellow-800">
-                  <strong>⚠️ Important:</strong> We do NOT sell your personal data to third parties. We only share data with 
-                  the service providers listed above as necessary to provide our service.
+                  <strong>⚠️ Important:</strong> I do NOT sell your personal data to third parties. I only share data with 
+                  the service providers listed above as necessary to provide my service.
                 </p>
               </div>
             </CardContent>
@@ -196,17 +196,17 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <ul className="list-disc list-inside space-y-2 ml-4">
-                <li><strong>Password Security:</strong> Passwords are hashed using bcrypt before storage. We never store plaintext passwords.</li>
+                <li><strong>Password Security:</strong> Passwords are hashed using bcrypt before storage. I never store plaintext passwords.</li>
                 <li><strong>Encryption:</strong> Data is encrypted in transit (HTTPS/TLS) and at rest (database encryption by Supabase).</li>
-                <li><strong>Authentication:</strong> We use JWT tokens for session management. Tokens expire and are validated on each request.</li>
-                <li><strong>OAuth Tokens:</strong> Stored securely in our database. Access is restricted to authenticated API requests only.</li>
+                <li><strong>Authentication:</strong> I use JWT tokens for session management. Tokens expire and are validated on each request.</li>
+                <li><strong>OAuth Tokens:</strong> Stored securely in my database. Access is restricted to authenticated API requests only.</li>
                 <li><strong>Email Verification:</strong> Required before accessing certain features to prevent unauthorized access.</li>
               </ul>
               
               <div className="bg-red-50 border border-red-200 rounded-md p-4 mt-4">
                 <p className="text-sm text-red-800">
-                  <strong>⚠️ Security Concern:</strong> OAuth tokens (GitHub, Slack, Google) are currently stored in plaintext in our database. 
-                  While the database is encrypted at rest, we recommend encrypting these tokens with application-level encryption for additional security.
+                  <strong>⚠️ Security Concern:</strong> OAuth tokens (GitHub, Slack, Google) are currently stored in plaintext in my database. 
+                  While the database is encrypted at rest, I recommend encrypting these tokens with application-level encryption for additional security.
                 </p>
               </div>
             </CardContent>
@@ -222,7 +222,7 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <p>
-                We retain your data for as long as your account is active and for a reasonable period afterward to comply with legal obligations.
+                I retain your data for as long as your account is active and for a reasonable period afterward to comply with legal obligations.
               </p>
               <div>
                 <h3 className="font-semibold text-graphite mb-2">You Can Request Deletion Of:</h3>
@@ -234,8 +234,8 @@ export default function Policy() {
                 </ul>
               </div>
               <p className="text-sm">
-                To request data deletion, contact us at the email address provided in the "Contact" section below. 
-                We will process deletion requests within 30 days.
+                To request data deletion, contact me at the email address provided in the "Contact" section below. 
+                I will process deletion requests within 30 days.
               </p>
               <p className="text-sm italic">
                 <strong>Note:</strong> Some data may be retained for legal or accounting purposes (e.g., payment records) 
@@ -263,7 +263,7 @@ export default function Policy() {
                 <li><strong>Withdrawal:</strong> Withdraw consent for OAuth integrations at any time</li>
               </ul>
               <p className="text-sm">
-                To exercise these rights, contact us using the information below. We will respond within 30 days.
+                To exercise these rights, contact me using the information below. I will respond within 30 days.
               </p>
             </CardContent>
           </Card>
@@ -278,7 +278,7 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <p>
-                We use localStorage to store authentication tokens and user preferences. We do NOT use tracking cookies, 
+                I use localStorage to store authentication tokens and user preferences. I do NOT use tracking cookies, 
                 analytics cookies, or third-party advertising trackers.
               </p>
               <p>
@@ -299,8 +299,8 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="text-steel-gray">
               <p>
-                PushLog is not intended for users under the age of 13. We do not knowingly collect personal information 
-                from children under 13. If you believe we have collected information from a child under 13, please contact us 
+                PushLog is not intended for users under the age of 13. I do not knowingly collect personal information 
+                from children under 13. If you believe I have collected information from a child under 13, please contact me 
                 immediately.
               </p>
             </CardContent>
@@ -313,8 +313,8 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="text-steel-gray">
               <p>
-                We may update this privacy policy from time to time. We will notify you of any material changes by posting 
-                the new policy on this page and updating the "Last updated" date. We encourage you to review this policy periodically.
+                I may update this privacy policy from time to time. I will notify you of any material changes by posting 
+                the new policy on this page and updating the "Last updated" date. I encourage you to review this policy periodically.
               </p>
             </CardContent>
           </Card>
@@ -329,7 +329,7 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="text-steel-gray">
               <p>
-                If you have questions about this privacy policy or wish to exercise your rights, please contact us:
+                If you have questions about this privacy policy or wish to exercise your rights, please contact me:
               </p>
               <p className="mt-2">
                 <strong>Email:</strong> carter@m0nke.com
