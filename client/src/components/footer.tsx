@@ -77,20 +77,30 @@ export function Footer() {
               <Link 
                 href="/support" 
                 className="hover:text-log-green transition-colors text-sm"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               >
                 Support
               </Link>
               <Link 
                 href="/terms" 
                 className="hover:text-log-green transition-colors text-sm"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               >
                 Terms of Service
               </Link>
               <Link 
                 href="/policy" 
                 className="hover:text-log-green transition-colors text-sm"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
               >
                 Privacy Policy
+              </Link>
+              <Link 
+                href="/sub-processors" 
+                className="hover:text-log-green transition-colors text-sm"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              >
+                Sub-Processors
               </Link>
             </div>
           </div>

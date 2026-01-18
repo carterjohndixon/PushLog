@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { useState, useEffect } from "react";
+import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
 interface User {
@@ -622,6 +623,26 @@ export default function Home() {
                 </p>
               </CardContent>
             </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* Legal Links Section */}
+      <section className="py-12 bg-white border-t border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-steel-gray">
+            <Link href="/support" className="hover:text-log-green transition-colors">
+              Support
+            </Link>
+            <Link href="/terms" className="hover:text-log-green transition-colors">
+              Terms of Service
+            </Link>
+            <Link href="/policy" className="hover:text-log-green transition-colors">
+              Privacy Policy
+            </Link>
+            <Link href="/sub-processors" className="hover:text-log-green transition-colors">
+              Sub-Processors
+            </Link>
           </div>
         </div>
       </section>
