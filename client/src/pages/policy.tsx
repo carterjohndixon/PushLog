@@ -332,7 +332,7 @@ export default function Policy() {
                 If you have questions about this privacy policy or wish to exercise your rights, please contact me:
               </p>
               <p className="mt-2">
-                <strong>Email:</strong> carter@m0nke.com
+                <strong>Email:</strong> carter@pushlog.ai
               </p>
               <p>
                 <strong>Website:</strong> <a href="https://pushlog.ai" className="text-sky-blue hover:underline">pushlog.ai</a>
