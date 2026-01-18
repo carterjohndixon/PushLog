@@ -27,8 +27,8 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <p>
-                PushLog ("we", "our", or "us") is committed to protecting your privacy. This policy explains how we collect, 
-                use, store, and protect your personal information when you use our service.
+              PushLog is a personal project created and operated by Carter Dixon. This policy explains how we collect, 
+              use, store, and protect your personal information when you use the service.
               </p>
               <p>
                 PushLog is a web-based SaaS platform that connects your GitHub and Slack accounts to automatically send 
