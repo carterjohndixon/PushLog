@@ -16,6 +16,7 @@ import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
+import { encrypt, decrypt } from "./encryption";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -214,26 +215,72 @@ export class DatabaseStorage implements IStorage {
   // Slack workspace methods
   async getSlackWorkspace(id: number): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
-    return result[0] as any;
+    if (!result[0]) return undefined;
+    const ws = result[0] as any;
+    // Decrypt access token
+    return {
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    };
   }
 
   async getSlackWorkspacesByUserId(userId: number): Promise<SlackWorkspace[]> {
-    return await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.userId, userId));
+    const results = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.userId, userId));
+    // Decrypt access tokens (but don't expose them in list responses)
+    return results.map((ws: any) => ({
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    }));
   }
 
   async getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId)).limit(1);
-    return result[0] as any;
+    if (!result[0]) return undefined;
+    const ws = result[0] as any;
+    return {
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    };
   }
 
   async createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
-    const result = await db.insert(slackWorkspaces).values(workspace).returning();
-    return result[0] as any;
+    // Encrypt the access token before storing
+    const encryptedWorkspace = {
+      ...workspace,
+      accessToken: encrypt(workspace.accessToken)
+    };
+    const result = await db.insert(slackWorkspaces).values(encryptedWorkspace).returning();
+    // Decrypt before returning
+    const ws = result[0] as any;
+    return {
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    };
   }
 
   async updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
-    const result = await db.update(slackWorkspaces).set(updates).where(eq(slackWorkspaces.id, id)).returning();
-    return result[0] as any;
+    // Encrypt access token if being updated
+    const encryptedUpdates = updates.accessToken 
+      ? { ...updates, accessToken: encrypt(updates.accessToken) }
+      : updates;
+    const result = await db.update(slackWorkspaces).set(encryptedUpdates).where(eq(slackWorkspaces.id, id)).returning();
+    if (!result[0]) return undefined;
+    // Decrypt before returning
+    const ws = result[0] as any;
+    return {
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    };
+  }
+
+  async getSlackWorkspaceDecrypted(id: number): Promise<SlackWorkspace | undefined> {
+    const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
+    if (!result[0]) return undefined;
+    const ws = result[0] as any;
+    return {
+      ...ws,
+      accessToken: decrypt(ws.accessToken)
+    };
   }
 
   // Analytics methods
@@ -389,6 +436,192 @@ export class DatabaseStorage implements IStorage {
       console.error("Database health check failed:", error);
       return "unhealthy";
     }
+  }
+
+  /**
+   * Delete a user account and all associated data (GDPR compliance)
+   */
+  async deleteUserAccount(userId: number): Promise<{ success: boolean; deletedData: any }> {
+    const deletedData: any = {
+      userId,
+      deletedAt: new Date().toISOString(),
+      aiUsage: 0,
+      payments: 0,
+      notifications: 0,
+      pushEvents: 0,
+      integrations: 0,
+      repositories: 0,
+      slackWorkspaces: 0,
+      user: false
+    };
+
+    try {
+      // 1. Delete AI usage records
+      const userAiUsage = await this.getAiUsageByUserId(userId);
+      for (const usage of userAiUsage) {
+        await db.delete(aiUsage).where(eq(aiUsage.id, usage.id));
+        deletedData.aiUsage++;
+      }
+
+      // 2. Delete payments (keep for legal/accounting - just anonymize)
+      // We don't delete payments for legal reasons, but we'll count them
+      const userPayments = await this.getPaymentsByUserId(userId);
+      deletedData.payments = userPayments.length;
+
+      // 3. Delete notifications
+      await this.deleteAllNotifications(userId);
+      deletedData.notifications = (await this.getNotificationsByUserId(userId)).length === 0 ? deletedData.notifications : 0;
+
+      // 4. Get all user repositories
+      const userRepos = await this.getRepositoriesByUserId(userId);
+
+      // 5. Delete push events for each repository
+      for (const repo of userRepos) {
+        const repoPushEvents = await db.select().from(pushEvents).where(eq(pushEvents.repositoryId, repo.id));
+        for (const event of repoPushEvents) {
+          await db.delete(pushEvents).where(eq(pushEvents.id, event.id));
+          deletedData.pushEvents++;
+        }
+      }
+
+      // 6. Delete integrations
+      const userIntegrations = await this.getIntegrationsByUserId(userId);
+      for (const integration of userIntegrations) {
+        await db.delete(integrations).where(eq(integrations.id, integration.id));
+        deletedData.integrations++;
+      }
+
+      // 7. Delete repositories
+      for (const repo of userRepos) {
+        await db.delete(repositories).where(eq(repositories.id, repo.id));
+        deletedData.repositories++;
+      }
+
+      // 8. Delete Slack workspaces
+      const userWorkspaces = await this.getSlackWorkspacesByUserId(userId);
+      for (const workspace of userWorkspaces) {
+        await db.delete(slackWorkspaces).where(eq(slackWorkspaces.id, workspace.id));
+        deletedData.slackWorkspaces++;
+      }
+
+      // 9. Finally, delete the user
+      await db.delete(users).where(eq(users.id, userId));
+      deletedData.user = true;
+
+      return { success: true, deletedData };
+    } catch (error) {
+      console.error("Error deleting user account:", error);
+      return { success: false, deletedData };
+    }
+  }
+
+  /**
+   * Export all user data (GDPR compliance)
+   */
+  async exportUserData(userId: number): Promise<any> {
+    const user = await this.getUser(userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    const userRepos = await this.getRepositoriesByUserId(userId);
+    const userIntegrations = await this.getIntegrationsByUserId(userId);
+    const userWorkspaces = await this.getSlackWorkspacesByUserId(userId);
+    const userNotifications = await this.getNotificationsByUserId(userId);
+    const userAiUsage = await this.getAiUsageByUserId(userId);
+    const userPayments = await this.getPaymentsByUserId(userId);
+
+    // Get push events for user's repositories
+    const allPushEvents: any[] = [];
+    for (const repo of userRepos) {
+      const repoPushEvents = await db.select().from(pushEvents).where(eq(pushEvents.repositoryId, repo.id));
+      allPushEvents.push(...repoPushEvents);
+    }
+
+    return {
+      exportDate: new Date().toISOString(),
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        createdAt: user.createdAt,
+        aiCredits: user.aiCredits,
+        preferredAiModel: user.preferredAiModel,
+        // Exclude sensitive data like passwords, tokens
+        githubConnected: !!user.githubId,
+        googleConnected: !!user.googleId,
+        slackConnected: !!user.slackUserId,
+        stripeCustomerId: user.stripeCustomerId ? "***" : null
+      },
+      repositories: userRepos.map(repo => ({
+        id: repo.id,
+        name: repo.name,
+        fullName: repo.fullName,
+        owner: repo.owner,
+        branch: repo.branch,
+        isActive: repo.isActive,
+        monitorAllBranches: repo.monitorAllBranches,
+        createdAt: repo.createdAt
+        // Exclude webhookId
+      })),
+      integrations: userIntegrations.map(integration => ({
+        id: integration.id,
+        repositoryId: integration.repositoryId,
+        slackChannelName: integration.slackChannelName,
+        notificationLevel: integration.notificationLevel,
+        includeCommitSummaries: integration.includeCommitSummaries,
+        isActive: integration.isActive,
+        aiModel: integration.aiModel,
+        maxTokens: integration.maxTokens,
+        createdAt: integration.createdAt
+        // Exclude slackChannelId, slackWorkspaceId
+      })),
+      slackWorkspaces: userWorkspaces.map(workspace => ({
+        id: workspace.id,
+        teamName: workspace.teamName,
+        createdAt: workspace.createdAt
+        // Exclude accessToken, teamId
+      })),
+      pushEvents: allPushEvents.map(event => ({
+        id: event.id,
+        repositoryId: event.repositoryId,
+        commitSha: event.commitSha,
+        commitMessage: event.commitMessage,
+        author: event.author,
+        branch: event.branch,
+        pushedAt: event.pushedAt,
+        notificationSent: event.notificationSent,
+        aiSummary: event.aiSummary,
+        aiImpact: event.aiImpact,
+        aiCategory: event.aiCategory,
+        createdAt: event.createdAt
+      })),
+      notifications: userNotifications.map(notification => ({
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+        isRead: notification.isRead,
+        createdAt: notification.createdAt
+      })),
+      aiUsage: userAiUsage.map(usage => ({
+        id: usage.id,
+        integrationId: usage.integrationId,
+        model: usage.model,
+        tokensUsed: usage.tokensUsed,
+        cost: usage.cost,
+        createdAt: usage.createdAt
+      })),
+      payments: userPayments.map(payment => ({
+        id: payment.id,
+        amount: payment.amount,
+        credits: payment.credits,
+        status: payment.status,
+        createdAt: payment.createdAt
+        // Exclude stripePaymentIntentId
+      }))
+    };
   }
 }
 

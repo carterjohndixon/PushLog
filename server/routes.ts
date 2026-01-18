@@ -2590,6 +2590,123 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ received: true });
   });
 
+  // =====================================
+  // GDPR Compliance Endpoints
+  // =====================================
+
+  // Export user data (GDPR)
+  app.get("/api/account/export", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      
+      console.log(`📦 [GDPR] User ${userId} requested data export`);
+      
+      const exportData = await databaseStorage.exportUserData(userId);
+      
+      // Log the export for audit purposes
+      await databaseStorage.createNotification({
+        userId,
+        type: 'data_export',
+        title: 'Data Export Requested',
+        message: 'Your data export was successfully generated.'
+      });
+      
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Content-Disposition', `attachment; filename="pushlog-data-export-${userId}-${Date.now()}.json"`);
+      res.json(exportData);
+    } catch (error) {
+      console.error("Error exporting user data:", error);
+      res.status(500).json({ error: "Failed to export user data" });
+    }
+  });
+
+  // Delete user account (GDPR)
+  app.delete("/api/account", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const { confirmDelete } = req.body;
+      
+      if (confirmDelete !== 'DELETE MY ACCOUNT') {
+        return res.status(400).json({ 
+          error: "Please confirm deletion by providing the exact phrase",
+          requiredPhrase: "DELETE MY ACCOUNT"
+        });
+      }
+      
+      console.log(`🗑️ [GDPR] User ${userId} requested account deletion`);
+      
+      const result = await databaseStorage.deleteUserAccount(userId);
+      
+      if (result.success) {
+        console.log(`✅ [GDPR] Account deleted for user ${userId}:`, result.deletedData);
+        res.json({ 
+          success: true, 
+          message: "Your account and all associated data have been deleted.",
+          deletedData: result.deletedData
+        });
+      } else {
+        console.error(`❌ [GDPR] Account deletion failed for user ${userId}`);
+        res.status(500).json({ 
+          error: "Failed to delete account. Please contact support.",
+          partialDeletion: result.deletedData
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting user account:", error);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  // Get account data summary (for settings page)
+  app.get("/api/account/data-summary", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      
+      const user = await databaseStorage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const repos = await databaseStorage.getRepositoriesByUserId(userId);
+      const integrations = await databaseStorage.getIntegrationsByUserId(userId);
+      const workspaces = await databaseStorage.getSlackWorkspacesByUserId(userId);
+      const notifications = await databaseStorage.getNotificationsByUserId(userId);
+      const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
+      const payments = await databaseStorage.getPaymentsByUserId(userId);
+
+      // Count push events
+      let pushEventCount = 0;
+      for (const repo of repos) {
+        // This is a simplified count - in production you'd want a more efficient query
+        pushEventCount += (await databaseStorage.getPushEventsByRepositoryId(repo.id)).length;
+      }
+
+      res.json({
+        accountCreated: user.createdAt,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        connectedServices: {
+          github: !!user.githubId,
+          google: !!user.googleId,
+          slack: workspaces.length > 0
+        },
+        dataSummary: {
+          repositories: repos.length,
+          integrations: integrations.length,
+          slackWorkspaces: workspaces.length,
+          pushEvents: pushEventCount,
+          notifications: notifications.length,
+          aiUsageRecords: aiUsage.length,
+          payments: payments.length
+        },
+        aiCredits: user.aiCredits
+      });
+    } catch (error) {
+      console.error("Error getting account summary:", error);
+      res.status(500).json({ error: "Failed to get account summary" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

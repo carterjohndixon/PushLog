@@ -328,7 +328,7 @@ export function IntegrationSetupModal({
                 <p className="text-xs text-blue-700">
                   To connect your work Slack (or another account), first{" "}
                   <a 
-                    href="https://slack.com/signout" 
+                    href="https://slack.com" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="underline font-medium"
