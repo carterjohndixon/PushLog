@@ -217,30 +217,106 @@ export default function Policy() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Trash2 className="w-5 h-5 text-steel-gray" />
-                Data Retention & Deletion
+                Data Retention & Deletion Policy
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-steel-gray">
               <p>
-                I retain your data for as long as your account is active and for a reasonable period afterward to comply with legal obligations.
+                This policy outlines how long I retain your data and when it is automatically deleted or can be deleted upon request.
               </p>
+
               <div>
-                <h3 className="font-semibold text-graphite mb-2">You Can Request Deletion Of:</h3>
-                <ul className="list-disc list-inside space-y-1 ml-4">
-                  <li>Your account and all associated data</li>
-                  <li>Specific repositories or integrations</li>
-                  <li>Push event history</li>
-                  <li>OAuth connections (by revoking access in GitHub/Slack/Google settings)</li>
+                <h3 className="font-semibold text-graphite mb-2">Active Account Data Retention</h3>
+                <p className="text-sm mb-2">
+                  While your account is active, I retain all data necessary to provide the Service:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li><strong>Account Information:</strong> Retained indefinitely while your account is active</li>
+                  <li><strong>OAuth Tokens:</strong> Retained until you disconnect the service or delete your account</li>
+                  <li><strong>Repository Data:</strong> Retained until you remove the repository or delete your account</li>
+                  <li><strong>Integration Settings:</strong> Retained until you delete the integration or account</li>
+                  <li><strong>Push Event History:</strong> Retained indefinitely to provide historical notifications and analytics</li>
+                  <li><strong>AI Usage Records:</strong> Retained for billing and usage tracking purposes</li>
+                  <li><strong>Notifications:</strong> Retained until you delete them or delete your account</li>
                 </ul>
               </div>
-              <p className="text-sm">
-                To request data deletion, contact me at the email address provided in the "Contact" section below. 
-                I will process deletion requests within 30 days.
-              </p>
-              <p className="text-sm italic">
-                <strong>Note:</strong> Some data may be retained for legal or accounting purposes (e.g., payment records) 
-                even after account deletion, as required by law.
-              </p>
+
+              <div>
+                <h3 className="font-semibold text-graphite mb-2">Inactive Account Data Retention</h3>
+                <p className="text-sm mb-2">
+                  If your account becomes inactive (no login activity for 2 years), I will:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li>Send email notifications before account deletion</li>
+                  <li>Retain data for 90 days after the final notification</li>
+                  <li>Automatically delete the account and all associated data after the retention period</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-graphite mb-2">Account Deletion</h3>
+                <p className="text-sm mb-2">
+                  When you delete your account, the following data is permanently removed:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li>User account and profile information</li>
+                  <li>All connected repositories and webhook configurations</li>
+                  <li>All integrations and Slack workspace connections</li>
+                  <li>All push event history and commit data</li>
+                  <li>All notifications and activity logs</li>
+                  <li>OAuth tokens and authentication data</li>
+                  <li>AI usage records</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-graphite mb-2">Data Retained After Account Deletion</h3>
+                <p className="text-sm mb-2">
+                  The following data may be retained for legal, accounting, or security purposes:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li><strong>Payment Records:</strong> Retained for 7 years as required by accounting and tax laws</li>
+                  <li><strong>Transaction Metadata:</strong> Retained for fraud prevention and dispute resolution</li>
+                  <li><strong>Security Logs:</strong> Retained for 1 year for security and abuse prevention</li>
+                </ul>
+                <p className="text-sm mt-2 italic">
+                  This retained data is anonymized and cannot be linked to your personal account.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-graphite mb-2">Automatic Data Cleanup</h3>
+                <p className="text-sm mb-2">
+                  I automatically clean up certain data to maintain system performance:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li><strong>Expired Verification Tokens:</strong> Deleted 7 days after expiration</li>
+                  <li><strong>Expired Password Reset Tokens:</strong> Deleted 24 hours after expiration</li>
+                  <li><strong>Old Notifications:</strong> Notifications older than 1 year may be automatically archived</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-graphite mb-2">Requesting Data Deletion</h3>
+                <p className="text-sm mb-2">
+                  You can request deletion of your data at any time:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4 text-sm">
+                  <li><strong>Full Account Deletion:</strong> Use the "Delete Account" feature in Settings, or contact me directly</li>
+                  <li><strong>Partial Deletion:</strong> Delete individual repositories or integrations from your dashboard</li>
+                  <li><strong>OAuth Disconnection:</strong> Revoke access in your GitHub/Slack/Google account settings</li>
+                </ul>
+                <p className="text-sm mt-2">
+                  I will process deletion requests within 30 days. You will receive confirmation once your data has been deleted.
+                </p>
+              </div>
+
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mt-4">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Note:</strong> Deleted data cannot be recovered. Please export your data before deletion if you want to keep a copy. 
+                  You can export all your data from the Settings page.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
