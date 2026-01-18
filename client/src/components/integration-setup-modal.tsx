@@ -322,6 +322,23 @@ export function IntegrationSetupModal({
                 {workspaces && workspaces.length > 0 ? "Add Another" : "Connect Workspace"}
               </Button>
             </div>
+            {workspaces && workspaces.length > 0 && (
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-xs text-blue-800 font-medium mb-1">💡 Connect a different Slack account?</p>
+                <p className="text-xs text-blue-700">
+                  To connect your work Slack (or another account), first{" "}
+                  <a 
+                    href="https://slack.com/signout" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    log out of Slack
+                  </a>
+                  {" "}in your browser, then click "Add Another" above. Or use an incognito/private window.
+                </p>
+              </div>
+            )}
             
             {/* Slack Workspace Selection */}
             <div className="space-y-2">
