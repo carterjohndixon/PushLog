@@ -75,6 +75,12 @@ export function Footer() {
             <p>&copy; 2026 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link 
+                href="/support" 
+                className="hover:text-log-green transition-colors text-sm"
+              >
+                Support
+              </Link>
+              <Link 
                 href="/policy" 
                 className="hover:text-log-green transition-colors text-sm"
               >

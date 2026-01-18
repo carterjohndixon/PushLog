@@ -20,6 +20,7 @@ const Repositories = lazy(() => import("@/pages/repositories"));
 const Carter = lazy(() => import("@/pages/carter"));
 const Policy = lazy(() => import("@/pages/policy"));
 const Settings = lazy(() => import("@/pages/settings"));
+const Support = lazy(() => import("@/pages/support"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Loading component for lazy-loaded pages
@@ -67,6 +68,7 @@ function Router() {
       
       <Route path="/carter" component={Carter} />
       <Route path="/policy" component={Policy} />
+      <Route path="/support" component={Support} />
       <Route path="/settings">
         <ProtectedRoute pageName="settings">
           <Settings />
