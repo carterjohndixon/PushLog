@@ -129,20 +129,13 @@ export function Header() {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-48">
-                    {/* TODO: Add profile and settings */}
-                    {/* <DropdownMenuItem asChild>
-                      <Link href="/profile" className="cursor-pointer flex items-center">
-                        <User className="mr-2 h-4 w-4" />
-                        <span>Profile</span>
-                      </Link>
-                    </DropdownMenuItem>
                     <DropdownMenuItem asChild>
                       <Link href="/settings" className="cursor-pointer flex items-center">
                         <Settings className="mr-2 h-4 w-4" />
                         <span>Settings</span>
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuSeparator /> */}
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       onClick={handleLogout} 
                       className="cursor-pointer text-red-600 hover:text-red-700 hover:bg-red-50 focus:bg-red-50"

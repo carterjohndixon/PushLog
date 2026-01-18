@@ -1,5 +1,6 @@
 import { Logo } from "./logo";
 import { Github, Twitter, Linkedin, User } from "lucide-react";
+import { Link } from "wouter";
 
 export function Footer() {
   return (
@@ -69,8 +70,18 @@ export function Footer() {
             </ul>
           </div> */}
         </div>
-        <div className="border-t border-gray-700 mt-12 pt-8 text-center text-gray-400">
-          <p>&copy; 2026 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
+        <div className="border-t border-gray-700 mt-12 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center text-gray-400">
+            <p>&copy; 2026 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
+            <div className="flex space-x-6 mt-4 md:mt-0">
+              <Link 
+                href="/policy" 
+                className="hover:text-log-green transition-colors text-sm"
+              >
+                Privacy Policy
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>
