@@ -51,7 +51,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     resetPasswordTokenExpiry: dbUser.resetPasswordTokenExpiry?.toISOString() ?? null,
     aiCredits: dbUser.aiCredits ?? 1000,
     stripeCustomerId: dbUser.stripeCustomerId,
-    preferredAiModel: dbUser.preferredAiModel ?? 'gpt-3.5-turbo',
+    preferredAiModel: dbUser.preferredAiModel ?? 'gpt-5',
     createdAt: dbUser.createdAt
   };
 }
