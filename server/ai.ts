@@ -34,7 +34,7 @@ export interface AiUsageResult {
 
 export async function generateCodeSummary(
   pushData: PushEventData, 
-  model: string = 'gpt-4o',
+  model: string = 'gpt-4o', // Valid OpenAI models: gpt-4o, gpt-4-turbo, gpt-4, gpt-3.5-turbo
   maxTokens: number = 350
 ): Promise<AiUsageResult> {
   try {
