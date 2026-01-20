@@ -9,7 +9,6 @@ import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
 import pkg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -246,8 +245,18 @@ app.use((req, res, next) => {
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
   if (app.get("env") === "development") {
-    await setupVite(app, server);
+    try {
+      const { setupVite } = await import("./vite");
+      await setupVite(app, server);
+    } catch (error) {
+      console.error("Failed to load Vite (vite may not be installed):", error);
+      // Fallback to static serving if vite isn't available
+      const { serveStatic } = await import("./vite");
+      serveStatic(app);
+    }
   } else {
+    // In production, always use static file serving
+    const { serveStatic } = await import("./vite");
     serveStatic(app);
   }
 
