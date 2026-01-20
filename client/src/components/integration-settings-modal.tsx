@@ -17,28 +17,28 @@ import { UseMutationResult } from "@tanstack/react-query";
 
 const AI_MODELS = [
   {
-    id: 'gpt-5',
-    name: 'GPT-5',
-    description: 'Advanced GPT-5 model with enhanced capabilities',
-    costPerToken: 15
+    id: 'gpt-4o',
+    name: 'GPT-4o',
+    description: 'Most advanced GPT-4 model with improved performance and lower cost',
+    costPerToken: 5
   },
   {
-    id: 'gpt-5.1',
-    name: 'GPT-5.1',
-    description: 'Improved GPT-5.1 with better performance',
-    costPerToken: 20
+    id: 'gpt-4-turbo',
+    name: 'GPT-4 Turbo',
+    description: 'GPT-4 Turbo with extended context window',
+    costPerToken: 10
   },
   {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    description: 'Latest GPT-5.2 with cutting-edge features',
-    costPerToken: 25
-  },
-  {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2-Codex',
-    description: 'Specialized GPT-5.2-Codex optimized for code analysis',
+    id: 'gpt-4',
+    name: 'GPT-4',
+    description: 'Original GPT-4 model for complex analysis',
     costPerToken: 30
+  },
+  {
+    id: 'gpt-3.5-turbo',
+    name: 'GPT-3.5 Turbo',
+    description: 'Fast and cost-effective for most use cases',
+    costPerToken: 1
   }
 ];
 
@@ -69,7 +69,7 @@ export function IntegrationSettingsModal({
   const [notificationLevel, setNotificationLevel] = useState(integration?.notificationLevel || 'all');
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
-  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2-codex');
+  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-4o');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
 
@@ -94,7 +94,7 @@ export function IntegrationSettingsModal({
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
-      setAiModel(integration.aiModel || 'gpt-5.2-codex');
+      setAiModel(integration.aiModel || 'gpt-4o');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
@@ -107,7 +107,7 @@ export function IntegrationSettingsModal({
         setNotificationLevel(integration.notificationLevel || 'all');
         setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
         setIsActive(integration.isActive ?? true);
-        setAiModel(integration.aiModel || 'gpt-5.2-codex');
+        setAiModel(integration.aiModel || 'gpt-4o');
         setMaxTokens(integration.maxTokens || 350);
         setMaxTokensInput(integration.maxTokens?.toString() || '350');
       }

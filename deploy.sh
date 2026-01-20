@@ -71,7 +71,7 @@ git pull origin "$BRANCH" || {
 
 # Install/update dependencies (including devDependencies needed for build)
 log_info "Installing dependencies..."
-npm install || {
+npm install --include=dev || {
     log_error "Failed to install dependencies"
     exit 1
 }
