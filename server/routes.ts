@@ -1881,7 +1881,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           commitSha: commit.id,
         };
 
-        const aiModel = integration.aiModel || 'gpt-4o';
+        const aiModel = integration.aiModel || 'gpt-5.2';
         const maxTokens = integration.maxTokens || 350;
         
         const summary = await generateCodeSummary(
