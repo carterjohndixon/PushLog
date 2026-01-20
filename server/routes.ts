@@ -1696,11 +1696,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
       if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
+        console.error('❌ Invalid webhook signature');
         return res.status(401).json({ error: "Invalid signature" });
       }
 
       // Handle both push and pull_request events
       const eventType = req.headers['x-github-event'];
+      console.log(`📥 Received ${eventType} webhook event`);
       let branch, commit, repository;
       
       if (eventType === 'pull_request') {
@@ -1728,16 +1730,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         repository = req.body.repository;
         
       } else if (eventType === 'push') {
-        // Handle push events (direct pushes to main)
+        // Handle push events (direct pushes to branches)
         const { ref, commits, repository: repo } = req.body;
         
         // Extract branch name from ref
         branch = ref.replace('refs/heads/', '');
-        
-        // Only process pushes to main branch
-        if (branch !== 'main' && branch !== 'master') {
-          return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
-        }
         
         if (!commits || commits.length === 0) {
           return res.status(200).json({ message: "No commits to process" });
@@ -1758,6 +1755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
       
       if (!storedRepo || !storedRepo.isActive) {
+        console.log(`⚠️ Repository ${repository.full_name} not found or not active`);
         return res.status(200).json({ message: "Repository not active" });
       }
 
@@ -1765,14 +1763,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
       
       if (!integration || !integration.isActive) {
+        console.log(`⚠️ Integration for repository ${storedRepo.id} not found or not active`);
         return res.status(200).json({ message: "Integration not active" });
       }
 
-      // Check notification level before processing
-      if (integration.notificationLevel === 'main_only') {
-        // Only process PRs that merge to main/master branch
+      // Check branch filtering based on repository and integration settings
+      const monitorAllBranches = storedRepo.monitorAllBranches ?? false;
+      const notificationLevel = integration.notificationLevel || 'all';
+      
+      // If monitorAllBranches is false, only process main/master
+      if (!monitorAllBranches && branch !== 'main' && branch !== 'master') {
+        console.log(`⚠️ Push to ${branch} branch ignored (monitorAllBranches: false)`);
+        return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
+      }
+      
+      // Check notification level filtering
+      if (notificationLevel === 'main_only') {
         if (branch !== 'main' && branch !== 'master') {
-          return res.status(200).json({ message: `PR merged to ${branch} branch ignored due to 'main_only' notification level` });
+          console.log(`⚠️ Push to ${branch} branch ignored due to 'main_only' notification level`);
+          return res.status(200).json({ message: `Push to ${branch} branch ignored due to 'main_only' notification level` });
         }
       }
       
@@ -1963,13 +1972,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let workspaceToken: string | null = null;
           if (integration.slackWorkspaceId) {
             const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
-            workspaceToken = workspace?.accessToken || null;
+            if (!workspace) {
+              console.error(`❌ Workspace ${integration.slackWorkspaceId} not found for integration ${integration.id}`);
+              throw new Error(`Workspace ${integration.slackWorkspaceId} not found`);
+            }
+            workspaceToken = workspace.accessToken || null;
+            console.log(`✅ Found workspace token for integration ${integration.id}, workspace: ${workspace.teamName}`);
+          } else {
+            console.error(`❌ Integration ${integration.id} has no slackWorkspaceId`);
+            throw new Error('Integration has no Slack workspace ID');
           }
           
           if (!workspaceToken) {
-            console.error(`No workspace token found for integration ${integration.id}`);
+            console.error(`❌ No workspace token found for integration ${integration.id}`);
             throw new Error('No workspace access token available');
           }
+
+          console.log(`📤 Sending Slack notification to channel ${integration.slackChannelId} (${integration.slackChannelName})`);
 
           if (aiGenerated && aiSummary) {
             // Use AI-enhanced Slack message with corrected stats
@@ -1977,7 +1996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               repositoryName: repository.full_name,
               branch,
               commitMessage: commit.message,
-              filesChanged: commit.added.concat(commit.modified).concat(commit.removed),
+              filesChanged: (commit.added || []).concat(commit.modified || []).concat(commit.removed || []),
               additions: finalAdditions, // Use the corrected GitHub API data
               deletions: finalDeletions, // Use the corrected GitHub API data
               commitSha: commit.id,
@@ -1992,14 +2011,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const slackMessage = await generateSlackMessage(pushData, summary);
           
-          await sendSlackMessage(workspaceToken, {
+          const result = await sendSlackMessage(workspaceToken, {
             channel: integration.slackChannelId,
             text: slackMessage,
             unfurl_links: false
           });
+          console.log(`✅ AI-enhanced Slack message sent successfully. Timestamp: ${result}`);
         } else {
           // Use regular push notification
-          await sendPushNotification(
+          console.log(`📤 Sending regular push notification (AI not generated or disabled)`);
+          const result = await sendPushNotification(
             workspaceToken,
             integration.slackChannelId,
             repository.full_name,
@@ -2009,10 +2030,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             commit.id,
             Boolean(integration.includeCommitSummaries)
           );
+          console.log(`✅ Regular Slack notification sent successfully. Timestamp: ${result}`);
         }
 
         // Mark notification as sent
         await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
+        console.log(`✅ Push event ${pushEvent.id} marked as notification sent`);
 
         // Store push notification in database
         await storage.createNotification({
@@ -2049,12 +2072,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         broadcastNotification(storedRepo.userId, slackNotification);
       } catch (slackError) {
-        console.error("Failed to send Slack notification:", slackError);
+        console.error("❌ Failed to send Slack notification:", slackError);
+        console.error("Error details:", {
+          integrationId: integration.id,
+          slackWorkspaceId: integration.slackWorkspaceId,
+          slackChannelId: integration.slackChannelId,
+          error: slackError instanceof Error ? slackError.message : String(slackError),
+          stack: slackError instanceof Error ? slackError.stack : undefined
+        });
+        // Don't throw - we still want to return success so GitHub doesn't retry
       }
 
       res.status(200).json({ message: "Webhook processed successfully" });
     } catch (error) {
-      console.error("Webhook processing error:", error);
+      console.error("❌ Webhook processing error:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : undefined);
       res.status(500).json({ error: "Webhook processing failed" });
     }
   });
