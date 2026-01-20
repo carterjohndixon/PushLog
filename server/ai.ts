@@ -34,7 +34,7 @@ export interface AiUsageResult {
 
 export async function generateCodeSummary(
   pushData: PushEventData, 
-  model: string = 'gpt-5',
+  model: string = 'gpt-5.2-codex',
   maxTokens: number = 350
 ): Promise<AiUsageResult> {
   try {

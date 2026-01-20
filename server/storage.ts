@@ -183,6 +183,7 @@ export class MemStorage implements IStorage {
     const newIntegration: Integration = {
       ...integration,
       id,
+      slackWorkspaceId: integration.slackWorkspaceId ?? null,
       isActive: integration.isActive ?? null,
       notificationLevel: integration.notificationLevel || null,
       includeCommitSummaries: integration.includeCommitSummaries ?? null,

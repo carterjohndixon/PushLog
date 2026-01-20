@@ -20,7 +20,7 @@ export const users = pgTable("users", {
   // AI Credits and Settings
   aiCredits: integer("ai_credits").default(1000), // Free credits for new users
   stripeCustomerId: text("stripe_customer_id"),
-  preferredAiModel: text("preferred_ai_model").default("gpt-3.5-turbo"),
+  preferredAiModel: text("preferred_ai_model").default("gpt-5.2-codex"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -49,7 +49,7 @@ export const integrations = pgTable("integrations", {
   includeCommitSummaries: boolean("include_commit_summaries").default(true),
   isActive: boolean("is_active").default(true),
   // AI Settings
-  aiModel: text("ai_model").default("gpt-3.5-turbo"), // gpt-3.5-turbo, gpt-4, etc.
+  aiModel: text("ai_model").default("gpt-5.2-codex"),
   maxTokens: integer("max_tokens").default(350), // Maximum tokens for AI response
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
@@ -98,7 +98,7 @@ export const aiUsage = pgTable("ai_usage", {
   userId: integer("user_id").notNull(),
   integrationId: integer("integration_id").notNull(),
   pushEventId: integer("push_event_id").notNull(),
-  model: text("model").notNull(), // gpt-3.5-turbo, gpt-4, etc.
+  model: text("model").notNull(), // gpt-5, gpt-5.1, gpt-5.2, gpt-5.2-codex
   tokensUsed: integer("tokens_used").notNull(),
   cost: integer("cost").notNull(), // Cost in cents
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

@@ -74,9 +74,11 @@ PushLog uses a credit-based system for AI-powered summaries:
 - **Professional Pack**: $20.00 for 5,000 credits  
 - **Enterprise Pack**: $50.00 for 15,000 credits
 
-Credits are used when AI generates summaries of your code pushes. Different AI models use different amounts of credits:
-- **GPT-3.5 Turbo**: ~350 credits per summary
-- **GPT-4**: ~1,000 credits per summary
+Credits are used when AI generates summaries of your code pushes. Different AI models use different amounts of credits (roughly 350 tokens per summary):
+- **GPT-5**: ~15 credits per summary (advanced model with enhanced capabilities)
+- **GPT-5.1**: ~20 credits per summary (improved performance)
+- **GPT-5.2**: ~25 credits per summary (latest model with cutting-edge features)
+- **GPT-5.2-Codex**: ~30 credits per summary (specialized for code analysis)
 
 ## Privacy
 
