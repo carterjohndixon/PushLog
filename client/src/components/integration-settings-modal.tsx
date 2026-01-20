@@ -206,16 +206,21 @@ export function IntegrationSettingsModal({
             <div className="space-y-2">
               <Label htmlFor="ai-model">AI Model</Label>
               <Select value={aiModel} onValueChange={setAiModel}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select AI model" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md">
                   {AI_MODELS.map((model) => (
-                    <SelectItem key={model.id} value={model.id}>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{model.name}</span>
-                        <span className="text-xs text-steel-gray">
-                          ${model.costPerToken}/1K tokens • {model.description}
+                    <SelectItem 
+                      key={model.id} 
+                      value={model.id} 
+                      className="py-3 h-auto cursor-pointer"
+                      textValue={model.name}
+                    >
+                      <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
+                        <span className="font-medium text-sm leading-tight">{model.name}</span>
+                        <span className="text-xs text-steel-gray leading-relaxed break-words">
+                          ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
                         </span>
                       </div>
                     </SelectItem>
