@@ -1598,12 +1598,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const pushEventId = parseInt(req.params.pushEventId);
       const userId = req.user!.userId;
       
-      // Get user's first active integration for testing
-      const userIntegrations = await storage.getIntegrationsByUserId(userId);
-      const activeIntegration = userIntegrations.find(integration => integration.isActive);
+      // Allow testing with model parameter directly (for performance tests)
+      const testModel = req.body?.model;
+      const testMaxTokens = req.body?.maxTokens || 350;
       
-      if (!activeIntegration) {
-        return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
+      // Get user's first active integration for testing (if not using direct model)
+      let activeIntegration = null;
+      if (!testModel) {
+        const userIntegrations = await storage.getIntegrationsByUserId(userId);
+        activeIntegration = userIntegrations.find(integration => integration.isActive);
+        
+        if (!activeIntegration) {
+          return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
+        }
       }
       
       // For now, let's just test the GitHub API with a known commit
@@ -1643,9 +1650,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('❌ Failed to fetch commit stats from GitHub API:', apiError);
       }
       
-      // Generate AI summary using the integration's model settings
-      const aiModel = activeIntegration.aiModel || 'gpt-5';
-      const maxTokens = activeIntegration.maxTokens || 350;
+      // Generate AI summary using the provided model or integration's model settings
+      const aiModel = testModel || activeIntegration?.aiModel || 'gpt-5.2';
+      const maxTokens = testMaxTokens || activeIntegration?.maxTokens || 350;
       
       const summary = await generateCodeSummary(
         testPushData, 
@@ -1653,23 +1660,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxTokens
       );
 
-      // Send to Slack
-      try {
-        // Get workspace access token
-        if (activeIntegration.slackWorkspaceId) {
-          const workspace = await databaseStorage.getSlackWorkspace(activeIntegration.slackWorkspaceId);
-          if (workspace) {
-            const slackMessage = await generateSlackMessage(testPushData, summary.summary);
-            
-            await sendSlackMessage(workspace.accessToken, {
-              channel: activeIntegration.slackChannelId,
-              text: slackMessage,
-              unfurl_links: false
-            });
+      // Send to Slack (only if we have an active integration)
+      if (activeIntegration) {
+        try {
+          // Get workspace access token
+          if (activeIntegration.slackWorkspaceId) {
+            const workspace = await databaseStorage.getSlackWorkspace(activeIntegration.slackWorkspaceId);
+            if (workspace) {
+              const slackMessage = await generateSlackMessage(testPushData, summary.summary);
+              
+              await sendSlackMessage(workspace.accessToken, {
+                channel: activeIntegration.slackChannelId,
+                text: slackMessage,
+                unfurl_links: false
+              });
+            }
           }
+        } catch (slackError) {
+          console.error("❌ Failed to send Slack message:", slackError);
         }
-      } catch (slackError) {
-        console.error("❌ Failed to send Slack message:", slackError);
       }
       
       res.json({
