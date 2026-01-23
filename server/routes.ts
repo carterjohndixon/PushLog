@@ -1602,15 +1602,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testModel = req.body?.model;
       const testMaxTokens = req.body?.maxTokens || 350;
       
+      console.log(`🧪 Test AI Summary - Model: ${testModel}, Body:`, JSON.stringify(req.body));
+      
       // Get user's first active integration for testing (if not using direct model)
       let activeIntegration = null;
       if (!testModel) {
+        console.log('🔍 No model provided, checking for active integration...');
         const userIntegrations = await storage.getIntegrationsByUserId(userId);
         activeIntegration = userIntegrations.find(integration => integration.isActive);
         
         if (!activeIntegration) {
           return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
         }
+      } else {
+        console.log(`✅ Using direct model parameter: ${testModel}`);
       }
       
       // For now, let's just test the GitHub API with a known commit
@@ -1782,14 +1787,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If monitorAllBranches is false, only process main/master
       if (!monitorAllBranches && branch !== 'main' && branch !== 'master') {
-        console.log(`⚠️ Push to ${branch} branch ignored (monitorAllBranches: false)`);
         return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
       }
       
       // Check notification level filtering
       if (notificationLevel === 'main_only') {
         if (branch !== 'main' && branch !== 'master') {
-          console.log(`⚠️ Push to ${branch} branch ignored due to 'main_only' notification level`);
           return res.status(200).json({ message: `Push to ${branch} branch ignored due to 'main_only' notification level` });
         }
       }
