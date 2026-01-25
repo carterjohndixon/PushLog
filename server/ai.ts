@@ -39,7 +39,7 @@ export async function generateCodeSummary(
 ): Promise<AiUsageResult> {
   try {
     const prompt = `
-You are a code review assistant. Analyze this git push and provide a concise, helpful summary.
+You are a world-class code review assistant tasked with analyzing a git push and providing a concise, helpful summary of the highest level of detail possible. Analyze this git push and provide a concise, helpful summary.
 
 Repository: ${pushData.repositoryName}
 Branch: ${pushData.branch}
@@ -65,8 +65,8 @@ Respond with only valid JSON:
 `;
 
     console.log(`🔍 OpenAI API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
-    
-    const completion = await openai.chat.completions.create({
+    const isGPT5Model = model.startsWith('gpt-5');
+    const requestParams: any = {
       model: model,
       messages: [
         {
@@ -78,9 +78,15 @@ Respond with only valid JSON:
           content: prompt
         }
       ],
-      temperature: 0.3,
       max_completion_tokens: maxTokens,
-    });
+    };
+    
+    // Only add temperature for models that support it (not GPT-5)
+    if (!isGPT5Model) {
+      requestParams.temperature = 0.3;
+    }
+    
+    const completion = await openai.chat.completions.create(requestParams);
 
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
