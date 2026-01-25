@@ -21,6 +21,11 @@ async function throwIfResNotOk(res: Response) {
         throw new Error(text || 'Invalid credentials');
       }
       
+      // Check if we're on the home page - don't redirect (home page is public)
+      if (typeof window !== 'undefined' && window.location.pathname === '/') {
+        throw new Error('Not authenticated'); // Just throw, don't redirect
+      }
+      
       // For other authenticated routes, handle session expiration
       handleAuthenticationFailure();
       throw new Error('Session expired');

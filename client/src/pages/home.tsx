@@ -44,22 +44,34 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
-    // Fetch user profile
-    apiRequest("GET", "/api/profile")
-      .then(response => response.json())
-      .then(data => {
+    // Try to fetch user profile (optional - home page works without it)
+    fetch("/api/profile", {
+      credentials: "include", // Send cookie if it exists
+      headers: {
+        "Accept": "application/json"
+      }
+    })
+      .then(async (response) => {
+        // If 401, user is not logged in - that's fine for home page
+        if (response.status === 401) {
+          setLoading(false);
+          return; // User stays null, show public home page
+        }
+        
+        // If other error, throw to be caught
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        // Success - user is logged in
+        const data = await response.json();
         if (data.success) {
           setUser(data.user);
         }
       })
       .catch(error => {
-        console.error("Failed to fetch user profile:", error);
+        // Silently handle errors - home page works without user data
+        console.log("User not logged in (home page is public)");
       })
       .finally(() => {
         setLoading(false);
