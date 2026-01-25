@@ -78,12 +78,14 @@ Respond with only valid JSON:
           content: prompt
         }
       ],
-      max_completion_tokens: maxTokens,
     };
     
-    // Only add temperature for models that support it (not GPT-5)
-    if (!isGPT5Model) {
-      requestParams.temperature = 0.3;
+    // GPT-5 models use max_tokens, others use max_completion_tokens
+    if (isGPT5Model) {
+      requestParams.max_tokens = maxTokens;
+    } else {
+      requestParams.max_completion_tokens = maxTokens;
+      requestParams.temperature = 0.3; // GPT-4/3.5 support temperature
     }
     
     let completion;
