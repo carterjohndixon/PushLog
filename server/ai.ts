@@ -90,12 +90,36 @@ Respond with only valid JSON:
       throw new Error('No response from OpenAI');
     }
 
+    let jsonString = response.trim();
+    
+    // Remove markdown code blocks if present
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    
     // Parse the JSON response
-    const summary = JSON.parse(response) as CodeSummary;
+    let summary: CodeSummary;
+    try {
+      summary = JSON.parse(jsonString) as CodeSummary;
+    } catch (parseError) {
+      console.error('❌ Failed to parse AI response as JSON:', parseError);
+      console.error('📄 Raw AI response:', jsonString);
+      throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+    
+    // Validate summary structure
+    if (!summary.summary || !summary.impact || !summary.category) {
+      console.error('❌ Invalid AI response structure:', summary);
+      throw new Error('AI response missing required fields');
+    }
     
     // Calculate usage and cost
     const tokensUsed = completion.usage?.total_tokens || 0;
     const cost = calculateTokenCost(model, tokensUsed);
+    
+    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
     
     return {
       summary,
@@ -104,12 +128,20 @@ Respond with only valid JSON:
       actualModel // Include the actual model used
     };
   } catch (error) {
-    console.error('Error generating code summary:', error);
+    console.error('❌ Error generating code summary:', error);
+    console.error('📊 Model attempted:', model);
+    console.error('📊 Push data:', {
+      repository: pushData.repositoryName,
+      branch: pushData.branch,
+      filesChanged: pushData.filesChanged.length,
+      additions: pushData.additions,
+      deletions: pushData.deletions
+    });
     
-    // Fallback summary if AI fails
+    // Fallback summary if AI fails (use correct additions/deletions values)
     return {
       summary: {
-        summary: `Updated ${pushData.filesChanged.length} files with ${pushData.additions} additions and ${pushData.deletions} deletions`,
+        summary: `Updated ${pushData.filesChanged.length} files with ${pushData.additions || 0} additions and ${pushData.deletions || 0} deletions`,
         impact: 'medium',
         category: 'other',
         details: `Changes made to ${pushData.filesChanged.join(', ')}`

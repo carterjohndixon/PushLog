@@ -1916,8 +1916,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           branch,
           commitMessage: commit.message,
           filesChanged,
-          additions,
-          deletions,
+          additions: finalAdditions, // Use the calculated values from GitHub API
+          deletions: finalDeletions, // Use the calculated values from GitHub API
           commitSha: commit.id,
         };
 
@@ -1929,11 +1929,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiModel,
           maxTokens
         );
-        aiSummary = summary.summary.summary;
-        aiImpact = summary.summary.impact;
-        aiCategory = summary.summary.category;
-        aiDetails = summary.summary.details;
-        aiGenerated = true;
+        
+        // Check if this is a real AI summary or a fallback
+        const isRealAISummary = summary.tokensUsed > 0;
+        
+        if (isRealAISummary) {
+          aiSummary = summary.summary.summary;
+          aiImpact = summary.summary.impact;
+          aiCategory = summary.summary.category;
+          aiDetails = summary.summary.details;
+          aiGenerated = true;
+          
+          console.log(`✅ AI summary generated successfully - Model: ${summary.actualModel || aiModel}, Tokens: ${summary.tokensUsed}`);
+        } else {
+          // Fallback summary - AI generation failed
+          console.warn(`⚠️ AI summary generation failed for model ${aiModel}, using fallback summary`);
+          console.warn(`⚠️ Fallback summary: ${summary.summary.summary}`);
+          // Don't set aiGenerated = true for fallback summaries
+          aiGenerated = false;
+          aiSummary = null;
+          aiImpact = null;
+          aiCategory = null;
+          aiDetails = null;
+        }
 
         // Deduct AI credits from user
         try {
@@ -1993,13 +2011,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Continue with AI processing even if credit deduction fails
         }
 
-        // Update the push event with AI summary
+        // Update the push event with AI summary (only if we got a real AI summary)
         await storage.updatePushEvent(pushEvent.id, {
           aiSummary,
           aiImpact,
           aiCategory,
           aiDetails,
-          aiGenerated: true,
+          aiGenerated: aiGenerated, // Use the value we set above (true for real AI, false for fallback)
         });
       } catch (aiError) {
         console.error('Failed to generate AI summary:', aiError);
