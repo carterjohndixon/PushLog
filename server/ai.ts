@@ -86,7 +86,24 @@ Respond with only valid JSON:
       requestParams.temperature = 0.3;
     }
     
-    const completion = await openai.chat.completions.create(requestParams);
+    let completion;
+    try {
+      completion = await openai.chat.completions.create(requestParams);
+    } catch (apiError: any) {
+      console.error('❌ OpenAI API Error Details:');
+      console.error('   Status:', apiError?.status);
+      console.error('   Message:', apiError?.message);
+      console.error('   Code:', apiError?.code);
+      console.error('   Type:', apiError?.type);
+      console.error('   Param:', apiError?.param);
+      if (apiError?.error) {
+        console.error('   Error Object:', JSON.stringify(apiError.error, null, 2));
+      }
+      if (apiError?.response) {
+        console.error('   Response:', JSON.stringify(apiError.response, null, 2));
+      }
+      throw apiError; // Re-throw to be caught by outer catch
+    }
 
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
@@ -136,6 +153,11 @@ Respond with only valid JSON:
   } catch (error) {
     console.error('❌ Error generating code summary:', error);
     console.error('📊 Model attempted:', model);
+    console.error('📊 Error details:', {
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : undefined
+    });
     console.error('📊 Push data:', {
       repository: pushData.repositoryName,
       branch: pushData.branch,
