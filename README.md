@@ -31,7 +31,7 @@ b
 
 - **Frontend**: React, TypeScript, Tailwind CSS, Vite
 - **Backend**: Node.js, Express, TypeScript
-- **Database**: PostgreSQL with Drizzle ORM
+- **Database**: Supabase
 - **UI Components**: Radix UI, shadcn/ui
 - **Authentication**: JWT tokens with email verification
 - **AI Integration**: OpenAI API (GPT-3.5, GPT-4)
