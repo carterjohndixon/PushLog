@@ -66,7 +66,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           <div 
             key={notification.id} 
             className={`flex items-center justify-between p-4 [&:hover]:!bg-gray-50 ${
-              notification.type === 'email_verification' ? 'bg-amber-50 border-b' : 'bg-white'
+              notification.type === 'email_verification' ? 'bg-amber-50 border-b' : 
+              !notification.isRead ? 'bg-green-50 border-l-4 border-green-300' : 'bg-white'
             }`}
           >
             <div className="flex items-center flex-1">
