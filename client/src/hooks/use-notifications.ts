@@ -79,34 +79,34 @@ export function useNotifications() {
     eventSource.onerror = (error) => {
       console.error('SSE connection error:', error);
       
-            // Check if the error is due to session expiration
-            if (eventSource.readyState === EventSource.CLOSED) {
-              // Try to reconnect, but if it fails due to auth, redirect to login
-              setTimeout(() => {
-                if (eventSourceRef.current) {
-                  eventSourceRef.current.close();
-                  eventSourceRef.current = null;
-                  
-                  // Try to create a new connection
-                  // Browser will automatically send cookie if session is still valid
-                  try {
-                    const newEventSource = new EventSource(`/api/notifications/stream`);
-                    newEventSource.onerror = (reconnectError) => {
-                      console.error('SSE reconnect failed:', reconnectError);
-                      // If reconnect fails, assume session is expired
-                      // Server will return 401, client will handle redirect
-                      if (newEventSource.readyState === EventSource.CLOSED) {
-                        window.location.href = '/login';
-                      }
-                    };
-                    eventSourceRef.current = newEventSource;
-                  } catch (reconnectError) {
-                    console.error('Failed to create new SSE connection:', reconnectError);
-                    window.location.href = '/login';
-                  }
+      // Check if the error is due to session expiration
+      if (eventSource.readyState === EventSource.CLOSED) {
+        // Try to reconnect, but if it fails due to auth, redirect to login
+        setTimeout(() => {
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+            
+            // Try to create a new connection
+            // Browser will automatically send cookie if session is still valid
+            try {
+              const newEventSource = new EventSource(`/api/notifications/stream`);
+              newEventSource.onerror = (reconnectError) => {
+                console.error('SSE reconnect failed:', reconnectError);
+                // If reconnect fails, assume session is expired
+                // Server will return 401, client will handle redirect
+                if (newEventSource.readyState === EventSource.CLOSED) {
+                  window.location.href = '/login';
                 }
-              }, 5000);
+              };
+              eventSourceRef.current = newEventSource;
+            } catch (reconnectError) {
+              console.error('Failed to create new SSE connection:', reconnectError);
+              window.location.href = '/login';
             }
+          }
+        }, 5000);
+      }
     };
 
     return () => {
@@ -117,9 +117,9 @@ export function useNotifications() {
     };
   }, [queryClient, currentToken]);
 
-  const markAsViewed = async () => {
+  const markAllAsRead = async () => {
     try {
-      // Optimistically update local state first
+      // Optimistically update local state first to ensure UI is updated immediately
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
       
@@ -135,9 +135,21 @@ export function useNotifications() {
     }
   };
 
+  const readNotification = async (notificationId: number) => {
+    try {
+      await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
+      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
+      setUnreadCount(prev => prev - 1);
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      // On error, invalidate queries to restore correct state
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
+    }
+  };
+
   const removeNotification = async (notificationId: number) => {
     try {
-      await apiRequest("DELETE", `/api/notifications/${notificationId}`);
+      await apiRequest("DELETE", `/api/notifications/delete/${notificationId}`);
       setNotifications(prev => prev.filter(n => n.id !== notificationId));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
@@ -181,7 +193,8 @@ export function useNotifications() {
     notifications,
     count: unreadCount,
     hasUnread: unreadCount > 0,
-    markAsViewed,
+    markAllAsRead,
+    readNotification,
     removeNotification,
     clearAllNotifications
   };

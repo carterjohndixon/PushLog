@@ -2341,6 +2341,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Mark a specific notification as read
+  app.post("/api/notifications/mark-read/:id", authenticateToken, async (req, res) => {
+    try {
+      const notificationId = parseInt(req.params.id);
+      const userId = req.user!.userId;
+      await storage.markNotificationAsRead(notificationId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
   // Delete a specific notification
   app.delete("/api/notifications/delete/:id", authenticateToken, async (req, res) => {
     try {
@@ -2363,7 +2376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
   })
 
-  // Clear all notifications for a user (MUST come before /:id route)
+  // Clear all notifications for a user
   app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
@@ -2381,32 +2394,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("❌ [SERVER] Error clearing notifications:", error);
       res.status(500).json({ error: "Failed to clear notifications" });
-    }
-  });
-
-  // Delete a specific notification
-  app.delete("/api/notifications/:id", authenticateToken, async (req, res) => {
-    try {
-      const notificationId = parseInt(req.params.id);
-      const userId = req.user!.userId;
-      
-      // Get all user notifications to verify ownership
-      const userNotifications = await storage.getNotificationsByUserId(userId);
-      const notification = userNotifications.find(n => n.id === notificationId);
-      
-      if (!notification) {
-        return res.status(404).json({ error: "Notification not found" });
-      }
-      
-      const success = await storage.deleteNotification(notificationId);
-      if (success) {
-        res.json({ success: true });
-      } else {
-        res.status(404).json({ error: "Notification not found" });
-      }
-    } catch (error) {
-      console.error("Error deleting notification:", error);
-      res.status(500).json({ error: "Failed to delete notification" });
     }
   });
 
