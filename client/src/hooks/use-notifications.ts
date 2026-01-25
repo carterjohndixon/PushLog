@@ -137,9 +137,15 @@ export function useNotifications() {
 
   const readNotification = async (notificationId: number) => {
     try {
-      await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
+      // Optimistically update local state
       setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
-      setUnreadCount(prev => prev - 1);
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      // Mark as read on server
+      await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
+      
+      // Refetch to ensure sync with server
+      await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
       console.error('Error marking notification as read:', error);
       // On error, invalidate queries to restore correct state

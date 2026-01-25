@@ -25,7 +25,6 @@ import {
   Activity,
   MessageSquare,
   CreditCard,
-  AlertTriangle,
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";

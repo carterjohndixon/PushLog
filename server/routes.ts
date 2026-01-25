@@ -2319,8 +2319,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort notifications by createdAt (newest first)
       notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+      // Count only unread notifications (not total)
+      const unreadCount = notifications.filter(n => !n.isRead).length;
+
       res.json({
-        count: notifications.length,
+        count: unreadCount,
         notifications
       });
     } catch (error) {
@@ -2346,6 +2349,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const notificationId = parseInt(req.params.id);
       const userId = req.user!.userId;
+      
+      // Verify the notification belongs to the user
+      const userNotifications = await storage.getNotificationsByUserId(userId);
+      const notification = userNotifications.find(n => n.id === notificationId);
+      
+      if (!notification) {
+        return res.status(404).json({ error: "Notification not found" });
+      }
+      
       await storage.markNotificationAsRead(notificationId);
       res.json({ success: true });
     } catch (error) {
