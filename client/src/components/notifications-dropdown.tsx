@@ -11,9 +11,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Bell, Mail, MessageSquare, GitBranch, X, Eye, Trash2 } from "lucide-react";
+import { Bell, Mail, MessageSquare, GitBranch, X, Eye } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 // Helper function to format notification dates
 function formatNotificationDate(dateString: string): string {
@@ -40,6 +43,27 @@ interface NotificationsDropdownProps {
 export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdownProps) {
   const { notifications, count, hasUnread, markAsViewed, removeNotification, clearAllNotifications } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
+
+  const deleteNotification = useMutation({
+    mutationFn: async (notificationId: number) => {
+      const response = await apiRequest("DELETE", `/api/notifications/delete/${notificationId}`);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Notification deleted",
+        description: "Notification deleted successfully.",
+        variant: "default",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete notification",
+        description: error.message || "Failed to delete notification.",
+        variant: "destructive",
+      });
+    },
+});
 
   return (
     <>
@@ -115,7 +139,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
                   onClick={(e) => {
                     e.stopPropagation();
-                    removeNotification(notification.id);
+                    deleteNotification.mutate(notification.id);
                   }}
                   title="Remove notification"
                 >
@@ -201,7 +225,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    removeNotification(selectedNotification.id);
+                    deleteNotification.mutate(selectedNotification.id);
                     setSelectedNotification(null);
                   }}
                 >

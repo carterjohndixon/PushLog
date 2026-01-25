@@ -14,15 +14,6 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    /**
-     * Check authentication by calling /api/profile
-     * 
-     * WHY THIS APPROACH:
-     * - /api/profile requires authentication (uses authenticateToken middleware)
-     * - If session is valid → returns user data
-     * - If session is invalid → returns 401 → redirect to login
-     * - No token checking needed - server handles everything
-     */
     apiRequest("GET", "/api/profile")
       .then(response => response.json())
       .then(data => {
@@ -42,10 +33,6 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
         setLoading(false);
       });
   }, [setLocation]);
-
-  // NO token validation interval needed!
-  // Server handles session expiration automatically
-  // If session expires, next API call will return 401 → redirect to login
 
   if (loading) {
     return (
