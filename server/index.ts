@@ -51,7 +51,8 @@ const pool = new Pool({
 const PostgresqlStore = pgSession(session);
 const sessionStore = new PostgresqlStore({
   pool,
-  tableName: 'user_sessions'
+  tableName: 'user_sessions',
+  createTableIfMissing: true  // Automatically create table if it doesn't exist
 });
 
 // Security middleware
@@ -94,8 +95,10 @@ const limiter = rateLimit({
     trustProxy: false, // Disable validation since we trust nginx
   },
   skip: (req) => {
-    // Skip rate limiting for health checks
-    return req.path === '/health' || req.path === '/health/detailed';
+    // Skip rate limiting for health checks and profile endpoint (used frequently for auth checks)
+    return req.path === '/health' || 
+           req.path === '/health/detailed' || 
+           req.path === '/api/profile'; // Profile endpoint is called frequently for auth checks
   },
 });
 app.use('/api/', limiter);
@@ -145,11 +148,13 @@ app.use('/api/payments/', paymentLimiter);
 app.use(compression());
 
 // CORS configuration
+// Allow both production domain and localhost (for development)
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? ['https://pushlog.ai', 'https://www.pushlog.ai'] 
-    : ['https://pushlog.ai'],
-  credentials: true,
+  origin: [
+    'https://pushlog.ai', 
+    
+  ],
+  credentials: true, // Required for cookies to work
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
@@ -187,11 +192,13 @@ app.use(session({
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
+  name: 'connect.sid',
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: true,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+    sameSite: 'lax',
+    domain: '.pushlog.ai'
   }
 }));
 

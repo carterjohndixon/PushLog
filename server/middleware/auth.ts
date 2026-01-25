@@ -23,11 +23,16 @@ declare global {
 }
 
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
-  try {
+  try {    
     // Check if session exists and has userId
     // Express automatically reads the HTTP-only cookie and populates req.session
     if (!req.session || !req.session.userId) {
-      console.error('No session found or session missing userId');
+      console.error('❌ Auth failed:', {
+        hasSession: !!req.session,
+        hasUserId: !!req.session?.userId,
+        cookies: req.headers.cookie ? 'present' : 'missing',
+        path: req.path
+      });
       return res.status(401).json({ error: 'Not authenticated' });
     }
 

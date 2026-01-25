@@ -204,6 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).send("Invalid email/username or password");
       }
 
+      // Set session data
       req.session.userId = user.id;
       req.session.user = {
         userId: user.id,
@@ -214,18 +215,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emailVerified: !!user.emailVerified
       };
 
-      // No token needed - cookie is set automatically by Express
-      res.status(200).json({
-        success: true,
-        // No token in response - client doesn't need it
-        user: {
-          id: user.id,
-          username: user.username || '',
-          email: user.email || null,
-          isUsernameSet: true,
-          emailVerified: !!user.emailVerified,
-          githubConnected: !!user.githubId
+      // Save session explicitly to ensure cookie is set
+      req.session.save((err) => {
+        if (err) {
+          console.error('❌ Error saving session:', err);
+          return res.status(500).json({ error: 'Failed to create session' });
         }
+
+        // Debug logging
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('✅ Session created:', {
+            userId: user.id,
+            sessionId: req.session.id,
+            cookieSet: res.getHeader('Set-Cookie') ? 'yes' : 'no'
+          });
+        }
+
+        // No token needed - cookie is set automatically by Express
+        res.status(200).json({
+          success: true,
+          // No token in response - client doesn't need it
+          user: {
+            id: user.id,
+            username: user.username || '',
+            email: user.email || null,
+            isUsernameSet: true,
+            emailVerified: !!user.emailVerified,
+            githubConnected: !!user.githubId
+          }
+        });
       });
     } catch (error) {
       res.status(500).send("An error occurred while trying to log in");
