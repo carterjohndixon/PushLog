@@ -39,6 +39,11 @@ export function useNotifications() {
   useEffect(() => {
     // Initialize with fetched data
     if (initialData) {
+      console.log('📥 Notifications fetched:', {
+        total: initialData.notifications.length,
+        unreadCount: initialData.count,
+        notifications: initialData.notifications.map(n => ({ id: n.id, isRead: n.isRead, type: n.type }))
+      });
       setNotifications(initialData.notifications);
       setUnreadCount(initialData.count);
     }
@@ -137,17 +142,34 @@ export function useNotifications() {
 
   const readNotification = async (notificationId: number) => {
     try {
-      // Optimistically update local state
-      setNotifications(prev => prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n));
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      console.log(`👁️ Marking notification ${notificationId} as read`);
       
-      // Mark as read on server
-      await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
+      // Mark as read on server first
+      const response = await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error('Failed to mark notification as read');
+      }
+      
+      console.log(`✅ Notification ${notificationId} marked as read on server`);
+      
+      // Update local state after server confirms
+      setNotifications(prev => {
+        const updated = prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n);
+        console.log(`🔄 Updated local state for notification ${notificationId}`);
+        return updated;
+      });
+      setUnreadCount(prev => {
+        const newCount = Math.max(0, prev - 1);
+        console.log(`📊 Unread count: ${prev} → ${newCount}`);
+        return newCount;
+      });
       
       // Refetch to ensure sync with server
       await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      console.error('❌ Error marking notification as read:', error);
       // On error, invalidate queries to restore correct state
       queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
     }

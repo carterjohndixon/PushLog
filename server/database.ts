@@ -366,11 +366,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async markNotificationAsRead(id: number): Promise<Notification | undefined> {
-    const result = await db.update(notifications)
-      .set({ isRead: true })
-      .where(eq(notifications.id, id))
-      .returning();
-    return result[0] as any;
+    try {
+      console.log(`📝 Database: Marking notification ${id} as read`);
+      const result = await db.update(notifications)
+        .set({ isRead: true })
+        .where(eq(notifications.id, id))
+        .returning();
+      
+      if (result.length === 0) {
+        console.error(`❌ Database: No notification found with id ${id}`);
+        return undefined;
+      }
+      
+      console.log(`✅ Database: Notification ${id} updated. isRead: ${result[0].isRead}`);
+      return result[0] as any;
+    } catch (error) {
+      console.error(`❌ Database: Error marking notification ${id} as read:`, error);
+      throw error;
+    }
   }
 
   async markAllNotificationsAsRead(userId: number): Promise<void> {

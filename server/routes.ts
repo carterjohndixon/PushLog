@@ -2350,18 +2350,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notificationId = parseInt(req.params.id);
       const userId = req.user!.userId;
       
+      console.log(`📖 Marking notification ${notificationId} as read for user ${userId}`);
+      
       // Verify the notification belongs to the user
       const userNotifications = await storage.getNotificationsByUserId(userId);
       const notification = userNotifications.find(n => n.id === notificationId);
       
       if (!notification) {
+        console.error(`❌ Notification ${notificationId} not found for user ${userId}`);
         return res.status(404).json({ error: "Notification not found" });
       }
       
-      await storage.markNotificationAsRead(notificationId);
+      console.log(`✅ Found notification ${notificationId}, current isRead: ${notification.isRead}`);
+      
+      // Mark as read
+      const updated = await storage.markNotificationAsRead(notificationId);
+      
+      if (!updated) {
+        console.error(`❌ Failed to update notification ${notificationId}`);
+        return res.status(500).json({ error: "Failed to mark notification as read" });
+      }
+      
+      console.log(`✅ Notification ${notificationId} marked as read. Updated isRead: ${updated.isRead}`);
+      
       res.json({ success: true });
     } catch (error) {
-      console.error("Error marking notification as read:", error);
+      console.error("❌ Error marking notification as read:", error);
       res.status(500).json({ error: "Failed to mark notification as read" });
     }
   });
