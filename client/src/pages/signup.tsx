@@ -79,10 +79,6 @@ export default function Signup() {
         return response.json();
       },
       onSuccess: (data) => {
-        // Store the token
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-        }
         toast({
           title: "Account Created",
           description: "Your account has been created successfully.",

@@ -45,11 +45,6 @@ export default function Login() {
         return response.json();
       },
       onSuccess: (data) => {
-        // Store the token
-        if (data.token) {
-          localStorage.setItem('token', data.token);
-        }
-        // Navigate to dashboard
         window.location.href = `${window.location.origin}/dashboard`;
       },
       onError: (error: any) => {

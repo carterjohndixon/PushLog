@@ -47,17 +47,21 @@ export default function GitHubCallback() {
             'Accept': 'application/json'
           }
         });
-
-        // Parse response as JSON
+        
+        // Check if response is a redirect (status 302/301)
+        if (response.redirected || response.status === 302 || response.status === 301) {
+          // Server redirected - session is set, just go to dashboard
+          queryClient.invalidateQueries();
+          setLocation('/dashboard');
+          return;
+        }
+        
+        // If JSON response (fallback), check for success
         const data = await response.json();
         
-        if (data.success && data.token) {
-          localStorage.setItem('token', data.token);
-          if (data.user && data.user.id) {
-            localStorage.setItem('userId', data.user.id.toString());
-          }
-          
-          // Invalidate queries to refetch data with new token
+        if (data.success) {
+          // No token storage needed - session is set automatically by server
+          // Invalidate queries to refetch data
           queryClient.invalidateQueries();
           
           toast({

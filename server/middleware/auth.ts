@@ -1,37 +1,68 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken, extractTokenFromHeader, type JWTPayload } from '../jwt';
+import { databaseStorage } from '../database';
+
+/**
+ * Session-based user data structure
+ * This replaces the JWT payload and is stored in req.session
+ */
+export interface SessionUser {
+  userId: number;
+  username: string;
+  email: string | null;
+  githubConnected: boolean;
+  googleConnected: boolean;
+  emailVerified: boolean;
+}
 
 declare global {
   namespace Express {
     interface Request {
-      user?: JWTPayload;
+      user?: SessionUser;
     }
   }
 }
 
-export function authenticateToken(req: Request, res: Response, next: NextFunction) {
+export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      console.error('No authorization header present');
-      console.log('Request headers:', req.headers);
-      return res.status(401).json({ error: 'No authorization header' });
+    // Check if session exists and has userId
+    // Express automatically reads the HTTP-only cookie and populates req.session
+    if (!req.session || !req.session.userId) {
+      console.error('No session found or session missing userId');
+      return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const token = extractTokenFromHeader(authHeader);
-    if (!token) {
-      console.error('No token found in authorization header');
-      return res.status(401).json({ error: 'No token found' });
-    }
-
-    try {
-      const user = verifyToken(token);
-      req.user = user;
+    // If we already have user data in session, use it (faster, no DB query)
+    // Otherwise, fetch from database
+    if (req.session.user) {
+      req.user = req.session.user;
       next();
-    } catch (verifyError) {
-      console.error('Token verification failed:', verifyError);
-      return res.status(401).json({ error: 'Invalid token' });
+      return;
     }
+
+    // Fetch user from database to populate session data
+    // This happens on first request after login, then we cache it in session
+    const user = await databaseStorage.getUser(req.session.userId);
+    if (!user) {
+      // User was deleted but session still exists - destroy session
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Build session user object (same structure as old JWT payload)
+    const sessionUser: SessionUser = {
+      userId: user.id,
+      username: user.username || '',
+      email: user.email || null,
+      githubConnected: !!user.githubId,
+      googleConnected: !!user.googleId,
+      emailVerified: !!user.emailVerified
+    };
+
+    // Cache user data in session to avoid DB queries on subsequent requests
+    req.session.user = sessionUser;
+    req.user = sessionUser;
+    
+    next();
   } catch (error) {
     console.error('Authentication error:', error);
     return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });

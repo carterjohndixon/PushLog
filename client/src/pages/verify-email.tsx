@@ -36,10 +36,7 @@ export default function VerifyEmail() {
         
         const data = await response.json();
 
-        if (data.success) {
-          // Store the new token with updated emailVerified status
-          localStorage.setItem("token", data.token);
-          
+        if (data.success) {   
           toast({
             title: "Email Verified",
             description: "Your email has been successfully verified.",

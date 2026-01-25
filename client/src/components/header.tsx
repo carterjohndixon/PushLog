@@ -31,13 +31,6 @@ export function Header() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLoading(false);
-      return; 
-    }
-
-    // Fetch user profile
     apiRequest("GET", "/api/profile")
       .then(response => response.json())
       .then(data => {
@@ -46,6 +39,7 @@ export function Header() {
         }
       })
       .catch(error => {
+        // Session invalid or not logged in - user stays null
         console.error("Failed to fetch user profile:", error);
       })
       .finally(() => {
@@ -53,8 +47,13 @@ export function Header() {
       });
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
+  const handleLogout = async () => {
+    try {
+      await apiRequest("POST", "/api/logout");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+    
     setUser(null);
     queryClient.clear(); // Clear all queries from cache
     setLocation('/');

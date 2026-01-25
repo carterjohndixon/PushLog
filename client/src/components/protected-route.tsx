@@ -7,39 +7,6 @@ interface ProtectedRouteProps {
   pageName?: string;
 }
 
-// Token validation function with countdown
-function validateTokenWithCountdown() {
-  const token = localStorage.getItem('token');
-  if (!token) {
-    return false;
-  }
-
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const expirationTime = payload.exp * 1000;
-    const currentTime = Date.now();
-    const timeRemaining = expirationTime - currentTime;
-    
-    if (timeRemaining > 0) {
-      // If token will expire in the next 5 minutes, redirect
-      if (timeRemaining <= 300000) {
-        localStorage.removeItem('token');
-        window.location.href = '/login';
-        return false;
-      }
-      return true;
-    } else {
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-      return false;
-    }
-  } catch (error) {
-    localStorage.removeItem('token');
-    window.location.href = '/login';
-    return false;
-  }
-}
-
 export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [, setLocation] = useLocation();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -47,36 +14,15 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if there's a token in the URL hash (OAuth callback)
-    const hash = window.location.hash;
-    if (hash.startsWith('#token=')) {
-      const token = hash.substring(7);
-      localStorage.setItem('token', token);
-      
-      // Extract userId from the token and store it
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        if (payload.userId) {
-          localStorage.setItem('userId', payload.userId.toString());
-        }
-      } catch (error) {
-        console.error('Failed to extract userId from token:', error);
-      }
-      
-      // Clean up the URL
-      window.history.replaceState(null, '', window.location.pathname);
-      setIsAuthenticated(true);
-      setLoading(false);
-      return;
-    }
-
-    const token = localStorage.getItem('token');
-    if (!token) {
-      setLocation('/login');
-      return;
-    }
-
-    // Verify token is valid and get user profile
+    /**
+     * Check authentication by calling /api/profile
+     * 
+     * WHY THIS APPROACH:
+     * - /api/profile requires authentication (uses authenticateToken middleware)
+     * - If session is valid → returns user data
+     * - If session is invalid → returns 401 → redirect to login
+     * - No token checking needed - server handles everything
+     */
     apiRequest("GET", "/api/profile")
       .then(response => response.json())
       .then(data => {
@@ -84,12 +30,12 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
           setIsAuthenticated(true);
           setUserProfile(data.user || data); // Store the profile data
         } else {
-          localStorage.removeItem('token');
+          // Session invalid or expired
           setLocation('/login');
         }
       })
       .catch(() => {
-        localStorage.removeItem('token');
+        // Request failed (401, network error, etc.) - redirect to login
         setLocation('/login');
       })
       .finally(() => {
@@ -97,21 +43,9 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
       });
   }, [setLocation]);
 
-  // Add token validation with countdown (runs every 2 seconds)
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const interval = setInterval(() => {
-      validateTokenWithCountdown();
-    }, 2 * 1000);
-
-    // Run validation immediately
-    validateTokenWithCountdown();
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [isAuthenticated]);
+  // NO token validation interval needed!
+  // Server handles session expiration automatically
+  // If session expires, next API call will return 401 → redirect to login
 
   if (loading) {
     return (

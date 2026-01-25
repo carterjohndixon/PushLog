@@ -1,11 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
-// Global function to handle token expiration
-function handleTokenExpiration() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('userId');
+function handleAuthenticationFailure() {
+  // Clear any cached data (React Query cache)
+  // No localStorage cleanup needed - we don't store tokens there
   
-  // Clear any cached data
   if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
     window.location.href = '/login';
   }
@@ -23,9 +21,9 @@ async function throwIfResNotOk(res: Response) {
         throw new Error(text || 'Invalid credentials');
       }
       
-      // For other authenticated routes, handle token expiration
-      handleTokenExpiration();
-      throw new Error('Token expired');
+      // For other authenticated routes, handle session expiration
+      handleAuthenticationFailure();
+      throw new Error('Session expired');
     }
     
     throw new Error(text || res.statusText);
@@ -47,17 +45,14 @@ export async function apiRequest(
     headers["Content-Type"] = "application/json";
   }
 
-  // Add Authorization header if token exists
-  const token = localStorage.getItem('token');
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
+  // NO Authorization header needed!
+  // Browser automatically sends HTTP-only cookie via credentials: "include"
 
   const res = await fetch(url, {
     method,
     headers,
     body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
+    credentials: "include", // ✅ Sends HTTP-only cookie automatically
   });
 
   await throwIfResNotOk(res);
@@ -70,26 +65,21 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const headers: Record<string, string> = {};
-    
-    // Add Authorization header if token exists
-    const token = localStorage.getItem('token');
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
+    // NO headers needed - cookie is sent automatically via credentials: "include"
     const res = await fetch(queryKey[0] as string, {
-      credentials: "include",
-      headers
+      credentials: "include", // ✅ Sends HTTP-only cookie automatically
+      headers: {
+        "Accept": "application/json"
+      }
     });
 
-    // Handle 401 Unauthorized globally
+    // Handle 401 Unauthorized globally (session expired/invalid)
     if (res.status === 401) {
       if (unauthorizedBehavior === "returnNull") {
         return null;
       }
-      handleTokenExpiration();
-      throw new Error('Token expired');
+      handleAuthenticationFailure();
+      throw new Error('Session expired');
     }
 
     await throwIfResNotOk(res);

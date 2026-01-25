@@ -45,17 +45,8 @@ export function useNotifications() {
   }, [initialData]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    // Force refresh notifications when token changes (e.g., after email verification)
-    if (token !== currentToken) {
-      setCurrentToken(token);
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
-    }
-
     // Create EventSource for real-time notifications
-    const eventSource = new EventSource(`/api/notifications/stream?token=${token}`);
+    const eventSource = new EventSource(`/api/notifications/stream`);
 
     eventSourceRef.current = eventSource;
 
@@ -88,40 +79,34 @@ export function useNotifications() {
     eventSource.onerror = (error) => {
       console.error('SSE connection error:', error);
       
-      // Check if the error is due to token expiration
-      if (eventSource.readyState === EventSource.CLOSED) {
-        // Try to reconnect, but if it fails due to auth, redirect to login
-        setTimeout(() => {
-          if (eventSourceRef.current) {
-            eventSourceRef.current.close();
-            eventSourceRef.current = null;
-            
-            // Check if token still exists and is valid
-            const token = localStorage.getItem('token');
-            if (!token) {
-              console.log('No token found, redirecting to login');
-              window.location.href = '/login';
-              return;
+            // Check if the error is due to session expiration
+            if (eventSource.readyState === EventSource.CLOSED) {
+              // Try to reconnect, but if it fails due to auth, redirect to login
+              setTimeout(() => {
+                if (eventSourceRef.current) {
+                  eventSourceRef.current.close();
+                  eventSourceRef.current = null;
+                  
+                  // Try to create a new connection
+                  // Browser will automatically send cookie if session is still valid
+                  try {
+                    const newEventSource = new EventSource(`/api/notifications/stream`);
+                    newEventSource.onerror = (reconnectError) => {
+                      console.error('SSE reconnect failed:', reconnectError);
+                      // If reconnect fails, assume session is expired
+                      // Server will return 401, client will handle redirect
+                      if (newEventSource.readyState === EventSource.CLOSED) {
+                        window.location.href = '/login';
+                      }
+                    };
+                    eventSourceRef.current = newEventSource;
+                  } catch (reconnectError) {
+                    console.error('Failed to create new SSE connection:', reconnectError);
+                    window.location.href = '/login';
+                  }
+                }
+              }, 5000);
             }
-            
-            // Try to create a new connection
-            try {
-              const newEventSource = new EventSource(`/api/notifications/stream?token=${token}`);
-              newEventSource.onerror = (reconnectError) => {
-                console.error('SSE reconnect failed:', reconnectError);
-                // If reconnect fails, assume token is expired
-                localStorage.removeItem('token');
-                window.location.href = '/login';
-              };
-              eventSourceRef.current = newEventSource;
-            } catch (reconnectError) {
-              console.error('Failed to create new SSE connection:', reconnectError);
-              localStorage.removeItem('token');
-              window.location.href = '/login';
-            }
-          }
-        }, 5000);
-      }
     };
 
     return () => {
@@ -134,13 +119,19 @@ export function useNotifications() {
 
   const markAsViewed = async () => {
     try {
+      // Optimistically update local state first
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+      
       // Mark all notifications as read in database
       await apiRequest("POST", "/api/notifications/mark-read");
-      setUnreadCount(0);
-      // Refetch notifications to update the read status
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
+      
+      // Refetch notifications to ensure sync with server
+      await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
       console.error('Error marking notifications as read:', error);
+      // On error, refetch to restore correct state
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
     }
   };
 

@@ -204,19 +204,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).send("Invalid email/username or password");
       }
 
-      // Generate JWT token
-      const token = generateToken({
+      req.session.userId = user.id;
+      req.session.user = {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: !!user.googleId,
         emailVerified: !!user.emailVerified
-      });
+      };
 
+      // No token needed - cookie is set automatically by Express
       res.status(200).json({
         success: true,
-        token,
+        // No token in response - client doesn't need it
         user: {
           id: user.id,
           username: user.username || '',
@@ -469,19 +470,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
 
-        // Generate JWT token
-        const jwtToken = generateToken({
+        
+        req.session.userId = user.id;
+        req.session.user = {
           userId: user.id,
           username: user.username || '',
           email: user.email || null,
           githubConnected: true,
           googleConnected: !!user.googleId,
           emailVerified: true
-        });
+        };
 
-        // For OAuth callback, redirect to dashboard with token in hash
-        const redirectUrl = `/dashboard#token=${jwtToken}`;
-        console.log(`Redirecting to dashboard with token for user ${user.id}`);
+        // Redirect to dashboard - no token needed, cookie is set automatically
+        const redirectUrl = `/dashboard`;
+        console.log(`Redirecting to dashboard for user ${user.id} (session-based auth)`);
         return res.redirect(redirectUrl);
       }
 
@@ -604,18 +606,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Failed to create or update user");
       }
 
-      // Generate JWT token
-      const jwtToken = generateToken({
+      
+      req.session.userId = user.id;
+      req.session.user = {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: true,
         emailVerified: !!user.emailVerified
-      });
+      };
 
-      // Store token in localStorage via redirect with hash
-      res.redirect(`/dashboard#token=${jwtToken}`);
+      // Redirect to dashboard - no token needed, cookie is set automatically
+      res.redirect(`/dashboard`);
     } catch (error) {
       console.error("Google auth error:", error);
       res.status(500).json({ error: "Authentication failed" });
@@ -698,20 +701,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send verification email
       await sendVerificationEmail(email, verificationToken);
-
-      // Generate JWT token
-      const token = generateToken({
+      req.session.userId = user.id;
+      req.session.user = {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: false,
         googleConnected: false,
         emailVerified: false
-      });
+      };
 
       res.status(200).json({
         success: true,
-        token,
+        // No token needed - cookie is set automatically
         user: {
           id: user.id,
           username: user.username || '',
@@ -767,19 +769,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Don't fail the verification process if notification cleanup fails
       }
 
-      // Generate new JWT with emailVerified: true
-      const newToken = generateToken({
+      req.session.userId = user.id;
+      req.session.user = {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: !!user.googleId,
-        emailVerified: true
-      });
+        emailVerified: true  // Updated to true after verification
+      };
 
       res.status(200).json({
         success: true,
-        token: newToken,
+        // No token needed - session is set/updated automatically
         message: "Email verified successfully"
       });
     } catch (error) {
@@ -850,13 +852,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add logout route
   app.post("/api/logout", (req, res) => {
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ error: "Failed to logout" });
       }
-      res.redirect("/login");
+      
+      // Clear the session cookie explicitly
+      // The cookie name is 'connect.sid' by default for express-session
+      res.clearCookie('connect.sid', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
+      });
+      
+      res.json({ success: true, message: "Logged out successfully" });
     });
   });
 
@@ -2342,21 +2352,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Server-Sent Events endpoint for real-time notifications
   app.get("/api/notifications/stream", (req, res) => {
-    // Get token from query parameter for SSE
-    const token = req.query.token as string;
-    if (!token) {
-      return res.status(401).json({ error: "Token required" });
+    // Check session instead of token query parameter
+    if (!req.session || !req.session.userId) {
+      return res.status(401).json({ error: "Not authenticated" });
     }
 
-    // Verify token
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-
-    const userId = decoded.userId;
+    const userId = req.session.userId;
     
     // Set headers for SSE
     res.writeHead(200, {
