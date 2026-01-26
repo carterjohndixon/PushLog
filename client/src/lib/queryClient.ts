@@ -4,7 +4,10 @@ function handleAuthenticationFailure() {
   // Clear any cached data (React Query cache)
   // No localStorage cleanup needed - we don't store tokens there
   
-  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+  // Don't redirect if already on login page or signup page
+  if (typeof window !== 'undefined' && 
+      window.location.pathname !== '/login' && 
+      window.location.pathname !== '/signup') {
     window.location.href = '/login';
   }
 }
@@ -21,9 +24,12 @@ async function throwIfResNotOk(res: Response) {
         throw new Error(text || 'Invalid credentials');
       }
       
-      // Check if we're on the home page - don't redirect (home page is public)
-      if (typeof window !== 'undefined' && window.location.pathname === '/') {
-        throw new Error('Not authenticated'); // Just throw, don't redirect
+      // Check if we're on public pages - don't redirect (home, login, signup pages are public)
+      if (typeof window !== 'undefined') {
+        const publicPaths = ['/', '/login', '/signup'];
+        if (publicPaths.includes(window.location.pathname)) {
+          throw new Error('Not authenticated'); // Just throw, don't redirect
+        }
       }
       
       // For other authenticated routes, handle session expiration

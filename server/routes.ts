@@ -1684,7 +1684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate AI summary using the provided model or integration's model settings
-      const aiModel = testModel || activeIntegration?.aiModel || 'gpt-5.2';
+      const aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
       const maxTokens = testMaxTokens || activeIntegration?.maxTokens || 350;
       
       const summary = await generateCodeSummary(
@@ -2152,16 +2152,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected route example - Get user profile
   app.get("/api/profile", authenticateToken, async (req, res) => {
     try {
+      if (req.session) {
+        req.session.touch();
+        await new Promise<void>((resolve) => {
+          req.session.save((err) => {
+            if (err) {
+              console.error('Error refreshing session:', err);
+            }
+            resolve();
+          });
+        });
+      }
+
       const user = await databaseStorage.getUserById(req.user!.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
 
-      // Validate GitHub token if user has GitHub connected
+      // Validate GitHub token if user has GitHub connected (non-blocking)
       let githubConnected = false;
       if (user.githubId && user.githubToken) {
         try {
-          githubConnected = await validateGitHubToken(user.githubToken);
+          // Use Promise.race to timeout GitHub validation after 2 seconds
+          // This prevents slow GitHub API calls from blocking the profile request
+          githubConnected = await Promise.race([
+            validateGitHubToken(user.githubToken),
+            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000))
+          ]);
           
           // If token is invalid, clear the GitHub connection
           if (!githubConnected) {

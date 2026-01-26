@@ -19,6 +19,28 @@ export default function Login() {
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
 
+  // Check if user is already authenticated - redirect to dashboard if so
+  React.useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/profile", {
+          credentials: "include",
+          headers: { "Accept": "application/json" }
+        });
+        
+        if (response.ok) {
+          // User is already authenticated, redirect to dashboard
+          window.location.href = "/dashboard";
+        }
+      } catch (error) {
+        // Not authenticated or network error - stay on login page
+        console.log("Not authenticated, showing login page");
+      }
+    };
+    
+    checkAuth();
+  }, []);
+
   // Check for error messages from OAuth redirects
   React.useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

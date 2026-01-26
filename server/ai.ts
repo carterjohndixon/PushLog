@@ -34,9 +34,17 @@ export interface AiUsageResult {
 
 export async function generateCodeSummary(
   pushData: PushEventData, 
-  model: string = 'gpt-5.2', // GPT-5 models: gpt-5, gpt-5.1, gpt-5.2, gpt-5.2-codex | GPT-4: gpt-4o, gpt-4-turbo, gpt-4, gpt-3.5-turbo
-  maxTokens: number = 350
+  model: string = 'gpt-5.2', // Available models: gpt-5.2 (latest), gpt-5.1, gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo
+  maxTokens: number = 1000
 ): Promise<AiUsageResult> {
+  // Migrate invalid models to gpt-5.2 (latest working model)
+  // Valid models based on comprehensive testing: GPT-5.2, GPT-5.1, GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-4 variants, GPT-3.5-turbo variants
+  const validModels = ['gpt-5.2', 'gpt-5.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-0613', 'gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106', 'gpt-3.5-turbo-16k'];
+  if (!validModels.includes(model)) {
+    console.warn(`⚠️ Invalid or deprecated model "${model}" detected. Migrating to gpt-5.2.`);
+    model = 'gpt-5.2';
+  }
+
   try {
     const prompt = `
 You are a world-class code review assistant tasked with analyzing a git push and providing a concise, helpful summary of the highest level of detail possible. Analyze this git push and provide a concise, helpful summary.
@@ -65,7 +73,6 @@ Respond with only valid JSON:
 `;
 
     console.log(`🔍 OpenAI API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
-    const isGPT5Model = model.startsWith('gpt-5');
     const requestParams: any = {
       model: model,
       messages: [
@@ -78,15 +85,9 @@ Respond with only valid JSON:
           content: prompt
         }
       ],
+      max_completion_tokens: maxTokens,
+      temperature: 0.3, // All supported models support temperature
     };
-    
-    // GPT-5 models use max_tokens, others use max_completion_tokens
-    if (isGPT5Model) {
-      requestParams.max_tokens = maxTokens;
-    } else {
-      requestParams.max_completion_tokens = maxTokens;
-      requestParams.temperature = 0.3; // GPT-4/3.5 support temperature
-    }
     
     let completion;
     try {

@@ -17,10 +17,10 @@ import { UseMutationResult } from "@tanstack/react-query";
 
 const AI_MODELS = [
   {
-    id: 'gpt-5',
-    name: 'GPT-5',
-    description: 'Advanced GPT-5 model with enhanced capabilities',
-    costPerToken: 15
+    id: 'gpt-5.2',
+    name: 'GPT-5.2',
+    description: 'Latest GPT-5.2 model with cutting-edge features (Latest & Recommended)',
+    costPerToken: 25
   },
   {
     id: 'gpt-5.1',
@@ -29,22 +29,16 @@ const AI_MODELS = [
     costPerToken: 20
   },
   {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    description: 'Latest GPT-5.2 with cutting-edge features',
-    costPerToken: 25
-  },
-  {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2-Codex',
-    description: 'Specialized GPT-5.2-Codex optimized for code analysis',
-    costPerToken: 30
-  },
-  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     description: 'Most advanced GPT-4 model with improved performance and lower cost',
     costPerToken: 5
+  },
+  {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    description: 'Faster and more affordable GPT-4o variant',
+    costPerToken: 3
   },
   {
     id: 'gpt-4-turbo',
@@ -118,7 +112,7 @@ export function IntegrationSettingsModal({
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
-      setAiModel(integration.aiModel || 'gpt-5.2');
+      setAiModel(integration.aiModel || 'gpt-4o');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
@@ -131,7 +125,7 @@ export function IntegrationSettingsModal({
         setNotificationLevel(integration.notificationLevel || 'all');
         setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
         setIsActive(integration.isActive ?? true);
-        setAiModel(integration.aiModel || 'gpt-5.2');
+        setAiModel(integration.aiModel || 'gpt-4o');
         setMaxTokens(integration.maxTokens || 350);
         setMaxTokensInput(integration.maxTokens?.toString() || '350');
       }

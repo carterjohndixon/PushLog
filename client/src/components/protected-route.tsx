@@ -14,24 +14,75 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiRequest("GET", "/api/profile")
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          setIsAuthenticated(true);
-          setUserProfile(data.user || data); // Store the profile data
-        } else {
-          // Session invalid or expired
+    let isMounted = true;
+    let retryCount = 0;
+    const maxRetries = 2;
+
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("/api/profile", {
+          credentials: "include",
+          headers: { "Accept": "application/json" }
+        });
+
+        if (!isMounted) return;
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success || data.id) {
+            setIsAuthenticated(true);
+            setUserProfile(data.user || data);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // If 401, session is invalid - redirect to login
+        if (response.status === 401) {
+          if (isMounted) {
+            setLocation('/login');
+            setLoading(false);
+          }
+          return;
+        }
+
+        // For other errors (network, 500, etc.), retry a few times
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Auth check failed, retrying... (${retryCount}/${maxRetries})`);
+          setTimeout(checkAuth, 1000 * retryCount); // Exponential backoff
+          return;
+        }
+
+        // Max retries reached - if it's a network error, don't redirect
+        // Only redirect if it's an auth error
+        if (response.status === 401 && isMounted) {
           setLocation('/login');
         }
-      })
-      .catch(() => {
-        // Request failed (401, network error, etc.) - redirect to login
-        setLocation('/login');
-      })
-      .finally(() => {
         setLoading(false);
-      });
+      } catch (error) {
+        if (!isMounted) return;
+        
+        // Network error - retry a few times before giving up
+        if (retryCount < maxRetries) {
+          retryCount++;
+          console.log(`Network error, retrying... (${retryCount}/${maxRetries})`);
+          setTimeout(checkAuth, 1000 * retryCount);
+          return;
+        }
+
+        // Max retries reached - assume network issue, don't redirect
+        // User can still use the app if they're already authenticated
+        console.error("Auth check failed after retries:", error);
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    return () => {
+      isMounted = false;
+    };
   }, [setLocation]);
 
   if (loading) {

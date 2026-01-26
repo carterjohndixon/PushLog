@@ -53,11 +53,11 @@ export interface AiModel {
 
 export const AI_MODELS: AiModel[] = [
   {
-    id: 'gpt-5',
-    name: 'GPT-5',
-    costPerToken: 15, // $0.015 per 1K tokens
+    id: 'gpt-5.2',
+    name: 'GPT-5.2',
+    costPerToken: 25, // $0.025 per 1K tokens
     maxTokens: 128000,
-    description: 'Advanced GPT-5 model with enhanced capabilities'
+    description: 'Latest GPT-5.2 model with cutting-edge features (Latest & Recommended)'
   },
   {
     id: 'gpt-5.1',
@@ -67,25 +67,18 @@ export const AI_MODELS: AiModel[] = [
     description: 'Improved GPT-5.1 with better performance'
   },
   {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    costPerToken: 25, // $0.025 per 1K tokens
-    maxTokens: 128000,
-    description: 'Latest GPT-5.2 with cutting-edge features'
-  },
-  {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2-Codex',
-    costPerToken: 30, // $0.03 per 1K tokens
-    maxTokens: 128000,
-    description: 'Specialized GPT-5.2-Codex optimized for code analysis'
-  },
-  {
     id: 'gpt-4o',
     name: 'GPT-4o',
     costPerToken: 5, // $0.005 per 1K tokens (input)
     maxTokens: 128000,
     description: 'Most advanced GPT-4 model with improved performance and lower cost'
+  },
+  {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o Mini',
+    costPerToken: 3, // $0.003 per 1K tokens
+    maxTokens: 128000,
+    description: 'Faster and more affordable GPT-4o variant'
   },
   {
     id: 'gpt-4-turbo',
