@@ -9,7 +9,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
-import { generateToken, verifyToken } from './jwt';
+import { verifyToken } from './jwt';
 import { authenticateToken, requireEmailVerification } from './middleware/auth';
 import { 
   exchangeCodeForToken, 
@@ -2089,6 +2089,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without AI summary
       }
       
+      // Store push_event notification in database with metadata (do this BEFORE Slack to ensure it's always created)
+      try {
+        const pushNotification = await storage.createNotification({
+          userId: storedRepo.userId,
+          type: 'push_event',
+          title: 'New Push Event',
+          message: `New push to ${repository.name} by ${commit.author.name}`,
+          metadata: JSON.stringify({
+            pushEventId: pushEvent.id,
+            repositoryId: repository.id,
+            repositoryName: repository.name,
+            repositoryFullName: repository.full_name,
+            branch: branch,
+            commitSha: commit.id,
+            commitMessage: commit.message,
+            author: commit.author.name,
+            additions: finalAdditions,
+            deletions: finalDeletions,
+            filesChanged: filesChanged.length,
+            aiGenerated: aiGenerated,
+            aiModel: aiGenerated ? integration.aiModel : null,
+            aiSummary: aiGenerated ? aiSummary : null,
+            aiImpact: aiGenerated ? aiImpact : null,
+            aiCategory: aiGenerated ? aiCategory : null
+          })
+        });
+        console.log(`✅ Created push_event notification ${pushNotification.id} for user ${storedRepo.userId}`);
+        
+        // Broadcast push notification via SSE for real-time updates
+        const pushNotificationSSE = {
+          id: `push_${pushEvent?.id || Date.now()}`,
+          type: 'push_event',
+          title: 'New Push Event',
+          message: `New push to ${repository.name} by ${commit.author.name}`,
+          createdAt: new Date().toISOString()
+        };
+        broadcastNotification(storedRepo.userId, pushNotificationSSE);
+      } catch (pushNotificationError) {
+        console.error("❌ Failed to create push_event notification:", pushNotificationError);
+        console.error("Push notification error details:", {
+          userId: storedRepo.userId,
+          pushEventId: pushEvent.id,
+          error: pushNotificationError instanceof Error ? pushNotificationError.message : String(pushNotificationError),
+          stack: pushNotificationError instanceof Error ? pushNotificationError.stack : undefined
+        });
+      }
+      
         try {
           // Get workspace access token for sending Slack messages
           let workspaceToken: string | null = null;
@@ -2159,80 +2206,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
         console.log(`✅ Push event ${pushEvent.id} marked as notification sent`);
 
-        // Store push notification in database with metadata
-        await storage.createNotification({
-          userId: storedRepo.userId,
-          type: 'push_event',
-          title: 'New Push Event',
-          message: `New push to ${repository.name} by ${commit.author.name}`,
-          metadata: JSON.stringify({
+        // Store Slack notification in database with metadata (only if Slack was sent successfully)
+        try {
+          const slackNotification = await storage.createNotification({
+            userId: storedRepo.userId,
+            type: 'slack_message_sent',
+            title: 'Slack Message Sent',
+            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
+            metadata: JSON.stringify({
+              pushEventId: pushEvent.id,
+              repositoryId: repository.id,
+              repositoryName: repository.name,
+              repositoryFullName: repository.full_name,
+              branch: branch,
+              commitSha: commit.id,
+              commitMessage: commit.message,
+              author: commit.author.name,
+              slackChannelId: integration.slackChannelId,
+              slackChannelName: integration.slackChannelName,
+              slackWorkspaceId: integration.slackWorkspaceId,
+              integrationId: integration.id,
+              aiGenerated: aiGenerated,
+              aiModel: aiGenerated ? integration.aiModel : null,
+              aiSummary: aiGenerated ? aiSummary : null,
+              aiImpact: aiGenerated ? aiImpact : null,
+              aiCategory: aiGenerated ? aiCategory : null,
+              additions: finalAdditions,
+              deletions: finalDeletions,
+              filesChanged: filesChanged.length
+            })
+          });
+          console.log(`✅ Created slack_message_sent notification ${slackNotification.id} for user ${storedRepo.userId}`);
+          
+          // Broadcast Slack notification via SSE for real-time updates
+          const slackNotificationSSE = {
+            id: `slack_${pushEvent?.id || Date.now()}`,
+            type: 'slack_message_sent',
+            title: 'Slack Message Sent',
+            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
+            createdAt: new Date().toISOString()
+          };
+          broadcastNotification(storedRepo.userId, slackNotificationSSE);
+        } catch (slackNotificationError) {
+          console.error("❌ Failed to create slack_message_sent notification:", slackNotificationError);
+          console.error("Slack notification error details:", {
+            userId: storedRepo.userId,
             pushEventId: pushEvent.id,
-            repositoryId: repository.id,
-            repositoryName: repository.name,
-            repositoryFullName: repository.full_name,
-            branch: branch,
-            commitSha: commit.id,
-            commitMessage: commit.message,
-            author: commit.author.name,
-            additions: finalAdditions,
-            deletions: finalDeletions,
-            filesChanged: filesChanged.length,
-            aiGenerated: aiGenerated,
-            aiModel: aiGenerated ? aiModel : null,
-            aiSummary: aiGenerated ? aiSummary : null,
-            aiImpact: aiGenerated ? aiImpact : null,
-            aiCategory: aiGenerated ? aiCategory : null
-          })
-        });
-        
-        // Store Slack notification in database with metadata
-        await storage.createNotification({
-          userId: storedRepo.userId,
-          type: 'slack_message_sent',
-          title: 'Slack Message Sent',
-          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
-          metadata: JSON.stringify({
-            pushEventId: pushEvent.id,
-            repositoryId: repository.id,
-            repositoryName: repository.name,
-            repositoryFullName: repository.full_name,
-            branch: branch,
-            commitSha: commit.id,
-            commitMessage: commit.message,
-            author: commit.author.name,
-            slackChannelId: integration.slackChannelId,
-            slackChannelName: integration.slackChannelName,
-            slackWorkspaceId: integration.slackWorkspaceId,
-            integrationId: integration.id,
-            aiGenerated: aiGenerated,
-            aiModel: aiGenerated ? aiModel : null,
-            aiSummary: aiGenerated ? aiSummary : null,
-            aiImpact: aiGenerated ? aiImpact : null,
-            aiCategory: aiGenerated ? aiCategory : null,
-            additions: finalAdditions,
-            deletions: finalDeletions,
-            filesChanged: filesChanged.length
-          })
-        });
-        
-        // Also broadcast via SSE for real-time updates
-        const pushNotification = {
-          id: `push_${pushEvent?.id || Date.now()}`,
-          type: 'push_event',
-          title: 'New Push Event',
-          message: `New push to ${repository.name} by ${commit.author.name}`,
-          createdAt: new Date().toISOString()
-        };
-        broadcastNotification(storedRepo.userId, pushNotification);
-        
-        const slackNotification = {
-          id: `slack_${pushEvent?.id || Date.now()}`,
-          type: 'slack_message_sent',
-          title: 'Slack Message Sent',
-          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
-          createdAt: new Date().toISOString()
-        };
-        broadcastNotification(storedRepo.userId, slackNotification);
+            error: slackNotificationError instanceof Error ? slackNotificationError.message : String(slackNotificationError),
+            stack: slackNotificationError instanceof Error ? slackNotificationError.stack : undefined
+          });
+        }
       } catch (slackError) {
         console.error("❌ Failed to send Slack notification:", slackError);
         console.error("Error details:", {
