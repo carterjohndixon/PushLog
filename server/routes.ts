@@ -2328,6 +2328,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get unread notifications from database
       const unreadNotifications = await storage.getUnreadNotificationsByUserId(userId);
       
+      // Parse metadata JSON strings into objects for easier client-side access
+      const parsedUnreadNotifications = unreadNotifications.map(n => {
+        if (n.metadata && typeof n.metadata === 'string') {
+          try {
+            return { ...n, metadata: JSON.parse(n.metadata) };
+          } catch (e) {
+            console.error('Failed to parse notification metadata:', e);
+            return n;
+          }
+        }
+        return n;
+      });
+      
       // Get user's email verification status from JWT token first, fallback to database
       const jwtEmailVerified = req.user!.emailVerified;
       const user = await databaseStorage.getUserById(userId);
@@ -2335,11 +2348,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("User not found");
       }
 
-
-
       // Add email verification notification if needed and user was created via regular signup
       // Use JWT token status as it's more up-to-date than database
-      let notifications = [...unreadNotifications];
+      let notifications = [...parsedUnreadNotifications];
       
       if (jwtEmailVerified) {
         // User is verified - remove only "Email Verification Required" notifications
