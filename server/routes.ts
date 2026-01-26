@@ -1550,6 +1550,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
       }
+      
+      // If AI model is being updated, also update user's preferred AI model
+      // This keeps them in sync for future integrations
+      if (updates.aiModel) {
+        await databaseStorage.updateUser(req.user!.userId, {
+          preferredAiModel: updates.aiModel
+        });
+        console.log(`📝 Updated user ${req.user!.userId} preferred_ai_model to ${updates.aiModel}`);
+      }
 
       // If integration is being activated (unpaused), also activate the repository
       if (updates.isActive === true && integration.repositoryId) {
