@@ -180,8 +180,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined> {
+    console.log(`💾 Database: Updating integration ${id} with:`, JSON.stringify(updates, null, 2));
     const result = await db.update(integrations).set(updates).where(eq(integrations.id, id)).returning();
-    return result[0] as any;
+    const updated = result[0] as any;
+    if (updated) {
+      console.log(`✅ Database: Integration ${id} updated. New ai_model: ${updated.aiModel}`);
+    }
+    return updated;
   }
 
   async deleteIntegration(id: number): Promise<boolean> {

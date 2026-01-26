@@ -487,7 +487,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
-
         
         req.session.userId = user.id;
         req.session.user = {
@@ -1525,6 +1524,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrationId = parseInt(req.params.id);
       const updates = req.body;
       
+      console.log(`📝 Updating integration ${integrationId} with:`, JSON.stringify(updates, null, 2));
+      
       // First verify user owns this integration
       const existingIntegration = await storage.getIntegration(integrationId);
       if (!existingIntegration) {
@@ -1535,7 +1536,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
       
+      console.log(`📊 Current integration ai_model: ${existingIntegration.aiModel}`);
+      
       const integration = await storage.updateIntegration(integrationId, updates);
+      
+      console.log(`✅ Updated integration ai_model: ${integration?.aiModel}`);
       
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
@@ -1950,6 +1955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         const aiModel = integration.aiModel || 'gpt-5.2';
+        console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration.aiModel: ${integration.aiModel})`);
         const maxTokens = integration.maxTokens || 350;
         
         const summary = await generateCodeSummary(
