@@ -1646,15 +1646,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`✅ Using direct model parameter: ${testModel}`);
       }
       
-      // For now, let's just test the GitHub API with a known commit
+      // Create realistic test data for GPT-5.2 testing
       const testPushData = {
         repositoryName: "carterjohndixon/PushLog",
         branch: "main",
-        commitMessage: "Test commit for AI summary",
-        filesChanged: ["server/ai.ts", "server/routes.ts"],
-        additions: 0,
-        deletions: 0,
-        commitSha: "77975ce720ad61f5566d3c745ef595e2242274f2", // Use your recent commit SHA
+        commitMessage: "feat: Add GPT-5.2 model support and update AI model validation\n\n- Added GPT-5.1 and GPT-5.2 to available models\n- Updated default model to GPT-5.2 (latest working model)\n- Added automatic migration for invalid models\n- Improved AI summary generation with better error handling",
+        filesChanged: [
+          "server/ai.ts",
+          "server/routes.ts", 
+          "server/stripe.ts",
+          "client/src/components/integration-settings-modal.tsx",
+          "shared/schema.ts"
+        ],
+        additions: 45,
+        deletions: 12,
+        commitSha: "test-commit-" + Date.now(), // Test commit SHA
       };
       
       // Try to fetch actual stats from GitHub API
@@ -1693,20 +1699,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxTokens
       );
 
-      // Send to Slack (only if we have an active integration)
-      if (activeIntegration) {
+      // Send to Slack (always try to send if we have an integration, even when using direct model)
+      let slackSent = false;
+      if (activeIntegration || testModel) {
         try {
-          // Get workspace access token
-          if (activeIntegration.slackWorkspaceId) {
-            const workspace = await databaseStorage.getSlackWorkspace(activeIntegration.slackWorkspaceId);
+          // If using direct model, try to find any active integration for the user
+          let integrationToUse = activeIntegration;
+          if (!integrationToUse && testModel) {
+            const userIntegrations = await storage.getIntegrationsByUserId(userId);
+            integrationToUse = userIntegrations.find(integration => integration.isActive) || null;
+          }
+          
+          if (integrationToUse && integrationToUse.slackWorkspaceId) {
+            const workspace = await databaseStorage.getSlackWorkspace(integrationToUse.slackWorkspaceId);
             if (workspace) {
               const slackMessage = await generateSlackMessage(testPushData, summary.summary);
               
               await sendSlackMessage(workspace.accessToken, {
-                channel: activeIntegration.slackChannelId,
+                channel: integrationToUse.slackChannelId,
                 text: slackMessage,
                 unfurl_links: false
               });
+              
+              slackSent = true;
+              console.log(`✅ Test Slack message sent to channel ${integrationToUse.slackChannelName} using model ${aiModel}`);
             }
           }
         } catch (slackError) {
@@ -1714,12 +1730,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      const slackMessagePreview = await generateSlackMessage(testPushData, summary.summary);
+      
       res.json({
         success: true,
         pushEventId,
-        summary,
+        model: aiModel,
+        summary: {
+          summary: summary.summary.summary,
+          impact: summary.summary.impact,
+          category: summary.summary.category,
+          details: summary.summary.details,
+          tokensUsed: summary.tokensUsed,
+          cost: summary.cost,
+          actualModel: summary.actualModel
+        },
         pushData: testPushData,
-        slackMessage: await generateSlackMessage(testPushData, summary.summary)
+        slackMessage: slackMessagePreview,
+        slackSent: slackSent
       });
       
     } catch (error) {
