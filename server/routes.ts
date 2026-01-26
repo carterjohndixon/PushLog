@@ -1958,7 +1958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration.aiModel: ${integration.aiModel})`);
         const maxTokens = integration.maxTokens || 350;
         
-gi        let summary;
+        let summary;
         try {
           summary = await generateCodeSummary(
             pushData, 
