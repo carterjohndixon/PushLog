@@ -1417,9 +1417,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateRepository(validatedData.repositoryId, { isActive: true });
       }
       
+      // Use user's preferred AI model as default if not specified
+      const user = await databaseStorage.getUserById(userId);
+      const defaultAiModel = user?.preferredAiModel || 'gpt-5.2';
+      
       const integration = await storage.createIntegration({
         ...validatedData,
-        userId: userId
+        userId: userId,
+        aiModel: validatedData.aiModel || defaultAiModel, // Use user's preference as default
       });
       
       // Send welcome message to Slack if integration is active
