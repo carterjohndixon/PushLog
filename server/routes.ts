@@ -1958,14 +1958,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration.aiModel: ${integration.aiModel})`);
         const maxTokens = integration.maxTokens || 350;
         
-        const summary = await generateCodeSummary(
-          pushData, 
-          aiModel,
-          maxTokens
-        );
+        let summary;
+        try {
+          summary = await generateCodeSummary(
+            pushData, 
+            aiModel,
+            maxTokens
+          );
+        } catch (aiError) {
+          console.error(`❌ AI generation error for model ${aiModel}:`, aiError);
+          console.error(`❌ Error details:`, {
+            message: aiError instanceof Error ? aiError.message : String(aiError),
+            stack: aiError instanceof Error ? aiError.stack : undefined
+          });
+          // Re-throw to be handled by outer catch
+          throw aiError;
+        }
         
         // Check if this is a real AI summary or a fallback
         const isRealAISummary = summary.tokensUsed > 0;
+        
+        if (!isRealAISummary) {
+          console.error(`❌ AI summary returned 0 tokens for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
+        }
         
         if (isRealAISummary) {
           aiSummary = summary.summary.summary;
