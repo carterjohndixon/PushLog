@@ -79,6 +79,8 @@ launch/README.md
 !launch/*.txt
 !launch/*.config.js
 
+migrations/
+
 # Moderate to fix:
 # I want to fix these moderate errors when running my code for nginx:
 

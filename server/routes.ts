@@ -1781,6 +1781,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const signature = req.headers['x-hub-signature-256'] as string;
       const payload = JSON.stringify(req.body);
+
+      const filesChanged = req.body.files_changed || [];
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
@@ -2086,8 +2088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error('Failed to generate AI summary:', aiError);
         // Continue without AI summary
       }
-
-              // Send Slack notification with AI summary if available
+      
         try {
           // Get workspace access token for sending Slack messages
           let workspaceToken: string | null = null;
@@ -2158,20 +2159,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
         console.log(`✅ Push event ${pushEvent.id} marked as notification sent`);
 
-        // Store push notification in database
+        // Store push notification in database with metadata
         await storage.createNotification({
           userId: storedRepo.userId,
           type: 'push_event',
           title: 'New Push Event',
-          message: `New push to ${repository.name} by ${commit.author.name}`
+          message: `New push to ${repository.name} by ${commit.author.name}`,
+          metadata: JSON.stringify({
+            pushEventId: pushEvent.id,
+            repositoryId: repository.id,
+            repositoryName: repository.name,
+            repositoryFullName: repository.full_name,
+            branch: branch,
+            commitSha: commit.id,
+            commitMessage: commit.message,
+            author: commit.author.name,
+            additions: finalAdditions,
+            deletions: finalDeletions,
+            filesChanged: filesChanged.length,
+            aiGenerated: aiGenerated,
+            aiModel: aiGenerated ? aiModel : null,
+            aiSummary: aiGenerated ? aiSummary : null,
+            aiImpact: aiGenerated ? aiImpact : null,
+            aiCategory: aiGenerated ? aiCategory : null
+          })
         });
         
-        // Store Slack notification in database
+        // Store Slack notification in database with metadata
         await storage.createNotification({
           userId: storedRepo.userId,
           type: 'slack_message_sent',
           title: 'Slack Message Sent',
-          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`
+          message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
+          metadata: JSON.stringify({
+            pushEventId: pushEvent.id,
+            repositoryId: repository.id,
+            repositoryName: repository.name,
+            repositoryFullName: repository.full_name,
+            branch: branch,
+            commitSha: commit.id,
+            commitMessage: commit.message,
+            author: commit.author.name,
+            slackChannelId: integration.slackChannelId,
+            slackChannelName: integration.slackChannelName,
+            slackWorkspaceId: integration.slackWorkspaceId,
+            integrationId: integration.id,
+            aiGenerated: aiGenerated,
+            aiModel: aiGenerated ? aiModel : null,
+            aiSummary: aiGenerated ? aiSummary : null,
+            aiImpact: aiGenerated ? aiImpact : null,
+            aiCategory: aiGenerated ? aiCategory : null,
+            additions: finalAdditions,
+            deletions: finalDeletions,
+            filesChanged: filesChanged.length
+          })
         });
         
         // Also broadcast via SSE for real-time updates
@@ -2399,12 +2440,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort notifications by createdAt (newest first)
       notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+      // Parse metadata JSON strings into objects for easier client-side access
+      const notificationsWithParsedMetadata = notifications.map(n => {
+        if (n.metadata && typeof n.metadata === 'string') {
+          try {
+            return { ...n, metadata: JSON.parse(n.metadata) };
+          } catch (e) {
+            console.error('Failed to parse notification metadata:', e);
+            return n;
+          }
+        }
+        return n;
+      });
+
       // Count only unread notifications (not total)
-      const unreadCount = notifications.filter(n => !n.isRead).length;
+      const unreadCount = notificationsWithParsedMetadata.filter(n => !n.isRead).length;
 
       res.json({
         count: unreadCount,
-        notifications
+        notifications: notificationsWithParsedMetadata
       });
     } catch (error) {
       console.error("Error fetching all notifications:", error);

@@ -2,11 +2,35 @@ import { useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 
+interface NotificationMetadata {
+  pushEventId?: number;
+  repositoryId?: number;
+  repositoryName?: string;
+  repositoryFullName?: string;
+  branch?: string;
+  commitSha?: string;
+  commitMessage?: string;
+  author?: string;
+  additions?: number;
+  deletions?: number;
+  filesChanged?: number;
+  aiGenerated?: boolean;
+  aiModel?: string | null;
+  aiSummary?: string | null;
+  aiImpact?: string | null;
+  aiCategory?: string | null;
+  slackChannelId?: string;
+  slackChannelName?: string;
+  slackWorkspaceId?: number;
+  integrationId?: number;
+}
+
 interface Notification {
   id: number;
   type: 'email_verification' | 'push_event' | 'slack_message_sent' | 'low_credits' | 'no_credits';
   title?: string;
   message: string;
+  metadata?: string | NotificationMetadata; // Can be JSON string or parsed object
   createdAt: string;
   isRead: boolean;
 }
