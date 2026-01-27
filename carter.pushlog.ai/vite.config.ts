@@ -14,7 +14,7 @@ export default defineConfig({
     host: true,
   },
   build: {
-    outDir: "../dist/carter",
+    outDir: "dist",
     emptyOutDir: true,
   },
 });
