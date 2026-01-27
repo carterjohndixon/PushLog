@@ -48,8 +48,14 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
     // Refresh session expiration (rolling sessions - resets expiration on activity)
     // This keeps the session alive as long as the user is making requests
+    // IMPORTANT: We need to modify the session to force Express-session to send the cookie
+    // Just calling touch() doesn't mark it as modified, so the cookie won't be sent on 304 responses
     if (req.session) {
+      // Touch the session to update expiration
       req.session.touch();
+      // Modify a property to force Express-session to send the cookie
+      // This ensures the cookie is sent even on 304 Not Modified responses
+      (req.session as any).lastActivity = Date.now();
     }
 
     // If we already have user data in session, use it (faster, no DB query)

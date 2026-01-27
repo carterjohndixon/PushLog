@@ -191,7 +191,7 @@ if (!sessionSecret) {
 app.use(session({
   store: sessionStore,
   secret: sessionSecret,
-  resave: false,
+  resave: true, // Set to true to ensure session is saved even if not modified (needed for rolling sessions)
   saveUninitialized: false,
   rolling: true, // Reset expiration on every request (keeps session alive during activity)
   name: 'connect.sid',

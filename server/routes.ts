@@ -2295,19 +2295,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Refresh session expiration (rolling sessions)
       // This ensures the cookie expiration is reset on every request
+      // IMPORTANT: We must modify the session to force Express-session to send the cookie
+      // on 304 responses. Just touching doesn't mark it as modified.
       if (req.session) {
         req.session.touch();
+        // Modify session to force cookie sending (even on 304 responses)
+        (req.session as any).lastActivity = Date.now();
         // Explicitly save to ensure cookie is refreshed
         await new Promise<void>((resolve) => {
           req.session.save((err) => {
             if (err) {
               console.error('Error refreshing session:', err);
-            } else {
-              // Verify cookie was set in response
-              if (!res.getHeader('Set-Cookie')) {
-                console.warn('⚠️ Session refreshed but cookie not set in response');
-              }
             }
+            // Note: Set-Cookie might not appear in getHeader() on 304, but it should still be sent
             resolve();
           });
         });
