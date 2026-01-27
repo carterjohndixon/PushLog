@@ -36,6 +36,12 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
+    // Refresh session expiration (rolling sessions - resets expiration on activity)
+    // This keeps the session alive as long as the user is making requests
+    if (req.session) {
+      req.session.touch();
+    }
+
     // If we already have user data in session, use it (faster, no DB query)
     // Otherwise, fetch from database
     if (req.session.user) {

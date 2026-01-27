@@ -52,7 +52,8 @@ const PostgresqlStore = pgSession(session);
 const sessionStore = new PostgresqlStore({
   pool,
   tableName: 'user_sessions',
-  createTableIfMissing: true  // Automatically create table if it doesn't exist
+  createTableIfMissing: true,  // Automatically create table if it doesn't exist
+  pruneSessionInterval: false  // Disable automatic cleanup - let sessions expire naturally based on maxAge
 });
 
 // Security middleware
