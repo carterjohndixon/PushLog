@@ -4,11 +4,19 @@ function handleAuthenticationFailure() {
   // Clear any cached data (React Query cache)
   // No localStorage cleanup needed - we don't store tokens there
   
-  // Don't redirect if already on login page or signup page
-  if (typeof window !== 'undefined' && 
-      window.location.pathname !== '/login' && 
-      window.location.pathname !== '/signup') {
-    window.location.href = '/login';
+  // Only redirect if we're on an authenticated route (not public pages)
+  // ProtectedRoute component handles route-level redirects, so we only handle API-level 401s
+  if (typeof window !== 'undefined') {
+    const publicPaths = ['/', '/login', '/signup'];
+    const currentPath = window.location.pathname;
+    
+    // Don't redirect if already on public pages
+    if (!publicPaths.includes(currentPath)) {
+      // Only redirect if not already being handled by ProtectedRoute
+      // ProtectedRoute will handle the redirect, so we can be less aggressive here
+      // But for API calls that fail with 401, we should still redirect
+      window.location.href = '/login';
+    }
   }
 }
 

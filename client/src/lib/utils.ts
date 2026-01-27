@@ -6,7 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function handleTokenExpiration(error: any, queryClient?: any) {
-  // Check if the error indicates token expiration
+  // DEPRECATED: This function is kept for backward compatibility but no longer redirects.
+  // Redirects are now handled by:
+  // 1. ProtectedRoute component (for route-level auth checks)
+  // 2. queryClient.ts handleAuthenticationFailure (for API-level 401 errors)
+  // 
+  // This function now only clears localStorage (for old JWT tokens) and invalidates queries.
+  // It does NOT redirect to prevent duplicate redirects and redirect loops.
+  
   const isTokenExpired = 
     error?.message?.includes('expired') ||
     error?.message?.includes('unauthorized') ||
@@ -15,7 +22,7 @@ export function handleTokenExpiration(error: any, queryClient?: any) {
     error?.statusCode === 401;
 
   if (isTokenExpired) {
-    // Clear the token from localStorage
+    // Clear old JWT tokens from localStorage (if any exist from before session migration)
     localStorage.removeItem('token');
     localStorage.removeItem('userId');
     
@@ -24,8 +31,8 @@ export function handleTokenExpiration(error: any, queryClient?: any) {
       queryClient.clear();
     }
     
-    // Redirect to login page
-    window.location.href = '/login';
+    // DO NOT redirect here - let ProtectedRoute or queryClient handle it
+    // Redirecting here causes duplicate redirects and can create redirect loops
     
     return true; // Indicates token was expired
   }
