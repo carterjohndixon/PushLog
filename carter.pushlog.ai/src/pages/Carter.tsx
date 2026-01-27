@@ -1,4 +1,4 @@
-import { Github, Mail, Code, Bug, CheckCircle, Shield } from "lucide-react";
+import { Github, Mail, Bug, CheckCircle, Shield } from "lucide-react";
 
 export default function Carter() {
   return (
