@@ -200,7 +200,9 @@ app.use(session({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax',
-    domain: '.pushlog.ai'
+    // Don't set domain - let browser handle it automatically
+    // Setting domain to '.pushlog.ai' can cause issues with cookie sending
+    // The browser will automatically send cookies to the correct domain
   }
 }));
 

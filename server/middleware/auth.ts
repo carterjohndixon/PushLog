@@ -23,16 +23,26 @@ declare global {
 }
 
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
-  try {    
+  try {
+    // Check if cookies are present - if not, session can't be read
+    const hasCookies = !!req.headers.cookie;
+    
     // Check if session exists and has userId
     // Express automatically reads the HTTP-only cookie and populates req.session
+    // Note: req.session might exist even without cookies (empty session object)
     if (!req.session || !req.session.userId) {
-      console.error('❌ Auth failed:', {
-        hasSession: !!req.session,
-        hasUserId: !!req.session?.userId,
-        cookies: req.headers.cookie ? 'present' : 'missing',
-        path: req.path
-      });
+      // Only log if it's not a public endpoint to reduce noise
+      if (!req.path.includes('/health') && !req.path.includes('/api/notifications/stream')) {
+        console.error('❌ Auth failed:', {
+          hasSession: !!req.session,
+          hasUserId: !!req.session?.userId,
+          cookies: hasCookies ? 'present' : 'missing',
+          sessionId: req.session?.id,
+          path: req.path,
+          // Check if session cookie specifically is missing
+          hasSessionCookie: hasCookies && req.headers.cookie?.includes('connect.sid')
+        });
+      }
       return res.status(401).json({ error: 'Not authenticated' });
     }
 

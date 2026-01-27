@@ -215,6 +215,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         emailVerified: !!user.emailVerified
       };
 
+      // Set userId in session BEFORE saving
+      req.session.userId = user.id;
+      
       // Save session explicitly to ensure cookie is set
       req.session.save((err) => {
         if (err) {
@@ -222,12 +225,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ error: 'Failed to create session' });
         }
 
+        // Verify cookie was set
+        const cookieHeader = res.getHeader('Set-Cookie');
+        if (!cookieHeader) {
+          console.error('❌ WARNING: Session cookie was not set in response!');
+        }
+
         // Debug logging
         if (process.env.NODE_ENV !== 'production') {
           console.log('✅ Session created:', {
             userId: user.id,
             sessionId: req.session.id,
-            cookieSet: res.getHeader('Set-Cookie') ? 'yes' : 'no'
+            cookieSet: cookieHeader ? 'yes' : 'no',
+            cookieValue: cookieHeader ? String(cookieHeader).substring(0, 50) + '...' : 'none'
           });
         }
 
@@ -2283,12 +2293,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Protected route example - Get user profile
   app.get("/api/profile", authenticateToken, async (req, res) => {
     try {
+      // Refresh session expiration (rolling sessions)
+      // This ensures the cookie expiration is reset on every request
       if (req.session) {
         req.session.touch();
+        // Explicitly save to ensure cookie is refreshed
         await new Promise<void>((resolve) => {
           req.session.save((err) => {
             if (err) {
               console.error('Error refreshing session:', err);
+            } else {
+              // Verify cookie was set in response
+              if (!res.getHeader('Set-Cookie')) {
+                console.warn('⚠️ Session refreshed but cookie not set in response');
+              }
             }
             resolve();
           });
