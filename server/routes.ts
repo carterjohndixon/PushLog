@@ -2615,11 +2615,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/notifications/stream", (req, res) => {
     // Check session instead of token query parameter
+    // For SSE, we want to fail gracefully - don't send 401 immediately
+    // EventSource will handle the error, but we should try to keep the connection open
+    // if possible to avoid triggering unnecessary redirects
+    
     if (!req.session || !req.session.userId) {
-      return res.status(401).json({ error: "Not authenticated" });
+      // Send an error message via SSE format before closing
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+      });
+      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Not authenticated' })}\n\n`);
+      res.end();
+      return;
     }
 
     const userId = req.session.userId;
+    
+    // Refresh session to keep it alive during SSE connection
+    if (req.session) {
+      req.session.touch();
+      (req.session as any).lastActivity = Date.now();
+    }
     
     // Set headers for SSE
     res.writeHead(200, {
@@ -2642,16 +2660,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Handle client disconnect
     req.on('close', () => {
       global.notificationStreams?.delete(userId);
+      clearInterval(heartbeat);
     });
 
     // Keep connection alive with heartbeat
+    // Also refresh session periodically to keep it alive
     const heartbeat = setInterval(() => {
-      res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
+      try {
+        // Refresh session on heartbeat to keep it alive
+        if (req.session) {
+          req.session.touch();
+          (req.session as any).lastActivity = Date.now();
+        }
+        res.write(`data: ${JSON.stringify({ type: 'heartbeat' })}\n\n`);
+      } catch (error) {
+        // If write fails, connection is likely closed
+        clearInterval(heartbeat);
+        global.notificationStreams?.delete(userId);
+      }
     }, 30000); // Send heartbeat every 30 seconds
-
-    req.on('close', () => {
-      clearInterval(heartbeat);
-    });
   });
 
   // Add forgot password endpoint

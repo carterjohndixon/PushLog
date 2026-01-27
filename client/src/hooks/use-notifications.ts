@@ -83,6 +83,18 @@ export function useNotifications() {
       try {
         const data = JSON.parse(event.data);
         
+        // Handle error messages from server (e.g., auth failures)
+        if (data.type === 'error') {
+          console.warn('SSE error message:', data.message);
+          // Don't redirect here - let ProtectedRoute handle auth redirects
+          // Just close the connection gracefully
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+          return;
+        }
+        
         if (data.type === 'notification') {
           // Add new notification to the list
           setNotifications(prev => [data.data, ...prev]);
@@ -100,6 +112,12 @@ export function useNotifications() {
           // Invalidate the query to refetch from database
           queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
         }
+        
+        // Ignore heartbeat messages (they're just keep-alive)
+        if (data.type === 'heartbeat' || data.type === 'connected') {
+          // Connection is healthy, do nothing
+          return;
+        }
       } catch (error) {
         console.error('Error parsing SSE message:', error);
       }
@@ -108,10 +126,15 @@ export function useNotifications() {
     eventSource.onerror = (error) => {
       console.error('SSE connection error:', error);
       
-      // Check if the error is due to session expiration
+      // SSE connections can fail for many reasons (network, server restart, etc.)
+      // Don't immediately redirect - only redirect if we're certain it's an auth issue
+      // Let ProtectedRoute handle auth redirects - SSE failures are not necessarily auth failures
+      
       if (eventSource.readyState === EventSource.CLOSED) {
-        // Try to reconnect, but if it fails due to auth, redirect to login
+        // Connection closed - try to reconnect after a delay
+        // Don't redirect immediately - network issues are common
         setTimeout(() => {
+          // Check if component is still mounted and we should reconnect
           if (eventSourceRef.current) {
             eventSourceRef.current.close();
             eventSourceRef.current = null;
@@ -120,21 +143,30 @@ export function useNotifications() {
             // Browser will automatically send cookie if session is still valid
             try {
               const newEventSource = new EventSource(`/api/notifications/stream`);
+              
+              // Set up message handler
+              newEventSource.onmessage = eventSource.onmessage;
+              
               newEventSource.onerror = (reconnectError) => {
                 console.error('SSE reconnect failed:', reconnectError);
-                // If reconnect fails, assume session is expired
-                // Server will return 401, client will handle redirect
+                // Don't redirect on reconnect failure - let ProtectedRoute handle auth
+                // SSE failures can be due to network issues, not just auth
+                // If session is expired, ProtectedRoute will catch it on the next page load
                 if (newEventSource.readyState === EventSource.CLOSED) {
-                  window.location.href = '/login';
+                  // Connection closed - just log, don't redirect
+                  // The user can still use the app, they just won't get real-time notifications
+                  console.warn('SSE connection closed. Real-time notifications disabled. User can still use the app.');
                 }
               };
+              
               eventSourceRef.current = newEventSource;
             } catch (reconnectError) {
               console.error('Failed to create new SSE connection:', reconnectError);
-              window.location.href = '/login';
+              // Don't redirect - this could be a network issue
+              // ProtectedRoute will handle auth redirects if needed
             }
           }
-        }, 5000);
+        }, 5000); // Wait 5 seconds before reconnecting
       }
     };
 
