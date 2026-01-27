@@ -3,7 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  * {
+    @apply border-gray-200;
+  }
+  
   body {
-    @apply font-sans antialiased;
+    @apply font-sans antialiased text-gray-900;
+    font-feature-settings: "kern" 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold tracking-tight;
   }
 }
