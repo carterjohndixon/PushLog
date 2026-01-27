@@ -2117,13 +2117,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         console.log(`✅ Created push_event notification ${pushNotification.id} for user ${storedRepo.userId}`);
         
-        // Broadcast push notification via SSE for real-time updates
+        // Broadcast push notification via SSE for real-time updates (use actual DB notification)
         const pushNotificationSSE = {
-          id: `push_${pushEvent?.id || Date.now()}`,
-          type: 'push_event',
-          title: 'New Push Event',
-          message: `New push to ${repository.name} by ${commit.author.name}`,
-          createdAt: new Date().toISOString()
+          id: pushNotification.id,
+          type: pushNotification.type,
+          title: pushNotification.title,
+          message: pushNotification.message,
+          metadata: pushNotification.metadata,
+          isRead: pushNotification.isRead,
+          createdAt: pushNotification.createdAt
         };
         broadcastNotification(storedRepo.userId, pushNotificationSSE);
       } catch (pushNotificationError) {
@@ -2238,13 +2240,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           console.log(`✅ Created slack_message_sent notification ${slackNotification.id} for user ${storedRepo.userId}`);
           
-          // Broadcast Slack notification via SSE for real-time updates
+          // Broadcast Slack notification via SSE for real-time updates (use actual DB notification)
           const slackNotificationSSE = {
-            id: `slack_${pushEvent?.id || Date.now()}`,
-            type: 'slack_message_sent',
-            title: 'Slack Message Sent',
-            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
-            createdAt: new Date().toISOString()
+            id: slackNotification.id,
+            type: slackNotification.type,
+            title: slackNotification.title,
+            message: slackNotification.message,
+            metadata: slackNotification.metadata,
+            isRead: slackNotification.isRead,
+            createdAt: slackNotification.createdAt
           };
           broadcastNotification(storedRepo.userId, slackNotificationSSE);
         } catch (slackNotificationError) {
