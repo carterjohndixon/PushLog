@@ -58,23 +58,16 @@ export function RepositorySelectModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Fetch repositories only when modal is open
+  // Fetch repositories only when modal is open.
+  // Uses cookie-based auth (credentials: "include"); do not rely on localStorage token/userId.
   const { data: repositories, isLoading, error, refetch } = useQuery({
     queryKey: ["/api/repositories", open], // Include open in the queryKey
     queryFn: async () => {
       if (!open) return []; // Return empty array if modal is closed
-      
-      const token = localStorage.getItem('token');
-      const userId = localStorage.getItem('userId');
 
-      if (!token || !userId) {
-        throw new Error('Authentication required. Please log in again.');
-      }
-
-      const response = await fetch(`/api/repositories?userId=${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('/api/repositories', {
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!response.ok) {
@@ -154,7 +147,7 @@ export function RepositorySelectModal({
       await onRepositorySelect(repositoryData);
       
       // Invalidate the repositories query to refresh the list
-      queryClient.invalidateQueries({ queryKey: [`/api/repositories?userId=${localStorage.getItem('userId')}`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       
       // Close modal after successful selection
       onOpenChange(false);
@@ -183,36 +176,25 @@ export function RepositorySelectModal({
             <div className="flex flex-col items-center justify-center space-y-4 p-8">
               <Github className="w-12 h-12 text-gray-400" />
               <p className="text-center text-gray-600">
-                {error instanceof Error && error.message.includes('Authentication required') 
-                  ? 'Please authenticate your account below.' 
+                {error instanceof Error && (error.message.includes('Authentication required') || error.message.includes('Not authenticated'))
+                  ? 'Please log in or connect GitHub below.'
                   : (error instanceof Error ? error.message : 'Failed to load repositories')
                 }
               </p>
               
-                              {error instanceof Error && error.message.includes('Authentication required') ? (
+                              {error instanceof Error && (error.message.includes('Authentication required') || error.message.includes('Not authenticated')) ? (
                   <div className="text-center">
                   <Button
                     onClick={async () => {
                       try {
-                        const token = localStorage.getItem('token');
-                        
-                        if (!token) {
-                          onOpenChange(false);
-                          window.location.href = '/login';
-                          return;
-                        }
-
                         const response = await fetch('/api/github/connect', {
-                          headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Accept': 'application/json'
-                          }
+                          credentials: 'include',
+                          headers: { 'Accept': 'application/json' }
                         });
 
                         const data = await response.json();
 
                         if (response.status === 401) {
-                          localStorage.removeItem('token');
                           onOpenChange(false);
                           window.location.href = '/login';
                           return;
@@ -251,11 +233,11 @@ export function RepositorySelectModal({
                     className="bg-log-green text-white hover:bg-green-600"
                   >
                     <Github className="w-4 h-4 mr-2" />
-                    Re-authenticate GitHub
+                    Log in
                   </Button>
                 </div>
-              ) : 
-              
+              ) :
+
               ((error instanceof Error && error.message.includes('No repositories found')) || 
                (error instanceof Error && error.message.includes('expired'))) ? (
                   <div className="text-center">
@@ -267,30 +249,14 @@ export function RepositorySelectModal({
                     <Button
                       onClick={async () => {
                         try {
-                          const token = localStorage.getItem('token');
-                          
-                          if (!token) {
-                            toast({
-                              title: "Authentication Required",
-                              description: "Please log in to connect your GitHub account.",
-                              variant: "destructive",
-                            });
-                            onOpenChange(false);
-                            window.location.href = '/login';
-                            return;
-                          }
-
                           const response = await fetch('/api/github/connect', {
-                            headers: {
-                              'Authorization': `Bearer ${token}`,
-                              'Accept': 'application/json'
-                            }
+                            credentials: 'include',
+                            headers: { 'Accept': 'application/json' }
                           });
 
                           const data = await response.json();
 
                           if (response.status === 401) {
-                            localStorage.removeItem('token');
                             onOpenChange(false);
                             window.location.href = '/login';
                             return;
