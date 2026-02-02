@@ -28,6 +28,7 @@
   --log-green: 122 39% 49%; /* #4CAF50 – kept */
   --sky-blue: 148 35% 42%; /* pine (reused for accent vibe) */
   --graphite: 95 22% 18%; /* bark */
+  --footer-bg: 95 22% 12%; /* dark footer in light mode */
 }
 
 .dark {
@@ -55,6 +56,7 @@
   --log-green: 122 39% 49%;
   --sky-blue: 148 32% 48%;
   --graphite: 90 18% 92%;
+  --footer-bg: 140 25% 8%; /* dark footer in dark mode */
 }
 
 @layer base {
@@ -98,6 +100,10 @@
   
   .bg-graphite {
     background-color: hsl(var(--graphite));
+  }
+
+  .bg-footer {
+    background-color: hsl(var(--footer-bg));
   }
   
   .border-log-green {

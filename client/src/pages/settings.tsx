@@ -152,7 +152,7 @@ export default function Settings() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
       
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
@@ -246,19 +246,19 @@ export default function Settings() {
             <CardContent>
               {dataSummary && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-graphite">{dataSummary.dataSummary.repositories}</p>
                     <p className="text-sm text-steel-gray">Repositories</p>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-graphite">{dataSummary.dataSummary.integrations}</p>
                     <p className="text-sm text-steel-gray">Integrations</p>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-graphite">{dataSummary.dataSummary.pushEvents}</p>
                     <p className="text-sm text-steel-gray">Push Events</p>
                   </div>
-                  <div className="text-center p-4 bg-gray-50 rounded-lg">
+                  <div className="text-center p-4 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-graphite">{dataSummary.dataSummary.slackWorkspaces}</p>
                     <p className="text-sm text-steel-gray">Slack Workspaces</p>
                   </div>

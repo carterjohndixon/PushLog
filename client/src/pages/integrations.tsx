@@ -330,7 +330,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Header />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -432,12 +432,12 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
             />
             {/* Search Dropdown */}
             {isSearchDropdownOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-20 max-h-60 overflow-y-auto">
                 {searchResults.map((integration) => (
                   <button
                     key={integration.id}
                     onClick={() => handleSearchSelect(integration)}
-                    className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 flex items-center space-x-3"
+                    className="w-full px-4 py-3 text-left hover:bg-muted border-b border-border last:border-b-0 flex items-center space-x-3"
                   >
                     <div className={`w-2 h-2 rounded-full ${
                       integration.status === 'active' ? 'bg-log-green' : 'bg-steel-gray'
@@ -462,7 +462,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="pl-5 pr-5 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-blue focus:border-transparent text-center text-sm bg-white flex items-center justify-between min-w-[60px] h-[42px]"
+              className="pl-5 pr-5 py-2 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent text-center text-sm bg-background flex items-center justify-between min-w-[60px] h-[42px]"
             >
               <span className="flex-1 text-center">
                 {statusFilter === "all" ? "All Status" : statusFilter === "active" ? "Active" : "Paused"}
@@ -470,14 +470,14 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
               <ChevronDown className={`w-4 h-4 ml-2 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
             {isDropdownOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 overflow-hidden">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg z-10 overflow-hidden">
                 <button
                   onClick={() => {
                     setStatusFilter("all");
                     setActiveTab("all");
                     setIsDropdownOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
                 >
                   All Status
                 </button>
@@ -487,7 +487,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
                     setActiveTab("active");
                     setIsDropdownOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
                 >
                   Active
                 </button>
@@ -497,7 +497,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
                     setActiveTab("paused");
                     setIsDropdownOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50 transition-colors"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors"
                 >
                   Paused
                 </button>

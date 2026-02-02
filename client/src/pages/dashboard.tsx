@@ -632,7 +632,7 @@ export default function Dashboard() {
   const [repositoryToDelete, setRepositoryToDelete] = useState<RepositoryCardData | null>(null);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       <Header />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -642,8 +642,8 @@ export default function Dashboard() {
         )}
         
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-graphite">Dashboard</h1>
-          <p className="text-steel-gray mt-2">Manage your integrations and monitor repository activity</p>
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground mt-2">Manage your integrations and monitor repository activity</p>
         </div>
 
         {/* Stats Cards */}
@@ -655,7 +655,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-steel-gray">Active Integrations</p>
+                  <p className="text-sm text-muted-foreground">Active Integrations</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
@@ -676,7 +676,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-steel-gray">Connected Repos</p>
+                  <p className="text-sm text-muted-foreground">Connected Repos</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
@@ -697,14 +697,14 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-steel-gray">Daily Pushes</p>
+                  <p className="text-sm text-muted-foreground">Daily Pushes</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
-                    <p className="text-2xl font-bold text-graphite">{stats?.dailyPushes || 0}</p>
+                    <p className="text-2xl font-bold text-foreground">{stats?.dailyPushes || 0}</p>
                   )}
                 </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                   <GitBranch className="text-log-green w-6 h-6" />
                 </div>
               </div>
@@ -718,14 +718,14 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-steel-gray">Slack Messages Sent</p>
+                  <p className="text-sm text-muted-foreground">Slack Messages Sent</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
-                    <p className="text-2xl font-bold text-steel-gray">{stats?.totalNotifications || 0}</p>
+                    <p className="text-2xl font-bold text-foreground">{stats?.totalNotifications || 0}</p>
                   )}
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                   <Bell className="text-sky-blue w-6 h-6" />
                 </div>
               </div>
@@ -740,7 +740,7 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div>
-                    <p className="text-sm text-steel-gray">AI Credits</p>
+                    <p className="text-sm text-muted-foreground">AI Credits</p>
                     {statsLoading ? (
                       <Skeleton className="h-8 w-8 mt-1" />
                     ) : (
@@ -771,13 +771,13 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold text-graphite">Connected Repositories</CardTitle>
+                <CardTitle className="text-lg font-semibold text-foreground">Connected Repositories</CardTitle>
                 <div className="flex items-center space-x-2">
                   <Link href="/repositories">
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="text-steel-gray hover:text-graphite"
+                      className="text-muted-foreground hover:text-foreground"
                     >
                       <ExternalLink className="w-4 h-4 mr-1" />
                       View All
@@ -820,9 +820,9 @@ export default function Dashboard() {
                     // Show expired token message
                     return (
                       <div className="text-center py-8">
-                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                        <h3 className="font-medium text-graphite mb-2">GitHub Connection Needs Refresh</h3>
-                        <p className="text-sm text-steel-gray mb-4">
+                        <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="font-medium text-foreground mb-2">GitHub Connection Needs Refresh</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
                           Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
                         </p>
                         <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
@@ -835,9 +835,9 @@ export default function Dashboard() {
                     // Show no GitHub connection message
                     return (
                       <div className="text-center py-8">
-                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                        <h3 className="font-medium text-graphite mb-2">No Connected Repositories</h3>
-                        <p className="text-sm text-steel-gray mb-4">
+                        <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="font-medium text-foreground mb-2">No Connected Repositories</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
                           Connect your GitHub account to start monitoring repositories.
                         </p>
                         <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
@@ -850,9 +850,9 @@ export default function Dashboard() {
                     // Show generic error
                     return (
                       <div className="text-center py-8">
-                        <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                        <h3 className="font-medium text-graphite mb-2">Error Loading Repositories</h3>
-                        <p className="text-sm text-steel-gray mb-4">
+                        <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="font-medium text-foreground mb-2">Error Loading Repositories</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
                           {repositoriesError.message}
                         </p>
                         <Button onClick={() => window.location.reload()} className="bg-log-green text-white hover:bg-green-600">
@@ -897,14 +897,14 @@ export default function Dashboard() {
                       }
                       
                       return (
-                        <div key={repo.githubId} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                        <div key={repo.githubId} className="flex items-center justify-between p-3 border border-border rounded-lg">
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
                               <Github className="text-white w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-graphite">{repo.name}</p>
-                              <p className="text-xs text-steel-gray">
+                              <p className="font-medium text-foreground">{repo.name}</p>
+                              <p className="text-xs text-muted-foreground">
                                 {repoHasIntegration 
                                   ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
                                   : 'No integration configured'
@@ -921,7 +921,7 @@ export default function Dashboard() {
                               size="sm"
                               variant="ghost"
                               onClick={() => handleRepositorySettings(repo)}
-                              className="text-steel-gray hover:text-graphite"
+                              className="text-muted-foreground hover:text-foreground"
                             >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
@@ -941,9 +941,9 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Github className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                  <h3 className="font-medium text-graphite mb-2">No Connected Repositories</h3>
-                  <p className="text-sm text-steel-gray mb-4">
+                  <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-medium text-foreground mb-2">No Connected Repositories</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
                     {userProfile?.user?.githubConnected 
                       ? "Click the 'Add Repo' button above to start monitoring your repositories."
                       : "Connect your GitHub account to start monitoring repositories."}
@@ -963,13 +963,13 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-semibold text-graphite">Active Integrations</CardTitle>
+                <CardTitle className="text-lg font-semibold text-foreground">Active Integrations</CardTitle>
                 <div className="flex items-center space-x-2">
                   <Link href="/integrations">
                     <Button 
                       size="sm" 
                       variant="outline"
-                      className="text-steel-gray hover:text-graphite"
+                      className="text-muted-foreground hover:text-foreground"
                     >
                       <ExternalLink className="w-4 h-4 mr-1" />
                       View All
@@ -990,7 +990,7 @@ export default function Dashboard() {
               {integrationsLoading ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div key={i} className="flex items-center justify-between p-4 bg-muted rounded-lg">
                       <div className="flex items-center space-x-3">
                         <Skeleton className="w-10 h-10 rounded-lg" />
                         <div>
@@ -1012,16 +1012,16 @@ export default function Dashboard() {
                       return 0;
                     })
                     .map((integration) => (
-                    <div key={integration.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div key={integration.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
                       <div className="flex items-center space-x-3">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                           integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
                         }`}>
-                          <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-steel-gray'}`} />
+                          <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-muted-foreground'}`} />
                         </div>
                         <div>
-                          <p className="font-medium text-graphite">{integration.repositoryName}</p>
-                          <p className="text-sm text-steel-gray">{integration.slackChannelName} channel</p>
+                          <p className="font-medium text-foreground">{integration.repositoryName}</p>
+                          <p className="text-sm text-muted-foreground">{integration.slackChannelName} channel</p>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
@@ -1050,7 +1050,7 @@ export default function Dashboard() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleIntegrationSettings(integration)}
-                          className="text-steel-gray hover:text-graphite"
+                          className="text-muted-foreground hover:text-foreground"
                         >
                           <MoreVertical className="w-4 h-4" />
                         </Button>
@@ -1069,13 +1069,13 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <SiSlack className="w-12 h-12 text-steel-gray mx-auto mb-4" />
-                  <h3 className="font-medium text-graphite mb-2">No integrations configured</h3>
+                  <SiSlack className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="font-medium text-foreground mb-2">No integrations configured</h3>
                   {slackWorkspacesLoading ? (
-                    <p className="text-sm text-steel-gray mb-4">Checking Slack connection...</p>
+                    <p className="text-sm text-muted-foreground mb-4">Checking Slack connection...</p>
                   ) : slackWorkspaces && slackWorkspaces.length === 0 ? (
                     <>
-                      <p className="text-sm text-steel-gray mb-4">Connect your Slack workspace to start creating integrations.</p>
+                      <p className="text-sm text-muted-foreground mb-4">Connect your Slack workspace to start creating integrations.</p>
                       <Button 
                         onClick={handleSlackConnect}
                         className="bg-log-green text-white hover:bg-green-600"
@@ -1087,7 +1087,7 @@ export default function Dashboard() {
                   ) : (
                     <>
                       <div className="mb-4">
-                        <p className="text-sm text-steel-gray mb-3">
+                        <p className="text-sm text-muted-foreground mb-3">
                           {slackWorkspaces && slackWorkspaces.length > 0 
                             ? `Connected to ${slackWorkspaces.length} Slack workspace${slackWorkspaces.length > 1 ? 's' : ''}:`
                             : 'Set up your first integration to start receiving notifications.'}
@@ -1095,10 +1095,10 @@ export default function Dashboard() {
                         {slackWorkspaces && slackWorkspaces.length > 0 && (
                           <div className="space-y-2 mb-4">
                             {slackWorkspaces.map((workspace: any) => (
-                              <div key={workspace.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                              <div key={workspace.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
                                 <div className="flex items-center space-x-2">
                                   <SiSlack className="w-4 h-4 text-sky-blue" />
-                                  <span className="text-sm font-medium text-graphite">{workspace.teamName}</span>
+                                  <span className="text-sm font-medium text-foreground">{workspace.teamName}</span>
                                 </div>
                               </div>
                             ))}
@@ -1150,7 +1150,7 @@ export default function Dashboard() {
         {/* Quick Actions */}
         <Card className="mt-8">
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-graphite">Quick Actions</CardTitle>
+            <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1177,13 +1177,13 @@ export default function Dashboard() {
               
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-gray-50 hover:border-steel-gray transition-colors"
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-muted hover:border-border transition-colors"
                 onClick={() => {
                   // Navigate to integrations page for settings
                   window.location.href = '/integrations';
                 }}
               >
-                <Settings className="w-5 h-5 text-steel-gray" />
+                <Settings className="w-5 h-5 text-muted-foreground" />
                 <span>Manage Integrations</span>
               </Button>
             </div>
@@ -1302,8 +1302,8 @@ export default function Dashboard() {
                           <SiSlack className="text-log-green w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-graphite">{integration.repositoryName}</p>
-                          <p className="text-sm text-steel-gray">#{integration.slackChannelName}</p>
+                          <p className="font-medium text-foreground">{integration.repositoryName}</p>
+                          <p className="text-sm text-muted-foreground">#{integration.slackChannelName}</p>
                         </div>
                       </div>
                       <Badge variant="default" className="bg-log-green text-white">
@@ -1313,15 +1313,15 @@ export default function Dashboard() {
                   ))}
                 {integrations.filter(integration => integration.status === 'active').length === 0 && (
                   <div className="text-center py-6">
-                    <LinkIcon className="w-12 h-12 text-steel-gray mx-auto mb-3" />
-                    <p className="text-steel-gray">No active integrations found</p>
+                    <LinkIcon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">No active integrations found</p>
                   </div>
                 )}
               </div>
             ) : (
               <div className="text-center py-6">
-                <LinkIcon className="w-12 h-12 text-steel-gray mx-auto mb-3" />
-                <p className="text-steel-gray">No integrations found</p>
+                <LinkIcon className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No integrations found</p>
               </div>
             )}
           </div>
@@ -1389,8 +1389,8 @@ export default function Dashboard() {
                             <Github className="text-white w-4 h-4" />
                           </div>
                           <div>
-                            <p className="font-medium text-graphite">{repo.name}</p>
-                            <p className="text-sm text-steel-gray">
+                            <p className="font-medium text-foreground">{repo.name}</p>
+                            <p className="text-sm text-muted-foreground">
                               {repoHasIntegration 
                                 ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
                                 : 'No integration configured'
@@ -1407,8 +1407,8 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="text-center py-6">
-                <Github className="w-12 h-12 text-steel-gray mx-auto mb-3" />
-                <p className="text-steel-gray">No repositories found</p>
+                <Github className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No repositories found</p>
               </div>
             )}
           </div>
@@ -1420,7 +1420,7 @@ export default function Dashboard() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
-              <GitBranch className="w-5 h-5 text-graphite" />
+              <GitBranch className="w-5 h-5 text-foreground" />
               <span>Daily Pushes Breakdown</span>
             </DialogTitle>
             <DialogDescription>
@@ -1446,22 +1446,22 @@ export default function Dashboard() {
                   <div className="flex items-center space-x-3">
                     <GitBranch className="w-6 h-6 text-sky-blue" />
                     <div>
-                      <p className="font-medium text-graphite">{stats.dailyPushes} push events</p>
-                      <p className="text-sm text-steel-gray">in the last 24 hours</p>
+                      <p className="font-medium text-foreground">{stats.dailyPushes} push events</p>
+                      <p className="text-sm text-muted-foreground">in the last 24 hours</p>
                     </div>
                   </div>
                 </div>
                 <div className="text-center py-4">
-                  <p className="text-steel-gray text-sm">
+                  <p className="text-muted-foreground text-sm">
                     Push event details are tracked in real-time. Check the Repositories page for detailed event history.
                   </p>
                 </div>
               </div>
             ) : (
               <div className="text-center py-6">
-                <GitBranch className="w-12 h-12 text-steel-gray mx-auto mb-3" />
-                <p className="text-steel-gray">No push events in the last 24 hours</p>
-                <p className="text-sm text-steel-gray mt-2">
+                <GitBranch className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No push events in the last 24 hours</p>
+                <p className="text-sm text-muted-foreground mt-2">
                   Push events will appear here when you make commits to your connected repositories.
                 </p>
               </div>
@@ -1475,7 +1475,7 @@ export default function Dashboard() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
-              <Bell className="w-5 h-5 text-steel-gray" />
+              <Bell className="w-5 h-5 text-muted-foreground" />
               <span>Slack Messages Sent Breakdown</span>
             </DialogTitle>
             <DialogDescription>
@@ -1501,27 +1501,27 @@ export default function Dashboard() {
                   <div className="flex items-center space-x-3">
                     <Bell className="w-6 h-6 text-log-green" />
                     <div>
-                      <p className="font-medium text-graphite">{stats.totalNotifications} Slack messages sent</p>
-                      <p className="text-sm text-steel-gray">across all integrations</p>
+                      <p className="font-medium text-foreground">{stats.totalNotifications} Slack messages sent</p>
+                      <p className="text-sm text-muted-foreground">across all integrations</p>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center space-x-2">
                       <MessageSquare className="w-4 h-4 text-sky-blue" />
-                      <span className="text-sm text-graphite">Welcome Messages</span>
+                      <span className="text-sm text-foreground">Welcome Messages</span>
                     </div>
-                    <span className="text-sm text-steel-gray">
+                    <span className="text-sm text-muted-foreground">
                       Sent when integrations are created
                     </span>
                   </div>
-                  <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center space-x-2">
                       <Activity className="w-4 h-4 text-log-green" />
-                      <span className="text-sm text-graphite">Push Notifications</span>
+                      <span className="text-sm text-foreground">Push Notifications</span>
                     </div>
-                    <span className="text-sm text-steel-gray">
+                    <span className="text-sm text-muted-foreground">
                       Sent when code is pushed to repositories
                     </span>
                   </div>
@@ -1529,9 +1529,9 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="text-center py-6">
-                <Bell className="w-12 h-12 text-steel-gray mx-auto mb-3" />
-                <p className="text-steel-gray">No Slack messages sent yet</p>
-                <p className="text-sm text-steel-gray mt-2">
+                <Bell className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground">No Slack messages sent yet</p>
+                <p className="text-sm text-muted-foreground mt-2">
                   Messages will be sent when you create integrations or push code to connected repositories.
                 </p>
               </div>

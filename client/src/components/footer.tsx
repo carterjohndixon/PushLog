@@ -4,7 +4,7 @@ import { Link } from "wouter";
 
 export function Footer() {
   return (
-    <footer className="bg-graphite text-white py-16">
+    <footer className="bg-footer text-white py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
@@ -70,7 +70,7 @@ export function Footer() {
             </ul>
           </div> */}
         </div>
-        <div className="border-t border-gray-700 mt-12 pt-8">
+        <div className="border-t border-white/10 mt-12 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-center text-gray-400">
             <p>&copy; 2026 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
