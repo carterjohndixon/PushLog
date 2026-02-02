@@ -322,7 +322,7 @@ export function IntegrationSettingsModal({
           <Button
             onClick={handleSave}
             disabled={updateIntegrationMutation.isPending}
-            className="bg-sky-blue text-white hover:bg-blue-600"
+            className="bg-log-green text-white hover:bg-green-600"
           >
             {updateIntegrationMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>

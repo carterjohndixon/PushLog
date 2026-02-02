@@ -111,6 +111,11 @@
   .hover\:bg-log-green:hover {
     background-color: hsl(var(--log-green));
   }
+
+  /* Darker green for button hover (forest vibe) */
+  .hover\:bg-log-green-dark:hover {
+    background-color: hsl(122 45% 38%);
+  }
   
   .hover\:bg-sky-blue:hover {
     background-color: hsl(var(--sky-blue));

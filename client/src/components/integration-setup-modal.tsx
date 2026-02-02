@@ -296,7 +296,7 @@ export function IntegrationSetupModal({
               </div>
               <Button 
                 onClick={handleSlackConnect} 
-                className="bg-sky-blue text-white hover:bg-blue-600"
+                className="bg-log-green text-white hover:bg-green-600"
                 size="default"
               >
                 <SiSlack className="w-4 h-4 mr-2" />

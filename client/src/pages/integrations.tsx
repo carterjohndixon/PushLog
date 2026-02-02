@@ -349,7 +349,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
             </div>
             <Button 
               onClick={() => setIsIntegrationModalOpen(true)}
-              className="bg-sky-blue text-white hover:bg-blue-600"
+              className="bg-log-green text-white hover:bg-green-600"
             >
               <Plus className="w-4 h-4 mr-2" />
               New Integration
@@ -566,7 +566,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
                   {!searchTerm && statusFilter === "all" && (
                     <Button 
                       onClick={() => setIsIntegrationModalOpen(true)}
-                      className="bg-sky-blue text-white hover:bg-blue-600"
+                      className="bg-log-green text-white hover:bg-green-600"
                     >
                       <Plus className="w-4 h-4 mr-2" />
                       Create Integration

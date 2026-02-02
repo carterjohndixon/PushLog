@@ -482,7 +482,7 @@ export default function Home() {
                   </div>
                   <Button 
                     onClick={handleSlackConnect}
-                    className="w-full bg-sky-blue text-white py-3 rounded-lg hover:bg-blue-600 transition-colors mt-6 font-semibold"
+                    className="w-full bg-log-green text-white py-3 rounded-lg hover:bg-green-600 transition-colors mt-6 font-semibold"
                   >
                     <SiSlack className="mr-2" />
                     Add to Slack

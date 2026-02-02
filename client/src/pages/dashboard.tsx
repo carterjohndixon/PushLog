@@ -785,7 +785,8 @@ export default function Dashboard() {
                   </Link>
                   <Button 
                     size="sm" 
-                    className="bg-log-green text-white hover:bg-green-600"
+                    // className="bg-log-green text-white hover:bg-green-600"
+                    className="bg-sky-blue text-white hover:bg-blue-600"
                     onClick={() => setIsRepoModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -976,7 +977,7 @@ export default function Dashboard() {
                   </Link>
                   <Button 
                     size="sm" 
-                    className="bg-sky-blue text-white hover:bg-blue-600"
+                    className="bg-log-green text-white hover:bg-green-600"
                     onClick={() => setIsIntegrationModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -1077,7 +1078,7 @@ export default function Dashboard() {
                       <p className="text-sm text-steel-gray mb-4">Connect your Slack workspace to start creating integrations.</p>
                       <Button 
                         onClick={handleSlackConnect}
-                        className="bg-sky-blue text-white hover:bg-blue-600"
+                        className="bg-log-green text-white hover:bg-green-600"
                       >
                         <SiSlack className="w-4 h-4 mr-2" />
                         Connect Slack Workspace
@@ -1108,7 +1109,7 @@ export default function Dashboard() {
                         <div className="flex gap-2">
                           <Button 
                             onClick={() => setIsIntegrationModalOpen(true)}
-                            className="bg-sky-blue text-white hover:bg-blue-600"
+                            className="bg-log-green text-white hover:bg-green-600"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Create Integration
@@ -1116,7 +1117,7 @@ export default function Dashboard() {
                           <Button 
                             onClick={handleSlackConnect}
                             variant="outline"
-                            className="border-sky-blue text-sky-blue hover:bg-sky-blue hover:text-white"
+                            className="border-log-green text-log-green hover:bg-log-green hover:text-white"
                           >
                             <SiSlack className="w-4 h-4 mr-2" />
                             Add Workspace
@@ -1164,7 +1165,7 @@ export default function Dashboard() {
               
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-blue-50 hover:border-sky-blue transition-colors"
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors"
                 onClick={() => {
                   // Navigate to repositories page to view detailed analytics
                   window.location.href = '/repositories';
