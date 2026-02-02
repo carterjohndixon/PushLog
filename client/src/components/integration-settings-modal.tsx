@@ -225,7 +225,9 @@ export function IntegrationSettingsModal({
               <Label htmlFor="ai-model">AI Model</Label>
               <Select value={aiModel} onValueChange={setAiModel}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select AI model" />
+                  <SelectValue placeholder="Select AI model">
+                    {aiModel ? AI_MODELS.find((m) => m.id === aiModel)?.name : null}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md">
                   {AI_MODELS.map((model) => (
