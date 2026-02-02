@@ -80,3 +80,6 @@ launch/README.md
 !launch/*.config.js
 
 migrations/*.sql
+
+# claude-mem
+.cursor

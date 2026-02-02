@@ -63,19 +63,13 @@ export function IntegrationSetupModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const currentUserId = localStorage.getItem('userId');
-
-  // Fetch user's Slack workspaces
+  // Fetch user's Slack workspaces (cookie-based auth)
   const { data: workspaces, isLoading: workspacesLoading } = useQuery<SlackWorkspace[]>({
     queryKey: ["/api/slack/workspaces"],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Authentication required');
-
       const response = await fetch('/api/slack/workspaces', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!response.ok) {
@@ -87,17 +81,15 @@ export function IntegrationSetupModal({
     enabled: open,
   });
 
-  // Fetch channels for selected workspace
+  // Fetch channels for selected workspace (cookie-based auth)
   const { data: channels, isLoading: channelsLoading } = useQuery<SlackChannel[]>({
     queryKey: ["/api/slack/workspaces", selectedWorkspace, "channels"],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      if (!token || !selectedWorkspace) throw new Error('Authentication required');
+      if (!selectedWorkspace) return [];
 
       const response = await fetch(`/api/slack/workspaces/${selectedWorkspace}/channels`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
 
       if (!response.ok) {
@@ -109,14 +101,15 @@ export function IntegrationSetupModal({
     enabled: open && !!selectedWorkspace,
   });
 
-  // Create integration mutation
+  // Create integration mutation (cookie-based auth)
   const createIntegrationMutation = useMutation({
     mutationFn: async (integrationData: any) => {
       const response = await fetch('/api/integrations', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Accept': 'application/json'
         },
         body: JSON.stringify(integrationData)
       });
@@ -148,22 +141,10 @@ export function IntegrationSetupModal({
   });
 
   const handleSlackConnect = async () => {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your Slack workspace.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
       const response = await fetch('/api/slack/connect?popup=true', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
 
       const data = await response.json();
@@ -236,7 +217,7 @@ export function IntegrationSetupModal({
     }
 
     const integrationData = {
-      userId: parseInt(currentUserId || '0'),
+      userId: 0, // Server sets from session
       repositoryId: repository.id,
       slackWorkspaceId: workspace.id,
       slackChannelId: channel.id,

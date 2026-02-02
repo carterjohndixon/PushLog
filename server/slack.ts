@@ -23,9 +23,10 @@ export function generateSlackOAuthUrl(state: string, isPopup: boolean = false): 
 }
 
 /**
- * Exchange Slack OAuth code for access token
+ * Exchange Slack OAuth code for access token.
+ * redirect_uri must match EXACTLY what was used in the authorize request (including ?popup=true when in popup flow).
  */
-export async function exchangeSlackCodeForToken(code: string): Promise<{
+export async function exchangeSlackCodeForToken(code: string, isPopup: boolean = false): Promise<{
   access_token: string;
   team: {
     id: string;
@@ -37,7 +38,8 @@ export async function exchangeSlackCodeForToken(code: string): Promise<{
 }> {
   const clientId = process.env.SLACK_CLIENT_ID;
   const clientSecret = process.env.SLACK_CLIENT_SECRET;
-  const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://pushlog.ai/api/slack/callback";
+  const baseRedirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/slack/callback` : "https://pushlog.ai/api/slack/callback";
+  const redirectUri = isPopup ? `${baseRedirectUri}?popup=true` : baseRedirectUri;
 
   if (!clientId || !clientSecret) {
     throw new Error("Slack OAuth credentials not configured");

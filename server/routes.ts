@@ -29,7 +29,6 @@ import {
   testSlackConnection,
   generateSlackOAuthUrl,
   exchangeSlackCodeForToken,
-  getSlackWorkspaceInfo,
   getSlackChannelsForWorkspace
 } from "./slack";
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
@@ -1291,11 +1290,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid or expired state parameter" });
       }
 
-      // Exchange code for token
-      const slackData = await exchangeSlackCodeForToken(code as string);
-      
-      // Get workspace info
-      const workspaceInfo = await getSlackWorkspaceInfo(slackData.access_token);
+      // Exchange code for token (redirect_uri must match authorize request, including ?popup=true)
+      const isPopupCallback = req.query.popup === 'true';
+      const slackData = await exchangeSlackCodeForToken(code as string, isPopupCallback);
 
       // Check if workspace already exists for this user
       const existingWorkspace = await databaseStorage.getSlackWorkspaceByTeamId(slackData.team.id);

@@ -332,14 +332,13 @@ export default function Dashboard() {
     }
   });
 
-  // Add after other useQuery hooks
+  // Slack workspaces (cookie-based auth)
   const { data: slackWorkspaces, isLoading: slackWorkspacesLoading } = useQuery({
     queryKey: ["/api/slack/workspaces"],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      if (!token) return [];
       const response = await fetch('/api/slack/workspaces', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
       if (!response.ok) return [];
       return response.json();
@@ -347,18 +346,10 @@ export default function Dashboard() {
   });
 
   const handleSlackConnect = async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your Slack workspace.",
-        variant: "destructive",
-      });
-      return;
-    }
     try {
       const response = await fetch('/api/slack/connect?popup=true', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
       });
       const data = await response.json();
       
