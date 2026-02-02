@@ -1865,6 +1865,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(200).json({ message: "Integration not active" });
       }
 
+      // Use integration's AI model; support both camelCase (aiModel) and snake_case (ai_model) from DB/driver
+      const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
+      const integrationAiModelStr = (typeof integrationAiModel === 'string' && integrationAiModel.trim()) ? integrationAiModel.trim() : null;
+
       // Check branch filtering based on repository and integration settings
       const monitorAllBranches = storedRepo.monitorAllBranches ?? false;
       const notificationLevel = integration.notificationLevel || 'all';
@@ -1904,6 +1908,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiCategory = null;
       let aiDetails = null;
       let aiGenerated = false;
+      /** Actual model used by OpenAI (from API response); used in notification metadata so "AI Model Used" is correct. */
+      let actualAiModelUsed = null as string | null;
       let finalAdditions = commit.additions || 0;
       let finalDeletions = commit.deletions || 0;
 
@@ -1977,8 +1983,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           commitSha: commit.id,
         };
 
-        const aiModel = integration.aiModel || 'gpt-5.2';
-        console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration.aiModel: ${integration.aiModel})`);
+        // Normalize to lowercase so "GPT-4o" from DB passes AI layer's validModels check
+        const aiModel = (integrationAiModelStr || 'gpt-5.2').toLowerCase();
+        console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration: ${integrationAiModelStr ?? 'default'})`);
         const maxTokens = integration.maxTokens || 350;
         
         let summary;
@@ -2011,8 +2018,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiCategory = summary.summary.category;
           aiDetails = summary.summary.details;
           aiGenerated = true;
-          
-          console.log(`✅ AI summary generated successfully - Model: ${summary.actualModel || aiModel}, Tokens: ${summary.tokensUsed}`);
+          actualAiModelUsed = summary.actualModel || aiModel;
+          console.log(`✅ AI summary generated successfully - Model: ${actualAiModelUsed}, Tokens: ${summary.tokensUsed}`);
         } else {
           // Fallback summary - AI generation failed
           console.warn(`⚠️ AI summary generation failed for model ${aiModel}, using fallback summary`);
@@ -2116,7 +2123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             deletions: finalDeletions,
             filesChanged: filesChanged.length,
             aiGenerated: aiGenerated,
-            aiModel: aiGenerated ? integration.aiModel : null,
+            aiModel: aiGenerated ? (actualAiModelUsed ?? integrationAiModelStr ?? integration.aiModel) : null,
             aiSummary: aiGenerated ? aiSummary : null,
             aiImpact: aiGenerated ? aiImpact : null,
             aiCategory: aiGenerated ? aiCategory : null
@@ -2236,7 +2243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               slackWorkspaceId: integration.slackWorkspaceId,
               integrationId: integration.id,
               aiGenerated: aiGenerated,
-              aiModel: aiGenerated ? integration.aiModel : null,
+              aiModel: aiGenerated ? (actualAiModelUsed ?? integrationAiModelStr ?? integration.aiModel) : null,
               aiSummary: aiGenerated ? aiSummary : null,
               aiImpact: aiGenerated ? aiImpact : null,
               aiCategory: aiGenerated ? aiCategory : null,
