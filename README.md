@@ -26,7 +26,7 @@ PushLog is a **web application** that you can access directly in your browser. S
 - **Background**: White #FFFFFF
 - **Text**: Graphite #333333
 - **Accent**: Sky Blue #00BFFF or Steel Gray #9E9E9E
-b
+
 ## Tech Stack
 
 - **Frontend**: React, TypeScript, Tailwind CSS, Vite

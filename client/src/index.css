@@ -3,56 +3,58 @@
 @tailwind utilities;
 
 :root {
-  --background: 0 0% 100%; /* #FFFFFF */
-  --foreground: 0 0% 20%; /* #333333 */
-  --muted: 210 7% 97%; /* #F8F9FA */
-  --muted-foreground: 0 0% 62%; /* #9E9E9E */
-  --popover: 0 0% 100%; /* #FFFFFF */
-  --popover-foreground: 0 0% 20%; /* #333333 */
-  --card: 0 0% 100%; /* #FFFFFF */
-  --card-foreground: 0 0% 20%; /* #333333 */
-  --border: 210 7% 89%; /* #E1E5E9 */
-  --input: 210 7% 89%; /* #E1E5E9 */
-  --primary: 122 39% 49%; /* #4CAF50 */
-  --primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --secondary: 210 7% 97%; /* #F8F9FA */
-  --secondary-foreground: 0 0% 20%; /* #333333 */
-  --accent: 195 100% 50%; /* #00BFFF */
-  --accent-foreground: 0 0% 100%; /* #FFFFFF */
+  /* Washington forest – misty morning */
+  --background: 115 18% 97%; /* misty forest floor */
+  --foreground: 95 22% 18%; /* bark / deep forest */
+  --muted: 115 15% 94%; /* soft moss */
+  --muted-foreground: 95 18% 42%; /* forest shadow */
+  --popover: 115 16% 99%; /* light bark */
+  --popover-foreground: 95 22% 18%;
+  --card: 115 14% 98%; /* subtle moss card */
+  --card-foreground: 95 22% 18%;
+  --border: 115 14% 88%; /* mossy edge */
+  --input: 115 14% 88%;
+  --primary: 122 39% 49%; /* log green – kept */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 115 12% 92%; /* understory */
+  --secondary-foreground: 95 22% 18%;
+  --accent: 148 35% 42%; /* pine / evergreen */
+  --accent-foreground: 0 0% 100%;
   --destructive: 0 84% 60%; /* #EF4444 */
-  --destructive-foreground: 0 0% 100%; /* #FFFFFF */
-  --ring: 122 39% 49%; /* #4CAF50 */
+  --destructive-foreground: 0 0% 100%;
+  --ring: 122 39% 49%;
   --radius: 0.5rem;
-  --steel-gray: 0 0% 62%; /* #9E9E9E */
-  --log-green: 122 39% 49%; /* #4CAF50 */
-  --sky-blue: 195 100% 50%; /* #00BFFF */
-  --graphite: 0 0% 20%; /* #333333 */
+  --steel-gray: 95 12% 52%; /* forest gray */
+  --log-green: 122 39% 49%; /* #4CAF50 – kept */
+  --sky-blue: 148 35% 42%; /* pine (reused for accent vibe) */
+  --graphite: 95 22% 18%; /* bark */
 }
 
 .dark {
-  --background: 222 84% 5%; /* #0A0A0A */
-  --foreground: 0 0% 98%; /* #FAFAFA */
-  --muted: 217 33% 17%; /* #1F1F23 */
-  --muted-foreground: 0 0% 62%; /* #9E9E9E */
-  --popover: 222 84% 5%; /* #0A0A0A */
-  --popover-foreground: 0 0% 98%; /* #FAFAFA */
-  --card: 222 84% 5%; /* #0A0A0A */
-  --card-foreground: 0 0% 98%; /* #FAFAFA */
-  --border: 217 33% 17%; /* #1F1F23 */
-  --input: 217 33% 17%; /* #1F1F23 */
-  --primary: 122 39% 49%; /* #4CAF50 */
-  --primary-foreground: 0 0% 100%; /* #FFFFFF */
-  --secondary: 217 33% 17%; /* #1F1F23 */
-  --secondary-foreground: 0 0% 98%; /* #FAFAFA */
-  --accent: 195 100% 50%; /* #00BFFF */
-  --accent-foreground: 0 0% 100%; /* #FFFFFF */
-  --destructive: 0 63% 31%; /* #7F1D1D */
-  --destructive-foreground: 0 0% 98%; /* #FAFAFA */
-  --ring: 122 39% 49%; /* #4CAF50 */
-  --steel-gray: 0 0% 62%; /* #9E9E9E */
-  --log-green: 122 39% 49%; /* #4CAF50 */
-  --sky-blue: 195 100% 50%; /* #00BFFF */
-  --graphite: 0 0% 98%; /* #FAFAFA in dark mode */
+  /* Washington forest – night */
+  --background: 140 28% 8%; /* deep forest */
+  --foreground: 90 18% 92%; /* moss / moonlight */
+  --muted: 140 22% 14%; /* dark pine */
+  --muted-foreground: 90 15% 58%;
+  --popover: 140 25% 10%;
+  --popover-foreground: 90 18% 92%;
+  --card: 140 24% 11%;
+  --card-foreground: 90 18% 92%;
+  --border: 140 20% 20%;
+  --input: 140 20% 20%;
+  --primary: 122 39% 49%; /* log green */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 140 20% 18%;
+  --secondary-foreground: 90 18% 92%;
+  --accent: 148 32% 48%; /* pine glow */
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 63% 31%;
+  --destructive-foreground: 0 0% 98%;
+  --ring: 122 39% 49%;
+  --steel-gray: 90 12% 55%;
+  --log-green: 122 39% 49%;
+  --sky-blue: 148 32% 48%;
+  --graphite: 90 18% 92%;
 }
 
 @layer base {
