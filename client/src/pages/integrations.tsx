@@ -197,6 +197,10 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
       const response = await apiRequest("PATCH", `/api/integrations/${integrationId}`, {
         isActive,
       });
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -221,6 +225,10 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   const updateIntegrationMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
       return response.json();
     },
     onSuccess: () => {

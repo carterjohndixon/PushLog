@@ -162,8 +162,16 @@ export async function sendSlackMessage(
     const client = new WebClient(accessToken);
     const response = await client.chat.postMessage(message);
     return response.ts;
-  } catch (error) {
-    console.error('Error sending Slack message:', error);
+  } catch (error: any) {
+    const code = error?.data?.error ?? error?.code;
+    const msg = error?.message ?? String(error);
+    console.error('Slack API error:', code || msg, error?.data ? JSON.stringify(error.data) : '');
+    if (code === "not_in_channel" || code === "channel_not_found") {
+      throw new Error(`PushLog bot is not in that channel. In Slack, invite the app to the channel (e.g. /invite @PushLog) or reconnect the integration.`);
+    }
+    if (code === "invalid_auth" || code === "token_revoked") {
+      throw new Error(`Slack connection expired or was revoked. Reconnect Slack from PushLog Integrations.`);
+    }
     throw error;
   }
 }

@@ -27,7 +27,7 @@ interface NotificationMetadata {
 
 interface Notification {
   id: number;
-  type: 'email_verification' | 'push_event' | 'slack_message_sent' | 'low_credits' | 'no_credits';
+  type: 'email_verification' | 'push_event' | 'slack_message_sent' | 'slack_delivery_failed' | 'low_credits' | 'no_credits';
   title?: string;
   message: string;
   metadata?: string | NotificationMetadata; // Can be JSON string or parsed object

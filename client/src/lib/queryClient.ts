@@ -20,18 +20,37 @@ function handleAuthenticationFailure() {
   }
 }
 
+/** Use a short, safe message for toasts; never show raw HTML or huge bodies. */
+function sanitizeErrorMessage(body: string, status: number, statusText: string): string {
+  const trimmed = body?.trim() ?? '';
+  if (!trimmed) return statusText || 'Request failed';
+  if (trimmed.startsWith('<!') || trimmed.toLowerCase().includes('<!doctype') || trimmed.toLowerCase().includes('<html')) {
+    return status >= 500 ? 'Server error. Please try again.' : 'Request failed. Please try again.';
+  }
+  try {
+    const json = JSON.parse(trimmed);
+    const msg = json?.message ?? json?.error ?? json?.details;
+    if (typeof msg === 'string' && msg.length < 300) return msg;
+  } catch {
+    // not JSON
+  }
+  if (trimmed.length > 200) return status >= 500 ? 'Server error. Please try again.' : 'Request failed. Please try again.';
+  return trimmed;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = await res.text();
-    
+    const message = sanitizeErrorMessage(text, res.status, res.statusText);
+
     // Handle 401 Unauthorized globally, but only for authenticated routes
     if (res.status === 401) {
       // Check if this is a login/signup request - don't redirect for these
       const url = res.url;
       if (url.includes('/api/login') || url.includes('/api/signup')) {
-        throw new Error(text || 'Invalid credentials');
+        throw new Error(message || 'Invalid credentials');
       }
-      
+
       // Check if we're on public pages - don't redirect (home, login, signup pages are public)
       if (typeof window !== 'undefined') {
         const publicPaths = ['/', '/login', '/signup'];
@@ -39,13 +58,13 @@ async function throwIfResNotOk(res: Response) {
           throw new Error('Not authenticated'); // Just throw, don't redirect
         }
       }
-      
+
       // For other authenticated routes, handle session expiration
       handleAuthenticationFailure();
       throw new Error('Session expired');
     }
-    
-    throw new Error(text || res.statusText);
+
+    throw new Error(message);
   }
 }
 

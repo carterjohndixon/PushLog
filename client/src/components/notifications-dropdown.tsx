@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink } from "lucide-react";
+import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink, AlertCircle } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { useState } from "react";
@@ -76,6 +76,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <GitBranch className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_message_sent' ? (
                 <MessageSquare className="w-5 h-5 text-sky-blue mr-3 flex-shrink-0" />
+              ) : notification.type === 'slack_delivery_failed' ? (
+                <AlertCircle className="w-5 h-5 text-destructive mr-3 flex-shrink-0" />
               ) : (
                 <Mail className={`w-5 h-5 mr-3 flex-shrink-0 ${
                   notification.type === 'email_verification' ? 'text-amber-500' : 'text-steel-gray'
@@ -85,7 +87,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <span className={`text-sm font-medium ${
                   notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
-                  notification.type === 'slack_message_sent' ? 'text-sky-blue' : 'text-foreground'
+                  notification.type === 'slack_message_sent' ? 'text-sky-blue' :
+                  notification.type === 'slack_delivery_failed' ? 'text-destructive' : 'text-foreground'
                 }`}>
                   {notification.title || notification.message}
                 </span>
@@ -176,6 +179,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               <GitBranch className="w-5 h-5 text-log-green mr-2" />
             ) : selectedNotification?.type === 'slack_message_sent' ? (
               <MessageSquare className="w-5 h-5 text-sky-blue mr-2" />
+            ) : selectedNotification?.type === 'slack_delivery_failed' ? (
+              <AlertCircle className="w-5 h-5 text-destructive mr-2" />
             ) : (
               <Mail className="w-5 h-5 text-amber-500 mr-2" />
             )}
@@ -197,6 +202,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
           const isPushEvent = selectedNotification.type === 'push_event';
           const isSlackMessage = selectedNotification.type === 'slack_message_sent';
+          const isSlackDeliveryFailed = selectedNotification.type === 'slack_delivery_failed';
           const commitUrl = metadata?.repositoryFullName && metadata?.commitSha
             ? `https://github.com/${metadata.repositoryFullName}/commit/${metadata.commitSha}`
             : null;
@@ -313,6 +319,34 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Slack delivery failed */}
+              {isSlackDeliveryFailed && metadata && (
+                <div className="border-t border-border pt-4 space-y-3">
+                  <h4 className="font-semibold text-destructive text-sm">Slack delivery failed</h4>
+                  {metadata.slackChannelName && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Channel:</span>{' '}
+                      <span className="text-muted-foreground">#{metadata.slackChannelName}</span>
+                    </div>
+                  )}
+                  {metadata.repositoryName && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Repository:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.repositoryName}</span>
+                    </div>
+                  )}
+                  {metadata.error && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Error:</span>
+                      <p className="text-muted-foreground mt-1 pl-4 border-l-2 border-destructive/50">{metadata.error}</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Reconnect Slack from Integrations and invite the app to the channel (/invite @PushLog) if needed.
+                  </p>
                 </div>
               )}
 

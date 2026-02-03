@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Slack Connected – PushLog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #e8f0e8 0%, #d4e5d4 50%, #c2d9c2 100%);
+        color: #2d4a2d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+      }
+      .card {
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid rgba(76, 175, 80, 0.25);
+        box-shadow: 0 4px 24px rgba(76, 175, 80, 0.12), 0 0 0 1px rgba(76, 175, 80, 0.06);
+        padding: 2rem 2.5rem;
+        text-align: center;
+        max-width: 22rem;
+      }
+      .icon {
+        width: 4rem;
+        height: 4rem;
+        margin: 0 auto 1.25rem;
+        background: linear-gradient(135deg, #4CAF50, #388E3C);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(76, 175, 80, 0.35);
+      }
+      .icon svg { width: 2rem; height: 2rem; color: #fff; }
+      h1 { font-size: 1.25rem; font-weight: 600; color: #1b3d1b; margin-bottom: 0.5rem; }
+      p { font-size: 0.9375rem; color: #3d5c3d; line-height: 1.5; }
+      .hint { font-size: 0.8125rem; color: #5a7a5a; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </div>
+      <h1>Slack connected</h1>
+      <p>Your workspace is linked to PushLog. You can close this window.</p>
+      <p class="hint">Redirecting back to the app…</p>
+    </div>
+    <script>
+      if (window.opener) {
+        window.opener.postMessage('slack-connected', '*');
+        window.close();
+      } else {
+        window.location.href = '/dashboard#slack=connected';
+      }
+    </script>
+  </body>
+</html>

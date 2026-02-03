@@ -408,6 +408,10 @@ export default function Dashboard() {
       const response = await apiRequest("PATCH", `/api/integrations/${integrationId}`, {
         isActive,
       });
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -430,22 +434,16 @@ export default function Dashboard() {
   // Delete integration mutation
   const deleteIntegrationMutation = useMutation({
     mutationFn: async (integrationId: number) => {
-      try {
-        const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-      
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error('Delete mutation error:', error);
-        throw error;
+      const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response. Please try again.");
       }
+      return response.json();
     },
     onSuccess: () => {
       setIsDeleteConfirmationOpen(false);
+      setIntegrationToDelete(null);
       setSelectedIntegration(null);
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
@@ -467,6 +465,10 @@ export default function Dashboard() {
   const updateIntegrationMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
+      const contentType = response.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Server returned an invalid response. Please try again.");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -611,7 +613,7 @@ export default function Dashboard() {
   };
 
   const handleDeleteIntegration = (integration: ActiveIntegration) => {
-    setSelectedIntegration(integration);
+    setIntegrationToDelete(integration);
     setIsDeleteConfirmationOpen(true);
   };
 
@@ -1234,7 +1236,10 @@ export default function Dashboard() {
 
       <ConfirmIntegrationDeletionModal
         open={isDeleteConfirmationOpen}
-        onOpenChange={setIsDeleteConfirmationOpen}
+        onOpenChange={(open) => {
+          setIsDeleteConfirmationOpen(open);
+          if (!open) setIntegrationToDelete(null);
+        }}
         integrationToDelete={integrationToDelete}
         deleteIntegrationMutation={deleteIntegrationMutation}
       />

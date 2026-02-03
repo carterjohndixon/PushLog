@@ -40,6 +40,7 @@ import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } fr
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
+import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -1308,6 +1309,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Preview Slack OAuth popup pages (dev only – so you can see the styled success/error pages)
+  const allowPreview = process.env.NODE_ENV === "development" || process.env.ENABLE_TEST_ROUTES === "true";
+  if (allowPreview) {
+    app.get("/api/slack/preview-popup", (req, res) => {
+      const variant = (req.query.variant as string)?.toLowerCase();
+      if (variant === "error") {
+        const redirectUrl = "/dashboard#error=" + encodeURIComponent("Failed to connect Slack workspace");
+        return res.type("text/html").send(getSlackErrorPopupHtml(redirectUrl));
+      }
+      return res.type("text/html").send(getSlackConnectedPopupHtml());
+    });
+  }
+
   // Add Slack connection initiation endpoint
   app.get("/api/slack/connect", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
@@ -1391,24 +1405,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isPopup = req.query.popup === 'true';
       
       if (isPopup) {
-        // Return HTML that closes popup and notifies parent
-        return res.send(`
-          <!DOCTYPE html>
-          <html>
-            <head><title>Slack Connected</title></head>
-            <body>
-              <script>
-                if (window.opener) {
-                  window.opener.postMessage('slack-connected', '*');
-                  window.close();
-                } else {
-                  window.location.href = '/dashboard#slack=connected';
-                }
-              </script>
-              <p>Slack workspace connected! This window will close automatically...</p>
-            </body>
-          </html>
-        `);
+        return res.type("text/html").send(getSlackConnectedPopupHtml());
       }
 
       // Redirect to dashboard with success
@@ -1418,23 +1415,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const isPopup = req.query.popup === 'true';
       if (isPopup) {
-        return res.send(`
-          <!DOCTYPE html>
-          <html>
-            <head><title>Slack Connection Failed</title></head>
-            <body>
-              <script>
-                if (window.opener) {
-                  window.opener.postMessage('slack-error', '*');
-                  window.close();
-                } else {
-                  window.location.href = '/dashboard#error=${encodeURIComponent('Failed to connect Slack workspace')}';
-                }
-              </script>
-              <p>Failed to connect Slack workspace. This window will close automatically...</p>
-            </body>
-          </html>
-        `);
+        const redirectUrl = `/dashboard#error=${encodeURIComponent('Failed to connect Slack workspace')}`;
+        return res.type("text/html").send(getSlackErrorPopupHtml(redirectUrl));
       }
       
       res.redirect(`/dashboard#error=${encodeURIComponent('Failed to connect Slack workspace')}`);
@@ -2686,14 +2668,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       } catch (slackError) {
+        const errMessage = slackError instanceof Error ? slackError.message : String(slackError);
         console.error("❌ Failed to send Slack notification:", slackError);
         console.error("Error details:", {
           integrationId: integration.id,
           slackWorkspaceId: integration.slackWorkspaceId,
           slackChannelId: integration.slackChannelId,
-          error: slackError instanceof Error ? slackError.message : String(slackError),
+          error: errMessage,
           stack: slackError instanceof Error ? slackError.stack : undefined
         });
+        // Notify user in app so they know Slack delivery failed
+        try {
+          const failNotification = await storage.createNotification({
+            userId: storedRepo.userId,
+            type: 'slack_delivery_failed',
+            title: 'Slack delivery failed',
+            message: `Could not send push notification to #${integration.slackChannelName}: ${errMessage}`,
+            metadata: JSON.stringify({
+              integrationId: integration.id,
+              slackChannelId: integration.slackChannelId,
+              slackChannelName: integration.slackChannelName,
+              repositoryName: repository.name,
+              pushEventId: pushEvent.id,
+              error: errMessage
+            })
+          });
+          broadcastNotification(storedRepo.userId, {
+            id: failNotification.id,
+            type: failNotification.type,
+            title: failNotification.title,
+            message: failNotification.message,
+            metadata: failNotification.metadata,
+            isRead: failNotification.isRead,
+            createdAt: failNotification.createdAt
+          });
+        } catch (notifErr) {
+          console.error("Failed to create slack_delivery_failed notification:", notifErr);
+        }
         // Don't throw - we still want to return success so GitHub doesn't retry
       }
 

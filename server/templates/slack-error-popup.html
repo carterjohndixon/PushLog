@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connection Failed – PushLog</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+        min-height: 100vh;
+        background: linear-gradient(180deg, #f5ebe8 0%, #edd8d4 100%);
+        color: #4a2d2d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+      }
+      .card {
+        background: #fff;
+        border-radius: 1rem;
+        border: 1px solid rgba(211, 47, 47, 0.2);
+        box-shadow: 0 4px 24px rgba(211, 47, 47, 0.08);
+        padding: 2rem 2.5rem;
+        text-align: center;
+        max-width: 22rem;
+      }
+      .icon {
+        width: 4rem;
+        height: 4rem;
+        margin: 0 auto 1.25rem;
+        background: linear-gradient(135deg, #d32f2f, #b71c1c);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(211, 47, 47, 0.3);
+      }
+      .icon svg { width: 2rem; height: 2rem; color: #fff; }
+      h1 { font-size: 1.25rem; font-weight: 600; color: #3d1b1b; margin-bottom: 0.5rem; }
+      p { font-size: 0.9375rem; color: #5c3d3d; line-height: 1.5; }
+      .hint { font-size: 0.8125rem; color: #7a5a5a; margin-top: 1rem; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <h1>Connection failed</h1>
+      <p>We couldn't connect your Slack workspace. You can try again from the dashboard.</p>
+      <p class="hint">Redirecting back to the app…</p>
+    </div>
+    <script>
+      if (window.opener) {
+        window.opener.postMessage('slack-error', '*');
+        window.close();
+      } else {
+        window.location.href = '{{REDIRECT_URL}}';
+      }
+    </script>
+  </body>
+</html>
