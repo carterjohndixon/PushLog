@@ -351,21 +351,21 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       return (
         <Card className="hover:shadow-md transition-shadow border-dashed border-2 border-gray-200 dark:border-[hsl(var(--log-green)/0.6)]">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <div className="w-10 h-10 flex-shrink-0 bg-gray-900 rounded-lg flex items-center justify-center">
                   <Github className="text-white w-5 h-5" />
                 </div>
-                <div>
-                  <CardTitle className="text-lg font-semibold text-graphite">
+                <div className="min-w-0">
+                  <CardTitle className="text-lg font-semibold text-foreground truncate">
                     {repository.name}
                   </CardTitle>
-                  <p className="text-sm text-steel-gray">
+                  <p className="text-sm text-muted-foreground truncate">
                     {repository.owner.login}/{repository.name}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-shrink-0">
                 <div className="w-2 h-2 rounded-full bg-red-500" />
                 <Badge variant="outline" className="text-xs text-red-600 border-red-300 whitespace-nowrap">
                   Unconnected
