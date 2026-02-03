@@ -86,7 +86,12 @@ export default function Models() {
     queryFn: async () => {
       const res = await fetch("/api/profile", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load profile");
-      return res.json();
+      const data = await res.json();
+      // #region agent log
+      const u = data?.user ?? data;
+      console.log('[debug] models profile-fetched', { hasOpenRouterKey: !!u?.hasOpenRouterKey, emailVerified: !!u?.emailVerified, hasUserKey: !!data?.user });
+      // #endregion
+      return data;
     },
   });
   const userHasKey = !!profile?.user?.hasOpenRouterKey;
@@ -168,6 +173,9 @@ export default function Models() {
       return res.json();
     },
     onSuccess: () => {
+      // #region agent log
+      console.log('[debug] models saveKey-success invalidating profile');
+      // #endregion
       queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       setApiKeyInput("");

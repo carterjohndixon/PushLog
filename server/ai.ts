@@ -131,8 +131,21 @@ Respond with only valid JSON:
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
     
-    const response = completion.choices[0]?.message?.content;
-    if (!response) {
+    // message.content can be a string or an array of parts (e.g. OpenRouter/Kimi: [{ type: "text", text: "..." }])
+    const rawContent = completion.choices[0]?.message?.content;
+    let response: string;
+    if (typeof rawContent === 'string') {
+      response = rawContent;
+    } else if (Array.isArray(rawContent)) {
+      response = (rawContent as { type?: string; text?: string }[])
+        .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+        .map((part) => part.text)
+        .join('');
+    } else {
+      response = '';
+    }
+    if (!response?.trim()) {
+      console.error('📄 Raw completion.choices[0]:', JSON.stringify(completion.choices?.[0], null, 2));
       throw new Error('No response from OpenAI');
     }
 

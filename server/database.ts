@@ -15,6 +15,7 @@ import {
 import { eq, and, sql } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
 import { encrypt, decrypt } from "./encryption";
@@ -118,7 +119,17 @@ export class DatabaseStorage implements IStorage {
 
   async getUserById(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    return result[0] ? convertToUser(result[0] as any) : undefined;
+    const row = result[0];
+    // #region agent log
+    if (row) {
+      const raw = row as any;
+      try {
+        const logPath = path.join(process.cwd(), '.cursor', 'debug.log');
+        fs.appendFileSync(logPath, JSON.stringify({ location: 'database.ts:getUserById', message: 'User row from DB', data: { userId: id, hasOpenRouterKeyColumn: raw?.openRouterApiKey != null, openRouterApiKeyLength: typeof raw?.openRouterApiKey === 'string' ? raw.openRouterApiKey.length : 0 }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1' }) + '\n');
+      } catch (_) {}
+    }
+    // #endregion
+    return row ? convertToUser(row as any) : undefined;
   }
 
   async getUserByVerificationToken(token: string): Promise<User | undefined> {

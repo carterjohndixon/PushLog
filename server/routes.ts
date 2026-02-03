@@ -42,6 +42,13 @@ import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 
+// #region agent log
+const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+function debugLog(payload: { location: string; message: string; data?: object; hypothesisId?: string }) {
+  try { fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: 'debug-session' }) + '\n'); } catch (_) {}
+}
+// #endregion
+
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
   if (!integration) return integration;
@@ -1742,6 +1749,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       console.log(`OpenRouter API key saved for user ${userId} (encrypted length ${stored.length})`);
+      // #region agent log
+      debugLog({ location: 'routes.ts:openrouter-key-saved', message: 'OpenRouter key persisted', data: { userId, keyPersisted: !!stored }, hypothesisId: 'C,H5' });
+      // #endregion
       res.json({ success: true });
     } catch (err: any) {
       console.error("OpenRouter save key error:", err);
@@ -2918,6 +2928,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      // #region agent log
+      debugLog({ location: 'routes.ts:profile-get-user', message: 'Profile user from DB', data: { userId: user.id, hasOpenRouterKeyInDb: !!((user as any).openRouterApiKey), emailVerified: !!user.emailVerified }, hypothesisId: 'A,E1' });
+      // #endregion
 
       // Sync session when DB says verified but session is stale (e.g. user verified in another tab)
       if (user.emailVerified && req.session?.user && !req.session.user.emailVerified) {
@@ -2938,6 +2951,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // If token is invalid, clear the GitHub connection
           if (!githubConnected) {
+            // #region agent log
+            debugLog({ location: 'routes.ts:profile-github-clear', message: 'updateUser clearing GitHub only', data: { userId: user.id, updatesKeys: ['githubId', 'githubToken'] }, hypothesisId: 'H2' });
+            // #endregion
             await databaseStorage.updateUser(user.id, {
               githubId: null,
               githubToken: null
@@ -2945,6 +2961,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         } catch (error) {
           console.error('GitHub token validation error:', error);
+          // #region agent log
+          debugLog({ location: 'routes.ts:profile-github-clear-catch', message: 'updateUser clearing GitHub only (catch)', data: { userId: user.id, updatesKeys: ['githubId', 'githubToken'] }, hypothesisId: 'H2' });
+          // #endregion
           // Clear invalid connection
           await databaseStorage.updateUser(user.id, {
             githubId: null,
@@ -2956,7 +2975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Prevent caching so clients always get fresh emailVerified after verification
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-      res.json({
+      const payload = {
         success: true,
         user: {
           id: user.id,
@@ -2969,7 +2988,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
         }
-      });
+      };
+      // #region agent log
+      debugLog({ location: 'routes.ts:profile-response', message: 'Profile payload sent', data: { userId: user.id, hasOpenRouterKey: payload.user.hasOpenRouterKey, emailVerified: payload.user.emailVerified }, hypothesisId: 'D' });
+      // #endregion
+      res.json(payload);
     } catch (error: any) {
       console.error("Profile error:", error?.message ?? error);
       if (error?.message?.includes("open_router_api_key") || error?.code === "42703") {

@@ -356,9 +356,12 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
     <div className="min-h-screen bg-forest-gradient">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Email Verification Banner */}
-        {userProfile && !userProfile.emailVerified && (
-          <EmailVerificationBanner />
-        )}
+        {userProfile && !userProfile.emailVerified && (() => {
+          // #region agent log
+          console.log('[debug] integrations banner-visible', { emailVerified: !!userProfile?.emailVerified, hasOpenRouterKey: !!userProfile?.hasOpenRouterKey });
+          // #endregion
+          return <EmailVerificationBanner />;
+        })()}
         
         <div className="mb-8">
           <div className="flex items-center justify-between">
