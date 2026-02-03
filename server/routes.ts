@@ -2919,6 +2919,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // Sync session when DB says verified but session is stale (e.g. user verified in another tab)
+      if (user.emailVerified && req.session?.user && !req.session.user.emailVerified) {
+        req.session.user.emailVerified = true;
+        req.session.save((err) => { if (err) console.error('Session save error:', err); });
+      }
+
       // Validate GitHub token if user has GitHub connected (non-blocking)
       let githubConnected = false;
       if (user.githubId && user.githubToken) {
@@ -2948,6 +2954,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Prevent caching so clients always get fresh emailVerified after verification
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.json({
         success: true,
         user: {
