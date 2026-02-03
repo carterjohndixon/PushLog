@@ -428,7 +428,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
               }}
               onFocus={() => setIsSearchDropdownOpen(searchTerm.length > 0)}
               onBlur={() => setTimeout(() => setIsSearchDropdownOpen(false), 200)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-blue focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-input rounded-lg bg-background text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-ring focus:border-transparent"
             />
             {/* Search Dropdown */}
             {isSearchDropdownOpen && searchResults.length > 0 && (

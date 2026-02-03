@@ -48,9 +48,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         <Button 
           variant="ghost" 
           size="icon" 
-          className="relative hover:bg-gray-100 focus:bg-gray-100 active:bg-gray-100 focus-visible:ring-0 focus:ring-0"
+          className="relative"
         >
-          <Bell className="text-steel-gray hover:text-graphite transition-colors" />
+          <Bell className="text-muted-foreground hover:text-foreground transition-colors" />
           {hasUnread && (
             <span className={`absolute -top-1 -right-1 bg-log-green text-white text-xs rounded-full flex items-center justify-center ${
               count >= 10 ? 'w-5 h-5 px-1' : 'w-4 h-4'
@@ -65,9 +65,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           {notifications.map((notification) => (
           <div 
             key={notification.id} 
-            className={`flex items-center justify-between p-4 [&:hover]:!bg-gray-50 ${
-              notification.type === 'email_verification' ? 'bg-amber-50 border-b' : 
-              !notification.isRead ? 'bg-green-50 border-l-4 border-green-300' : 'bg-white'
+            className={`flex items-center justify-between p-4 [&:hover]:!bg-muted ${
+              notification.type === 'email_verification' ? 'bg-amber-500/10 dark:bg-amber-500/20 border-b border-border' : 
+              !notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : ''
             }`}
           >
             <div className="flex items-center flex-1">
@@ -82,16 +82,16 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               )}
               <div className="flex flex-col flex-1">
                 <span className={`text-sm font-medium ${
-                  notification.type === 'email_verification' ? 'text-amber-700' : 
+                  notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
-                  notification.type === 'slack_message_sent' ? 'text-sky-blue' : 'text-steel-gray'
+                  notification.type === 'slack_message_sent' ? 'text-sky-blue' : 'text-foreground'
                 }`}>
                   {notification.title || notification.message}
                 </span>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {notification.message}
                 </span>
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-muted-foreground/80">
                   {formatNotificationDate(notification.createdAt)}
                 </span>
               </div>
@@ -100,7 +100,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 hover:bg-gray-200"
+                className="h-6 w-6 p-0 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedNotification(notification);
@@ -108,27 +108,27 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 }}
                 title="View details"
               >
-                <Eye className="w-3 h-3 text-gray-500" />
+                <Eye className="w-3 h-3 text-muted-foreground" />
               </Button>
               {notification.type !== 'email_verification' && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 hover:bg-red-100 hover:text-red-600"
+                  className="h-6 w-6 p-0 hover:bg-destructive/10 hover:text-destructive"
                   onClick={(e) => {
                     e.stopPropagation();
                     removeNotification(notification.id);
                   }}
                   title="Remove notification"
                 >
-                  <X className="w-3 h-3 text-gray-500" />
+                  <X className="w-3 h-3 text-muted-foreground" />
                 </Button>
               )}
             </div>
           </div>
         ))}
         {(notifications.length === 0) && (
-          <div className="p-4 text-center text-steel-gray">
+          <div className="p-4 text-center text-muted-foreground">
             No new notifications
           </div>
         )}
@@ -136,11 +136,11 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         {notifications.length > 0 && (
           <>
             <DropdownMenuSeparator />
-            <div className="p-2 flex justify-between items-center bg-white border-t">
+            <div className="p-2 flex justify-between items-center bg-muted/50 border-t border-border">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-steel-gray hover:text-graphite"
+                className="text-xs text-muted-foreground hover:text-foreground"
                 onClick={(e) => {
                   e.stopPropagation();
                   markAllAsRead();
@@ -151,7 +151,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-xs text-red-600 hover:text-red-700"
+                className="text-xs text-destructive hover:text-destructive/90"
                 onClick={(e) => {
                   e.stopPropagation();
                   console.log('Clear All button clicked');
@@ -203,44 +203,44 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           return (
             <div className="space-y-4">
               <div>
-                <h3 className="font-medium text-gray-900">
+                <h3 className="font-medium text-foreground">
                   {selectedNotification.title || selectedNotification.message}
                 </h3>
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-muted-foreground mt-1">
                   {selectedNotification.message}
                 </p>
               </div>
 
               {/* Push Event Details */}
               {isPushEvent && metadata && (
-                <div className="border-t pt-4 space-y-3">
-                  <h4 className="font-semibold text-gray-900 text-sm">Push Event Details</h4>
+                <div className="border-t border-border pt-4 space-y-3">
+                  <h4 className="font-semibold text-foreground text-sm">Push Event Details</h4>
                   
                   {metadata.repositoryFullName && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Repository:</span>{' '}
-                      <span className="text-gray-600">{metadata.repositoryFullName}</span>
+                      <span className="font-medium text-foreground">Repository:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.repositoryFullName}</span>
                     </div>
                   )}
                   
                   {metadata.branch && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Branch:</span>{' '}
-                      <span className="text-gray-600">{metadata.branch}</span>
+                      <span className="font-medium text-foreground">Branch:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.branch}</span>
                     </div>
                   )}
                   
                   {metadata.author && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Author:</span>{' '}
-                      <span className="text-gray-600">{metadata.author}</span>
+                      <span className="font-medium text-foreground">Author:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.author}</span>
                     </div>
                   )}
                   
                   {metadata.commitMessage && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Commit Message:</span>
-                      <p className="text-gray-600 mt-1 pl-4 border-l-2 border-gray-200">
+                      <span className="font-medium text-foreground">Commit Message:</span>
+                      <p className="text-muted-foreground mt-1 pl-4 border-l-2 border-border">
                         {metadata.commitMessage}
                       </p>
                     </div>
@@ -248,11 +248,11 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   
                   {(metadata.additions !== undefined || metadata.deletions !== undefined) && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Changes:</span>{' '}
+                      <span className="font-medium text-foreground">Changes:</span>{' '}
                       <span className="text-green-600">+{metadata.additions || 0}</span>{' '}
                       <span className="text-red-600">-{metadata.deletions || 0}</span>
                       {metadata.filesChanged !== undefined && (
-                        <span className="text-gray-600"> ({metadata.filesChanged} files)</span>
+                        <span className="text-muted-foreground"> ({metadata.filesChanged} files)</span>
                       )}
                     </div>
                   )}
@@ -274,26 +274,26 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
                   {/* AI Summary Details */}
                   {metadata.aiGenerated && (
-                    <div className="mt-4 pt-4 border-t space-y-2">
-                      <h5 className="font-semibold text-gray-900 text-sm">AI Summary</h5>
+                    <div className="mt-4 pt-4 border-t border-border space-y-2">
+                      <h5 className="font-semibold text-foreground text-sm">AI Summary</h5>
                       
                       {metadata.aiModel && (
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700">Model:</span>{' '}
-                          <span className="text-gray-600">{metadata.aiModel}</span>
+                          <span className="font-medium text-foreground">Model:</span>{' '}
+                          <span className="text-muted-foreground">{metadata.aiModel}</span>
                         </div>
                       )}
                       
                       {metadata.aiSummary && (
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700">Summary:</span>
-                          <p className="text-gray-600 mt-1">{metadata.aiSummary}</p>
+                          <span className="font-medium text-foreground">Summary:</span>
+                          <p className="text-muted-foreground mt-1">{metadata.aiSummary}</p>
                         </div>
                       )}
                       
                       {metadata.aiImpact && (
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700">Impact:</span>{' '}
+                          <span className="font-medium text-foreground">Impact:</span>{' '}
                           <span className={`font-medium ${
                             metadata.aiImpact === 'high' ? 'text-red-600' :
                             metadata.aiImpact === 'medium' ? 'text-yellow-600' :
@@ -306,8 +306,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                       
                       {metadata.aiCategory && (
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700">Category:</span>{' '}
-                          <span className="text-gray-600 capitalize">{metadata.aiCategory}</span>
+                          <span className="font-medium text-foreground">Category:</span>{' '}
+                          <span className="text-muted-foreground capitalize">{metadata.aiCategory}</span>
                         </div>
                       )}
                     </div>
@@ -317,34 +317,34 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
               {/* Slack Message Details */}
               {isSlackMessage && metadata && (
-                <div className="border-t pt-4 space-y-3">
-                  <h4 className="font-semibold text-gray-900 text-sm">Slack Message Details</h4>
+                <div className="border-t border-border pt-4 space-y-3">
+                  <h4 className="font-semibold text-foreground text-sm">Slack Message Details</h4>
                   
                   {metadata.slackChannelName && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Channel:</span>{' '}
-                      <span className="text-gray-600">#{metadata.slackChannelName}</span>
+                      <span className="font-medium text-foreground">Channel:</span>{' '}
+                      <span className="text-muted-foreground">#{metadata.slackChannelName}</span>
                     </div>
                   )}
                   
                   {metadata.repositoryFullName && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Repository:</span>{' '}
-                      <span className="text-gray-600">{metadata.repositoryFullName}</span>
+                      <span className="font-medium text-foreground">Repository:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.repositoryFullName}</span>
                     </div>
                   )}
                   
                   {metadata.branch && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Branch:</span>{' '}
-                      <span className="text-gray-600">{metadata.branch}</span>
+                      <span className="font-medium text-foreground">Branch:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.branch}</span>
                     </div>
                   )}
                   
                   {metadata.commitMessage && (
                     <div className="text-sm">
-                      <span className="font-medium text-gray-700">Commit:</span>
-                      <p className="text-gray-600 mt-1 pl-4 border-l-2 border-gray-200">
+                      <span className="font-medium text-foreground">Commit:</span>
+                      <p className="text-muted-foreground mt-1 pl-4 border-l-2 border-border">
                         {metadata.commitMessage}
                       </p>
                     </div>
@@ -367,13 +367,13 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
                   {/* AI Model Used */}
                   {metadata.aiModel && (
-                    <div className="mt-4 pt-4 border-t">
+                    <div className="mt-4 pt-4 border-t border-border">
                       <div className="text-sm">
-                        <span className="font-medium text-gray-700">AI Model Used:</span>{' '}
-                        <span className="text-gray-600 font-mono">{metadata.aiModel}</span>
+                        <span className="font-medium text-foreground">AI Model Used:</span>{' '}
+                        <span className="text-muted-foreground font-mono">{metadata.aiModel}</span>
                       </div>
                       {metadata.aiGenerated === false && (
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="text-xs text-muted-foreground mt-1">
                           AI summary was not generated (fallback message used)
                         </p>
                       )}
@@ -382,12 +382,12 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
                   {/* AI Summary if available */}
                   {metadata.aiGenerated && metadata.aiSummary && (
-                    <div className="mt-4 pt-4 border-t space-y-2">
-                      <h5 className="font-semibold text-gray-900 text-sm">AI Summary</h5>
-                      <p className="text-sm text-gray-600">{metadata.aiSummary}</p>
+                    <div className="mt-4 pt-4 border-t border-border space-y-2">
+                      <h5 className="font-semibold text-foreground text-sm">AI Summary</h5>
+                      <p className="text-sm text-muted-foreground">{metadata.aiSummary}</p>
                       {metadata.aiImpact && (
                         <div className="text-sm">
-                          <span className="font-medium text-gray-700">Impact:</span>{' '}
+                          <span className="font-medium text-foreground">Impact:</span>{' '}
                           <span className={`font-medium ${
                             metadata.aiImpact === 'high' ? 'text-red-600' :
                             metadata.aiImpact === 'medium' ? 'text-yellow-600' :
@@ -403,7 +403,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               )}
 
               {/* Basic Info for all notifications */}
-              <div className="border-t pt-4 text-sm text-gray-500">
+              <div className="border-t border-border pt-4 text-sm text-muted-foreground">
                 <p><strong>Type:</strong> {selectedNotification.type.replace('_', ' ')}</p>
                 <p><strong>Created:</strong> {new Date(selectedNotification.createdAt).toLocaleString()}</p>
                 {metadata?.pushEventId && (
