@@ -311,8 +311,8 @@ export default function Analytics() {
                   </h4>
                   <div className="rounded-lg border border-border overflow-hidden">
                     <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-muted/50 border-b border-border">
+                    <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+                      <tr className="border-b border-border">
                           <th className="text-left p-2 font-medium text-foreground">Folder</th>
                           <th className="text-right p-2 text-muted-foreground">+ Additions</th>
                           <th className="text-right p-2 text-muted-foreground">− Deletions</th>
@@ -339,7 +339,7 @@ export default function Analytics() {
                   </h4>
                   <div className="rounded-lg border border-border overflow-hidden max-h-64 overflow-y-auto">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 bg-muted/50">
+                      <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
                         <tr className="border-b border-border">
                           <th className="text-left p-2 font-medium text-foreground">File</th>
                           <th className="text-right p-2 text-muted-foreground">+ Additions</th>
