@@ -1127,15 +1127,15 @@ export default function Dashboard() {
                             Add Workspace
                           </Button>
                         </div>
-                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                          <p className="text-xs text-blue-800 font-medium mb-1">💡 Connect a different Slack account?</p>
-                          <p className="text-xs text-blue-700">
+                        <div className="p-3 bg-primary/10 border border-border rounded-md">
+                          <p className="text-xs text-foreground font-medium mb-1">💡 Connect a different Slack account?</p>
+                          <p className="text-xs text-muted-foreground">
                             To connect your work Slack (or another account), first{" "}
                             <a 
                               href="https://slack.com/signout" 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="underline font-medium"
+                              className="underline font-medium text-foreground hover:text-log-green"
                             >
                               log out of Slack
                             </a>

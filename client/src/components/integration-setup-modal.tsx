@@ -271,7 +271,7 @@ export function IntegrationSetupModal({
                           <Github className="w-4 h-4" />
                           <span>{repo.name}</span>
                           {isPaused && (
-                            <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-1 rounded">
+                            <span className="text-xs text-amber-700 dark:text-amber-200 bg-amber-100 dark:bg-amber-500/20 px-2 py-1 rounded">
                               Currently paused
                             </span>
                           )}
@@ -284,11 +284,11 @@ export function IntegrationSetupModal({
           </div>
 
           {/* Slack Workspace Section */}
-          <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+          <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/50">
             <div className="flex items-center justify-between">
               <div>
                 <Label htmlFor="workspace" className="text-base font-semibold">Slack Workspace</Label>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   {workspaces && workspaces.length > 0 
                     ? `Connected to ${workspaces.length} workspace${workspaces.length > 1 ? 's' : ''}`
                     : "No workspaces connected yet"}
@@ -305,15 +305,15 @@ export function IntegrationSetupModal({
               </Button>
             </div>
             {workspaces && workspaces.length > 0 && (
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-xs text-blue-800 font-medium mb-1">💡 Connect a different Slack account?</p>
-                <p className="text-xs text-blue-700">
+              <div className="p-3 bg-primary/10 border border-border rounded-md">
+                <p className="text-xs text-foreground font-medium mb-1">💡 Connect a different Slack account?</p>
+                <p className="text-xs text-muted-foreground">
                   To connect your work Slack (or another account), first{" "}
                   <a 
                     href="https://slack.com" 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="underline font-medium"
+                    className="underline font-medium text-foreground hover:text-log-green"
                   >
                     log out of Slack
                   </a>
@@ -325,7 +325,7 @@ export function IntegrationSetupModal({
             {/* Slack Workspace Selection */}
             <div className="space-y-2">
             {workspacesLoading ? (
-              <div className="text-sm text-gray-500">Loading workspaces...</div>
+              <div className="text-sm text-muted-foreground">Loading workspaces...</div>
             ) : workspaces && workspaces.length > 0 ? (
               <Select 
                 value={selectedWorkspace} 
@@ -350,7 +350,7 @@ export function IntegrationSetupModal({
                     </SelectItem>
                   ))}
                   <div className="border-t my-1" />
-                  <SelectItem value="__add_new__" className="text-sky-blue font-medium">
+                  <SelectItem value="__add_new__" className="text-log-green font-medium">
                     <div className="flex items-center space-x-2">
                       <SiSlack className="w-4 h-4" />
                       <span>+ Add Another Workspace</span>
@@ -359,7 +359,7 @@ export function IntegrationSetupModal({
                 </SelectContent>
               </Select>
             ) : (
-              <div className="text-sm text-gray-500 p-3 bg-white rounded-md border">
+              <div className="text-sm text-muted-foreground p-3 bg-card rounded-md border border-border">
                 No Slack workspaces connected. Click "Connect Workspace" above to add one.
               </div>
             )}
@@ -371,7 +371,7 @@ export function IntegrationSetupModal({
             <div className="space-y-2">
               <Label htmlFor="channel">Slack Channel</Label>
               {channelsLoading ? (
-                <div className="text-sm text-gray-500">Loading channels...</div>
+                <div className="text-sm text-muted-foreground">Loading channels...</div>
               ) : channels && channels.length > 0 ? (
                 <Select value={selectedChannel} onValueChange={setSelectedChannel}>
                   <SelectTrigger>
@@ -383,7 +383,7 @@ export function IntegrationSetupModal({
                         <div className="flex items-center space-x-2">
                           <span>#{channel.name}</span>
                           {channel.is_private && (
-                            <span className="text-xs text-gray-500">(private)</span>
+                            <span className="text-xs text-muted-foreground">(private)</span>
                           )}
                         </div>
                       </SelectItem>
@@ -391,7 +391,7 @@ export function IntegrationSetupModal({
                   </SelectContent>
                 </Select>
               ) : (
-                <div className="text-sm text-gray-500">No channels available</div>
+                <div className="text-sm text-muted-foreground">No channels available</div>
               )}
             </div>
           )}
