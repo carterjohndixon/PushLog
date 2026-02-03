@@ -22,6 +22,7 @@ import { encrypt, decrypt } from "./encryption";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const DEBUG_LOG_PATH = path.join(__dirname, '..', '.cursor', 'debug.log');
 
 // Load .env file from the project root (one level up from server directory)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -124,8 +125,7 @@ export class DatabaseStorage implements IStorage {
     if (row) {
       const raw = row as any;
       try {
-        const logPath = path.join(process.cwd(), '.cursor', 'debug.log');
-        fs.appendFileSync(logPath, JSON.stringify({ location: 'database.ts:getUserById', message: 'User row from DB', data: { userId: id, hasOpenRouterKeyColumn: raw?.openRouterApiKey != null, openRouterApiKeyLength: typeof raw?.openRouterApiKey === 'string' ? raw.openRouterApiKey.length : 0 }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1' }) + '\n');
+        fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify({ location: 'database.ts:getUserById', message: 'User row from DB', data: { userId: id, hasOpenRouterKeyColumn: raw?.openRouterApiKey != null, openRouterApiKeyLength: typeof raw?.openRouterApiKey === 'string' ? raw.openRouterApiKey.length : 0 }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1' }) + '\n');
       } catch (_) {}
     }
     // #endregion

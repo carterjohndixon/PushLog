@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -43,7 +44,8 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 
 // #region agent log
-const DEBUG_LOG_PATH = path.join(process.cwd(), '.cursor', 'debug.log');
+const __dirnameRoutes = path.dirname(fileURLToPath(import.meta.url));
+const DEBUG_LOG_PATH = path.join(__dirnameRoutes, '..', '.cursor', 'debug.log');
 function debugLog(payload: { location: string; message: string; data?: object; hypothesisId?: string }) {
   try { fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify({ ...payload, timestamp: Date.now(), sessionId: 'debug-session' }) + '\n'); } catch (_) {}
 }
