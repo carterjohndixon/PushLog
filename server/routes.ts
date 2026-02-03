@@ -1310,17 +1310,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Preview Slack OAuth popup pages (dev only – so you can see the styled success/error pages)
-  const allowPreview = process.env.NODE_ENV === "development" || process.env.ENABLE_TEST_ROUTES === "true";
-  if (allowPreview) {
-    app.get("/api/slack/preview-popup", (req, res) => {
-      const variant = (req.query.variant as string)?.toLowerCase();
-      if (variant === "error") {
-        const redirectUrl = "/dashboard#error=" + encodeURIComponent("Failed to connect Slack workspace");
-        return res.type("text/html").send(getSlackErrorPopupHtml(redirectUrl));
-      }
-      return res.type("text/html").send(getSlackConnectedPopupHtml());
-    });
-  }
+  // const allowPreview = process.env.NODE_ENV === "development" || process.env.ENABLE_TEST_ROUTES === "true";
+  // if (allowPreview) {
+  app.get("/api/slack/preview-popup", (req, res) => {
+    const variant = (req.query.variant as string)?.toLowerCase();
+    if (variant === "error") {
+      const redirectUrl = "/dashboard#error=" + encodeURIComponent("Failed to connect Slack workspace");
+      return res.type("text/html").send(getSlackErrorPopupHtml(redirectUrl));
+    }
+    return res.type("text/html").send(getSlackConnectedPopupHtml());
+  });
+  // }
 
   // Add Slack connection initiation endpoint
   app.get("/api/slack/connect", authenticateToken, requireEmailVerification, async (req, res) => {
