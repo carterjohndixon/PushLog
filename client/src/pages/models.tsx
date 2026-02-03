@@ -13,11 +13,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Key, Sparkles, CheckCircle2, XCircle, Loader2, Trash2, Search, DollarSign, Zap } from "lucide-react";
+import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/footer";
 import { getAiModelDisplayName } from "@/lib/utils";
+import { Link } from "wouter";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 interface OpenRouterModel {
   id: string;
@@ -55,10 +65,18 @@ interface OpenRouterUsage {
   calls: UsageCall[];
 }
 
+interface IntegrationOption {
+  id: number;
+  repositoryName: string;
+  slackChannelName: string;
+}
+
 export default function Models() {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [contextFilter, setContextFilter] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<OpenRouterModel | null>(null);
+  const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -90,6 +108,36 @@ export default function Models() {
       return res.json();
     },
     enabled: userHasKey,
+  });
+
+  const { data: integrations } = useQuery<IntegrationOption[]>({
+    queryKey: ["/api/integrations"],
+    queryFn: async () => {
+      const res = await fetch("/api/integrations", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load integrations");
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    },
+    enabled: !!selectedModel && userHasKey,
+  });
+
+  const applyToIntegrationMutation = useMutation({
+    mutationFn: async ({ integrationId, modelId }: { integrationId: number; modelId: string }) => {
+      const res = await apiRequest("PATCH", `/api/integrations/${integrationId}`, { aiModel: modelId });
+      return res.json();
+    },
+    onSuccess: (_, { modelId }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      setSelectedModel(null);
+      setApplyToIntegrationId("");
+      toast({
+        title: "Model applied",
+        description: `Integration will use ${getAiModelDisplayName(modelId)} for commit summaries.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to apply model", description: e.message, variant: "destructive" });
+    },
   });
 
   const verifyMutation = useMutation({
@@ -210,27 +258,37 @@ export default function Models() {
             {profileLoading ? (
               <Skeleton className="h-10 w-full max-w-md" />
             ) : userHasKey ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <CheckCircle2 className="w-5 h-5" />
-                  <span className="font-medium">API key saved</span>
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="font-medium">API key saved</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-destructive text-destructive hover:bg-destructive/10"
+                    disabled={removeKeyMutation.isPending}
+                    onClick={() => removeKeyMutation.mutate()}
+                  >
+                    {removeKeyMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Remove key
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-destructive text-destructive hover:bg-destructive/10"
-                  disabled={removeKeyMutation.isPending}
-                  onClick={() => removeKeyMutation.mutate()}
-                >
-                  {removeKeyMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Remove key
-                    </>
-                  )}
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  To <strong className="text-foreground">select which model</strong> an integration uses: go to{" "}
+                  <Link href="/integrations" className="text-log-green hover:underline">Integrations</Link>
+                  {" "}or{" "}
+                  <Link href="/dashboard" className="text-log-green hover:underline">Dashboard</Link>
+                  , open the <span className="font-medium text-foreground">⋮ menu</span> on an integration, turn on{" "}
+                  <span className="font-medium text-foreground">OpenRouter</span>, pick a model from the dropdown, and save.
+                </p>
               </div>
             ) : (
               <div className="flex flex-col sm:flex-row gap-2 max-w-xl">
@@ -337,7 +395,7 @@ export default function Models() {
               Browse OpenRouter models
             </CardTitle>
             <CardDescription>
-              Search and filter by name or context length. Use these model IDs when choosing a model in your integration settings.
+              Search and filter by name or context length. Click a model for details and to apply it to an integration.
             </CardDescription>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <div className="relative flex-1">
@@ -382,7 +440,11 @@ export default function Models() {
                   </TableHeader>
                   <TableBody>
                     {filteredModels.slice(0, 100).map((m) => (
-                      <TableRow key={m.id} className="border-border">
+                      <TableRow
+                        key={m.id}
+                        className="border-border cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => setSelectedModel(m)}
+                      >
                         <TableCell>
                           <div>
                             <p className="font-medium text-foreground">{m.name || m.id}</p>
@@ -417,6 +479,119 @@ export default function Models() {
             )}
           </CardContent>
         </Card>
+
+        {/* Model detail modal */}
+        <Dialog open={!!selectedModel} onOpenChange={(open) => !open && setSelectedModel(null)}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            {selectedModel && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-xl text-foreground flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-log-green" />
+                    {selectedModel.name || selectedModel.id}
+                  </DialogTitle>
+                  <DialogDescription className="font-mono text-xs text-muted-foreground">
+                    {selectedModel.id}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  {selectedModel.description && (
+                    <p className="text-sm text-muted-foreground">{selectedModel.description}</p>
+                  )}
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-lg border border-border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Context length</p>
+                      <p className="font-medium text-foreground">
+                        {selectedModel.context_length != null
+                          ? selectedModel.context_length.toLocaleString()
+                          : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Prompt (per 1K)</p>
+                      <p className="font-medium text-foreground">{formatPrice(selectedModel.pricing?.prompt)}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-3">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Completion (per 1K)</p>
+                      <p className="font-medium text-foreground">{formatPrice(selectedModel.pricing?.completion)}</p>
+                    </div>
+                    {selectedModel.pricing?.request != null && (
+                      <div className="rounded-lg border border-border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Request</p>
+                        <p className="font-medium text-foreground">{formatPrice(selectedModel.pricing.request)}</p>
+                      </div>
+                    )}
+                  </div>
+                  {selectedModel.top_provider && (selectedModel.top_provider.context_length != null || selectedModel.top_provider.max_completion_tokens != null) && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Top provider</p>
+                      {selectedModel.top_provider.context_length != null && (
+                        <p className="text-foreground">Context: {selectedModel.top_provider.context_length.toLocaleString()}</p>
+                      )}
+                      {selectedModel.top_provider.max_completion_tokens != null && (
+                        <p className="text-foreground">Max completion tokens: {selectedModel.top_provider.max_completion_tokens.toLocaleString()}</p>
+                      )}
+                    </div>
+                  )}
+                  <a
+                    href={`https://openrouter.ai/models/${selectedModel.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm text-log-green hover:underline"
+                  >
+                    View on OpenRouter <ExternalLink className="w-4 h-4" />
+                  </a>
+                  <Separator className="my-4" />
+                  {userHasKey && (
+                    <div className="space-y-3">
+                      <p className="text-sm font-medium text-foreground">Use this model for an integration</p>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="flex-1 min-w-[200px]">
+                          <Select value={applyToIntegrationId} onValueChange={setApplyToIntegrationId}>
+                            <SelectTrigger className="bg-background border-border text-foreground">
+                              <SelectValue placeholder="Choose integration..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(integrations ?? []).map((int) => (
+                                <SelectItem key={int.id} value={String(int.id)} className="text-foreground">
+                                  {int.repositoryName} → #{int.slackChannelName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          variant="glow"
+                          className="text-white shrink-0"
+                          disabled={!applyToIntegrationId || applyToIntegrationMutation.isPending}
+                          onClick={() => {
+                            if (!applyToIntegrationId || !selectedModel) return;
+                            applyToIntegrationMutation.mutate({
+                              integrationId: Number(applyToIntegrationId),
+                              modelId: selectedModel.id,
+                            });
+                          }}
+                        >
+                          {applyToIntegrationMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Apply"
+                          )}
+                        </Button>
+                      </div>
+                      {integrations?.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          No integrations yet. Create one from <Link href="/dashboard" className="text-log-green hover:underline">Dashboard</Link> or{" "}
+                          <Link href="/integrations" className="text-log-green hover:underline">Integrations</Link>.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
       <Footer />
     </div>
