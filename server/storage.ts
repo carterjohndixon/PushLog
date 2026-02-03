@@ -32,6 +32,7 @@ export interface IStorage {
   getIntegrationsByUserId(userId: number): Promise<Integration[]>;
   getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]>;
   getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined>;
+  getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]>;
   createIntegration(integration: InsertIntegration): Promise<Integration>;
   updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined>;
   deleteIntegration(id: number): Promise<boolean>;
@@ -181,6 +182,12 @@ export class MemStorage implements IStorage {
 
   async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
     return Array.from(this.integrations.values()).find(integration => integration.repositoryId === repositoryId);
+  }
+
+  async getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]> {
+    return Array.from(this.integrations.values()).filter(
+      i => i.slackWorkspaceId === workspaceId && i.slackChannelId === channelId
+    );
   }
 
   async createIntegration(integration: InsertIntegration): Promise<Integration> {

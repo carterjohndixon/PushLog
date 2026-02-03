@@ -180,6 +180,12 @@ export class DatabaseStorage implements IStorage {
     return result[0] as any;
   }
 
+  async getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]> {
+    return await db.select().from(integrations).where(
+      and(eq(integrations.slackWorkspaceId, workspaceId), eq(integrations.slackChannelId, channelId))
+    ) as any;
+  }
+
   async createIntegration(integration: InsertIntegration): Promise<Integration> {
     const result = await db.insert(integrations).values(integration).returning();
     return result[0] as any;

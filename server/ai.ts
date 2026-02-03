@@ -161,11 +161,20 @@ Respond with only valid JSON:
       throw new Error('AI response missing required fields');
     }
     
-    // Calculate usage and cost (OpenRouter: user pays; we don't deduct PushLog credits)
+    // Calculate usage and cost
     const tokensUsed = completion.usage?.total_tokens || 0;
-    const cost = useOpenRouter ? 0 : calculateTokenCost(model, tokensUsed);
-    
-    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}${useOpenRouter ? '' : `, Cost: $${(cost / 100).toFixed(4)}`}`);
+    const usage = completion.usage as { total_tokens?: number; cost?: number } | undefined;
+    let cost: number;
+    if (useOpenRouter && typeof usage?.cost === 'number') {
+      // OpenRouter returns cost in USD (as "credits"); store in cents for ai_usage
+      cost = Math.round(usage.cost * 100);
+    } else if (!useOpenRouter) {
+      cost = calculateTokenCost(model, tokensUsed);
+    } else {
+      cost = 0;
+    }
+
+    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
     
     return {
       summary,

@@ -39,6 +39,7 @@ import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
+import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -68,7 +69,7 @@ async function getUserIdFromOAuthState(state: string): Promise<number | null> {
   }
 }
 
-const SALT_ROUNDS = 10;
+const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
 
 // Helper function to broadcast notifications to connected clients
 function broadcastNotification(userId: number, notification: any) {
@@ -77,6 +78,50 @@ function broadcastNotification(userId: number, notification: any) {
     if (stream) {
       stream.write(`data: ${JSON.stringify({ type: 'notification', data: notification })}\n\n`);
     }
+  }
+}
+
+/** Slack slash command handler. Must be mounted with express.raw({ type: 'application/x-www-form-urlencoded' }) so req.body is a Buffer. */
+export async function slackCommandsHandler(req: Request, res: Response): Promise<void> {
+  const rawBody = req.body;
+  if (!rawBody || !(rawBody instanceof Buffer)) {
+    res.status(400).json({ response_type: "ephemeral", text: "Invalid request body." });
+    return;
+  }
+  const signature = req.headers["x-slack-signature"] as string | undefined;
+  const signingSecret = process.env.SLACK_SIGNING_SECRET;
+  if (!signingSecret) {
+    console.error("SLACK_SIGNING_SECRET not configured");
+    res.status(500).json({ response_type: "ephemeral", text: "Slack commands are not configured." });
+    return;
+  }
+  if (!verifySlackRequest(rawBody, signature, signingSecret)) {
+    res.status(401).json({ response_type: "ephemeral", text: "Invalid signature." });
+    return;
+  }
+  const payload = parseSlackCommandBody(rawBody.toString("utf8"));
+  const getIntegrationsForChannel = async (teamId: string, channelId: string) => {
+    const workspace = await databaseStorage.getSlackWorkspaceByTeamId(teamId);
+    if (!workspace) return [];
+    const integrations = await databaseStorage.getIntegrationsBySlackChannel(workspace.id, channelId);
+    const result: { repositoryName: string; slackChannelName: string; aiModel: string | null; isActive: boolean }[] = [];
+    for (const i of integrations) {
+      const repo = await databaseStorage.getRepository(i.repositoryId);
+      result.push({
+        repositoryName: repo?.name ?? "Unknown",
+        slackChannelName: i.slackChannelName,
+        aiModel: i.aiModel ?? null,
+        isActive: !!i.isActive,
+      });
+    }
+    return result;
+  };
+  try {
+    const response = await handleSlackCommand(payload, getIntegrationsForChannel);
+    res.json(response);
+  } catch (err) {
+    console.error("Slack command error:", err);
+    res.status(500).json({ response_type: "ephemeral", text: "Something went wrong. Try again later." });
   }
 }
 

@@ -8,7 +8,7 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
-import { registerRoutes } from "./routes";
+import { registerRoutes, slackCommandsHandler } from "./routes";
 import pkg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -159,6 +159,13 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Slack slash commands: must receive raw body for signature verification (before body parsers)
+app.post(
+  "/api/slack/commands",
+  express.raw({ type: "application/x-www-form-urlencoded", limit: "1mb" }),
+  slackCommandsHandler
+);
 
 // Body parsing with security limits
 app.use(express.json({ 
