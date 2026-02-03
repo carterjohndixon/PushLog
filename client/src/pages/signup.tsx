@@ -188,7 +188,7 @@ export default function Signup() {
           </div>
           <div className="space-y-2">
             <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
-            <div className="relative">
+            <div className="relative mt-1.5">
               <Input 
                 onChange={(e) => setPassword(e.target.value)} 
                 onFocus={() => setPasswordFocused(true)}
@@ -197,12 +197,12 @@ export default function Signup() {
                 id="password" 
                 placeholder="••••••••" 
                 required 
-                className="mt-1.5 pr-10"
+                className="pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(prev => !prev)}
-                className="absolute right-2 top-[38px] text-muted-foreground hover:text-foreground transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
                 {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
