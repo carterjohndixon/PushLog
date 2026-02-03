@@ -17,9 +17,9 @@ export default {
       boxShadow: {
         forest: "0 4px 14px -2px hsl(var(--log-green) / 0.08), 0 2px 6px -2px hsl(var(--log-green) / 0.04)",
         "forest-lg": "0 10px 40px -10px hsl(var(--log-green) / 0.12), 0 4px 12px -4px hsl(var(--log-green) / 0.06)",
-        glow: "0 0 20px hsl(var(--log-green) / 0.4), 0 0 40px hsl(var(--log-green) / 0.15)",
-        "glow-hover": "0 0 28px hsl(var(--log-green) / 0.5), 0 0 56px hsl(var(--log-green) / 0.25)",
-        "glow-lg": "0 0 32px hsl(var(--log-green) / 0.45), 0 0 64px hsl(var(--log-green) / 0.2)",
+        glow: "0 0 24px hsl(var(--log-green) / 0.55), 0 0 48px hsl(var(--log-green) / 0.25)",
+        "glow-hover": "0 0 32px hsl(var(--log-green) / 0.65), 0 0 64px hsl(var(--log-green) / 0.35)",
+        "glow-lg": "0 0 40px hsl(var(--log-green) / 0.5), 0 0 80px hsl(var(--log-green) / 0.3)",
       },
       colors: {
         background: "hsl(var(--background))",
