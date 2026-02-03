@@ -34,26 +34,24 @@ export function EmailVerificationBanner() {
   };
 
   return (
-    <Alert className="mb-6 border-orange-200 bg-orange-50">
-      <AlertDescription className="flex items-center justify-between w-full">
-        <div className="flex items-center space-x-2">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <Mail className="h-4 w-4 text-orange-600" />
-          <span className="text-orange-800">
+    <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-amber-800/70 dark:bg-card dark:shadow-forest">
+      <AlertDescription className="flex items-center justify-between w-full gap-4">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0 text-orange-600 dark:text-amber-400" />
+          <Mail className="h-4 w-4 shrink-0 text-orange-600 dark:text-amber-400" />
+          <span className="text-orange-800 dark:text-foreground">
             <strong>Email verification required.</strong> Please verify your email address to access GitHub and Slack integrations.
           </span>
         </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResendEmail}
-            disabled={resendEmailMutation.isPending}
-            className="border-orange-300 text-orange-700 hover:bg-orange-100"
-          >
-            {resendEmailMutation.isPending ? "Sending..." : "Resend Email"}
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleResendEmail}
+          disabled={resendEmailMutation.isPending}
+          className="shrink-0 border-orange-300 text-orange-700 hover:bg-orange-100 dark:border-border dark:bg-muted dark:text-foreground dark:hover:bg-muted/80"
+        >
+          {resendEmailMutation.isPending ? "Sending..." : "Resend Email"}
+        </Button>
       </AlertDescription>
     </Alert>
   );

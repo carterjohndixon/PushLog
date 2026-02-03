@@ -885,15 +885,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await databaseStorage.getUserById(userId);
       if (!user) {
-        return res.status(404).json({ error: "User not found" });
+        res.status(404).json({ error: "User not found" });
       }
 
-      if (user.emailVerified) {
-        return res.status(400).json({ error: "Email is already verified" });
+      if (user?.emailVerified) {
+        res.status(400).json({ error: "Email is already verified" });
       }
 
-      if (!user.email) {
-        return res.status(400).json({ error: "No email address associated with account" });
+      if (!user?.email) {
+        res.status(400).json({ error: "No email address associated with account" });
       }
 
       // Generate new verification token
@@ -907,7 +907,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Send verification email
-      await sendVerificationEmail(user.email, verificationToken);
+      await sendVerificationEmail(user?.email ?? '', verificationToken);
 
       // Create notification for resend email
       let notification;
