@@ -2830,8 +2830,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
         }
       });
-    } catch (error) {
-      console.error("Profile error:", error);
+    } catch (error: any) {
+      console.error("Profile error:", error?.message ?? error);
+      if (error?.message?.includes("open_router_api_key") || error?.code === "42703") {
+        console.error("Profile failed: users table is missing open_router_api_key. Run: migrations/add-openrouter-api-key-users.sql");
+      }
       res.status(500).json({ error: "Failed to fetch profile" });
     }
   });
