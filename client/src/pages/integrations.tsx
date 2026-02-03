@@ -150,9 +150,8 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
     queryKey: ['/api/repositories'],
     queryFn: async () => {
       const response = await fetch('/api/repositories', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -172,12 +171,11 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
     queryKey: ['/api/integrations'],
     queryFn: async () => {
       const response = await fetch('/api/integrations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || "Failed to fetch integrations");
         // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {

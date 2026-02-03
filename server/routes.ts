@@ -1541,11 +1541,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/integrations", authenticateToken, async (req, res) => {
     try {
       const userId = Number(req.user!.userId);
-      if (!Number.isInteger(userId) || userId < 1) {
+      if (Number.isNaN(userId) || userId < 1) {
         return res.status(400).json({ error: "Invalid session" });
       }
-
-      console.log("Fetching integrations for user:", userId);
 
       const integrations = await storage.getIntegrationsByUserId(userId);
       if (!Array.isArray(integrations)) {

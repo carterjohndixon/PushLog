@@ -132,38 +132,40 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-graphite mb-2">Log in to PushLog</h1>
-          <p className="text-steel-gray">Seamlessly connect GitHub with Slack</p>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Log in to PushLog</h1>
+          <p className="text-muted-foreground">Seamlessly connect GitHub with Slack</p>
         </div>
 
-        <form className="bg-gray-50 shadow-lg rounded-xl p-6 space-y-4">
+        <form className="bg-card border border-border shadow-lg rounded-xl p-6 space-y-4">
           <div>
-            <Label htmlFor="identifier" className="text-graphite">Email or Username</Label>
+            <Label htmlFor="identifier" className="text-foreground">Email or Username</Label>
             <Input 
               onChange={(e) => setIdentifier(e.target.value)} 
               type="text" 
               id="identifier" 
               placeholder="you@example.com or username" 
               required 
+              className="bg-background border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
           <div className="mb-6 relative">
-            <Label htmlFor="password" className="text-graphite">Password</Label>
+            <Label htmlFor="password" className="text-foreground">Password</Label>
             <Input 
               onChange={(e) => setPassword(e.target.value)} 
               type={showPassword ? "text" : "password"} 
               id="password" 
               placeholder="••••••••" 
               required 
+              className="bg-background border-border text-foreground placeholder:text-muted-foreground"
             />
             <button
               type="button"
               onClick={() => setShowPassword(prev => !prev)}
-              className="absolute right-2 top-[45%] transform -translate-y-1/2 text-graphite hover:text-black"
+              className="absolute right-2 top-[45%] transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
             </button>
@@ -186,13 +188,13 @@ export default function Login() {
         </form>
 
         <div className="flex items-center justify-center">
-          <span className="text-sm text-steel-gray">or</span>
+          <span className="text-sm text-muted-foreground">or</span>
         </div>
 
         <Button
           onClick={handleGitHubConnect}
           variant="outline"
-          className="w-full bg-gray-100 text-graphite hover:bg-gray-200 font-semibold"
+          className="w-full bg-muted text-foreground hover:bg-muted/80 border-border font-semibold"
         >
           <Github className="mr-2 w-4 h-4" />
           Log in with GitHub
@@ -201,7 +203,7 @@ export default function Login() {
         <Button
           onClick={handleGoogleConnect}
           variant="outline"
-          className="w-full bg-gray-100 text-graphite hover:bg-gray-200 font-semibold"
+          className="w-full bg-muted text-foreground hover:bg-muted/80 border-border font-semibold"
         >
           <svg className="mr-2 w-4 h-4" viewBox="0 0 24 24">
             <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
@@ -209,7 +211,7 @@ export default function Login() {
           Log in with Google
         </Button>
 
-        <p className="text-center text-sm text-steel-gray">
+        <p className="text-center text-sm text-muted-foreground">
           Don't have an account? <a href="/signup" className="text-log-green hover:underline">Sign up</a>
         </p>
       </div>

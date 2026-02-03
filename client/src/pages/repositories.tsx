@@ -86,16 +86,14 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     queryKey: ['/api/repositories'],
     queryFn: async () => {
       const response = await fetch('/api/repositories', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || 'Failed to fetch repositories');
-        // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return [];
         }
         throw error;
       }
@@ -108,21 +106,22 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     queryKey: ['/api/integrations'],
     queryFn: async () => {
       const response = await fetch('/api/integrations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || "Failed to fetch integrations");
-        // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return [];
         }
         throw error;
       }
       const data = await response.json();
-      return data;
+      return data.map((integration: any) => ({
+        ...integration,
+        status: integration.isActive ? 'active' : 'paused',
+      }));
     }
   });
 
@@ -131,22 +130,20 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     queryKey: ['/api/push-events'],
     queryFn: async () => {
       const response = await fetch('/api/push-events', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || "Failed to fetch push events");
-        // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return [];
         }
         throw error;
       }
       return response.json();
     },
-    refetchInterval: 30000, // Refetch every 30 seconds for real-time updates
+    refetchInterval: 30000,
   });
 
   // Toggle repository status mutation
@@ -154,12 +151,14 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     mutationFn: async ({ repositoryId, isActive }: { repositoryId: number; isActive: boolean }) => {
       const response = await fetch(`/api/repositories/${repositoryId}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Accept': 'application/json',
         },
         body: JSON.stringify({ isActive })
       });
+      if (!response.ok) throw new Error('Failed to update repository');
       return response.json();
     },
     onSuccess: () => {
@@ -184,9 +183,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     mutationFn: async (repoId: number) => {
       const response = await fetch(`/api/repositories/${repoId}`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) throw new Error('Failed to delete repository');
       return response.json();
@@ -216,12 +214,14 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
       const response = await fetch(`/api/repositories/${id}`, {
         method: 'PATCH',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Accept': 'application/json',
         },
         body: JSON.stringify(updates)
       });
+      if (!response.ok) throw new Error('Failed to update repository');
       return response.json();
     },
     onSuccess: () => {

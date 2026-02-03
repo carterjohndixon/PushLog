@@ -163,11 +163,18 @@ export default function Dashboard() {
       } else {
         throw new Error('No redirect URL received');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to initiate GitHub connection:', error);
+      let description = "Failed to connect to GitHub. Please try again.";
+      try {
+        const msg = typeof error?.message === 'string' ? error.message : '';
+        if (msg.includes('already connected')) description = "Your GitHub account is already connected.";
+        else if (msg.includes('verification') || msg.includes('Email')) description = "Please verify your email first.";
+        else if (msg) description = msg;
+      } catch {}
       toast({
         title: "Connection Failed",
-        description: "Failed to connect to GitHub. Please try again.",
+        description,
         variant: "destructive",
       });
     }
@@ -178,9 +185,10 @@ export default function Dashboard() {
     mutationFn: async (repository: ConnectRepositoryData) => {
       const response = await fetch('/api/repositories', {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Accept': 'application/json',
         },
         body: JSON.stringify({
           ...repository,
@@ -290,16 +298,14 @@ export default function Dashboard() {
     queryKey: ['/api/repositories'],
     queryFn: async () => {
       const response = await fetch('/api/repositories', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || 'Failed to fetch repositories');
-        // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return [];
         }
         throw error;
       }
@@ -312,21 +318,18 @@ export default function Dashboard() {
     queryKey: ['/api/integrations'],
     queryFn: async () => {
       const response = await fetch('/api/integrations', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         const error = new Error(errorData.error || "Failed to fetch integrations");
-        // Handle token expiration
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return [];
         }
         throw error;
       }
       const data = await response.json();
-      // Server already provides status field, no need to map
       return data;
     }
   });
