@@ -126,17 +126,17 @@ export default function Home() {
       <Header />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-green-50 to-blue-50 py-20">
+      <section className="bg-muted/40 dark:bg-muted/60 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="flex justify-center mb-6">
               <Logo size="xl" className="shadow-lg" />
             </div>
-            <h1 className="text-5xl font-bold text-graphite mb-6">
+            <h1 className="text-5xl font-bold text-foreground mb-6">
               Bridge Your GitHub & Slack
               <span className="text-brand-gradient"> Seamlessly</span>
             </h1>
-            <p className="text-xl text-steel-gray mb-8 max-w-3xl mx-auto">
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
               Automate your development workflow with intelligent push notifications, code summaries, 
               and team collaboration tools that keep everyone in sync.
             </p>
@@ -162,11 +162,11 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <Card className="text-center shadow-lg">
               <CardContent className="p-6">
-                <div className="w-16 h-16 bg-gray-900 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <Github className="text-white text-2xl w-8 h-8" />
+                <div className="w-16 h-16 bg-secondary rounded-lg mx-auto mb-4 flex items-center justify-center">
+                  <Github className="text-foreground text-2xl w-8 h-8" />
                 </div>
-                <h3 className="font-semibold text-graphite mb-2">Push Detection</h3>
-                <p className="text-steel-gray text-sm">Automatically detects new commits and changes</p>
+                <h3 className="font-semibold text-foreground mb-2">Push Detection</h3>
+                <p className="text-muted-foreground text-sm">Automatically detects new commits and changes</p>
               </CardContent>
             </Card>
             <Card className="text-center shadow-lg">
@@ -174,17 +174,17 @@ export default function Home() {
                 <div className="w-16 h-16 bg-log-green rounded-lg mx-auto mb-4 flex items-center justify-center">
                   <Brain className="text-white text-2xl w-8 h-8" />
                 </div>
-                <h3 className="font-semibold text-graphite mb-2">AI Summary</h3>
-                <p className="text-steel-gray text-sm">Generates intelligent code summaries</p>
+                <h3 className="font-semibold text-foreground mb-2">AI Summary</h3>
+                <p className="text-muted-foreground text-sm">Generates intelligent code summaries</p>
               </CardContent>
             </Card>
             <Card className="text-center shadow-lg">
               <CardContent className="p-6">
-                <div className="w-16 h-16 bg-sky-blue rounded-lg mx-auto mb-4 flex items-center justify-center">
+                <div className="w-16 h-16 bg-log-green rounded-lg mx-auto mb-4 flex items-center justify-center">
                   <SiSlack className="text-white text-2xl" />
                 </div>
-                <h3 className="font-semibold text-graphite mb-2">Team Notification</h3>
-                <p className="text-steel-gray text-sm">Sends formatted updates to Slack channels</p>
+                <h3 className="font-semibold text-foreground mb-2">Team Notification</h3>
+                <p className="text-muted-foreground text-sm">Sends formatted updates to Slack channels</p>
               </CardContent>
             </Card>
           </div>
@@ -192,13 +192,13 @@ export default function Home() {
       </section>
 
       {/* Dashboard Preview */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-graphite mb-4">
+            <h2 className="text-4xl font-bold text-foreground mb-4">
               Powerful Dashboard Experience
             </h2>
-            <p className="text-xl text-steel-gray max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Monitor all your integrations, configure settings, and track performance from one central hub.
             </p>
           </div>
@@ -206,21 +206,21 @@ export default function Home() {
           {/* Dashboard Mockup */}
           <Card className="overflow-hidden shadow-2xl">
             {/* Dashboard Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <Logo size="md" />
                 <div>
                   <h1 className="text-xl font-bold text-brand-gradient">PushLog</h1>
-                  <p className="text-xs text-steel-gray">GitHub ↔ Slack Integration</p>
+                  <p className="text-xs text-muted-foreground">GitHub ↔ Slack Integration</p>
                 </div>
               </div>
             </div>
 
             {/* Main Content */}
-            <div className="p-6 bg-gray-50">
+            <div className="p-6 bg-muted/30">
               <div className="mb-8">
-                <h1 className="text-3xl font-bold text-graphite">Dashboard</h1>
-                <p className="text-steel-gray mt-2">Manage your integrations and monitor repository activity</p>
+                <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+                <p className="text-muted-foreground mt-2">Manage your integrations and monitor repository activity</p>
               </div>
 
               {/* Stats Cards */}
@@ -229,10 +229,10 @@ export default function Home() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-steel-gray">Active Integrations</p>
+                        <p className="text-sm text-muted-foreground">Active Integrations</p>
                         <p className="text-2xl font-bold text-log-green">8</p>
                       </div>
-                      <div className="w-12 h-12 bg-log-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                         <LinkIcon className="text-log-green w-6 h-6" />
                       </div>
                     </div>
@@ -243,11 +243,11 @@ export default function Home() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-steel-gray">Connected Repos</p>
-                        <p className="text-2xl font-bold text-sky-blue">12</p>
+                        <p className="text-sm text-muted-foreground">Connected Repos</p>
+                        <p className="text-2xl font-bold text-log-green">12</p>
                       </div>
-                      <div className="w-12 h-12 bg-sky-blue bg-opacity-10 rounded-lg flex items-center justify-center">
-                        <Github className="text-sky-blue w-6 h-6" />
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Github className="text-log-green w-6 h-6" />
                       </div>
                     </div>
                   </CardContent>
@@ -257,10 +257,10 @@ export default function Home() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-steel-gray">Daily Pushes</p>
-                        <p className="text-2xl font-bold text-graphite">24</p>
+                        <p className="text-sm text-muted-foreground">Daily Pushes</p>
+                        <p className="text-2xl font-bold text-foreground">24</p>
                       </div>
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                         <GitBranch className="text-log-green w-6 h-6" />
                       </div>
                     </div>
@@ -271,11 +271,11 @@ export default function Home() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-steel-gray">Notifications Sent</p>
-                        <p className="text-2xl font-bold text-steel-gray">156</p>
+                        <p className="text-sm text-muted-foreground">Notifications Sent</p>
+                        <p className="text-2xl font-bold text-muted-foreground">156</p>
                       </div>
-                      <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Bell className="text-sky-blue w-6 h-6" />
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Bell className="text-log-green w-6 h-6" />
                       </div>
                     </div>
                   </CardContent>
@@ -288,7 +288,7 @@ export default function Home() {
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold text-graphite">Connected Repositories</CardTitle>
+                      <CardTitle className="text-lg font-semibold text-foreground">Connected Repositories</CardTitle>
                       <Button 
                         size="sm" 
                         className="btn-glow"
@@ -301,14 +301,14 @@ export default function Home() {
                   <CardContent>
                     <div className="space-y-3">
                       {[1, 2].map((i) => (
-                        <div key={i} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                        <div key={i} className="flex items-center justify-between p-3 border border-border rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                              <Github className="text-white w-4 h-4" />
+                            <div className="w-8 h-8 bg-secondary rounded flex items-center justify-center">
+                              <Github className="text-foreground w-4 h-4" />
                             </div>
                             <div>
-                              <p className="font-medium text-graphite">example/repository-{i}</p>
-                              <p className="text-xs text-steel-gray">Last push: 2 hours ago</p>
+                              <p className="font-medium text-foreground">example/repository-{i}</p>
+                              <p className="text-xs text-muted-foreground">Last push: 2 hours ago</p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -326,19 +326,19 @@ export default function Home() {
                 {/* Active Integrations */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-lg font-semibold text-graphite">Active Integrations</CardTitle>
+                    <CardTitle className="text-lg font-semibold text-foreground">Active Integrations</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
                       {[1, 2].map((i) => (
-                        <div key={i} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                        <div key={i} className="flex items-center justify-between p-4 bg-muted rounded-lg">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-log-green bg-opacity-10 rounded-lg flex items-center justify-center">
+                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
                               <SiSlack className="text-log-green" />
                             </div>
                             <div>
-                              <p className="font-medium text-graphite">example/repository-{i}</p>
-                              <p className="text-sm text-steel-gray">#dev-updates channel</p>
+                              <p className="font-medium text-foreground">example/repository-{i}</p>
+                              <p className="text-sm text-muted-foreground">#dev-updates channel</p>
                             </div>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -360,7 +360,7 @@ export default function Home() {
               {/* Quick Actions */}
               <Card className="mt-8">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold text-graphite">Quick Actions</CardTitle>
+                  <CardTitle className="text-lg font-semibold text-foreground">Quick Actions</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -384,7 +384,7 @@ export default function Home() {
                       variant="outline" 
                       className="flex items-center justify-center space-x-2 p-6 h-auto"
                     >
-                      <Settings className="w-5 h-5 text-steel-gray" />
+                      <Settings className="w-5 h-5 text-muted-foreground" />
                       <span>Integration Settings</span>
                     </Button>
                   </div>
@@ -396,13 +396,13 @@ export default function Home() {
       </section>
 
       {/* Integration Setup */}
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-background">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-graphite mb-4">
+            <h2 className="text-4xl font-bold text-foreground mb-4">
               Simple <span className="text-log-green">Integration Setup</span>
             </h2>
-            <p className="text-xl text-steel-gray max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Connect your GitHub repositories and Slack workspaces in just a few clicks.
             </p>
           </div>
@@ -411,38 +411,39 @@ export default function Home() {
             {/* Setup Steps */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
               {/* GitHub Setup */}
-              <Card className="border-2 border-gray-200 hover:border-log-green transition-colors">
+              <Card className="border-2 border-border hover:border-log-green transition-colors">
                 <CardContent className="p-8">
                   <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-gray-900 rounded-xl mx-auto mb-4 flex items-center justify-center">
-                      <Github className="text-white text-3xl w-8 h-8" />
+                    <div className="w-16 h-16 bg-secondary rounded-xl mx-auto mb-4 flex items-center justify-center">
+                      <Github className="text-foreground text-3xl w-8 h-8" />
                     </div>
-                    <h3 className="text-2xl font-bold text-graphite mb-2">Connect GitHub</h3>
-                    <p className="text-steel-gray">Authorize PushLog to access your repositories</p>
+                    <h3 className="text-2xl font-bold text-foreground mb-2">Connect GitHub</h3>
+                    <p className="text-muted-foreground">Authorize PushLog to access your repositories</p>
                   </div>
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">OAuth authentication</span>
+                      <span className="text-foreground">OAuth authentication</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">Repository selection</span>
+                      <span className="text-foreground">Repository selection</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">Webhook configuration</span>
+                      <span className="text-foreground">Webhook configuration</span>
                     </div>
                   </div>
                   <Button 
                     onClick={handleGitHubConnect}
-                    className="w-full bg-gray-900 text-white py-3 rounded-lg hover:bg-gray-800 transition-colors mt-6 font-semibold"
+                    variant="outline"
+                    className="w-full bg-foreground text-background hover:bg-foreground/90 py-3 rounded-lg transition-colors mt-6 font-semibold"
                   >
                     <Github className="mr-2 w-5 h-5" />
                     Authorize GitHub
@@ -451,33 +452,33 @@ export default function Home() {
               </Card>
 
               {/* Slack Setup */}
-              <Card className="border-2 border-gray-200 hover:border-sky-blue transition-colors">
+              <Card className="border-2 border-border hover:border-log-green transition-colors">
                 <CardContent className="p-8">
                   <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-sky-blue rounded-xl mx-auto mb-4 flex items-center justify-center">
+                    <div className="w-16 h-16 bg-log-green rounded-xl mx-auto mb-4 flex items-center justify-center">
                       <SiSlack className="text-white text-3xl" />
                     </div>
-                    <h3 className="text-2xl font-bold text-graphite mb-2">Connect Slack</h3>
-                    <p className="text-steel-gray">Link your Slack workspace for notifications</p>
+                    <h3 className="text-2xl font-bold text-foreground mb-2">Connect Slack</h3>
+                    <p className="text-muted-foreground">Link your Slack workspace for notifications</p>
                   </div>
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-sky-blue rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">Workspace integration</span>
+                      <span className="text-foreground">Workspace integration</span>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-sky-blue rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">Channel configuration</span>
+                      <span className="text-foreground">Channel configuration</span>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <div className="w-6 h-6 bg-sky-blue rounded-full flex items-center justify-center">
+                      <div className="w-6 h-6 bg-log-green rounded-full flex items-center justify-center">
                         <Check className="text-white text-xs w-3 h-3" />
                       </div>
-                      <span className="text-graphite">Message formatting</span>
+                      <span className="text-foreground">Message formatting</span>
                     </div>
                   </div>
                   <Button 
@@ -492,12 +493,12 @@ export default function Home() {
             </div>
 
             {/* Configuration Panel */}
-            <Card className="bg-gray-50">
+            <Card className="bg-muted/50">
               <CardContent className="p-8">
-                <h3 className="text-2xl font-bold text-graphite mb-6 text-center">Configuration Options</h3>
+                <h3 className="text-2xl font-bold text-foreground mb-6 text-center">Configuration Options</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
-                    <Label htmlFor="slack-channel" className="block text-sm font-medium text-graphite mb-2">
+                    <Label htmlFor="slack-channel" className="block text-sm font-medium text-foreground mb-2">
                       Default Slack Channel
                     </Label>
                     <Select>
@@ -512,7 +513,7 @@ export default function Home() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="notification-frequency" className="block text-sm font-medium text-graphite mb-2">
+                    <Label htmlFor="notification-frequency" className="block text-sm font-medium text-foreground mb-2">
                       Notification Frequency
                     </Label>
                     <Select>
@@ -528,13 +529,13 @@ export default function Home() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox id="include-summaries" />
-                    <Label htmlFor="include-summaries" className="text-graphite">
+                    <Label htmlFor="include-summaries" className="text-foreground">
                       Include code summaries
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Checkbox id="mention-members" />
-                    <Label htmlFor="mention-members" className="text-graphite">
+                    <Label htmlFor="mention-members" className="text-foreground">
                       Mention relevant team members
                     </Label>
                   </div>
@@ -546,13 +547,13 @@ export default function Home() {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-graphite mb-4">
+            <h2 className="text-4xl font-bold text-foreground mb-4">
               Powerful Features for <span className="text-log-green">Developer Teams</span>
             </h2>
-            <p className="text-xl text-steel-gray max-w-2xl mx-auto">
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Everything you need to streamline your development workflow and keep your team synchronized.
             </p>
           </div>
@@ -564,8 +565,8 @@ export default function Home() {
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Zap className="text-white text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">Real-time Notifications</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">Real-time Notifications</h3>
+                <p className="text-muted-foreground">
                   Instant Slack notifications when code is pushed, with intelligent filtering and batching options.
                 </p>
               </CardContent>
@@ -574,11 +575,11 @@ export default function Home() {
             {/* AI Code Summaries */}
             <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 bg-sky-blue rounded-lg flex items-center justify-center mb-4">
+                <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Brain className="text-white text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">AI Code Summaries</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">AI Code Summaries</h3>
+                <p className="text-muted-foreground">
                   Automatically generated summaries of code changes help team members understand what's been updated.
                 </p>
               </CardContent>
@@ -587,11 +588,11 @@ export default function Home() {
             {/* Multi-Repository Support */}
             <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 bg-steel-gray rounded-lg flex items-center justify-center mb-4">
-                  <Layers className="text-white text-xl w-6 h-6" />
+                <div className="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center mb-4">
+                  <Layers className="text-foreground text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">Multi-Repository</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">Multi-Repository</h3>
+                <p className="text-muted-foreground">
                   Connect unlimited GitHub repositories and manage all integrations from a single dashboard.
                 </p>
               </CardContent>
@@ -603,8 +604,8 @@ export default function Home() {
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Webhook className="text-white text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">Custom Webhooks</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">Custom Webhooks</h3>
+                <p className="text-muted-foreground">
                   Flexible webhook configuration with custom payloads and advanced filtering capabilities.
                 </p>
               </CardContent>
@@ -613,11 +614,11 @@ export default function Home() {
             {/* Team Management */}
             <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 bg-sky-blue rounded-lg flex items-center justify-center mb-4">
+                <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Users className="text-white text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">Team Management</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">Team Management</h3>
+                <p className="text-muted-foreground">
                   Role-based access control and team member management with granular permission settings.
                 </p>
               </CardContent>
@@ -626,11 +627,11 @@ export default function Home() {
             {/* Analytics & Insights */}
             <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
-                <div className="w-12 h-12 bg-steel-gray rounded-lg flex items-center justify-center mb-4">
-                  <TrendingUp className="text-white text-xl w-6 h-6" />
+                <div className="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center mb-4">
+                  <TrendingUp className="text-foreground text-xl w-6 h-6" />
                 </div>
-                <h3 className="text-xl font-bold text-graphite mb-3">Analytics & Insights</h3>
-                <p className="text-steel-gray">
+                <h3 className="text-xl font-bold text-foreground mb-3">Analytics & Insights</h3>
+                <p className="text-muted-foreground">
                   Detailed analytics on push frequency, team activity, and integration performance metrics.
                 </p>
               </CardContent>
@@ -640,9 +641,9 @@ export default function Home() {
       </section>
 
       {/* Legal Links Section */}
-      <section className="py-12 bg-white border-t border-gray-200">
+      <section className="py-12 bg-background border-t border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-wrap justify-center gap-6 text-sm text-steel-gray">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
             <Link href="/support" className="hover:text-log-green transition-colors">
               Support
             </Link>
