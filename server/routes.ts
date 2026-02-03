@@ -2336,11 +2336,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw aiError;
         }
         
-        // Check if this is a real AI summary or a fallback
-        const isRealAISummary = summary.tokensUsed > 0;
+        // Check if this is a real AI summary or a fallback. Some providers (e.g. OpenRouter/x-ai) return
+        // valid summary content but report 0 tokens, so treat as real when we have valid content.
+        const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
+        const isRealAISummary = summary.tokensUsed > 0 || hasValidContent;
         
         if (!isRealAISummary) {
-          console.error(`❌ AI summary returned 0 tokens for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
+          console.error(`❌ AI summary invalid for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
         }
         
         if (isRealAISummary) {
@@ -2350,7 +2352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiDetails = summary.summary.details;
           aiGenerated = true;
           actualAiModelUsed = summary.actualModel || aiModel;
-          console.log(`✅ AI summary generated successfully - Model: ${actualAiModelUsed}, Tokens: ${summary.tokensUsed}`);
+          console.log(`✅ AI summary generated successfully - Model: ${actualAiModelUsed}, Tokens: ${summary.tokensUsed}${summary.tokensUsed === 0 ? ' (provider did not report usage)' : ''}`);
         } else {
           // Fallback summary - AI generation failed
           console.warn(`⚠️ AI summary generation failed for model ${aiModel}, using fallback summary`);
@@ -2433,15 +2435,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         // Record AI usage per user so analytics can show "most used model"
-        if (aiGenerated && summary && summary.tokensUsed > 0) {
+        if (aiGenerated && summary) {
           try {
             await databaseStorage.createAiUsage({
               userId: storedRepo.userId,
               integrationId: integration.id,
               pushEventId: pushEvent.id,
               model: actualAiModelUsed || (integrationAiModelStr ?? 'gpt-5.2'),
-              tokensUsed: summary.tokensUsed,
-              cost: summary.cost,
+              tokensUsed: summary.tokensUsed || 0,
+              cost: summary.cost || 0,
             });
           } catch (usageErr) {
             console.error('Failed to record AI usage:', usageErr);
@@ -2700,7 +2702,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "AI summary failed", details: aiErr instanceof Error ? aiErr.message : String(aiErr) });
       }
 
-      const aiGenerated = summary.tokensUsed > 0;
+      const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
+      const aiGenerated = summary.tokensUsed > 0 || hasValidContent;
       const aiSummary = aiGenerated ? summary.summary.summary : null;
       const aiImpact = aiGenerated ? summary.summary.impact : null;
       const aiCategory = aiGenerated ? summary.summary.category : null;
