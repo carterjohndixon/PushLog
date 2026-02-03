@@ -47,6 +47,11 @@ function sanitizeIntegrationForClient(integration: any) {
   return { ...rest, hasOpenRouterKey: !!openRouterApiKey };
 }
 
+/** True only if the string looks like a real OpenRouter API key (decrypt can return ciphertext on failure). */
+function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
+  return !!s?.trim().startsWith("sk-or-");
+}
+
 // Extend global type for notification streams
 declare global {
   var notificationStreams: Map<number, any> | undefined;
@@ -2292,11 +2297,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let actualAiModelUsed = null as string | null;
 
       let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) {
+        if (openRouterKeyRaw) console.warn("⚠️ Stored OpenRouter key could not be decrypted (wrong ENCRYPTION_KEY?). Re-add key on Models page.");
+        openRouterKeyRaw = null;
+      }
       if (!openRouterKeyRaw?.trim()) {
         const userForKey = await databaseStorage.getUserById(storedRepo.userId);
         if ((userForKey as any)?.openRouterApiKey) {
           openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
         }
+      }
+      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) {
+        if (openRouterKeyRaw) console.warn("⚠️ Stored OpenRouter key could not be decrypted (wrong ENCRYPTION_KEY?). Re-add key on Models page.");
+        openRouterKeyRaw = null;
       }
       const useOpenRouter = !!openRouterKeyRaw?.trim();
 
@@ -2680,12 +2693,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
       const maxTokens = integration.maxTokens || 350;
       let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
       if (!openRouterKeyRaw?.trim()) {
         const userForKey = await databaseStorage.getUserById(integration.userId);
         if ((userForKey as any)?.openRouterApiKey) {
           openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
         }
       }
+      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
       const useOpenRouter = !!openRouterKeyRaw?.trim();
       const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
