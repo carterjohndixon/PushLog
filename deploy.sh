@@ -9,6 +9,8 @@ set -e  # Exit on any error
 APP_DIR="${APP_DIR:-/var/www/pushlog}"
 BRANCH="${DEPLOY_BRANCH:-main}"
 LOG_FILE="${APP_DIR}/deploy.log"
+# Delay (seconds) before pull/restart so in-flight push webhooks can finish (OpenAI + Slack ~10-20s)
+DEPLOY_DELAY="${DEPLOY_DELAY:-25}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -44,6 +46,12 @@ cd "$APP_DIR"
 log_info "Starting deployment..."
 log_info "Current directory: $(pwd)"
 log_info "Branch: $BRANCH"
+
+# Wait so any in-flight push webhook (AI summary + Slack) can complete before we restart PM2
+if [ -n "$DEPLOY_DELAY" ] && [ "$DEPLOY_DELAY" -gt 0 ] 2>/dev/null; then
+    log_info "Waiting ${DEPLOY_DELAY}s for in-flight webhooks to finish..."
+    sleep "$DEPLOY_DELAY"
+fi
 
 # Fetch latest changes
 log_info "Fetching latest changes from GitHub..."

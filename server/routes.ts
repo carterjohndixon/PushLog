@@ -2509,6 +2509,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test route: simulate push → AI summary → Slack (same code path as webhook). Enable with ENABLE_TEST_ROUTES=true.
+  app.post("/api/test/simulate-push", authenticateToken, async (req, res) => {
+    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
+    if (!allow) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    try {
+      const userId = req.user!.userId;
+      const integrationId = typeof req.body?.integrationId === "number" ? req.body.integrationId : null;
+      const integrations = await storage.getIntegrationsByUserId(userId);
+      const integration = integrationId
+        ? integrations.find((i) => i.id === integrationId)
+        : integrations.find((i) => i.isActive);
+      if (!integration || !integration.isActive) {
+        return res.status(400).json({ error: "No active integration found. Pass integrationId or ensure one is active." });
+      }
+      const repo = await storage.getRepository(integration.repositoryId);
+      if (!repo) return res.status(400).json({ error: "Repository not found" });
+
+      const pushData = {
+        repositoryName: repo.fullName,
+        branch: repo.branch || "main",
+        commitMessage: "[Test] Simulated push from /api/test/simulate-push",
+        filesChanged: ["README.md", "server/routes.ts"],
+        additions: 42,
+        deletions: 6,
+        commitSha: "test-" + Date.now(),
+      };
+
+      console.log(`🧪 [TEST] Simulate push: ${repo.fullName} @ ${pushData.branch} → Slack #${integration.slackChannelName}`);
+
+      const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
+      const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
+      const maxTokens = integration.maxTokens || 350;
+      const openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      const useOpenRouter = !!openRouterKeyRaw?.trim();
+      const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+
+      let summary;
+      try {
+        summary = await generateCodeSummary(
+          pushData,
+          aiModel,
+          maxTokens,
+          useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
+        );
+      } catch (aiErr) {
+        console.error("🧪 [TEST] AI failed:", aiErr);
+        return res.status(500).json({ error: "AI summary failed", details: aiErr instanceof Error ? aiErr.message : String(aiErr) });
+      }
+
+      const aiGenerated = summary.tokensUsed > 0;
+      const aiSummary = aiGenerated ? summary.summary.summary : null;
+      const aiImpact = aiGenerated ? summary.summary.impact : null;
+      const aiCategory = aiGenerated ? summary.summary.category : null;
+      const aiDetails = aiGenerated ? summary.summary.details : null;
+
+      let workspaceToken: string | null = null;
+      if (integration.slackWorkspaceId) {
+        const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
+        workspaceToken = workspace?.accessToken ?? null;
+      }
+      if (!workspaceToken) {
+        return res.status(500).json({ error: "Slack workspace token not found" });
+      }
+
+      console.log(`🧪 [TEST] Sending Slack notification to ${integration.slackChannelName}...`);
+      if (aiGenerated && aiSummary) {
+        const slackMessage = await generateSlackMessage(pushData, {
+          summary: aiSummary,
+          impact: aiImpact as "low" | "medium" | "high",
+          category: aiCategory!,
+          details: aiDetails!,
+        });
+        const ts = await sendSlackMessage(workspaceToken, {
+          channel: integration.slackChannelId,
+          text: slackMessage,
+          unfurl_links: false,
+        });
+        console.log(`🧪 [TEST] ✅ AI Slack message sent. Timestamp: ${ts}`);
+      } else {
+        const ts = await sendPushNotification(
+          workspaceToken,
+          integration.slackChannelId,
+          pushData.repositoryName,
+          pushData.commitMessage,
+          "Test User",
+          pushData.branch,
+          pushData.commitSha,
+          Boolean(integration.includeCommitSummaries)
+        );
+        console.log(`🧪 [TEST] ✅ Regular Slack message sent. Timestamp: ${ts}`);
+      }
+
+      res.json({
+        ok: true,
+        message: "Slack message sent",
+        integrationId: integration.id,
+        channel: integration.slackChannelName,
+        aiGenerated,
+      });
+    } catch (err) {
+      console.error("🧪 [TEST] Error:", err);
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Simulate push failed",
+        stack: process.env.NODE_ENV === "development" ? (err instanceof Error ? err.stack : undefined) : undefined,
+      });
+    }
+  });
+
   // Protected route example - Get user profile
   app.get("/api/profile", authenticateToken, async (req, res) => {
     try {
