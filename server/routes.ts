@@ -1911,8 +1911,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const signature = req.headers['x-hub-signature-256'] as string;
       const payload = JSON.stringify(req.body);
-
-      const filesChanged = req.body.files_changed || [];
       
       // Verify webhook signature
       const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
