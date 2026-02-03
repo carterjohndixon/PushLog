@@ -32,17 +32,32 @@ export interface AiUsageResult {
   actualModel?: string; // The actual model used by OpenAI
 }
 
+export interface GenerateCodeSummaryOptions {
+  /** When set, use OpenRouter with this API key and treat model as OpenRouter model id (e.g. openai/gpt-4o). No PushLog credit deduction. */
+  openRouterApiKey?: string;
+}
+
 export async function generateCodeSummary(
   pushData: PushEventData, 
-  model: string = 'gpt-5.2', // Available models: gpt-5.2 (latest), gpt-5.1, gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo
-  maxTokens: number = 1000
+  model: string = 'gpt-5.2', // PushLog: gpt-5.2, gpt-4o, etc. OpenRouter: e.g. openai/gpt-4o, anthropic/claude-3.5-sonnet
+  maxTokens: number = 1000,
+  options?: GenerateCodeSummaryOptions
 ): Promise<AiUsageResult> {
-  // Migrate invalid models to gpt-5.2 (latest working model)
-  // Valid models based on comprehensive testing: GPT-5.2, GPT-5.1, GPT-4o, GPT-4o-mini, GPT-4-turbo, GPT-4 variants, GPT-3.5-turbo variants
-  const validModels = ['gpt-5.2', 'gpt-5.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-0613', 'gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106', 'gpt-3.5-turbo-16k'];
-  if (!validModels.includes(model)) {
-    console.warn(`⚠️ Invalid or deprecated model "${model}" detected. Migrating to gpt-5.2.`);
-    model = 'gpt-5.2';
+  const useOpenRouter = !!options?.openRouterApiKey?.trim();
+  const client = useOpenRouter
+    ? new OpenAI({
+        apiKey: options!.openRouterApiKey!.trim(),
+        baseURL: 'https://openrouter.ai/api/v1',
+      })
+    : openai;
+
+  // For PushLog-only: migrate invalid models to gpt-5.2
+  if (!useOpenRouter) {
+    const validModels = ['gpt-5.2', 'gpt-5.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-0613', 'gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106', 'gpt-3.5-turbo-16k'];
+    if (!validModels.includes(model)) {
+      console.warn(`⚠️ Invalid or deprecated model "${model}" detected. Migrating to gpt-5.2.`);
+      model = 'gpt-5.2';
+    }
   }
 
   try {
@@ -72,7 +87,7 @@ Focus on:
 Respond with only valid JSON:
 `;
 
-    console.log(`🔍 OpenAI API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
+    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : 'OpenAI'} API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
     const requestParams: any = {
       model: model,
       messages: [
@@ -91,7 +106,7 @@ Respond with only valid JSON:
     
     let completion;
     try {
-      completion = await openai.chat.completions.create(requestParams);
+      completion = await client.chat.completions.create(requestParams);
     } catch (apiError: any) {
       console.error('❌ OpenAI API Error Details:');
       console.error('   Status:', apiError?.status);
@@ -141,11 +156,11 @@ Respond with only valid JSON:
       throw new Error('AI response missing required fields');
     }
     
-    // Calculate usage and cost
+    // Calculate usage and cost (OpenRouter: user pays; we don't deduct PushLog credits)
     const tokensUsed = completion.usage?.total_tokens || 0;
-    const cost = calculateTokenCost(model, tokensUsed);
+    const cost = useOpenRouter ? 0 : calculateTokenCost(model, tokensUsed);
     
-    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
+    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}${useOpenRouter ? '' : `, Cost: $${(cost / 100).toFixed(4)}`}`);
     
     return {
       summary,

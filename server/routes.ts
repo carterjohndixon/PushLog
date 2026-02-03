@@ -36,7 +36,15 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
+import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
+
+/** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
+function sanitizeIntegrationForClient(integration: any) {
+  if (!integration) return integration;
+  const { openRouterApiKey, ...rest } = integration;
+  return { ...rest, hasOpenRouterKey: !!openRouterApiKey };
+}
 
 // Extend global type for notification streams
 declare global {
@@ -1512,8 +1520,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             repository = await storage.getRepositoryByGithubId(integration.repositoryId.toString());
           }
           
+          const sanitized = sanitizeIntegrationForClient(integration);
           return {
-            ...integration,
+            ...sanitized,
             repositoryName: repository?.name || 'Unknown Repository',
             lastUsed: integration.createdAt, // Use createdAt as lastUsed
             status: integration.isActive ? 'active' : 'paused',
@@ -1534,9 +1543,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/integrations/:id", authenticateToken, async (req, res) => {
     try {
       const integrationId = parseInt(req.params.id);
-      const updates = req.body;
+      const updates = { ...req.body };
       
-      console.log(`📝 Updating integration ${integrationId} with:`, JSON.stringify(updates, null, 2));
+      // OpenRouter API key: encrypt before storing; never send raw key to DB
+      if (updates.openRouterApiKey !== undefined) {
+        updates.openRouterApiKey = typeof updates.openRouterApiKey === 'string' && updates.openRouterApiKey.trim()
+          ? encrypt(updates.openRouterApiKey.trim())
+          : null;
+      }
+      
+      console.log(`📝 Updating integration ${integrationId} with:`, JSON.stringify({ ...updates, openRouterApiKey: updates.openRouterApiKey ? '[REDACTED]' : updates.openRouterApiKey }, null, 2));
       
       // First verify user owns this integration
       const existingIntegration = await storage.getIntegration(integrationId);
@@ -1575,10 +1591,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json(integration);
+      res.json(sanitizeIntegrationForClient(integration));
     } catch (error) {
       console.error("Error updating integration:", error);
       res.status(500).json({ error: "Failed to update integration" });
+    }
+  });
+
+  // OpenRouter: verify user's API key (returns 401/402 from OpenRouter for invalid key or no credits)
+  app.post("/api/openrouter/verify", authenticateToken, async (req, res) => {
+    try {
+      const apiKey = typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
+      if (!apiKey) {
+        return res.status(400).json({ valid: false, error: "API key is required" });
+      }
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+      if (response.status === 401) {
+        return res.json({ valid: false, error: "Invalid API key. Check your key at openrouter.ai/keys." });
+      }
+      if (response.status === 402) {
+        return res.json({ valid: false, error: "Insufficient credits on your OpenRouter account." });
+      }
+      if (!response.ok) {
+        return res.status(response.status).json({ valid: false, error: "Could not verify key. Try again." });
+      }
+      res.json({ valid: true });
+    } catch (err) {
+      console.error("OpenRouter verify error:", err);
+      res.status(500).json({ valid: false, error: "Verification failed. Try again." });
+    }
+  });
+
+  // OpenRouter models list (public; used by integration modal for model dropdown)
+  app.get("/api/openrouter/models", async (_req, res) => {
+    try {
+      const response = await fetch("https://openrouter.ai/api/v1/models", {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch OpenRouter models" });
+      }
+      const data = await response.json();
+      const models = (data.data || []).map((m: any) => ({
+        id: m.id,
+        name: m.name || m.id,
+        description: m.description || "",
+      }));
+      res.json({ models });
+    } catch (err) {
+      console.error("OpenRouter models fetch error:", err);
+      res.status(500).json({ error: "Failed to fetch OpenRouter models" });
     }
   });
 
@@ -2096,6 +2163,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiGenerated = false;
       let actualAiModelUsed = null as string | null;
 
+      const openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      const useOpenRouter = !!openRouterKeyRaw?.trim();
+
       try {
         const pushData = {
           repositoryName: repository.full_name,
@@ -2107,17 +2177,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           commitSha: commit.id,
         };
 
-        // Normalize to lowercase so "GPT-4o" from DB passes AI layer's validModels check
-        const aiModel = (integrationAiModelStr || 'gpt-5.2').toLowerCase();
-        console.log(`🤖 Using AI model for integration ${integration.id}: ${aiModel} (from integration: ${integrationAiModelStr ?? 'default'})`);
+        // OpenRouter: use aiModel as-is (e.g. openai/gpt-4o). PushLog: normalize to lowercase.
+        const aiModel = useOpenRouter
+          ? (integrationAiModelStr || 'openai/gpt-4o').trim()
+          : (integrationAiModelStr || 'gpt-5.2').toLowerCase();
+        console.log(`🤖 Using ${useOpenRouter ? 'OpenRouter' : 'PushLog'} AI for integration ${integration.id}: ${aiModel}`);
         const maxTokens = integration.maxTokens || 350;
         
         let summary;
         try {
           summary = await generateCodeSummary(
-            pushData, 
+            pushData,
             aiModel,
-            maxTokens
+            maxTokens,
+            useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
           );
         } catch (aiError) {
           console.error(`❌ AI generation error for model ${aiModel}:`, aiError);
@@ -2156,62 +2229,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiDetails = null;
         }
 
-        // Deduct AI credits from user
-        try {
-          const user = await databaseStorage.getUserById(storedRepo.userId);
-          if (user) {
-            const currentCredits = user.aiCredits || 0;
-            const creditsToDeduct = Math.ceil(summary.tokensUsed / 10); // 1 credit per 10 tokens
-            
-            if (currentCredits >= creditsToDeduct) {
-              const newCredits = currentCredits - creditsToDeduct;
-              await databaseStorage.updateUser(user.id, { aiCredits: newCredits });
+        // Deduct AI credits from user (only when using PushLog AI; OpenRouter uses user's own key)
+        if (!useOpenRouter) {
+          try {
+            const user = await databaseStorage.getUserById(storedRepo.userId);
+            if (user) {
+              const currentCredits = user.aiCredits || 0;
+              const creditsToDeduct = Math.ceil(summary.tokensUsed / 10); // 1 credit per 10 tokens
               
-              // Check if credits are low (less than 50)
-              if (newCredits < 50) {
+              if (currentCredits >= creditsToDeduct) {
+                const newCredits = currentCredits - creditsToDeduct;
+                await databaseStorage.updateUser(user.id, { aiCredits: newCredits });
+                
+                // Check if credits are low (less than 50)
+                if (newCredits < 50) {
+                  await storage.createNotification({
+                    userId: user.id,
+                    type: 'low_credits',
+                    title: 'Low AI Credits',
+                    message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`
+                  });
+                  
+                  // Broadcast notification for real-time updates
+                  broadcastNotification(user.id, {
+                    type: 'low_credits',
+                    title: 'Low AI Credits',
+                    message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`,
+                    createdAt: new Date().toISOString()
+                  });
+                }
+              } else {
+                // Create notification for insufficient credits
                 await storage.createNotification({
                   userId: user.id,
-                  type: 'low_credits',
-                  title: 'Low AI Credits',
-                  message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`
+                  type: 'no_credits',
+                  title: 'No AI Credits',
+                  message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.'
                 });
                 
                 // Broadcast notification for real-time updates
                 broadcastNotification(user.id, {
-                  type: 'low_credits',
-                  title: 'Low AI Credits',
-                  message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`,
+                  type: 'no_credits',
+                  title: 'No AI Credits',
+                  message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.',
                   createdAt: new Date().toISOString()
                 });
+                
+                // Skip AI processing for this push
+                aiGenerated = false;
+                aiSummary = null;
+                aiImpact = null;
+                aiCategory = null;
+                aiDetails = null;
               }
-            } else {
-              // Create notification for insufficient credits
-              await storage.createNotification({
-                userId: user.id,
-                type: 'no_credits',
-                title: 'No AI Credits',
-                message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.'
-              });
-              
-              // Broadcast notification for real-time updates
-              broadcastNotification(user.id, {
-                type: 'no_credits',
-                title: 'No AI Credits',
-                message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.',
-                createdAt: new Date().toISOString()
-              });
-              
-              // Skip AI processing for this push
-              aiGenerated = false;
-              aiSummary = null;
-              aiImpact = null;
-              aiCategory = null;
-              aiDetails = null;
             }
+          } catch (creditError) {
+            console.error('Error processing credits:', creditError);
+            // Continue with AI processing even if credit deduction fails
           }
-        } catch (creditError) {
-          console.error('Error processing credits:', creditError);
-          // Continue with AI processing even if credit deduction fails
         }
 
         // Update the push event with AI summary (only if we got a real AI summary)

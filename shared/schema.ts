@@ -51,6 +51,7 @@ export const integrations = pgTable("integrations", {
   // AI Settings
   aiModel: text("ai_model").default("gpt-5.2"),
   maxTokens: integer("max_tokens").default(350), // Maximum tokens for AI response
+  openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, summaries use OpenRouter with this key and aiModel as OpenRouter model id
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 

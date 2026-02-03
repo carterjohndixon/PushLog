@@ -36,6 +36,13 @@ export function getAiModelDisplayName(modelId: string | null | undefined): strin
   const withoutDate = trimmed.replace(/-\d{4}-\d{2}-\d{2}$/, "").replace(/-\d{4}$/, "");
   const knownWithoutDate = AI_MODEL_DISPLAY_NAMES[withoutDate];
   if (knownWithoutDate) return knownWithoutDate;
+  // OpenRouter-style "provider/model" (e.g. openai/gpt-4o, anthropic/claude-3.5-sonnet)
+  if (trimmed.includes("/")) {
+    const [provider, model] = trimmed.split("/");
+    const providerLabel = provider.charAt(0).toUpperCase() + (provider.slice(1).toLowerCase() || "");
+    const modelDisplay = getAiModelDisplayName(model) || model.split("-").map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+    return modelDisplay ? `${providerLabel}: ${modelDisplay}` : providerLabel;
+  }
   // Fallback: use base id (without date) and format nicely
   const base = trimmed.replace(/-\d{4}-\d{2}-\d{2}$/, "").replace(/-\d{4}$/, "");
   const parts = base.split("-");
