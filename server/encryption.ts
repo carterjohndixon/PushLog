@@ -12,12 +12,21 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 // Encryption key must be 32 bytes (64 hex chars) and STABLE across restarts.
 // Without it, encrypted data (e.g. OpenRouter API key) cannot be decrypted after restart.
 const RAW = process.env.ENCRYPTION_KEY;
-const ENCRYPTION_KEY = typeof RAW === 'string' && /^[a-fA-F0-9]{64}$/.test(RAW.trim()) ? RAW.trim() : null;
+const trimmed = typeof RAW === 'string' ? RAW.trim() : '';
+const ENCRYPTION_KEY = /^[a-fA-F0-9]{64}$/.test(trimmed) ? trimmed : null;
 
-if (!ENCRYPTION_KEY && process.env.NODE_ENV !== 'test') {
-  console.warn(
-    '⚠️ ENCRYPTION_KEY is missing or invalid (need 64 hex chars). Set it in .env so encrypted data (e.g. OpenRouter API key) persists across restarts. Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-  );
+if (process.env.NODE_ENV !== 'test') {
+  if (ENCRYPTION_KEY) {
+    console.log('✓ ENCRYPTION_KEY loaded (64 hex chars) – encrypted data will persist across restarts.');
+  } else if (trimmed.length > 0) {
+    console.warn(
+      `⚠️ ENCRYPTION_KEY is invalid: must be exactly 64 hex characters (0-9, a-f). Got ${trimmed.length} chars${trimmed.length === 66 && (trimmed.startsWith('"') || trimmed.startsWith("'")) ? ' (remove quotes around the value in .env)' : ''}. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+    );
+  } else {
+    console.warn(
+      '⚠️ ENCRYPTION_KEY is missing. Add it to .env (64 hex chars) so encrypted data (e.g. OpenRouter API key) persists. Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
+  }
 }
 
 const ALGORITHM = 'aes-256-gcm';

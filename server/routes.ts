@@ -1732,9 +1732,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const encrypted = encrypt(apiKey);
       await databaseStorage.updateUser(userId, { openRouterApiKey: encrypted } as any);
+      // Verify persistence: re-fetch user and ensure key was stored (catches missing DB column or failed write)
+      const updated = await databaseStorage.getUserById(userId);
+      const stored = (updated as any)?.openRouterApiKey;
+      if (!stored || typeof stored !== "string" || stored.length === 0) {
+        console.error("OpenRouter key save verification failed: user row has no open_router_api_key after update. Run migrations/add-openrouter-api-key-users.sql and ensure ENCRYPTION_KEY is set in .env");
+        return res.status(500).json({
+          error: "Key did not persist. Ensure the database has the open_router_api_key column (run migrations/add-openrouter-api-key-users.sql) and ENCRYPTION_KEY is set in .env (64 hex chars).",
+        });
+      }
+      console.log(`OpenRouter API key saved for user ${userId} (encrypted length ${stored.length})`);
       res.json({ success: true });
-    } catch (err) {
+    } catch (err: any) {
       console.error("OpenRouter save key error:", err);
+      const msg = err?.message ?? String(err);
+      const code = err?.code ?? err?.cause?.code;
+      if (code === "42703" || msg.includes("open_router_api_key")) {
+        return res.status(500).json({
+          error: "Database missing open_router_api_key column. Run: migrations/add-openrouter-api-key-users.sql",
+        });
+      }
+      if (msg.includes("ENCRYPTION_KEY")) {
+        return res.status(500).json({ error: msg });
+      }
       res.status(500).json({ error: "Failed to save API key" });
     }
   });
