@@ -192,7 +192,7 @@ export function Header() {
               </>
             ) : (
               <Link href="/login">
-                <Button variant="outline" className="bg-log-green text-sm text-white font-medium px-4 py-2 hover:bg-green-600">
+                <Button variant="glow" className="text-sm font-medium px-4 py-2">
                   <LogIn className="w-5 h-5 mr-2" />
                   Login
                 </Button>

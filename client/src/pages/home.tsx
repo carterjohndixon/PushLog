@@ -143,7 +143,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button 
                 onClick={ user ? handleGitHubConnect : () => window.location.href = '/login'}
-                className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-colors font-semibold text-lg"
+                className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-all font-semibold text-lg btn-glow"
               >
                 <Github className="mr-2 w-5 h-5" />
                 {user ? 'Connect GitHub' : 'Get Started'}
@@ -291,7 +291,7 @@ export default function Home() {
                       <CardTitle className="text-lg font-semibold text-graphite">Connected Repositories</CardTitle>
                       <Button 
                         size="sm" 
-                        className="bg-log-green text-white hover:bg-green-600"
+                        className="btn-glow"
                       >
                         <Plus className="w-4 h-4 mr-1" />
                         Add Repo
@@ -482,7 +482,7 @@ export default function Home() {
                   </div>
                   <Button 
                     onClick={handleSlackConnect}
-                    className="w-full bg-log-green text-white py-3 rounded-lg hover:bg-green-600 transition-colors mt-6 font-semibold"
+                    className="w-full bg-log-green text-white py-3 rounded-lg hover:bg-green-600 transition-all mt-6 font-semibold btn-glow"
                   >
                     <SiSlack className="mr-2" />
                     Add to Slack

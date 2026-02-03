@@ -221,7 +221,8 @@ export function RepositorySettingsModal({
           <Button
             onClick={handleSave}
             disabled={updateRepositoryMutation.isPending}
-            className="bg-log-green text-white hover:bg-green-600"
+            variant="glow"
+            className="text-white"
           >
             {updateRepositoryMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>

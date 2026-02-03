@@ -266,7 +266,8 @@ export default function Settings() {
                 <Button 
                   onClick={handleExportData} 
                   disabled={isExporting}
-                  className="bg-log-green text-white hover:bg-green-600"
+                  variant="glow"
+                  className="text-white"
                 >
                   <Download className="w-4 h-4 mr-2" />
                   {isExporting ? "Exporting..." : "Export My Data"}

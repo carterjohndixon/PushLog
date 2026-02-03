@@ -646,7 +646,7 @@ export default function Dashboard() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-shadow hover:shadow-glow"
             onClick={() => setIsActiveIntegrationsModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -667,7 +667,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-shadow hover:shadow-glow"
             onClick={() => setIsTotalRepositoriesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -688,7 +688,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-shadow hover:shadow-glow"
             onClick={() => setIsDailyPushesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -709,7 +709,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-shadow hover:shadow-glow"
             onClick={() => setIsSlackMessagesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -730,7 +730,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer transition-shadow hover:shadow-glow"
             onClick={() => setIsAiCreditsModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -782,8 +782,8 @@ export default function Dashboard() {
                   </Link>
                   <Button 
                     size="sm" 
-                    // className="bg-log-green text-white hover:bg-green-600"
-                    className="bg-sky-blue text-white hover:bg-blue-600"
+                    variant="glow"
+                    className="text-white"
                     onClick={() => setIsRepoModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -822,7 +822,8 @@ export default function Dashboard() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Your GitHub token may have expired or been revoked. Please reconnect your GitHub account.
                         </p>
-                        <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                        <Button onClick={handleGitHubConnect} variant="glow"
+            className="text-white">
                           <Github className="w-4 h-4 mr-2" />
                           Reconnect GitHub
                         </Button>
@@ -837,7 +838,8 @@ export default function Dashboard() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Connect your GitHub account to start monitoring repositories.
                         </p>
-                        <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                        <Button onClick={handleGitHubConnect} variant="glow"
+            className="text-white">
                           <Github className="w-4 h-4 mr-2" />
                           Connect GitHub
                         </Button>
@@ -852,7 +854,8 @@ export default function Dashboard() {
                         <p className="text-sm text-muted-foreground mb-4">
                           {repositoriesError.message}
                         </p>
-                        <Button onClick={() => window.location.reload()} className="bg-log-green text-white hover:bg-green-600">
+                        <Button onClick={() => window.location.reload()} variant="glow"
+            className="text-white">
                           <Github className="w-4 h-4 mr-2" />
                           Retry
                         </Button>
@@ -946,7 +949,8 @@ export default function Dashboard() {
                       : "Connect your GitHub account to start monitoring repositories."}
                   </p>
                   {!userProfile?.user?.githubConnected && (
-                    <Button onClick={handleGitHubConnect} className="bg-log-green text-white hover:bg-green-600">
+                    <Button onClick={handleGitHubConnect} variant="glow"
+            className="text-white">
                       <Github className="w-4 h-4 mr-2" />
                       Connect GitHub
                     </Button>
@@ -974,7 +978,8 @@ export default function Dashboard() {
                   </Link>
                   <Button 
                     size="sm" 
-                    className="bg-log-green text-white hover:bg-green-600"
+                    variant="glow"
+            className="text-white"
                     onClick={() => setIsIntegrationModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -1075,7 +1080,8 @@ export default function Dashboard() {
                       <p className="text-sm text-muted-foreground mb-4">Connect your Slack workspace to start creating integrations.</p>
                       <Button 
                         onClick={handleSlackConnect}
-                        className="bg-log-green text-white hover:bg-green-600"
+                        variant="glow"
+            className="text-white"
                       >
                         <SiSlack className="w-4 h-4 mr-2" />
                         Connect Slack Workspace
@@ -1106,7 +1112,8 @@ export default function Dashboard() {
                         <div className="flex gap-2">
                           <Button 
                             onClick={() => setIsIntegrationModalOpen(true)}
-                            className="bg-log-green text-white hover:bg-green-600"
+                            variant="glow"
+            className="text-white"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Create Integration

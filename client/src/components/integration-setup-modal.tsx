@@ -296,7 +296,8 @@ export function IntegrationSetupModal({
               </div>
               <Button 
                 onClick={handleSlackConnect} 
-                className="bg-log-green text-white hover:bg-green-600"
+                variant="glow"
+                className="text-white"
                 size="default"
               >
                 <SiSlack className="w-4 h-4 mr-2" />
@@ -431,7 +432,8 @@ export function IntegrationSetupModal({
           <Button
             onClick={handleCreateIntegration}
             disabled={!selectedRepository || !selectedWorkspace || !selectedChannel || createIntegrationMutation.isPending}
-            className="bg-log-green text-white hover:bg-green-600"
+            variant="glow"
+                className="text-white"
           >
             {createIntegrationMutation.isPending ? "Creating..." : "Create Integration"}
           </Button>

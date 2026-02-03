@@ -226,7 +226,8 @@ export default function Signup() {
               e.preventDefault(); 
               handleSignup(email, username, password);
             }} 
-            className="w-full bg-log-green text-white font-semibold hover:bg-green-600"
+            variant="glow"
+            className="w-full font-semibold"
           >
             Create Account
           </Button>

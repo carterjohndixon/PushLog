@@ -230,7 +230,8 @@ export function RepositorySelectModal({
                         });
                       }
                     }}
-                    className="bg-log-green text-white hover:bg-green-600"
+                    variant="glow"
+                    className="text-white"
                   >
                     <Github className="w-4 h-4 mr-2" />
                     Log in

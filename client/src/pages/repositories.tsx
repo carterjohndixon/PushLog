@@ -395,12 +395,13 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
               
               <Button
                 size="sm"
+                variant="glow"
                 onClick={() => {
                   // Open integration setup modal for this repository
                   setSelectedRepository(repository);
                   setIsRepoModalOpen(true);
                 }}
-                className="bg-log-green text-white hover:bg-green-600"
+                className="text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Connect Repository
@@ -647,8 +648,9 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             )}
           </div>
           <Button 
+            variant="glow"
             onClick={() => setIsRepoModalOpen(true)}
-            className="bg-log-green text-white hover:bg-green-600"
+            className="text-white"
           >
             <Plus className="w-4 h-4 mr-2" />
             Add Repository
@@ -721,8 +723,9 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     }
                   </p>
                   <Button 
+                    variant="glow"
                     onClick={() => setIsRepoModalOpen(true)}
-                    className="bg-log-green text-white hover:bg-green-600"
+                    className="text-white"
                   >
                     <Plus className="w-4 h-4 mr-2" />
                     Add Repository

@@ -71,8 +71,9 @@ export default function ForgotPassword() {
             />
           </div>
           <Button 
+            variant="glow"
             type="submit"
-            className="w-full bg-log-green text-white font-semibold hover:bg-green-600"
+            className="w-full font-semibold"
             disabled={forgotPasswordMutation.isPending}
           >
             {forgotPasswordMutation.isPending ? "Sending..." : "Send Reset Link"}

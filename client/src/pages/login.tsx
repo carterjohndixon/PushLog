@@ -174,11 +174,12 @@ export default function Login() {
             </div>
           </div>
           <Button 
+            variant="glow"
             onClick={(e) => {
               e.preventDefault(); 
               handleLogin(identifier, password);
             }} 
-            className="w-full bg-log-green text-white font-semibold hover:bg-green-600"
+            className="w-full font-semibold"
           >
             Log In
           </Button>

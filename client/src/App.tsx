@@ -5,7 +5,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
-import { Header } from "@/components/header";
+
+const Header = lazy(() => import("@/components/header").then((m) => ({ default: m.Header })));
 
 
 // Lazy load pages for better performance
@@ -56,7 +57,11 @@ function Router() {
 
   return (
     <>
-      {showPersistentHeader && <Header />}
+      {showPersistentHeader && (
+        <Suspense fallback={<header className="h-16 shrink-0 border-b border-border bg-background" aria-hidden />}>
+          <Header />
+        </Suspense>
+      )}
       <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
