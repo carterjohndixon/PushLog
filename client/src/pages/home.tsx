@@ -126,13 +126,13 @@ export default function Home() {
       <Header />
       
       {/* Hero Section */}
-      <section className="bg-muted/40 dark:bg-muted/60 py-20">
+      <section className="bg-muted/60 py-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <div className="flex justify-center mb-6">
               <Logo size="xl" className="shadow-lg" />
             </div>
-            <h1 className="text-5xl font-bold text-foreground mb-6">
+            <h1 className="text-5xl font-bold text-hero mb-6">
               Bridge Your GitHub & Slack
               <span className="text-brand-gradient"> Seamlessly</span>
             </h1>
@@ -162,28 +162,28 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <Card className="text-center shadow-lg">
               <CardContent className="p-6">
-                <div className="w-16 h-16 bg-secondary rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <Github className="text-foreground text-2xl w-8 h-8" />
+                <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                  <Github className="text-log-green text-2xl w-8 h-8" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">Push Detection</h3>
+                <h3 className="font-semibold text-hero mb-2">Push Detection</h3>
                 <p className="text-muted-foreground text-sm">Automatically detects new commits and changes</p>
               </CardContent>
             </Card>
             <Card className="text-center shadow-lg">
               <CardContent className="p-6">
-                <div className="w-16 h-16 bg-log-green rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <Brain className="text-white text-2xl w-8 h-8" />
+                <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                  <Brain className="text-log-green text-2xl w-8 h-8" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">AI Summary</h3>
+                <h3 className="font-semibold text-hero mb-2">AI Summary</h3>
                 <p className="text-muted-foreground text-sm">Generates intelligent code summaries</p>
               </CardContent>
             </Card>
             <Card className="text-center shadow-lg">
               <CardContent className="p-6">
-                <div className="w-16 h-16 bg-log-green rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <SiSlack className="text-white text-2xl" />
+                <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
+                  <SiSlack className="text-log-green text-2xl w-8 h-8" />
                 </div>
-                <h3 className="font-semibold text-foreground mb-2">Team Notification</h3>
+                <h3 className="font-semibold text-hero mb-2">Team Notification</h3>
                 <p className="text-muted-foreground text-sm">Sends formatted updates to Slack channels</p>
               </CardContent>
             </Card>
@@ -195,7 +195,7 @@ export default function Home() {
       <section className="py-20 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-4">
+            <h2 className="text-4xl font-bold text-hero mb-4">
               Powerful Dashboard Experience
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

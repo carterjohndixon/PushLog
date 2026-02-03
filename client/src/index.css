@@ -179,4 +179,12 @@
     background-clip: text;
     color: transparent;
   }
+
+  /* Hero headlines: high-contrast – explicit dark in light mode, light in dark */
+  .text-hero {
+    color: hsl(var(--graphite));
+  }
+  .dark .text-hero {
+    color: hsl(var(--foreground));
+  }
 }
