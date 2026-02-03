@@ -132,45 +132,46 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-foreground mb-2">Log in to PushLog</h1>
-          <p className="text-muted-foreground">Seamlessly connect GitHub with Slack</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Log in to PushLog</h1>
+          <p className="text-sm text-muted-foreground">Seamlessly connect GitHub with Slack</p>
         </div>
 
-        <form className="bg-card border border-border shadow-lg rounded-xl p-6 space-y-4">
+        <form className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
-            <Label htmlFor="identifier" className="text-foreground">Email or Username</Label>
+            <Label htmlFor="identifier" className="text-foreground font-medium">Email or Username</Label>
             <Input 
               onChange={(e) => setIdentifier(e.target.value)} 
               type="text" 
               id="identifier" 
               placeholder="you@example.com or username" 
               required 
-              className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+              className="mt-1.5"
             />
           </div>
-          <div className="mb-6 relative">
-            <Label htmlFor="password" className="text-foreground">Password</Label>
+          <div className="relative">
+            <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
             <Input 
               onChange={(e) => setPassword(e.target.value)} 
               type={showPassword ? "text" : "password"} 
               id="password" 
               placeholder="••••••••" 
               required 
-              className="bg-background border-border text-foreground placeholder:text-muted-foreground"
+              className="mt-1.5 pr-10"
             />
             <button
               type="button"
               onClick={() => setShowPassword(prev => !prev)}
-              className="absolute right-2 top-[45%] transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              className="absolute right-2 top-[38px] text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showPassword ? "Hide password" : "Show password"}
             >
-              {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+              {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
             </button>
             <div className="mt-2 text-right">
-              <a href="/forgot-password" className="text-sm text-log-green hover:underline">
+              <a href="/forgot-password" className="text-sm text-primary hover:underline font-medium">
                 Forgot password?
               </a>
             </div>
@@ -181,38 +182,42 @@ export default function Login() {
               e.preventDefault(); 
               handleLogin(identifier, password);
             }} 
-            className="w-full font-semibold"
+            className="w-full font-semibold mt-2"
           >
             Log In
           </Button>
         </form>
 
-        <div className="flex items-center justify-center">
-          <span className="text-sm text-muted-foreground">or</span>
+        <div className="flex items-center gap-3">
+          <span className="flex-1 border-t border-border" />
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">or</span>
+          <span className="flex-1 border-t border-border" />
         </div>
 
-        <Button
-          onClick={handleGitHubConnect}
-          variant="outline"
-          className="w-full bg-muted text-foreground hover:bg-muted/80 border-border font-semibold"
-        >
-          <Github className="mr-2 w-4 h-4" />
-          Log in with GitHub
-        </Button>
-
-        <Button
-          onClick={handleGoogleConnect}
-          variant="outline"
-          className="w-full bg-muted text-foreground hover:bg-muted/80 border-border font-semibold"
-        >
-          <svg className="mr-2 w-4 h-4" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
-          </svg>
-          Log in with Google
-        </Button>
+        <div className="space-y-3">
+          <Button
+            onClick={handleGitHubConnect}
+            variant="outline"
+            className="w-full h-11 border-2 border-border bg-card text-foreground hover:bg-muted hover:border-muted-foreground/30 font-semibold shadow-sm"
+          >
+            <Github className="mr-2 w-4 h-4 shrink-0" />
+            Log in with GitHub
+          </Button>
+          <Button
+            onClick={handleGoogleConnect}
+            variant="outline"
+            className="w-full h-11 border-2 border-border bg-card text-foreground hover:bg-muted hover:border-muted-foreground/30 font-semibold shadow-sm"
+          >
+            <svg className="mr-2 w-4 h-4 shrink-0" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
+            </svg>
+            Log in with Google
+          </Button>
+        </div>
 
         <p className="text-center text-sm text-muted-foreground">
-          Don't have an account? <a href="/signup" className="text-log-green hover:underline">Sign up</a>
+          Don&apos;t have an account?{" "}
+          <a href="/signup" className="text-primary font-medium hover:underline">Sign up</a>
         </p>
       </div>
       

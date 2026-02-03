@@ -155,37 +155,39 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-graphite mb-2">Create your account</h1>
-          <p className="text-steel-gray">Start connecting GitHub with Slack</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Create your account</h1>
+          <p className="text-sm text-muted-foreground">Start connecting GitHub with Slack</p>
         </div>
 
-        <form className="bg-gray-50 shadow-lg rounded-xl p-6 space-y-4">
+        <form className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
-            <Label htmlFor="username" className="text-graphite">Username</Label>
+            <Label htmlFor="username" className="text-foreground font-medium">Username</Label>
             <Input 
               onChange={(e) => setUsername(e.target.value)} 
               type="text" 
               id="username" 
               placeholder="johndoe" 
               required 
+              className="mt-1.5"
             />
           </div>
           <div>
-            <Label htmlFor="email" className="text-graphite">Email</Label>
+            <Label htmlFor="email" className="text-foreground font-medium">Email</Label>
             <Input 
               onChange={(e) => setEmail(e.target.value)} 
               type="email" 
               id="email" 
               placeholder="you@example.com" 
               required 
+              className="mt-1.5"
             />
           </div>
-          <div className="mb-6 space-y-2">
-            <Label htmlFor="password" className="text-graphite">Password</Label>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-foreground font-medium">Password</Label>
             <div className="relative">
               <Input 
                 onChange={(e) => setPassword(e.target.value)} 
@@ -195,26 +197,27 @@ export default function Signup() {
                 id="password" 
                 placeholder="••••••••" 
                 required 
+                className="mt-1.5 pr-10"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(prev => !prev)}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 text-graphite hover:text-black"
+                className="absolute right-2 top-[38px] text-muted-foreground hover:text-foreground transition-colors"
+                aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                {showPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
               </button>
             </div>
             
-            {/* Password requirements list */}
             <div className={`space-y-2 text-sm transition-all duration-200 ${passwordFocused || password ? 'opacity-100 max-h-40' : 'opacity-0 max-h-0 overflow-hidden'}`}>
               {passwordStrength.map((requirement) => (
-                <div key={requirement.name} className="flex items-center space-x-2">
+                <div key={requirement.name} className="flex items-center gap-2">
                   {requirement.isMet ? (
-                    <Check className="w-4 h-4 text-green-500" />
+                    <Check className="w-4 h-4 text-primary shrink-0" />
                   ) : (
-                    <X className="w-4 h-4 text-red-500" />
+                    <X className="w-4 h-4 text-muted-foreground shrink-0" />
                   )}
-                  <span className={requirement.isMet ? "text-green-700" : "text-red-700"}>
+                  <span className={requirement.isMet ? "text-foreground" : "text-muted-foreground"}>
                     {requirement.message}
                   </span>
                 </div>
@@ -227,38 +230,42 @@ export default function Signup() {
               handleSignup(email, username, password);
             }} 
             variant="glow"
-            className="w-full font-semibold"
+            className="w-full font-semibold mt-2"
           >
             Create Account
           </Button>
         </form>
 
-        <div className="flex items-center justify-center">
-          <span className="text-sm text-steel-gray">or</span>
+        <div className="flex items-center gap-3">
+          <span className="flex-1 border-t border-border" />
+          <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">or</span>
+          <span className="flex-1 border-t border-border" />
         </div>
 
-        <Button
-          onClick={handleGitHubConnect}
-          variant="outline"
-          className="w-full bg-gray-100 text-graphite hover:bg-gray-200 font-semibold"
-        >
-          <Github className="mr-2 w-4 h-4" />
-          Sign up with GitHub
-        </Button>
+        <div className="space-y-3">
+          <Button
+            onClick={handleGitHubConnect}
+            variant="outline"
+            className="w-full h-11 border-2 border-border bg-card text-foreground hover:bg-muted hover:border-muted-foreground/30 font-semibold shadow-sm"
+          >
+            <Github className="mr-2 w-4 h-4 shrink-0" />
+            Sign up with GitHub
+          </Button>
+          <Button
+            onClick={handleGoogleConnect}
+            variant="outline"
+            className="w-full h-11 border-2 border-border bg-card text-foreground hover:bg-muted hover:border-muted-foreground/30 font-semibold shadow-sm"
+          >
+            <svg className="mr-2 w-4 h-4 shrink-0" viewBox="0 0 24 24">
+              <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
+            </svg>
+            Sign up with Google
+          </Button>
+        </div>
 
-        <Button
-          onClick={handleGoogleConnect}
-          variant="outline"
-          className="w-full bg-gray-100 text-graphite hover:bg-gray-200 font-semibold"
-        >
-          <svg className="mr-2 w-4 h-4" viewBox="0 0 24 24">
-            <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
-          </svg>
-          Sign up with Google
-        </Button>
-
-        <p className="text-center text-sm text-steel-gray">
-          Already have an account? <a href="/login" className="text-log-green hover:underline">Log in</a>
+        <p className="text-center text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <a href="/login" className="text-primary font-medium hover:underline">Log in</a>
         </p>
       </div>
       
