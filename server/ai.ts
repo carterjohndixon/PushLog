@@ -4,6 +4,8 @@ import { calculateTokenCost } from './stripe';
 
 dotenv.config();
 
+// AI summary generation (OpenAI + OpenRouter, e.g. x-ai/grok-4.1-fast)
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
