@@ -249,7 +249,7 @@ export function IntegrationSettingsModal({
                 <SelectTrigger className="bg-background text-foreground border-border">
                   <SelectValue placeholder="Select notification level" />
                 </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
+                <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
                   <SelectItem value="all">All pushes</SelectItem>
                   <SelectItem value="main_only">Main branch only</SelectItem>
                   <SelectItem value="tagged_only">Tagged releases only</SelectItem>
@@ -312,7 +312,7 @@ export function IntegrationSettingsModal({
                         {aiModel ? getAiModelDisplayName(aiModel) : null}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md bg-popover border-border">
+                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
                       {AI_MODELS.map((model) => (
                         <SelectItem
                           key={model.id}
@@ -363,16 +363,21 @@ export function IntegrationSettingsModal({
                             placeholder={openRouterModels.length ? "Select model" : "Loading models…"}
                           />
                         </SelectTrigger>
-                        <SelectContent className="max-h-[280px] bg-popover border-border">
+                        <SelectContent
+                          className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border"
+                          position="popper"
+                        >
                           {openRouterModels.map((model) => (
                             <SelectItem
                               key={model.id}
                               value={model.id}
-                              className="py-2 cursor-pointer"
+                              className="py-2 cursor-pointer min-w-0"
                               textValue={model.name}
                             >
-                              <span className="font-medium text-sm">{model.name}</span>
-                              <span className="text-muted-foreground ml-2 text-xs">({model.id})</span>
+                              <span className="flex items-center min-w-0 gap-2 overflow-hidden">
+                                <span className="font-medium text-sm truncate">{model.name}</span>
+                                <span className="text-muted-foreground text-xs truncate shrink-0">({model.id})</span>
+                              </span>
                             </SelectItem>
                           ))}
                         </SelectContent>
