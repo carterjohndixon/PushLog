@@ -69,6 +69,7 @@ interface IntegrationOption {
   id: number;
   repositoryName: string;
   slackChannelName: string;
+  aiModel?: string;
 }
 
 export default function Models() {
@@ -118,7 +119,7 @@ export default function Models() {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: !!selectedModel && userHasKey,
+    enabled: userHasKey,
   });
 
   const applyToIntegrationMutation = useMutation({
@@ -128,6 +129,7 @@ export default function Models() {
     },
     onSuccess: (_, { modelId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       setSelectedModel(null);
       setApplyToIntegrationId("");
       toast({
@@ -333,6 +335,36 @@ export default function Models() {
                 <Skeleton className="h-24 w-full" />
               ) : usageData ? (
                 <>
+                  {/* Models in use (integrations using OpenRouter) */}
+                  {integrations && integrations.some((i) => i.aiModel?.includes("/")) && (
+                    <div className="mb-6">
+                      <p className="text-sm font-medium text-foreground mb-2">Models in use</p>
+                      <div className="rounded-md border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 border-border">
+                              <TableHead className="text-foreground">Integration</TableHead>
+                              <TableHead className="text-foreground">Model</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {integrations
+                              .filter((i) => i.aiModel?.includes("/"))
+                              .map((i) => (
+                                <TableRow key={i.id} className="border-border">
+                                  <TableCell className="font-medium text-foreground">
+                                    {i.repositoryName} → #{i.slackChannelName}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {getAiModelDisplayName(i.aiModel!)}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                     <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Total calls</p>

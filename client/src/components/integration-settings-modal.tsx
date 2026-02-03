@@ -260,14 +260,14 @@ export function IntegrationSettingsModal({
 
             {/* AI provider: PushLog vs OpenRouter */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
+              <div className="flex items-center justify-between gap-6">
+                <div className="space-y-0.5 min-w-0 flex-1">
                   <Label>AI for commit summaries</Label>
                   <p className="text-xs text-muted-foreground">
                     Use PushLog&apos;s models (uses your credits) or your own OpenRouter API key (you pay OpenRouter).
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0 ml-2">
                   <Switch
                     checked={useOpenRouter}
                     onCheckedChange={(checked) => {
