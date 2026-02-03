@@ -97,6 +97,7 @@ export function Header() {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/integrations", label: "Integrations" },
     { href: "/repositories", label: "Repositories" },
+    { href: "/analytics", label: "Analytics" },
   ] as const;
 
   const themeCycle: Theme[] = ["light", "dark", "system"];

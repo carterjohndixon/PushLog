@@ -640,7 +640,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Legal Links Section */}
+      {/* Legal Links Section
       <section className="py-12 bg-background border-t border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
@@ -658,7 +658,7 @@ export default function Home() {
             </Link>
           </div>
         </div>
-      </section>
+      </section> */}
 
       <Footer />
     </div>

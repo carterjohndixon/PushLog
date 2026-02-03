@@ -1623,6 +1623,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get analytics data (pushes by day, Slack messages by day, AI model usage)
+  app.get("/api/analytics", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const days = 30;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+
+      // Build empty series for last N days
+      const dateKeys: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dateKeys.push(d.toISOString().slice(0, 10));
+      }
+      const pushesByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
+      const slackByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
+
+      // Pushes: get user repos, then push events per repo, aggregate by day
+      const userRepos = await storage.getRepositoriesByUserId(userId);
+      const allPushEvents: { pushedAt: Date | string }[] = [];
+      for (const repo of userRepos) {
+        const events = await storage.getPushEventsByRepositoryId(repo.id);
+        allPushEvents.push(...events.map(e => ({ pushedAt: e.pushedAt })));
+      }
+      for (const event of allPushEvents) {
+        const d = new Date(event.pushedAt);
+        if (d < startDate) continue;
+        const key = d.toISOString().slice(0, 10);
+        const entry = pushesByDay.find(p => p.date === key);
+        if (entry) entry.count++;
+      }
+
+      // Slack messages: notifications with type slack_message_sent, group by day
+      const notifications = await storage.getNotificationsByUserId(userId);
+      const slackNotifications = notifications.filter(n => n.type === "slack_message_sent");
+      for (const n of slackNotifications) {
+        const d = new Date(n.createdAt);
+        if (d < startDate) continue;
+        const key = d.toISOString().slice(0, 10);
+        const entry = slackByDay.find(p => p.date === key);
+        if (entry) entry.count++;
+      }
+
+      // AI model usage: use database (has getAiUsageByUserId)
+      const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
+      const modelCounts: Record<string, number> = {};
+      for (const u of aiUsage) {
+        const model = (u as any).model || "unknown";
+        modelCounts[model] = (modelCounts[model] || 0) + 1;
+      }
+      const aiModelUsage = Object.entries(modelCounts)
+        .map(([model, count]) => ({ model, count }))
+        .sort((a, b) => b.count - a.count);
+
+      res.json({
+        pushesByDay,
+        slackMessagesByDay: slackByDay,
+        aiModelUsage,
+      });
+    } catch (error) {
+      console.error("Error fetching analytics:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   // Get push events (authenticated version)
   app.get("/api/push-events", authenticateToken, async (req, res) => {
     try {

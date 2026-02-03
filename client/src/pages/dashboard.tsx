@@ -1167,17 +1167,15 @@ export default function Dashboard() {
                 <span>Set Up New Integration</span>
               </Button>
               
+              <Link href="/analytics" className="block h-full">
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors"
-                onClick={() => {
-                  // Navigate to repositories page to view detailed analytics
-                  window.location.href = '/repositories';
-                }}
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors w-full h-full"
               >
                 <TrendingUp className="w-5 h-5 text-sky-blue" />
                 <span>View Repository Analytics</span>
               </Button>
+            </Link>
               
               <Button 
                 variant="outline" 

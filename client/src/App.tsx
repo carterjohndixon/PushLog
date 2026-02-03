@@ -19,6 +19,7 @@ const ResetPassword = lazy(() => import("@/pages/reset-password"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Integrations = lazy(() => import("@/pages/integrations"));
 const Repositories = lazy(() => import("@/pages/repositories"));
+const Analytics = lazy(() => import("@/pages/analytics"));
 const Carter = lazy(() => import("@/pages/carter"));
 const Policy = lazy(() => import("@/pages/policy"));
 const Terms = lazy(() => import("@/pages/terms"));
@@ -44,7 +45,7 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/settings"];
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/analytics", "/settings"];
 
 function Router() {
   const [location] = useLocation();
@@ -83,6 +84,11 @@ function Router() {
       <Route path="/repositories">
         <ProtectedRoute pageName="repositories">
           <Repositories />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/analytics">
+        <ProtectedRoute pageName="analytics">
+          <Analytics />
         </ProtectedRoute>
       </Route>
       
