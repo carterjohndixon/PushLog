@@ -113,7 +113,7 @@ export function RepositorySettingsModal({
         </DialogHeader>
         
         {repository && typeof repository === 'object' && (
-          <div className="space-y-6">
+          <div className="space-y-6 p-4 border border-border rounded-lg bg-muter/50">
             {/* Repository Info */}
             <div className="p-4 bg-gray-50 rounded-lg space-y-3">
               <div className="flex items-center space-x-3">
@@ -121,8 +121,8 @@ export function RepositorySettingsModal({
                   <Github className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">{repository?.name || 'Unknown Repository'}</p> 
-                  <p className="text-sm text-steel-gray">{repository?.owner?.login || 'Unknown'}/{repository?.name || 'Unknown'}</p>
+                  <p className="font-medium text-muted-foreground">{repository?.name || 'Unknown Repository'}</p> 
+                  <p className="text-sm text-muted-foreground">{repository?.owner?.login || 'Unknown'}/{repository?.name || 'Unknown'}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -168,23 +168,23 @@ export function RepositorySettingsModal({
             </div>
 
             {/* Integration Status Indicator */}
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-muted/50 rounded-lg border border-border">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-graphite">Integration Status</p>
-                  <p className="text-xs text-steel-gray">
+                  <p className="text-sm font-medium text-muted-foreground">Integration Status</p>
+                  <p className="text-xs text-muted-foreground">
                     {repository?.id ? 'Check if this repository has active integrations' : 'Repository not yet connected'}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-steel-gray" />
-                  <span className="text-xs text-steel-gray">
+                  <div className="w-2 h-2 rounded-full bg-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">
                     {repository?.id ? 'Connected' : 'Not Connected'}
                   </span>
                 </div>
               </div>
               {repository?.isActive === false && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                <div className="mt-2 p-2 bg-yellow-50 border border-border rounded text-xs text-yellow-800">
                   <p>⚠️ This repository is currently paused. Enable it above to start monitoring.</p>
                   <p className="mt-1">💡 <strong>Note:</strong> If you have integrations for this repository, unpausing them on the Integrations page will automatically activate this repository.</p>
                 </div>
