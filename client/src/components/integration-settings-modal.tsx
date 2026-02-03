@@ -138,7 +138,7 @@ export function IntegrationSettingsModal({
       <DialogContent className="max-w-lg max-h-[90vh] flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center space-x-2">
-            <Settings className="w-5 h-5 text-sky-blue" />
+            <Settings className="w-5 h-5 text-log-green" />
             <DialogTitle>Integration Settings</DialogTitle>
           </div>
           <DialogDescription>
@@ -149,23 +149,23 @@ export function IntegrationSettingsModal({
         {integration && (
           <div className="flex-1 overflow-y-auto space-y-6 px-1 py-2 pr-3">
             {/* Integration Info */}
-            <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+            <div className="p-4 bg-muted rounded-lg border border-border space-y-3">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                  <Github className="text-white w-4 h-4" />
+                <div className="w-8 h-8 bg-secondary rounded flex items-center justify-center">
+                  <Github className="text-foreground w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">{integration.repositoryName}</p> 
-                  <p className="text-sm text-steel-gray">Repository</p>
+                  <p className="font-medium text-foreground">{integration.repositoryName}</p> 
+                  <p className="text-sm text-muted-foreground">Repository</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-sky-blue rounded flex items-center justify-center">
+                <div className="w-8 h-8 bg-log-green rounded flex items-center justify-center">
                   <SlackIcon className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">#{integration.slackChannelName}</p>
-                  <p className="text-sm text-steel-gray">Slack Channel</p>
+                  <p className="font-medium text-foreground">#{integration.slackChannelName}</p>
+                  <p className="text-sm text-muted-foreground">Slack Channel</p>
                 </div>
               </div>
             </div>
@@ -174,7 +174,7 @@ export function IntegrationSettingsModal({
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="integration-active">Integration Active</Label>
-                <p className="text-xs text-steel-gray">
+                <p className="text-xs text-muted-foreground">
                   Enable or disable this integration. When disabled, no notifications will be sent to Slack.
                 </p>
               </div>
@@ -189,16 +189,16 @@ export function IntegrationSettingsModal({
             <div className="space-y-2">
               <Label htmlFor="notification-level">Notification Level</Label>
               <Select value={notificationLevel} onValueChange={setNotificationLevel}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-background text-foreground border-border">
                   <SelectValue placeholder="Select notification level" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover border-border">
                   <SelectItem value="all">All pushes</SelectItem>
                   <SelectItem value="main_only">Main branch only</SelectItem>
                   <SelectItem value="tagged_only">Tagged releases only</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-steel-gray">
+              <p className="text-xs text-muted-foreground">
                 {notificationLevel === 'all' && 'Receive notifications for all pushes to any branch'}
                 {notificationLevel === 'main_only' && 'Only receive notifications for pushes to the main branch'}
                 {notificationLevel === 'tagged_only' && 'Only receive notifications for tagged releases'}
@@ -209,7 +209,7 @@ export function IntegrationSettingsModal({
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="commit-summaries">Include Commit Summaries</Label>
-                <p className="text-xs text-steel-gray">
+                <p className="text-xs text-muted-foreground">
                   Include commit messages and author information in notifications
                 </p>
               </div>
@@ -224,12 +224,12 @@ export function IntegrationSettingsModal({
             <div className="space-y-2">
               <Label htmlFor="ai-model">AI Model</Label>
               <Select value={aiModel} onValueChange={setAiModel}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full bg-background text-foreground border-border">
                   <SelectValue placeholder="Select AI model">
                     {aiModel ? AI_MODELS.find((m) => m.id === aiModel)?.name : null}
                   </SelectValue>
                 </SelectTrigger>
-                <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md">
+                <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md bg-popover border-border">
                   {AI_MODELS.map((model) => (
                     <SelectItem 
                       key={model.id} 
@@ -239,7 +239,7 @@ export function IntegrationSettingsModal({
                     >
                       <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
                         <span className="font-medium text-sm leading-tight">{model.name}</span>
-                        <span className="text-xs text-steel-gray leading-relaxed break-words">
+                        <span className="text-xs text-muted-foreground leading-relaxed break-words">
                           ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
                         </span>
                       </div>
@@ -247,7 +247,7 @@ export function IntegrationSettingsModal({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-steel-gray">
+              <p className="text-xs text-muted-foreground">
                 Choose the AI model for generating commit summaries. Higher-end models provide better analysis but cost more.
               </p>
             </div>
@@ -279,31 +279,31 @@ export function IntegrationSettingsModal({
                     }
                   }
                 }}
-                className="w-full"
+                className="w-full bg-background text-foreground border-border"
               />
-              <p className="text-xs text-steel-gray">
+              <p className="text-xs text-muted-foreground">
                 Maximum number of tokens for AI responses (50-2000). Higher values allow for more detailed summaries but cost more.
               </p>
             </div>
 
             {/* Integration Status Indicator */}
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-muted rounded-lg border border-border">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-graphite">Current Status</p>
-                  <p className="text-xs text-steel-gray">
+                  <p className="text-sm font-medium text-foreground">Current Status</p>
+                  <p className="text-xs text-muted-foreground">
                     {isActive ? 'Integration is active and sending notifications' : 'Integration is paused and not sending notifications'}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-log-green' : 'bg-steel-gray'}`} />
-                  <span className="text-xs text-steel-gray">
+                  <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-log-green' : 'bg-muted-foreground'}`} />
+                  <span className="text-xs text-muted-foreground">
                     {isActive ? 'Active' : 'Paused'}
                   </span>
                 </div>
               </div>
               {!isActive && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-800 dark:text-amber-200">
                   <p>⚠️ This integration is currently paused. Enable it above to start sending notifications to Slack.</p>
                 </div>
               )}
@@ -311,7 +311,7 @@ export function IntegrationSettingsModal({
           </div>
         )}
         
-        <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t">
+        <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t border-border">
           <Button 
             variant="outline" 
             onClick={() => handleOpenChange(false)}
