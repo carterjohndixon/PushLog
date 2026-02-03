@@ -1,6 +1,6 @@
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
-import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor, Check } from "lucide-react";
+import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -99,11 +99,17 @@ export function Header() {
     { href: "/repositories", label: "Repositories" },
   ] as const;
 
-  const themeOptions: { value: Theme; label: string; icon: React.ReactNode }[] = [
-    { value: "light", label: "Light", icon: <Sun className="h-4 w-4" /> },
-    { value: "dark", label: "Dark", icon: <Moon className="h-4 w-4" /> },
-    { value: "system", label: "System", icon: <Monitor className="h-4 w-4" /> },
-  ];
+  const themeCycle: Theme[] = ["light", "dark", "system"];
+  const cycleTheme = () => {
+    const currentIndex = themeCycle.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themeCycle.length;
+    setTheme(themeCycle[nextIndex]);
+  };
+  const themeIcons: Record<Theme, React.ReactNode> = {
+    light: <Sun className="h-4 w-4" />,
+    dark: <Moon className="h-4 w-4" />,
+    system: <Monitor className="h-4 w-4" />,
+  };
 
   return (
     <header className="bg-background border-b border-border sticky top-0 z-50">
@@ -140,30 +146,15 @@ export function Header() {
           </div>
 
           <div className="flex items-center space-x-2 sm:space-x-4">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="Theme">
-                  {resolvedTheme === "dark" ? (
-                    <Moon className="h-4 w-4" />
-                  ) : (
-                    <Sun className="h-4 w-4" />
-                  )}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                {themeOptions.map((opt) => (
-                  <DropdownMenuItem
-                    key={opt.value}
-                    onClick={() => setTheme(opt.value)}
-                    className="flex items-center gap-2"
-                  >
-                    {opt.icon}
-                    <span>{opt.label}</span>
-                    {theme === opt.value && <Check className="h-4 w-4 ml-auto" />}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              aria-label={`Theme: ${theme} (click to cycle)`}
+              onClick={cycleTheme}
+            >
+              {themeIcons[theme]}
+            </Button>
             {loading ? null : (user ? (
               <>
                 <NotificationsDropdown isEmailVerified={user.emailVerified} />
