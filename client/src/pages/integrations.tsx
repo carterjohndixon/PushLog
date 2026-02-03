@@ -253,7 +253,7 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   };
 
   const IntegrationCard = ({ integration }: { integration: ActiveIntegration }) => (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className="card-lift hover:shadow-md transition-shadow">
       <CardContent className="p-6">
         <div className="flex flex-col h-full">
           {/* Top section with main content */}

@@ -349,7 +349,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     // If repository is not connected to our system, show "Connect" option
     if (!isConnected) {
       return (
-        <Card className="hover:shadow-md transition-shadow border-dashed border-2 border-gray-200 dark:border-[hsl(var(--log-green)/0.6)]">
+        <Card className="card-lift hover:shadow-md transition-shadow border-dashed border-2 border-gray-200 dark:border-[hsl(var(--log-green)/0.6)]">
           <CardHeader className="pb-3">
             <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
               <div className="flex items-center space-x-3 min-w-0 flex-1">
@@ -429,7 +429,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     }
 
     return (
-      <Card className="hover:shadow-md transition-shadow">
+      <Card className="card-lift hover:shadow-md transition-shadow">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">

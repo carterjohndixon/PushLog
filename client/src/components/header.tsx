@@ -119,7 +119,7 @@ export function Header() {
             <Link href="/" className="flex items-center space-x-3">
               <Logo size="md" />
               <div>
-                <h1 className="text-xl font-bold text-log-green">PushLog</h1>
+                <h1 className="text-xl font-bold text-brand-gradient">PushLog</h1>
                 <p className="text-xs text-muted-foreground hidden sm:block">GitHub ↔ Slack Integration</p>
               </div>
             </Link>
@@ -131,7 +131,7 @@ export function Header() {
                     <Link
                       key={href}
                       href={href}
-                      className={`transition-colors ${
+                      className={`transition-colors duration-200 ${
                         isActive
                           ? "text-foreground font-semibold"
                           : "text-log-green hover:text-foreground"

@@ -134,7 +134,7 @@ export default function Home() {
             </div>
             <h1 className="text-5xl font-bold text-graphite mb-6">
               Bridge Your GitHub & Slack
-              <span className="text-log-green"> Seamlessly</span>
+              <span className="text-brand-gradient"> Seamlessly</span>
             </h1>
             <p className="text-xl text-steel-gray mb-8 max-w-3xl mx-auto">
               Automate your development workflow with intelligent push notifications, code summaries, 
@@ -210,7 +210,7 @@ export default function Home() {
               <div className="flex items-center space-x-4">
                 <Logo size="md" />
                 <div>
-                  <h1 className="text-xl font-bold text-log-green">PushLog</h1>
+                  <h1 className="text-xl font-bold text-brand-gradient">PushLog</h1>
                   <p className="text-xs text-steel-gray">GitHub ↔ Slack Integration</p>
                 </div>
               </div>
@@ -559,7 +559,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Real-time Notifications */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Zap className="text-white text-xl w-6 h-6" />
@@ -572,7 +572,7 @@ export default function Home() {
             </Card>
 
             {/* AI Code Summaries */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-sky-blue rounded-lg flex items-center justify-center mb-4">
                   <Brain className="text-white text-xl w-6 h-6" />
@@ -585,7 +585,7 @@ export default function Home() {
             </Card>
 
             {/* Multi-Repository Support */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-steel-gray rounded-lg flex items-center justify-center mb-4">
                   <Layers className="text-white text-xl w-6 h-6" />
@@ -598,7 +598,7 @@ export default function Home() {
             </Card>
 
             {/* Custom Webhooks */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Webhook className="text-white text-xl w-6 h-6" />
@@ -611,7 +611,7 @@ export default function Home() {
             </Card>
 
             {/* Team Management */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-sky-blue rounded-lg flex items-center justify-center mb-4">
                   <Users className="text-white text-xl w-6 h-6" />
@@ -624,7 +624,7 @@ export default function Home() {
             </Card>
 
             {/* Analytics & Insights */}
-            <Card className="hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl transition-shadow">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-steel-gray rounded-lg flex items-center justify-center mb-4">
                   <TrendingUp className="text-white text-xl w-6 h-6" />

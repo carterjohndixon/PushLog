@@ -646,7 +646,7 @@ export default function Dashboard() {
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
           <Card 
-            className="cursor-pointer transition-shadow hover:shadow-glow"
+            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
             onClick={() => setIsActiveIntegrationsModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -667,7 +667,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer transition-shadow hover:shadow-glow"
+            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
             onClick={() => setIsTotalRepositoriesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -688,7 +688,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer transition-shadow hover:shadow-glow"
+            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
             onClick={() => setIsDailyPushesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -709,7 +709,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer transition-shadow hover:shadow-glow"
+            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
             onClick={() => setIsSlackMessagesModalOpen(true)}
           >
             <CardContent className="p-6">
@@ -730,7 +730,7 @@ export default function Dashboard() {
           </Card>
 
           <Card 
-            className="cursor-pointer transition-shadow hover:shadow-glow"
+            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
             onClick={() => setIsAiCreditsModalOpen(true)}
           >
             <CardContent className="p-6">
