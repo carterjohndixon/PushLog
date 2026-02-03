@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -27,24 +28,32 @@ function formatShortDate(isoDate: string) {
 }
 
 export default function Analytics() {
-  const { data, isLoading, error } = useQuery<AnalyticsData>({
+  const { data, isLoading, error, refetch } = useQuery<AnalyticsData>({
     queryKey: ["/api/analytics"],
     queryFn: async () => {
       const response = await fetch("/api/analytics", {
         credentials: "include",
         headers: { Accept: "application/json" },
       });
-      if (!response.ok) throw new Error("Failed to fetch analytics");
-      return response.json();
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const msg = body?.error || (response.status === 401 ? "Please log in again." : "Failed to load analytics.");
+        throw new Error(msg);
+      }
+      return body;
     },
   });
 
   if (error) {
+    const message = error instanceof Error ? error.message : "Failed to load analytics. Please try again.";
     return (
       <div className="min-h-screen bg-forest-gradient">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="text-center py-12">
-            <p className="text-destructive">Failed to load analytics. Please try again.</p>
+          <div className="text-center py-12 space-y-4">
+            <p className="text-destructive">{message}</p>
+            <Button variant="outline" onClick={() => refetch()}>
+              Try again
+            </Button>
           </div>
         </main>
       </div>

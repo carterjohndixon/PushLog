@@ -1625,23 +1625,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get analytics data (pushes by day, Slack messages by day, AI model usage)
   app.get("/api/analytics", authenticateToken, async (req, res) => {
+    const userId = req.user!.userId;
+    const days = 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Build empty series for last N days
+    const dateKeys: string[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      dateKeys.push(d.toISOString().slice(0, 10));
+    }
+    const pushesByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
+    const slackByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
+    let aiModelUsage: { model: string; count: number }[] = [];
+
     try {
-      const userId = req.user!.userId;
-      const days = 30;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - days);
-      startDate.setHours(0, 0, 0, 0);
-
-      // Build empty series for last N days
-      const dateKeys: string[] = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dateKeys.push(d.toISOString().slice(0, 10));
-      }
-      const pushesByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
-      const slackByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
-
       // Pushes: get user repos, then push events per repo, aggregate by day
       const userRepos = await storage.getRepositoriesByUserId(userId);
       const allPushEvents: { pushedAt: Date | string }[] = [];
@@ -1651,43 +1652,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       for (const event of allPushEvents) {
         const d = new Date(event.pushedAt);
-        if (d < startDate) continue;
+        if (Number.isNaN(d.getTime()) || d < startDate) continue;
         const key = d.toISOString().slice(0, 10);
         const entry = pushesByDay.find(p => p.date === key);
         if (entry) entry.count++;
       }
+    } catch (err) {
+      console.error("Analytics: error fetching pushes:", err);
+    }
 
+    try {
       // Slack messages: notifications with type slack_message_sent, group by day
       const notifications = await storage.getNotificationsByUserId(userId);
       const slackNotifications = notifications.filter(n => n.type === "slack_message_sent");
       for (const n of slackNotifications) {
         const d = new Date(n.createdAt);
-        if (d < startDate) continue;
+        if (Number.isNaN(d.getTime()) || d < startDate) continue;
         const key = d.toISOString().slice(0, 10);
         const entry = slackByDay.find(p => p.date === key);
         if (entry) entry.count++;
       }
+    } catch (err) {
+      console.error("Analytics: error fetching Slack notifications:", err);
+    }
 
-      // AI model usage: use database (has getAiUsageByUserId)
+    try {
+      // AI model usage
       const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
       const modelCounts: Record<string, number> = {};
       for (const u of aiUsage) {
         const model = (u as any).model || "unknown";
         modelCounts[model] = (modelCounts[model] || 0) + 1;
       }
-      const aiModelUsage = Object.entries(modelCounts)
+      aiModelUsage = Object.entries(modelCounts)
         .map(([model, count]) => ({ model, count }))
         .sort((a, b) => b.count - a.count);
-
-      res.json({
-        pushesByDay,
-        slackMessagesByDay: slackByDay,
-        aiModelUsage,
-      });
-    } catch (error) {
-      console.error("Error fetching analytics:", error);
-      res.status(500).json({ error: "Failed to fetch analytics" });
+    } catch (err) {
+      console.error("Analytics: error fetching AI usage:", err);
     }
+
+    res.json({
+      pushesByDay,
+      slackMessagesByDay: slackByDay,
+      aiModelUsage,
+    });
   });
 
   // Get push events (authenticated version)
@@ -1867,7 +1875,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Handle both push and pull_request events
       const eventType = req.headers['x-github-event'];
-      console.log(`📥 Received ${eventType} webhook event`);
+      const repoName = req.body.repository?.full_name || req.body.repository?.name || "unknown";
+      console.log(`📥 [Webhook] Received ${eventType} for ${repoName}`);
       let branch, commit, repository;
       
       if (eventType === 'pull_request') {
@@ -1920,7 +1929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
       
       if (!storedRepo || !storedRepo.isActive) {
-        console.log(`⚠️ Repository ${repository.full_name} not found or not active`);
+        console.log(`⚠️ [Webhook] Repository ${repository.full_name} (GitHub id ${repository.id}) not in DB or not active. Add/reconnect the repo in PushLog.`);
         return res.status(200).json({ message: "Repository not active" });
       }
 
@@ -1928,9 +1937,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
       
       if (!integration || !integration.isActive) {
-        console.log(`⚠️ Integration for repository ${storedRepo.id} not found or not active`);
+        console.log(`⚠️ [Webhook] No active integration for ${repository.full_name}. Create an integration on the Dashboard.`);
         return res.status(200).json({ message: "Integration not active" });
       }
+
+      console.log(`📤 [Webhook] Processing push: ${repository.full_name} @ ${branch} → Slack #${integration.slackChannelName}`);
 
       // Use integration's AI model; support both camelCase (aiModel) and snake_case (ai_model) from DB/driver
       const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
