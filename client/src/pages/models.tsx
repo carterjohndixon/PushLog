@@ -383,17 +383,28 @@ export default function Models() {
                       </p>
                     </div>
                   </div>
-                  {usageData.calls.length > 0 ? (
+                  {Array.isArray(usageData.calls) && usageData.calls.length > 0 ? (
                     (() => {
                       const byModel = usageData.calls.reduce<Record<string, { model: string; tokens: number; costCents: number; lastAt: string }>>((acc, c) => {
                         const m = c.model || "unknown";
-                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: c.createdAt };
+                        const createdAt = c.createdAt ?? "";
+                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: createdAt };
                         acc[m].tokens += c.tokensUsed ?? 0;
                         acc[m].costCents += c.cost ?? 0;
-                        if (new Date(c.createdAt) > new Date(acc[m].lastAt)) acc[m].lastAt = c.createdAt;
+                        if (createdAt && (new Date(createdAt).getTime() > new Date(acc[m].lastAt).getTime())) acc[m].lastAt = createdAt;
                         return acc;
                       }, {});
                       const rows = Object.values(byModel).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+                      const formatLastUsed = (lastAt: string) => {
+                        if (!lastAt) return "—";
+                        try {
+                          const d = new Date(lastAt);
+                          if (Number.isNaN(d.getTime())) return "—";
+                          return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" });
+                        } catch {
+                          return "—";
+                        }
+                      };
                       return (
                         <div className="rounded-md border border-border overflow-hidden">
                           <Table>
@@ -416,7 +427,7 @@ export default function Models() {
                                     {r.costCents ? `$${(r.costCents / 100).toFixed(4)}` : "—"}
                                   </TableCell>
                                   <TableCell className="text-muted-foreground text-sm">
-                                    {new Date(r.lastAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" })}
+                                    {formatLastUsed(r.lastAt)}
                                   </TableCell>
                                 </TableRow>
                               ))}
