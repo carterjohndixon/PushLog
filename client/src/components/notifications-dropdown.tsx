@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
+import { getAiModelDisplayName } from "@/lib/utils";
 import { useState } from "react";
 
 // Helper function to format notification dates
@@ -280,7 +281,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                       {metadata.aiModel && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Model:</span>{' '}
-                          <span className="text-muted-foreground">{metadata.aiModel}</span>
+                          <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
                         </div>
                       )}
                       
@@ -370,7 +371,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                     <div className="mt-4 pt-4 border-t border-border">
                       <div className="text-sm">
                         <span className="font-medium text-foreground">AI Model Used:</span>{' '}
-                        <span className="text-muted-foreground font-mono">{metadata.aiModel}</span>
+                        <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
                       </div>
                       {metadata.aiGenerated === false && (
                         <p className="text-xs text-muted-foreground mt-1">

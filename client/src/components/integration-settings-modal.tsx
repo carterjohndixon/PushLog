@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Settings, Github} from "lucide-react";
+import { Settings, Github } from "lucide-react";
+import { getAiModelDisplayName } from "@/lib/utils";
 import { SiSlack as SlackIcon } from "react-icons/si";
 import { UseMutationResult } from "@tanstack/react-query";
 
@@ -226,7 +227,7 @@ export function IntegrationSettingsModal({
               <Select value={aiModel} onValueChange={setAiModel}>
                 <SelectTrigger className="w-full bg-background text-foreground border-border">
                   <SelectValue placeholder="Select AI model">
-                    {aiModel ? AI_MODELS.find((m) => m.id === aiModel)?.name : null}
+                    {aiModel ? getAiModelDisplayName(aiModel) : null}
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent className="min-w-[var(--radix-select-trigger-width)] w-full max-w-md bg-popover border-border">

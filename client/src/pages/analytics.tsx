@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { GitBranch, Bell, Cpu, Github, Folder, FileCode, TrendingUp } from "lucide-react";
+import { getAiModelDisplayName } from "@/lib/utils";
 
 interface TopRepo {
   repositoryId: number;
@@ -129,7 +130,7 @@ export default function Analytics() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Your most used AI model</p>
-                  <p className="text-xl font-semibold text-foreground">{mostUsedModel.model}</p>
+                  <p className="text-xl font-semibold text-foreground">{getAiModelDisplayName(mostUsedModel.model)}</p>
                   <p className="text-sm text-muted-foreground">{mostUsedModel.count} summaries generated</p>
                 </div>
               </div>
@@ -267,7 +268,7 @@ export default function Analytics() {
                     key={model}
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
                   >
-                    <span className="font-medium text-foreground">{model}</span>
+                    <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
                     <span className="text-muted-foreground">{count} summaries</span>
                   </div>
                 ))}
