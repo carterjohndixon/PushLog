@@ -7,11 +7,15 @@ import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { Github } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 
 export default function Login() {
-  const {toast} = useToast();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
 
   const [showPassword, setShowPassword] = React.useState(false);
   const [identifier, setIdentifier] = React.useState("");
@@ -34,7 +38,6 @@ export default function Login() {
         }
       } catch (error) {
         // Not authenticated or network error - stay on login page
-        console.log("Not authenticated, showing login page");
       }
     };
     
@@ -66,8 +69,9 @@ export default function Login() {
 
         return response.json();
       },
-      onSuccess: (data) => {
-        window.location.href = `${window.location.origin}/dashboard`;
+      onSuccess: async () => {
+        await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
+        setLocation("/dashboard");
       },
       onError: (error: any) => {
         toast({
@@ -102,10 +106,6 @@ export default function Login() {
     const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
     const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
     const scope = "repo user:email admin:org_hook";
-    
-    // Log what we're using (for debugging)
-    console.log("Frontend GitHub OAuth - Client ID:", clientId.substring(0, 10) + "...");
-    console.log("Frontend GitHub OAuth - Redirect URI:", redirectUri);
     
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))

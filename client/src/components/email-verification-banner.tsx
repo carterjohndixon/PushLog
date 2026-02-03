@@ -4,6 +4,7 @@ import { Mail, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { PROFILE_QUERY_KEY } from "@/lib/profile";
 
 export function EmailVerificationBanner() {
   const { toast } = useToast();
@@ -16,7 +17,7 @@ export function EmailVerificationBanner() {
     },
     onSuccess: (data: { alreadyVerified?: boolean }) => {
       if (data.alreadyVerified) {
-        queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+        queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
         toast({
           title: "Already verified",
           description: "Your email is already verified. Refreshing…",

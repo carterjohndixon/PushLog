@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { 
   Github, 
   GitBranch, 
@@ -261,15 +262,12 @@ export default function Dashboard() {
     });
   };
 
-  // Fetch user profile
-  const { data: userProfile } = useQuery({
-    queryKey: ["/api/profile"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/profile");
-      const data = await response.json();
-      return data.user;
-    },
+  // Fetch user profile (shared cache with ProtectedRoute – preloaded before page renders)
+  const { data: profileResponse } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
   });
+  const userProfile = profileResponse?.user;
 
   // Fetch dashboard stats
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
@@ -638,13 +636,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-forest-gradient">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Email Verification Banner */}
-        {userProfile && !userProfile.emailVerified && (() => {
-          // #region agent log
-          console.log('[debug] dashboard banner-visible', { emailVerified: !!userProfile?.emailVerified, hasOpenRouterKey: !!userProfile?.hasOpenRouterKey });
-          // #endregion
-          return <EmailVerificationBanner />;
-        })()}
+        {/* Email Verification Banner – only when profile is loaded and not verified */}
+        {userProfile && !userProfile.emailVerified && <EmailVerificationBanner />}
         
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
@@ -952,11 +945,11 @@ export default function Dashboard() {
                   <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="font-medium text-foreground mb-2">No Connected Repositories</h3>
                   <p className="text-sm text-muted-foreground mb-4">
-                    {userProfile?.user?.githubConnected 
+                    {userProfile?.githubConnected 
                       ? "Click the 'Add Repo' button above to start monitoring your repositories."
                       : "Connect your GitHub account to start monitoring repositories."}
                   </p>
-                  {!userProfile?.user?.githubConnected && (
+                  {!userProfile?.githubConnected && (
                     <Button onClick={handleGitHubConnect} variant="glow"
             className="text-white">
                       <Github className="w-4 h-4 mr-2" />

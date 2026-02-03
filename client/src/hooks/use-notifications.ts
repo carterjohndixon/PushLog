@@ -61,13 +61,7 @@ export function useNotifications() {
   });
 
   useEffect(() => {
-    // Initialize with fetched data
     if (initialData) {
-      console.log('📥 Notifications fetched:', {
-        total: initialData.notifications.length,
-        unreadCount: initialData.count,
-        notifications: initialData.notifications.map(n => ({ id: n.id, isRead: n.isRead, type: n.type }))
-      });
       setNotifications(initialData.notifications);
       setUnreadCount(initialData.count);
     }
@@ -198,9 +192,6 @@ export function useNotifications() {
 
   const readNotification = async (notificationId: number) => {
     try {
-      console.log(`👁️ Marking notification ${notificationId} as read`);
-      
-      // Mark as read on server first
       const response = await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
       const result = await response.json();
       
@@ -208,19 +199,10 @@ export function useNotifications() {
         throw new Error('Failed to mark notification as read');
       }
       
-      console.log(`✅ Notification ${notificationId} marked as read on server`);
-      
-      // Update local state after server confirms
-      setNotifications(prev => {
-        const updated = prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n);
-        console.log(`🔄 Updated local state for notification ${notificationId}`);
-        return updated;
-      });
-      setUnreadCount(prev => {
-        const newCount = Math.max(0, prev - 1);
-        console.log(`📊 Unread count: ${prev} → ${newCount}`);
-        return newCount;
-      });
+      setNotifications(prev =>
+        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
       
       // Refetch to ensure sync with server
       await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
@@ -243,31 +225,14 @@ export function useNotifications() {
 
   const clearAllNotifications = async () => {
     try {
-      console.log('🗑️ Starting to clear all notifications...');
-      console.log('📊 Current notifications count:', notifications.length);
-      console.log('📊 Current unread count:', unreadCount);
-      
-      // Make the API request to clear all notifications
-      const response = await apiRequest("DELETE", "/api/notifications/clear-all");
-      console.log('✅ API request successful, response:', response);
-      
-      // Update local state immediately
+      await apiRequest("DELETE", "/api/notifications/clear-all");
       setNotifications([]);
       setUnreadCount(0);
-      console.log('🔄 Local state updated - notifications cleared');
-      
-      // Force a refetch to ensure UI is in sync with server
       await queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
-      console.log('🔄 Query cache invalidated');
-      
-      // Refetch to verify the clear worked
       const verifyResponse = await apiRequest("GET", "/api/notifications/all");
       const verifyData = await verifyResponse.json();
-      console.log('🔍 Verification fetch result:', verifyData);
-      
       setNotifications(verifyData.notifications || []);
       setUnreadCount(verifyData.count || 0);
-      console.log('✅ Clear all notifications completed successfully');
     } catch (error) {
       console.error('❌ Error clearing notifications:', error);
     }

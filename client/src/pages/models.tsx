@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/footer";
 import { getAiModelDisplayName } from "@/lib/utils";
@@ -81,20 +82,11 @@ export default function Models() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: profile, isLoading: profileLoading } = useQuery<{ success: boolean; user: ProfileUser }>({
-    queryKey: ["/api/profile"],
-    queryFn: async () => {
-      const res = await fetch("/api/profile", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load profile");
-      const data = await res.json();
-      // #region agent log
-      const u = data?.user ?? data;
-      console.log('[debug] models profile-fetched', { hasOpenRouterKey: !!u?.hasOpenRouterKey, emailVerified: !!u?.emailVerified, hasUserKey: !!data?.user });
-      // #endregion
-      return data;
-    },
+  const { data: profileResponse, isLoading: profileLoading } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
   });
-  const userHasKey = !!profile?.user?.hasOpenRouterKey;
+  const userHasKey = !!profileResponse?.user?.hasOpenRouterKey;
 
   const { data: modelsData, isLoading: modelsLoading } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
@@ -173,10 +165,7 @@ export default function Models() {
       return res.json();
     },
     onSuccess: () => {
-      // #region agent log
-      console.log('[debug] models saveKey-success invalidating profile');
-      // #endregion
-      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       setApiKeyInput("");
       toast({ title: "API key saved", description: "Your OpenRouter key is stored securely." });
@@ -192,7 +181,7 @@ export default function Models() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       toast({ title: "API key removed", description: "You can add a new key anytime." });
     },

@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { 
   Plus,
   Play,
@@ -143,16 +144,11 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   const queryClient = useQueryClient();
-  const { data: profileData } = useQuery({
-    queryKey: ["/api/profile"],
-    queryFn: async () => {
-      const res = await fetch("/api/profile", { credentials: "include", headers: { Accept: "application/json" } });
-      if (!res.ok) throw new Error("Failed to fetch profile");
-      const data = await res.json();
-      return data.user ?? data;
-    },
+  const { data: profileResponse } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
   });
-  const userProfile = profileData ?? userProfileProp;
+  const userProfile = profileResponse?.user ?? userProfileProp;
   const { toast } = useToast();
 
   // Fetch user repositories
@@ -355,13 +351,8 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   return (
     <div className="min-h-screen bg-forest-gradient">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Email Verification Banner */}
-        {userProfile && !userProfile.emailVerified && (() => {
-          // #region agent log
-          console.log('[debug] integrations banner-visible', { emailVerified: !!userProfile?.emailVerified, hasOpenRouterKey: !!userProfile?.hasOpenRouterKey });
-          // #endregion
-          return <EmailVerificationBanner />;
-        })()}
+        {/* Email Verification Banner – only when profile is loaded and not verified */}
+        {userProfile && !userProfile.emailVerified && <EmailVerificationBanner />}
         
         <div className="mb-8">
           <div className="flex items-center justify-between">

@@ -9,61 +9,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useTheme, type Theme } from "@/lib/theme";
-
-interface User {
-  id: number;
-  username: string;
-  email: string | null;
-  githubConnected: boolean;
-  emailVerified: boolean;
-}
+import { PROFILE_QUERY_KEY, fetchProfile, type ProfileUser } from "@/lib/profile";
 
 export function Header() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data: profileResponse, isLoading } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+    retry: false,
+  });
+  const user: ProfileUser | null = profileResponse?.user ?? null;
   const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    fetch("/api/profile", {
-      credentials: "include", // Send cookie if it exists
-      headers: {
-        "Accept": "application/json"
-      }
-    })
-      .then(async (response) => {
-        // If 401, user is not logged in - that's fine, just don't set user
-        if (response.status === 401) {
-          setLoading(false);
-          return; // User stays null, show public header
-        }
-        
-        // If other error, throw to be caught
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        // Success - user is logged in
-        const data = await response.json();
-        if (data.success) {
-          setUser(data.user);
-        }
-      })
-      .catch(error => {
-        // Silently handle errors - header works without user data
-        console.log("User not logged in (header is public)");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
 
   const handleLogout = async () => {
     try {
@@ -71,10 +33,9 @@ export function Header() {
     } catch (error) {
       console.error("Logout error:", error);
     }
-    
-    setUser(null);
-    queryClient.clear(); // Clear all queries from cache
-    setLocation('/');
+    queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY });
+    queryClient.clear();
+    setLocation("/");
   };
 
   const handleProtectedNavigation = (e: React.MouseEvent, path: string) => {
@@ -157,7 +118,7 @@ export function Header() {
             >
               {themeIcons[theme]}
             </Button>
-            {loading ? null : (user ? (
+            {isLoading ? null : (user ? (
               <>
                 <NotificationsDropdown isEmailVerified={user.emailVerified} />
                 <DropdownMenu>

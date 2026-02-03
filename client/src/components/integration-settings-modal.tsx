@@ -19,6 +19,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { Send } from "lucide-react";
 
 const AI_MODELS = [
@@ -124,16 +125,12 @@ export function IntegrationSettingsModal({
     },
   });
 
-  const { data: profileData } = useQuery<{ success: boolean; user?: { hasOpenRouterKey?: boolean } }>({
-    queryKey: ["/api/profile"],
-    queryFn: async () => {
-      const res = await fetch("/api/profile", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch profile");
-      return res.json();
-    },
+  const { data: profileResponse } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
     enabled: open,
   });
-  const userHasOpenRouterKey = !!profileData?.user?.hasOpenRouterKey;
+  const userHasOpenRouterKey = !!profileResponse?.user?.hasOpenRouterKey;
 
   const { data: openRouterData } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],

@@ -158,7 +158,6 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 className="text-xs text-destructive hover:text-destructive/90"
                 onClick={(e) => {
                   e.stopPropagation();
-                  console.log('Clear All button clicked');
                   clearAllNotifications();
                 }}
               >

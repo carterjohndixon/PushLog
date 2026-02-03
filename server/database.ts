@@ -15,15 +15,12 @@ import {
 import { eq, and, sql } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
 import { encrypt, decrypt } from "./encryption";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DEBUG_LOG_PATH = path.join(__dirname, '..', '.cursor', 'debug.log');
-
 // Load .env file from the project root (one level up from server directory)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
@@ -121,14 +118,6 @@ export class DatabaseStorage implements IStorage {
   async getUserById(id: number): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     const row = result[0];
-    // #region agent log
-    if (row) {
-      const raw = row as any;
-      try {
-        fs.appendFileSync(DEBUG_LOG_PATH, JSON.stringify({ location: 'database.ts:getUserById', message: 'User row from DB', data: { userId: id, hasOpenRouterKeyColumn: raw?.openRouterApiKey != null, openRouterApiKeyLength: typeof raw?.openRouterApiKey === 'string' ? raw.openRouterApiKey.length : 0 }, timestamp: Date.now(), sessionId: 'debug-session', hypothesisId: 'H1' }) + '\n');
-      } catch (_) {}
-    }
-    // #endregion
     return row ? convertToUser(row as any) : undefined;
   }
 
