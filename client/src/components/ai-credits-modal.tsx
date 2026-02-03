@@ -312,13 +312,13 @@ export function AiCreditsModal({
         */}
         
         <div className="space-y-6">
-          <div className="p-8 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg border-2 border-log-green">
+          <div className="p-8 bg-primary/10 rounded-lg border border-border">
             <div className="text-center space-y-4">
               <div className="text-6xl font-bold text-log-green mb-4">∞</div>
-              <h3 className="text-2xl font-bold text-graphite">
+              <h3 className="text-2xl font-bold text-foreground">
                 All users now have infinite tokens!
               </h3>
-              <p className="text-lg text-steel-gray">
+              <p className="text-lg text-muted-foreground">
                 Play with PushLog at your will!
               </p>
             </div>

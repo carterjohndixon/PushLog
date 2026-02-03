@@ -27,15 +27,15 @@ const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center">
-    <div className="bg-white rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
+  <div className="min-h-screen bg-background flex items-center justify-center">
+    <div className="bg-card border border-border rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
       <div className="flex flex-col items-center space-y-4">
         <div className="relative">
-          <div className="w-8 h-8 text-log-green animate-spin rounded-full border-4 border-gray-200 border-t-log-green"></div>
+          <div className="w-8 h-8 text-log-green animate-spin rounded-full border-4 border-border border-t-log-green"></div>
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-graphite mb-2">Loading...</h3>
-          <p className="text-sm text-steel-gray">Please wait while we load the page.</p>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Loading...</h3>
+          <p className="text-sm text-muted-foreground">Please wait while we load the page.</p>
         </div>
       </div>
     </div>

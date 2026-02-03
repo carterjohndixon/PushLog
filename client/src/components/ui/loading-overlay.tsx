@@ -10,8 +10,8 @@ export function LoadingOverlay({ isVisible, message, provider }: LoadingOverlayP
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="bg-card border border-border rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
         <div className="flex flex-col items-center space-y-4">
           <div className="relative">
             <Loader2 className="w-8 h-8 text-log-green animate-spin" />
@@ -30,10 +30,10 @@ export function LoadingOverlay({ isVisible, message, provider }: LoadingOverlayP
             )}
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-graphite mb-2">
+            <h3 className="text-lg font-semibold text-foreground mb-2">
               {provider ? `Connecting to ${provider}...` : "Loading..."}
             </h3>
-            <p className="text-sm text-steel-gray">
+            <p className="text-sm text-muted-foreground">
               {message || "Please wait while we authenticate your account."}
             </p>
           </div>

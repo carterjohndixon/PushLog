@@ -1431,7 +1431,7 @@ export default function Dashboard() {
             {statsLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center space-x-3 p-3 border rounded-lg">
+                  <div key={i} className="flex items-center space-x-3 p-3 border border-border rounded-lg">
                     <Skeleton className="w-8 h-8 rounded" />
                     <div className="flex-1">
                       <Skeleton className="h-4 w-32 mb-1" />
@@ -1442,9 +1442,9 @@ export default function Dashboard() {
               </div>
             ) : stats && stats.dailyPushes > 0 ? (
               <div className="space-y-3">
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="p-4 bg-primary/10 border border-border rounded-lg">
                   <div className="flex items-center space-x-3">
-                    <GitBranch className="w-6 h-6 text-sky-blue" />
+                    <GitBranch className="w-6 h-6 text-log-green" />
                     <div>
                       <p className="font-medium text-foreground">{stats.dailyPushes} push events</p>
                       <p className="text-sm text-muted-foreground">in the last 24 hours</p>
@@ -1486,7 +1486,7 @@ export default function Dashboard() {
             {statsLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex items-center space-x-3 p-3 border rounded-lg">
+                  <div key={i} className="flex items-center space-x-3 p-3 border border-border rounded-lg">
                     <Skeleton className="w-8 h-8 rounded" />
                     <div className="flex-1">
                       <Skeleton className="h-4 w-32 mb-1" />
@@ -1497,7 +1497,7 @@ export default function Dashboard() {
               </div>
             ) : stats && stats.totalNotifications > 0 ? (
               <div className="space-y-3">
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="p-4 bg-primary/10 border border-border rounded-lg">
                   <div className="flex items-center space-x-3">
                     <Bell className="w-6 h-6 text-log-green" />
                     <div>
@@ -1509,7 +1509,7 @@ export default function Dashboard() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                     <div className="flex items-center space-x-2">
-                      <MessageSquare className="w-4 h-4 text-sky-blue" />
+                      <MessageSquare className="w-4 h-4 text-log-green" />
                       <span className="text-sm text-foreground">Welcome Messages</span>
                     </div>
                     <span className="text-sm text-muted-foreground">
