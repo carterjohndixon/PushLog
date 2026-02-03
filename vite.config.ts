@@ -21,44 +21,42 @@ export default defineConfig({
     build: {
       outDir: path.resolve(__dirname, "dist/public"),
       emptyOutDir: true,
-      chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB
+      target: "es2020",
+      chunkSizeWarningLimit: 800,
       rollupOptions: {
         output: {
-          manualChunks: {
-            // Vendor chunks - only include actual dependencies
-            'react-vendor': ['react', 'react-dom'],
-            'router-vendor': ['wouter'],
-            'ui-vendor': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-tabs', '@radix-ui/react-select', '@radix-ui/react-switch', '@radix-ui/react-toast'],
-            'query-vendor': ['@tanstack/react-query'],
-            'icons-vendor': ['lucide-react']
-          },
-          // Optimize chunk naming
-          chunkFileNames: (chunkInfo: any) => {
-            const facadeModuleId = chunkInfo.facadeModuleId ? chunkInfo.facadeModuleId.split('/').pop() : 'chunk';
-            return `js/[name]-[hash].js`;
-          },
-          entryFileNames: 'js/[name]-[hash].js',
-          assetFileNames: (assetInfo: any) => {
-            const name = assetInfo.name || 'asset';
-            const info = name.split('.');
-            const ext = info[info.length - 1];
-            if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) {
-              return `images/[name]-[hash][extname]`;
+          manualChunks(id) {
+            if (id.includes("node_modules")) {
+              if (id.includes("react") || id.includes("react-dom") || id.includes("wouter")) {
+                return "vendor-core";
+              }
+              if (id.includes("@tanstack/react-query")) {
+                return "vendor-query";
+              }
+              if (id.includes("@radix-ui")) {
+                return "vendor-ui";
+              }
+              if (id.includes("recharts") || id.includes("date-fns") || id.includes("framer-motion")) {
+                return "vendor-misc";
+              }
             }
-            if (/css/i.test(ext)) {
-              return `css/[name]-[hash][extname]`;
-            }
-            return `assets/[name]-[hash][extname]`;
-          }
-        }
+          },
+          chunkFileNames: "js/[name]-[hash].js",
+          entryFileNames: "js/[name]-[hash].js",
+          assetFileNames: (assetInfo) => {
+            const ext = assetInfo.name?.split(".").pop() ?? "";
+            if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(ext)) return "images/[name]-[hash][extname]";
+            if (/css/i.test(ext)) return "css/[name]-[hash][extname]";
+            return "assets/[name]-[hash][extname]";
+          },
+        },
       },
-      // Enable minification and source maps
-      minify: 'terser',
+      minify: "esbuild",
       sourcemap: false,
-      // Optimize dependencies
+      cssCodeSplit: true,
       commonjsOptions: {
         include: [/node_modules/],
-      }
+      },
     },
     server: {
       fs: {
@@ -75,15 +73,23 @@ export default defineConfig({
         ".ngrok.io"
       ],
     },
-    // Optimize dependencies
     optimizeDeps: {
       include: [
-        'react',
-        'react-dom',
-        'wouter',
-        '@tanstack/react-query',
-        'lucide-react'
-      ]
-    }
+        "react",
+        "react-dom",
+        "wouter",
+        "@tanstack/react-query",
+        "lucide-react",
+        "date-fns",
+        "clsx",
+        "tailwind-merge",
+        "next-themes",
+        "recharts",
+        "framer-motion",
+      ],
+      esbuildOptions: {
+        target: "es2020",
+      },
+    },
   }
 );

@@ -1517,7 +1517,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (error instanceof z.ZodError) {
         const first = error.errors[0];
         const message = first ? `${first.path.join(".")}: ${first.message}` : "Validation failed";
-        return res.status(400).json({ error: "Invalid integration data", details: message });
+        // return res.status(400).json({ error: "Invalid integration data", details: message });
+        console.log("Validation failed:", message);
+        res.status(400).json({ error: "Invalid integration data"});
       }
       res.status(400).json({ error: "Invalid integration data" });
     }
@@ -1538,39 +1540,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user integrations
   app.get("/api/integrations", authenticateToken, async (req, res) => {
     try {
-      const userId = req.user!.userId;
+      const userId = Number(req.user!.userId);
+      if (!Number.isInteger(userId) || userId < 1) {
+        return res.status(400).json({ error: "Invalid session" });
+      }
+
+      console.log("Fetching integrations for user:", userId);
 
       const integrations = await storage.getIntegrationsByUserId(userId);
-      
-      // Enrich integrations with repository names
+      if (!Array.isArray(integrations)) {
+        console.error("getIntegrationsByUserId did not return an array:", typeof integrations);
+        return res.json([]);
+      }
+
+      // Enrich each integration; if one fails, still return it with fallback name so the list doesn't 500
       const enrichedIntegrations = await Promise.all(
-        integrations.map(async (integration) => {
-          
-          // let repository = await storage.getRepository(integration.id);
-          let repository = await storage.getRepository(integration.repositoryId);
-          
-          if (!repository) {
-            repository = await storage.getRepositoryByGithubId(integration.repositoryId.toString());
+        integrations.map(async (integration: any) => {
+          try {
+            const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+            let repository = repoId != null ? await storage.getRepository(repoId) : null;
+            if (!repository && repoId != null) {
+              try {
+                repository = await storage.getRepositoryByGithubId(String(repoId));
+              } catch {
+                // ignore fallback lookup
+              }
+            }
+            const sanitized = sanitizeIntegrationForClient(integration);
+            return {
+              ...sanitized,
+              repositoryName: repository?.name ?? "Unknown Repository",
+              lastUsed: integration.createdAt ?? null,
+              status: integration.isActive ? "active" : "paused",
+              notificationLevel: integration.notificationLevel ?? "all",
+              includeCommitSummaries: integration.includeCommitSummaries ?? true,
+            };
+          } catch (err) {
+            console.error("Error enriching integration", integration?.id, err);
+            const sanitized = sanitizeIntegrationForClient(integration);
+            return {
+              ...sanitized,
+              repositoryName: "Unknown Repository",
+              lastUsed: integration?.createdAt ?? null,
+              status: integration?.isActive ? "active" : "paused",
+              notificationLevel: integration?.notificationLevel ?? "all",
+              includeCommitSummaries: integration?.includeCommitSummaries ?? true,
+            };
           }
-          
-          const sanitized = sanitizeIntegrationForClient(integration);
-          return {
-            ...sanitized,
-            repositoryName: repository?.name || 'Unknown Repository',
-            lastUsed: integration.createdAt, // Use createdAt as lastUsed
-            status: integration.isActive ? 'active' : 'paused',
-            notificationLevel: integration.notificationLevel || 'all',
-            includeCommitSummaries: integration.includeCommitSummaries ?? true
-          };
         })
       );
-      
+
       res.json(enrichedIntegrations);
     } catch (error) {
       console.error("Error fetching integrations:", error);
-      res.status(500).json({ error: "Failed to fetch integrations" });
+      const message = error instanceof Error ? error.message : "Unknown error";
+      res.status(500).json({
+        error: "Failed to fetch integrations",
+        details: process.env.NODE_ENV === "development" ? message : undefined,
+      });
     }
   });
+
+  // app.post("/api/ai/add-open-router-key", authenticateToken, async (req, res) => {
+    
+  // });
 
   // Update integration
   app.patch("/api/integrations/:id", authenticateToken, async (req, res) => {
