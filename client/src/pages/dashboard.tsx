@@ -1061,7 +1061,7 @@ export default function Dashboard() {
                           variant="ghost"
                           onClick={() => handleDeleteIntegration(integration)}
                           disabled={deleteIntegrationMutation.isPending}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -1077,7 +1077,7 @@ export default function Dashboard() {
                     <p className="text-sm text-muted-foreground mb-4">Checking Slack connection...</p>
                   ) : slackWorkspaces && slackWorkspaces.length === 0 ? (
                     <>
-                      <p className="text-sm text-muted-foreground mb-4">Connect your Slack workspace to start creating integrations.</p>
+                      <p className="text-sm text-muted-foreground mb-4">Connect your Slack workspace first, then create an integration to send push notifications to a channel.</p>
                       <Button 
                         onClick={handleSlackConnect}
                         variant="glow"
@@ -1089,57 +1089,51 @@ export default function Dashboard() {
                     </>
                   ) : (
                     <>
-                      <div className="mb-4">
-                        <p className="text-sm text-muted-foreground mb-3">
-                          {slackWorkspaces && slackWorkspaces.length > 0 
-                            ? `Connected to ${slackWorkspaces.length} Slack workspace${slackWorkspaces.length > 1 ? 's' : ''}:`
-                            : 'Set up your first integration to start receiving notifications.'}
-                        </p>
-                        {slackWorkspaces && slackWorkspaces.length > 0 && (
-                          <div className="space-y-2 mb-4">
-                            {slackWorkspaces.map((workspace: any) => (
-                              <div key={workspace.id} className="flex items-center justify-between p-2 bg-muted rounded-lg">
-                                <div className="flex items-center space-x-2">
-                                  <SiSlack className="w-4 h-4 text-sky-blue" />
-                                  <span className="text-sm font-medium text-foreground">{workspace.teamName}</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex gap-2">
-                          <Button 
+                      <p className="text-sm text-muted-foreground mb-3">
+                        Connected to {slackWorkspaces?.length ?? 0} Slack workspace{(slackWorkspaces?.length ?? 0) !== 1 ? "s" : ""}. Create an integration to connect a repository to a Slack channel.
+                      </p>
+                      {slackWorkspaces && slackWorkspaces.length > 0 && (
+                        <div className="space-y-2 mb-4 max-w-xs mx-auto">
+                          {slackWorkspaces.map((workspace: any) => (
+                            <div key={workspace.id} className="flex items-center justify-center gap-2 p-2 bg-muted rounded-lg">
+                              <SiSlack className="w-4 h-4 text-log-green shrink-0" />
+                              <span className="text-sm font-medium text-foreground">{workspace.teamName}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <Button
                             onClick={() => setIsIntegrationModalOpen(true)}
                             variant="glow"
-            className="text-white"
+                            className="text-white"
                           >
                             <Plus className="w-4 h-4 mr-2" />
                             Create Integration
                           </Button>
-                          <Button 
+                          <Button
                             onClick={handleSlackConnect}
                             variant="outline"
-                            className="border-log-green text-log-green hover:bg-log-green hover:text-white"
+                            className="border-border text-foreground hover:bg-muted"
                           >
                             <SiSlack className="w-4 h-4 mr-2" />
                             Add Workspace
                           </Button>
                         </div>
-                        <div className="p-3 bg-primary/10 border border-border rounded-md">
-                          <p className="text-xs text-foreground font-medium mb-1">💡 Connect a different Slack account?</p>
+                        <div className="p-3 bg-muted/50 border border-border rounded-lg text-left max-w-md mx-auto">
+                          <p className="text-xs font-medium text-foreground mb-1">💡 Connect a different Slack account?</p>
                           <p className="text-xs text-muted-foreground">
-                            To connect your work Slack (or another account), first{" "}
-                            <a 
-                              href="https://slack.com/signout" 
-                              target="_blank" 
+                            To connect work Slack (or another account), first{" "}
+                            <a
+                              href="https://slack.com/signout"
+                              target="_blank"
                               rel="noopener noreferrer"
-                              className="underline font-medium text-foreground hover:text-log-green"
+                              className="underline text-log-green hover:no-underline"
                             >
                               log out of Slack
                             </a>
-                            {" "}in your browser, then click "Add Workspace" above. Or use an incognito/private window.
+                            {" "}in your browser, then click &quot;Add Workspace&quot; above. Or use an incognito/private window.
                           </p>
                         </div>
                       </div>
@@ -1158,9 +1152,9 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button 
-                variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-green-50 hover:border-log-green transition-colors"
+              <Button
+                variant="outline"
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-muted hover:border-log-green transition-colors"
                 onClick={() => setIsIntegrationModalOpen(true)}
               >
                 <Plus className="w-5 h-5 text-log-green" />
@@ -1170,16 +1164,16 @@ export default function Dashboard() {
               <Link href="/analytics" className="block h-full">
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors w-full h-full"
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors w-full"
               >
-                <TrendingUp className="w-5 h-5 text-sky-blue" />
+                <TrendingUp className="w-5 h-5 text-log-green" />
                 <span>View Repository Analytics</span>
               </Button>
             </Link>
               
               <Button 
                 variant="outline" 
-                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-muted hover:border-border transition-colors"
+                className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-primary/10 hover:border-primary transition-colors"
                 onClick={() => {
                   // Navigate to integrations page for settings
                   window.location.href = '/integrations';
@@ -1260,7 +1254,10 @@ export default function Dashboard() {
           default_branch: selectedRepository.branch,
           isActive: selectedRepository.isActive,
           isConnected: selectedRepository.isConnected,
-          private: selectedRepository.private
+          private: selectedRepository.private,
+          monitorAllBranches: (selectedRepository as any).monitorAllBranches,
+          pushEvents: (selectedRepository as any).totalPushes ?? (selectedRepository as any).pushEvents,
+          lastPush: selectedRepository.lastPush,
         } : null}
         updateRepositoryMutation={updateRepositoryMutation}
       />

@@ -113,16 +113,16 @@ export function RepositorySettingsModal({
         </DialogHeader>
         
         {repository && typeof repository === 'object' && (
-          <div className="space-y-6 p-4 border border-border rounded-lg bg-muter/50">
+          <div className="space-y-6 p-4 border border-border rounded-lg bg-muted/50">
             {/* Repository Info */}
-            <div className="p-4 bg-gray-50 rounded-lg space-y-3">
+            <div className="p-4 bg-muted rounded-lg space-y-3">
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                  <Github className="text-white w-4 h-4" />
+                <div className="w-8 h-8 bg-secondary rounded flex items-center justify-center">
+                  <Github className="text-foreground w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-muted-foreground">{repository?.name || 'Unknown Repository'}</p> 
-                  <p className="text-sm text-muted-foreground">{repository?.owner?.login || 'Unknown'}/{repository?.name || 'Unknown'}</p>
+                  <p className="font-medium text-foreground">{repository?.name || 'Unknown Repository'}</p>
+                  <p className="text-sm text-muted-foreground">{repository?.owner?.login ?? repository?.name ?? 'Unknown'}/{repository?.name ?? 'Unknown'}</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
@@ -130,19 +130,19 @@ export function RepositorySettingsModal({
                   <GitBranch className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">{repository?.default_branch || 'main'}</p>
-                  <p className="text-sm text-steel-gray">Default Branch</p>
+                  <p className="font-medium text-foreground">{repository?.default_branch || 'main'}</p>
+                  <p className="text-sm text-muted-foreground">Default Branch</p>
                 </div>
               </div>
             </div>
-            
+
             {/* Repository Status */}
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="repository-active">Repository Active</Label>
-                <p className="text-xs text-steel-gray">
-                  Enable or disable monitoring for this repository. When disabled, no push events will be tracked. 
-                  If you have integrations, unpausing them will automatically activate this repository.
+                <p className="text-xs text-muted-foreground">
+                  Enable or disable monitoring for this repository. When disabled, no push events will be tracked.
+                  If you have integrations, unpausing them on the Integrations page will automatically activate this repository.
                 </p>
               </div>
               <Switch
@@ -156,7 +156,7 @@ export function RepositorySettingsModal({
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
                 <Label htmlFor="monitor-all-branches">Monitor All Branches</Label>
-                <p className="text-xs text-steel-gray">
+                <p className="text-xs text-muted-foreground">
                   Enable to track activity across all branches of this repository.
                 </p>
               </div>
@@ -171,37 +171,37 @@ export function RepositorySettingsModal({
             <div className="p-3 bg-muted/50 rounded-lg border border-border">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
-                  <p className="text-sm font-medium text-muted-foreground">Integration Status</p>
+                  <p className="text-sm font-medium text-foreground">Integration Status</p>
                   <p className="text-xs text-muted-foreground">
-                    {repository?.id ? 'Check if this repository has active integrations' : 'Repository not yet connected'}
+                    {repository?.id ? 'Whether this repository has an integration (repo → Slack channel)' : 'Repository not yet connected'}
                   </p>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${repository?.id ? 'bg-log-green' : 'bg-muted-foreground'}`} />
+                  <span className="text-sm font-medium text-foreground">
                     {repository?.id ? 'Connected' : 'Not Connected'}
                   </span>
                 </div>
               </div>
               {repository?.isActive === false && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-border rounded text-xs text-yellow-800">
+                <div className="mt-2 p-2 bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/30 rounded text-xs text-amber-800 dark:text-amber-200">
                   <p>⚠️ This repository is currently paused. Enable it above to start monitoring.</p>
-                  <p className="mt-1">💡 <strong>Note:</strong> If you have integrations for this repository, unpausing them on the Integrations page will automatically activate this repository.</p>
+                  <p className="mt-1">💡 If you have integrations for this repository, unpausing them on the Integrations page will automatically activate this repository.</p>
                 </div>
               )}
             </div>
 
             {/* Repository Stats */}
-            {repository?.pushEvents !== undefined && (
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h4 className="font-medium text-graphite mb-2">Repository Activity</h4>
+            {(repository?.pushEvents !== undefined || repository?.lastPush) && (
+              <div className="p-4 bg-muted rounded-lg">
+                <h4 className="font-medium text-foreground mb-2">Repository Activity</h4>
                 <div className="space-y-1 text-sm">
-                  <p className="text-steel-gray">
-                    Total push events: <span className="font-medium text-graphite">{repository?.pushEvents || 0}</span>
+                  <p className="text-muted-foreground">
+                    Total push events: <span className="font-medium text-foreground">{repository?.pushEvents ?? 0}</span>
                   </p>
                   {repository?.lastPush && (
-                    <p className="text-steel-gray">
-                      Last activity: <span className="font-medium text-graphite">{repository?.lastPush}</span>
+                    <p className="text-muted-foreground">
+                      Last activity: <span className="font-medium text-foreground">{repository?.lastPush}</span>
                     </p>
                   )}
                 </div>
