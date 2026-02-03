@@ -24,6 +24,7 @@
   --destructive-foreground: 0 0% 100%;
   --ring: 122 39% 49%;
   --radius: 0.5rem;
+  --card-radius: 0.75rem; /* slightly rounder, organic cards */
   --steel-gray: 95 12% 52%; /* forest gray */
   --log-green: 122 39% 49%; /* #4CAF50 – kept */
   --sky-blue: 148 35% 42%; /* pine (reused for accent vibe) */
@@ -52,6 +53,7 @@
   --destructive: 0 63% 31%;
   --destructive-foreground: 0 0% 98%;
   --ring: 122 39% 49%;
+  --card-radius: 0.75rem;
   --steel-gray: 90 12% 55%;
   --log-green: 122 39% 49%;
   --sky-blue: 148 32% 48%;
@@ -65,7 +67,8 @@
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased text-foreground;
+    transition: background 0.3s ease, color 0.2s ease;
   }
 }
 
@@ -133,5 +136,22 @@
   
   .focus\:ring-sky-blue:focus {
     --tw-ring-color: hsl(var(--sky-blue));
+  }
+
+  /* Subtle forest gradient: canopy light (top) → forest floor (bottom) */
+  .bg-forest-gradient {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(115 16% 95%) 100%
+    );
+  }
+
+  .dark .bg-forest-gradient {
+    background: linear-gradient(
+      180deg,
+      hsl(var(--background)) 0%,
+      hsl(140 28% 5%) 100%
+    );
   }
 }

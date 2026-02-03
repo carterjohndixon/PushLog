@@ -151,7 +151,7 @@ export default function Settings() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen flex flex-col bg-forest-gradient">
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-graphite mb-2">Account Settings</h1>

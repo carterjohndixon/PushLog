@@ -5,10 +5,18 @@ export default {
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+        card: "var(--card-radius)",
+      },
+      boxShadow: {
+        forest: "0 4px 14px -2px hsl(var(--log-green) / 0.08), 0 2px 6px -2px hsl(var(--log-green) / 0.04)",
+        "forest-lg": "0 10px 40px -10px hsl(var(--log-green) / 0.12), 0 4px 12px -4px hsl(var(--log-green) / 0.06)",
       },
       colors: {
         background: "hsl(var(--background))",
