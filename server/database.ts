@@ -53,6 +53,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     aiCredits: dbUser.aiCredits ?? 1000,
     stripeCustomerId: dbUser.stripeCustomerId,
     preferredAiModel: dbUser.preferredAiModel ?? "gpt-5.2",
+    openRouterApiKey: (dbUser as any).openRouterApiKey ?? null,
     createdAt: dbUser.createdAt
   };
 }

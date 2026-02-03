@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   aiCredits: integer("ai_credits").default(1000), // Free credits for new users
   stripeCustomerId: text("stripe_customer_id"),
   preferredAiModel: text("preferred_ai_model").default("gpt-5.2"),
+  openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, integrations can use OpenRouter with this key
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -192,6 +193,7 @@ export type User = {
   aiCredits: number;
   stripeCustomerId: string | null;
   preferredAiModel: string;
+  openRouterApiKey: string | null;
   createdAt: string;
 };
 

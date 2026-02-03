@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Settings, Github, Key, Sparkles, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Settings, Github, Key, Sparkles } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { SiSlack as SlackIcon } from "react-icons/si";
 import { UseMutationResult } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 
 const AI_MODELS = [
   {
@@ -62,8 +63,6 @@ const AI_MODELS = [
   }
 ];
 
-const OPENROUTER_PLACEHOLDER = "••••••••";
-
 interface OpenRouterModel {
   id: string;
   name: string;
@@ -98,14 +97,21 @@ export function IntegrationSettingsModal({
   const [notificationLevel, setNotificationLevel] = useState(integration?.notificationLevel || 'all');
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
-  const [useOpenRouter, setUseOpenRouter] = useState(integration?.hasOpenRouterKey ?? false);
+  const [useOpenRouter, setUseOpenRouter] = useState(!!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey));
   const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
-  const [openRouterApiKeyInput, setOpenRouterApiKeyInput] = useState("");
-  const [openRouterVerified, setOpenRouterVerified] = useState(false);
-  const [openRouterVerifyError, setOpenRouterVerifyError] = useState<string | null>(null);
-  const [openRouterVerifying, setOpenRouterVerifying] = useState(false);
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
+
+  const { data: profileData } = useQuery<{ success: boolean; user?: { hasOpenRouterKey?: boolean } }>({
+    queryKey: ["/api/profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/profile", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch profile");
+      return res.json();
+    },
+    enabled: open,
+  });
+  const userHasOpenRouterKey = !!profileData?.user?.hasOpenRouterKey;
 
   const { data: openRouterData } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
@@ -118,40 +124,6 @@ export function IntegrationSettingsModal({
   });
   const openRouterModels = openRouterData?.models ?? [];
 
-  const canVerifyOpenRouterKey =
-    useOpenRouter &&
-    openRouterApiKeyInput.trim() !== "" &&
-    openRouterApiKeyInput !== OPENROUTER_PLACEHOLDER;
-  const isOpenRouterKeyVerified =
-    openRouterVerified || (integration?.hasOpenRouterKey && openRouterApiKeyInput === OPENROUTER_PLACEHOLDER);
-
-  async function handleVerifyOpenRouterKey() {
-    if (!canVerifyOpenRouterKey) return;
-    setOpenRouterVerifying(true);
-    setOpenRouterVerifyError(null);
-    try {
-      const res = await fetch("/api/openrouter/verify", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: openRouterApiKeyInput.trim() }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (data.valid) {
-        setOpenRouterVerified(true);
-        setOpenRouterVerifyError(null);
-      } else {
-        setOpenRouterVerified(false);
-        setOpenRouterVerifyError(data.error || "Verification failed.");
-      }
-    } catch {
-      setOpenRouterVerified(false);
-      setOpenRouterVerifyError("Verification failed. Try again.");
-    } finally {
-      setOpenRouterVerifying(false);
-    }
-  }
-
   const handleSave = () => {
     if (!integration) return;
 
@@ -162,13 +134,10 @@ export function IntegrationSettingsModal({
       aiModel,
       maxTokens,
     };
-    if (useOpenRouter) {
-      if (openRouterApiKeyInput && openRouterApiKeyInput !== OPENROUTER_PLACEHOLDER) {
-        updates.openRouterApiKey = openRouterApiKeyInput;
-      }
-    } else {
+    if (!useOpenRouter) {
       updates.openRouterApiKey = "";
     }
+    // OpenRouter API key is managed on the Models page (user-level); we do not send it here.
 
     updateIntegrationMutation.mutate({
       id: integration.id,
@@ -182,30 +151,22 @@ export function IntegrationSettingsModal({
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
-      setUseOpenRouter(integration.hasOpenRouterKey ?? false);
-      setAiModel(integration.aiModel || (integration.hasOpenRouterKey ? 'openai/gpt-4o' : 'gpt-4o'));
-      setOpenRouterApiKeyInput(integration.hasOpenRouterKey ? OPENROUTER_PLACEHOLDER : '');
-      setOpenRouterVerified(false);
-      setOpenRouterVerifyError(null);
+      setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
+      setAiModel(integration.aiModel || 'gpt-4o');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
   }, [integration]);
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      if (integration) {
-        setNotificationLevel(integration.notificationLevel || 'all');
-        setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
-        setIsActive(integration.isActive ?? true);
-        setUseOpenRouter(integration.hasOpenRouterKey ?? false);
-        setAiModel(integration.aiModel || 'gpt-4o');
-        setOpenRouterApiKeyInput(integration.hasOpenRouterKey ? OPENROUTER_PLACEHOLDER : '');
-        setOpenRouterVerified(false);
-        setOpenRouterVerifyError(null);
-        setMaxTokens(integration.maxTokens || 350);
-        setMaxTokensInput(integration.maxTokens?.toString() || '350');
-      }
+    if (!newOpen && integration) {
+      setNotificationLevel(integration.notificationLevel || 'all');
+      setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
+      setIsActive(integration.isActive ?? true);
+      setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
+      setAiModel(integration.aiModel || 'gpt-4o');
+      setMaxTokens(integration.maxTokens || 350);
+      setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
     onOpenChange(newOpen);
   };
@@ -307,14 +268,14 @@ export function IntegrationSettingsModal({
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">PushLog</span>
                   <Switch
                     checked={useOpenRouter}
                     onCheckedChange={(checked) => {
                       setUseOpenRouter(checked);
-                      if (checked && !aiModel.includes("/")) {
-                        setAiModel(openRouterModels[0]?.id ?? "openai/gpt-4o");
+                      if (!checked && aiModel.includes("/")) {
+                        setAiModel("gpt-5.2");
                       }
+                      // When switching to OpenRouter, do not change aiModel; user must select from dropdown
                     }}
                   />
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
@@ -353,103 +314,56 @@ export function IntegrationSettingsModal({
                   </Select>
                 </div>
               ) : (
-                /* OpenRouter: API key → verify → model choice */
+                /* OpenRouter: key is managed on Models page; here we only show model choice if user has key */
                 <div className="space-y-4 rounded-lg border border-border p-4 bg-muted/30">
-                  <div className="space-y-2">
-                    <Label htmlFor="openrouter-key" className="flex items-center gap-2">
-                      <Key className="w-4 h-4 text-log-green" /> OpenRouter API key
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id="openrouter-key"
-                        type="password"
-                        placeholder="sk-or-v1-..."
-                        value={openRouterApiKeyInput}
-                        onChange={(e) => {
-                          setOpenRouterApiKeyInput(e.target.value);
-                          if (e.target.value !== OPENROUTER_PLACEHOLDER) setOpenRouterVerified(false);
-                          setOpenRouterVerifyError(null);
-                        }}
-                        className="font-mono bg-background text-foreground border-border flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={!canVerifyOpenRouterKey || openRouterVerifying}
-                        onClick={handleVerifyOpenRouterKey}
-                        className="shrink-0 border-border"
-                      >
-                        {openRouterVerifying ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : isOpenRouterKeyVerified ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-600" aria-label="Key verified" />
-                        ) : (
-                          "Verify"
-                        )}
-                      </Button>
+                  {!userHasOpenRouterKey ? (
+                    <div className="space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        Add your OpenRouter API key on the <strong className="text-foreground">Models</strong> page to use OpenRouter models here.
+                      </p>
+                      <Link href="/models">
+                        <Button type="button" variant="outline" size="sm" className="border-log-green text-log-green hover:bg-log-green/10">
+                          <Key className="w-4 h-4 mr-2" />
+                          Go to Models
+                        </Button>
+                      </Link>
                     </div>
-                    {isOpenRouterKeyVerified && (
-                      <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> API key verified. You can select a model below.
-                      </p>
-                    )}
-                    {openRouterVerifyError && (
-                      <p className="text-xs text-destructive flex items-center gap-1">
-                        <XCircle className="w-3.5 h-3.5 shrink-0" /> {openRouterVerifyError}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      Get a key at{" "}
-                      <a
-                        href="https://openrouter.ai/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-log-green hover:underline"
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="openrouter-model" className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-log-green" /> Model
+                      </Label>
+                      <Select
+                        value={openRouterModels.some((m) => m.id === aiModel) ? aiModel : ""}
+                        onValueChange={(v) => setAiModel(v)}
                       >
-                        openrouter.ai/keys
-                      </a>
-                      . Verify your key, then choose a model. Leave key blank to keep your existing key.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="openrouter-model" className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-log-green" /> Model
-                    </Label>
-                    <Select
-                      value={openRouterModels.some((m) => m.id === aiModel) ? aiModel : (openRouterModels[0]?.id ?? aiModel ?? '')}
-                      onValueChange={(v) => setAiModel(v)}
-                      disabled={!isOpenRouterKeyVerified}
-                    >
-                      <SelectTrigger
-                        id="openrouter-model"
-                        className="w-full bg-background text-foreground border-border disabled:opacity-60"
-                      >
-                        <SelectValue
-                          placeholder={
-                            !isOpenRouterKeyVerified
-                              ? "Verify your API key first"
-                              : openRouterModels.length
-                                ? "Select model"
-                                : "Loading models…"
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[280px] bg-popover border-border">
-                        {openRouterModels.map((model) => (
-                          <SelectItem
-                            key={model.id}
-                            value={model.id}
-                            className="py-2 cursor-pointer"
-                            textValue={model.name}
-                          >
-                            <span className="font-medium text-sm">{model.name}</span>
-                            <span className="text-muted-foreground ml-2 text-xs">({model.id})</span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                        <SelectTrigger
+                          id="openrouter-model"
+                          className="w-full bg-background text-foreground border-border"
+                        >
+                          <SelectValue
+                            placeholder={openRouterModels.length ? "Select model" : "Loading models…"}
+                          />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[280px] bg-popover border-border">
+                          {openRouterModels.map((model) => (
+                            <SelectItem
+                              key={model.id}
+                              value={model.id}
+                              className="py-2 cursor-pointer"
+                              textValue={model.name}
+                            >
+                              <span className="font-medium text-sm">{model.name}</span>
+                              <span className="text-muted-foreground ml-2 text-xs">({model.id})</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Browse and compare models on the <Link href="/models" className="text-log-green hover:underline">Models</Link> page.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -525,7 +439,8 @@ export function IntegrationSettingsModal({
             onClick={handleSave}
             disabled={
               updateIntegrationMutation.isPending ||
-              (useOpenRouter && canVerifyOpenRouterKey && !isOpenRouterKeyVerified)
+              (useOpenRouter && !userHasOpenRouterKey) ||
+              (useOpenRouter && userHasOpenRouterKey && !openRouterModels.some((m) => m.id === aiModel))
             }
             variant="glow"
             className="text-white"

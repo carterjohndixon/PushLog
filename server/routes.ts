@@ -1691,8 +1691,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // OpenRouter models list (public; used by integration modal for model dropdown)
-  app.get("/api/openrouter/models", async (_req, res) => {
+  // OpenRouter: save user's API key (encrypted). Call after verify.
+  app.post("/api/openrouter/key", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const apiKey = typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
+      if (!apiKey) {
+        return res.status(400).json({ error: "API key is required" });
+      }
+      const encrypted = encrypt(apiKey);
+      await databaseStorage.updateUser(userId, { openRouterApiKey: encrypted } as any);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("OpenRouter save key error:", err);
+      res.status(500).json({ error: "Failed to save API key" });
+    }
+  });
+
+  // OpenRouter: remove user's saved key
+  app.delete("/api/openrouter/key", authenticateToken, async (req, res) => {
+    try {
+      await databaseStorage.updateUser(req.user!.userId, { openRouterApiKey: null } as any);
+      res.json({ success: true });
+    } catch (err) {
+      console.error("OpenRouter remove key error:", err);
+      res.status(500).json({ error: "Failed to remove API key" });
+    }
+  });
+
+  // OpenRouter usage for current user (calls, tokens, cost from our ai_usage where model is OpenRouter-style provider/model)
+  app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
+      const totalCalls = openRouterRows.length;
+      const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed || 0), 0);
+      const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + (u.cost || 0), 0);
+      res.json({
+        totalCalls,
+        totalTokens,
+        totalCostCents,
+        totalCostFormatted: totalCostCents ? `$${(totalCostCents / 100).toFixed(4)}` : null,
+        calls: openRouterRows.slice(0, 100).map((u: any) => ({
+          id: u.id,
+          model: u.model,
+          tokensUsed: u.tokensUsed,
+          cost: u.cost,
+          costFormatted: u.cost ? `$${(u.cost / 100).toFixed(4)}` : null,
+          createdAt: u.createdAt,
+        })),
+      });
+    } catch (err) {
+      console.error("OpenRouter usage error:", err);
+      res.status(500).json({ error: "Failed to load usage" });
+    }
+  });
+
+  // OpenRouter models list with full details (context_length, pricing) for Models page search/filter
+  app.get("/api/openrouter/models", async (req, res) => {
     try {
       const response = await fetch("https://openrouter.ai/api/v1/models", {
         headers: { Accept: "application/json" },
@@ -1705,6 +1762,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: m.id,
         name: m.name || m.id,
         description: m.description || "",
+        context_length: m.context_length ?? null,
+        pricing: m.pricing ? {
+          prompt: m.pricing.prompt,
+          completion: m.pricing.completion,
+          request: m.pricing.request,
+        } : null,
+        top_provider: m.top_provider ? { context_length: m.top_provider.context_length, max_completion_tokens: m.top_provider.max_completion_tokens } : null,
       }));
       res.json({ models });
     } catch (err) {
@@ -2227,7 +2291,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let aiGenerated = false;
       let actualAiModelUsed = null as string | null;
 
-      const openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      if (!openRouterKeyRaw?.trim()) {
+        const userForKey = await databaseStorage.getUserById(storedRepo.userId);
+        if ((userForKey as any)?.openRouterApiKey) {
+          openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
+        }
+      }
       const useOpenRouter = !!openRouterKeyRaw?.trim();
 
       try {
@@ -2607,7 +2677,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
       const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
       const maxTokens = integration.maxTokens || 350;
-      const openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+      if (!openRouterKeyRaw?.trim()) {
+        const userForKey = await databaseStorage.getUserById(integration.userId);
+        if ((userForKey as any)?.openRouterApiKey) {
+          openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
+        }
+      }
       const useOpenRouter = !!openRouterKeyRaw?.trim();
       const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
@@ -2749,7 +2825,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isUsernameSet: !!user.username,
           emailVerified: !!user.emailVerified,
           githubConnected,
+          googleConnected: !!user.googleId,
           aiCredits: user.aiCredits || 0,
+          hasOpenRouterKey: !!((user as any).openRouterApiKey),
         }
       });
     } catch (error) {
