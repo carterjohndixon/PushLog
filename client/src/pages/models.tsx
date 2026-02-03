@@ -384,32 +384,47 @@ export default function Models() {
                     </div>
                   </div>
                   {usageData.calls.length > 0 ? (
-                    <div className="rounded-md border border-border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/50 border-border">
-                            <TableHead className="text-foreground">Model</TableHead>
-                            <TableHead className="text-foreground">Tokens</TableHead>
-                            <TableHead className="text-foreground">Cost</TableHead>
-                            <TableHead className="text-foreground">Time</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {usageData.calls.map((c) => (
-                            <TableRow key={c.id} className="border-border">
-                              <TableCell className="font-medium text-foreground">
-                                {getAiModelDisplayName(c.model)}
-                              </TableCell>
-                              <TableCell className="text-muted-foreground">{c.tokensUsed ?? "—"}</TableCell>
-                              <TableCell className="text-muted-foreground">{c.costFormatted ?? "—"}</TableCell>
-                              <TableCell className="text-muted-foreground text-sm">
-                                {new Date(c.createdAt).toLocaleString()}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                    (() => {
+                      const byModel = usageData.calls.reduce<Record<string, { model: string; tokens: number; costCents: number; lastAt: string }>>((acc, c) => {
+                        const m = c.model || "unknown";
+                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: c.createdAt };
+                        acc[m].tokens += c.tokensUsed ?? 0;
+                        acc[m].costCents += c.cost ?? 0;
+                        if (new Date(c.createdAt) > new Date(acc[m].lastAt)) acc[m].lastAt = c.createdAt;
+                        return acc;
+                      }, {});
+                      const rows = Object.values(byModel).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+                      return (
+                        <div className="rounded-md border border-border overflow-hidden">
+                          <Table>
+                            <TableHeader>
+                              <TableRow className="bg-muted/50 border-border">
+                                <TableHead className="text-foreground">Model</TableHead>
+                                <TableHead className="text-foreground">Tokens</TableHead>
+                                <TableHead className="text-foreground">Cost</TableHead>
+                                <TableHead className="text-foreground">Last used</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {rows.map((r) => (
+                                <TableRow key={r.model} className="border-border">
+                                  <TableCell className="font-medium text-foreground">
+                                    {getAiModelDisplayName(r.model)}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground">{r.tokens.toLocaleString()}</TableCell>
+                                  <TableCell className="text-muted-foreground">
+                                    {r.costCents ? `$${(r.costCents / 100).toFixed(4)}` : "—"}
+                                  </TableCell>
+                                  <TableCell className="text-muted-foreground text-sm">
+                                    {new Date(r.lastAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" })}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      );
+                    })()
                   ) : (
                     <p className="text-sm text-muted-foreground">No OpenRouter calls yet. Use an integration with OpenRouter to see usage here.</p>
                   )}
