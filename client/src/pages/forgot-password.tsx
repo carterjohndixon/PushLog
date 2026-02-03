@@ -51,23 +51,24 @@ export default function ForgotPassword() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center px-4">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold text-graphite mb-2">Reset your password</h1>
-          <p className="text-steel-gray">Enter your email to receive a password reset link</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Reset your password</h1>
+          <p className="text-sm text-muted-foreground">Enter your email to receive a password reset link</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-gray-50 shadow-lg rounded-xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
-            <Label htmlFor="email" className="text-graphite">Email</Label>
+            <Label htmlFor="email" className="text-foreground font-medium">Email</Label>
             <Input 
               onChange={(e) => setEmail(e.target.value)} 
               type="email" 
               id="email" 
               placeholder="you@example.com" 
               required 
+              className="mt-1.5"
             />
           </div>
           <Button 
@@ -80,8 +81,9 @@ export default function ForgotPassword() {
           </Button>
         </form>
 
-        <p className="text-center text-sm text-steel-gray">
-          Remember your password? <a href="/login" className="text-log-green hover:underline">Log in</a>
+        <p className="text-center text-sm text-muted-foreground">
+          Remember your password?{" "}
+          <a href="/login" className="text-primary font-medium hover:underline">Log in</a>
         </p>
       </div>
     </div>

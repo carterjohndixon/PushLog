@@ -66,8 +66,13 @@
     @apply border-border;
   }
 
+  html {
+    background-color: hsl(var(--background));
+  }
+
   body {
     @apply font-sans antialiased text-foreground;
+    background-color: hsl(var(--background));
     transition: background 0.3s ease, color 0.2s ease;
   }
 }

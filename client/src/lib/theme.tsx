@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useState,
   useCallback,
   type ReactNode,
@@ -50,7 +51,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setResolvedTheme(applyTheme(next));
   }, []);
 
-  useEffect(() => {
+  // Apply theme before first paint so auth pages (login/signup/forgot-password) are never white
+  useLayoutEffect(() => {
     const resolved = applyTheme(theme);
     setResolvedTheme(resolved);
   }, [theme]);
