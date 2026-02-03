@@ -1,24 +1,32 @@
-import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Mail, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export function EmailVerificationBanner() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const resendEmailMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/resend-verification");
       return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Verification Email Sent",
-        description: "Please check your email inbox and spam folder.",
-      });
+    onSuccess: (data: { alreadyVerified?: boolean }) => {
+      if (data.alreadyVerified) {
+        queryClient.invalidateQueries({ queryKey: ["/api/profile"] });
+        toast({
+          title: "Already verified",
+          description: "Your email is already verified. Refreshing…",
+        });
+      } else {
+        toast({
+          title: "Verification Email Sent",
+          description: "Please check your email inbox and spam folder.",
+        });
+      }
     },
     onError: (error: any) => {
       toast({

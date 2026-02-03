@@ -45,28 +45,28 @@ export function ConfirmIntegrationDeletionModal({
         
         {integrationToDelete && (
           <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-muted/50 dark:bg-muted rounded-lg border border-border">
               <div className="flex items-center space-x-3 mb-3">
-                <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                  <Github className="text-white w-4 h-4" />
+                <div className="w-8 h-8 bg-foreground rounded flex items-center justify-center">
+                  <Github className="text-background w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">{integrationToDelete.repositoryName}</p> 
-                  <p className="text-sm text-steel-gray">Repository</p>
+                  <p className="font-medium text-foreground">{integrationToDelete.repositoryName}</p>
+                  <p className="text-sm text-muted-foreground">Repository</p>
                 </div>
               </div>
               <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-sky-blue rounded flex items-center justify-center">
+                <div className="w-8 h-8 bg-[#4A154B] dark:bg-[#611f69] rounded flex items-center justify-center">
                   <SiSlack className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">#{integrationToDelete.slackChannelName}</p>
-                  <p className="text-sm text-steel-gray">Slack Channel</p>
+                  <p className="font-medium text-foreground">#{integrationToDelete.slackChannelName}</p>
+                  <p className="text-sm text-muted-foreground">Slack Channel</p>
                 </div>
               </div>
             </div>
-            
-            <div className="flex items-center space-x-2 text-sm text-steel-gray">
+
+            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <Clock className="w-4 h-4" />
               <span>Last used: {integrationToDelete.lastUsed ? 
                 new Date(integrationToDelete.lastUsed).toLocaleDateString('en-US', {

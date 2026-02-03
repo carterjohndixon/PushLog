@@ -887,15 +887,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await databaseStorage.getUserById(userId);
       if (!user) {
-        res.status(404).json({ error: "User not found" });
+        return res.status(404).json({ error: "User not found" });
       }
-
-      if (user?.emailVerified) {
-        res.status(400).json({ error: "Email is already verified" });
+      if (user.emailVerified) {
+        return res.status(200).json({ success: true, alreadyVerified: true, message: "Email is already verified." });
       }
-
-      if (!user?.email) {
-        res.status(400).json({ error: "No email address associated with account" });
+      if (!user.email) {
+        return res.status(400).json({ error: "No email address associated with account" });
       }
 
       // Generate new verification token
@@ -1807,6 +1805,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("OpenRouter models fetch error:", err);
       res.status(500).json({ error: "Failed to fetch OpenRouter models" });
+    }
+  });
+
+  // Test Slack delivery for an integration (sends a test message to the channel)
+  app.post("/api/integrations/:id/test-slack", authenticateToken, async (req, res) => {
+    let integration: Awaited<ReturnType<typeof storage.getIntegration>> | undefined = undefined;
+    try {
+      const integrationId = parseInt(req.params.id);
+      integration = await storage.getIntegration(integrationId);
+      if (!integration || integration.userId !== req.user!.userId) {
+        return res.status(404).json({ error: "Integration not found" });
+      }
+      if (!integration.slackWorkspaceId) {
+        return res.status(400).json({ error: "No Slack workspace linked to this integration." });
+      }
+      const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
+      if (!workspace?.accessToken) {
+        return res.status(400).json({ error: "Slack workspace token missing. Reconnect Slack from Integrations." });
+      }
+      const testMessage = `🧪 *PushLog test* – If you see this, notifications for #${integration.slackChannelName} are working.`;
+      await sendSlackMessage(workspace.accessToken, {
+        channel: integration.slackChannelId,
+        text: testMessage,
+        unfurl_links: false,
+      });
+      res.json({ success: true, message: "Test message sent to Slack." });
+    } catch (err: any) {
+      const code = err?.data?.error ?? err?.code;
+      const msg = err?.message ?? String(err);
+      console.error("Test Slack error:", code || msg, err?.data ? JSON.stringify(err.data) : "");
+      if (code === "invalid_auth" || code === "token_revoked") {
+        return res.status(401).json({ error: "Slack connection expired or revoked. Reconnect Slack from the Integrations page (Connect Slack)." });
+      }
+      if (code === "not_in_channel" || code === "channel_not_found") {
+        const ch = integration?.slackChannelName ?? "your-channel";
+        return res.status(400).json({ error: `PushLog isn't in that channel. In Slack, run: /invite @PushLog in #${ch}.` });
+      }
+      res.status(500).json({ error: msg || "Failed to send test message to Slack." });
     }
   });
 

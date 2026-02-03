@@ -130,7 +130,7 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
   );
 }
 
-export default function Integrations({ userProfile }: IntegrationsProps) {
+export default function Integrations({ userProfile: userProfileProp }: IntegrationsProps) {
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
   const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
@@ -143,6 +143,16 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
 
   const queryClient = useQueryClient();
+  const { data: profileData } = useQuery({
+    queryKey: ["/api/profile"],
+    queryFn: async () => {
+      const res = await fetch("/api/profile", { credentials: "include", headers: { Accept: "application/json" } });
+      if (!res.ok) throw new Error("Failed to fetch profile");
+      const data = await res.json();
+      return data.user ?? data;
+    },
+  });
+  const userProfile = profileData ?? userProfileProp;
   const { toast } = useToast();
 
   // Fetch user repositories

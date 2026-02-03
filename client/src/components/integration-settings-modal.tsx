@@ -14,9 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Settings, Github, Key, Sparkles } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { SiSlack as SlackIcon } from "react-icons/si";
-import { UseMutationResult } from "@tanstack/react-query";
+import { UseMutationResult, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { Send } from "lucide-react";
 
 const AI_MODELS = [
   {
@@ -101,6 +104,25 @@ export function IntegrationSettingsModal({
   const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const testSlackMutation = useMutation({
+    mutationFn: async (integrationId: number) => {
+      const res = await apiRequest("POST", `/api/integrations/${integrationId}/test-slack`);
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Test sent", description: "Check your Slack channel for the test message." });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Test failed",
+        description: err?.message || "Could not send test message to Slack.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const { data: profileData } = useQuery<{ success: boolean; user?: { hasOpenRouterKey?: boolean } }>({
     queryKey: ["/api/profile"],
@@ -422,10 +444,26 @@ export function IntegrationSettingsModal({
                   <p>⚠️ This integration is currently paused. Enable it above to start sending notifications to Slack.</p>
                 </div>
               )}
+              <div className="mt-3 pt-3 border-t border-border">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full border-border"
+                  disabled={testSlackMutation.isPending}
+                  onClick={() => integration && testSlackMutation.mutate(integration.id)}
+                >
+                  <Send className="w-3.5 h-3.5 mr-2" />
+                  {testSlackMutation.isPending ? "Sending…" : "Send test message to Slack"}
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1.5">
+                  Sends a test message to #{integration?.slackChannelName}. If it fails, reconnect Slack or invite the app to the channel.
+                </p>
+              </div>
             </div>
           </div>
         )}
-        
+
         <div className="flex-shrink-0 flex justify-end space-x-2 pt-4 border-t border-border">
           <Button 
             variant="outline" 
