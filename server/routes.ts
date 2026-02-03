@@ -40,6 +40,13 @@ import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } fr
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
 
+
+/* TODO
+Add a models page for the user to like fully select and read into the models and also allow for the user to enter their open router key and actually make the verify key thing work too!
+
+Can you also make it so that after they add the API key, it allows my app to track the amount of money they've spent on the API key and a breakdown of how many calls they've had and the tokens and cost for each call?
+*/
+
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
   if (!integration) return integration;

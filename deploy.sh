@@ -69,10 +69,9 @@ if [ "$LOCAL" = "$REMOTE" ]; then
     exit 0
 fi
 
-log_info "New changes detected. Pulling latest code..."
-git pull origin "$BRANCH" || {
-    log_error "Failed to pull from GitHub"
-    log_info "Git pull error details. Checking git status..."
+log_info "New changes detected. Updating to origin/$BRANCH..."
+git reset --hard "origin/$BRANCH" || {
+    log_error "Failed to update from GitHub"
     git status || true
     exit 1
 }
