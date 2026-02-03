@@ -1641,15 +1641,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const pushesByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
     const slackByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
     let aiModelUsage: { model: string; count: number }[] = [];
+    let topRepos: { repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[] = [];
 
     try {
-      // Pushes: get user repos, then push events per repo, aggregate by day
+      // Pushes and top repos: get user repos, then push events per repo
       const userRepos = await storage.getRepositoriesByUserId(userId);
       const allPushEvents: { pushedAt: Date | string }[] = [];
       for (const repo of userRepos) {
         const events = await storage.getPushEventsByRepositoryId(repo.id);
         allPushEvents.push(...events.map(e => ({ pushedAt: e.pushedAt })));
+        const add = events.reduce((sum, e) => sum + ((e as any).additions ?? 0), 0);
+        const del = events.reduce((sum, e) => sum + ((e as any).deletions ?? 0), 0);
+        topRepos.push({
+          repositoryId: repo.id,
+          name: repo.name,
+          fullName: repo.fullName,
+          pushCount: events.length,
+          totalAdditions: add,
+          totalDeletions: del,
+        });
       }
+      topRepos.sort((a, b) => (b.totalAdditions + b.totalDeletions) - (a.totalAdditions + a.totalDeletions));
       for (const event of allPushEvents) {
         const d = new Date(event.pushedAt);
         if (Number.isNaN(d.getTime()) || d < startDate) continue;
@@ -1695,7 +1707,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       pushesByDay,
       slackMessagesByDay: slackByDay,
       aiModelUsage,
+      topRepos,
     });
+  });
+
+  // Repo-level analytics: file and folder breakdown (lines changed)
+  app.get("/api/analytics/repos/:repositoryId", authenticateToken, async (req, res) => {
+    try {
+      const repositoryId = parseInt(req.params.repositoryId);
+      if (Number.isNaN(repositoryId)) {
+        return res.status(400).json({ error: "Invalid repository ID" });
+      }
+      const repo = await storage.getRepository(repositoryId);
+      if (!repo || repo.userId !== req.user!.userId) {
+        return res.status(404).json({ error: "Repository not found" });
+      }
+      const fileStats = await databaseStorage.getFileStatsByRepositoryId(repositoryId);
+      const folderMap: Record<string, { additions: number; deletions: number }> = {};
+      for (const f of fileStats) {
+        const folder = f.filePath.includes("/") ? f.filePath.split("/")[0] : "(root)";
+        if (!folderMap[folder]) folderMap[folder] = { additions: 0, deletions: 0 };
+        folderMap[folder].additions += f.additions;
+        folderMap[folder].deletions += f.deletions;
+      }
+      const folderStats = Object.entries(folderMap).map(([folder, stats]) => ({
+        folder,
+        additions: stats.additions,
+        deletions: stats.deletions,
+      })).sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
+      res.json({
+        repository: { id: repo.id, name: repo.name, fullName: repo.fullName },
+        fileStats: fileStats.sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions)),
+        folderStats,
+      });
+    } catch (err) {
+      console.error("Analytics repo detail:", err);
+      res.status(500).json({ error: "Failed to load repo analytics" });
+    }
   });
 
   // Get push events (authenticated version)
@@ -1962,8 +2010,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(200).json({ message: `Push to ${branch} branch ignored due to 'main_only' notification level` });
         }
       }
-      
-      // Store push event first to get the ID
+
+      // Fetch commit stats (and file-level data) from GitHub API before creating push event so we can store additions/deletions and file breakdown for analytics
+      const filesChanged = [
+        ...(commit.added || []),
+        ...(commit.modified || []),
+        ...(commit.removed || [])
+      ];
+      let finalAdditions = commit.additions ?? 0;
+      let finalDeletions = commit.deletions ?? 0;
+      type CommitFile = { filename: string; additions?: number; deletions?: number };
+      let commitDataFromApi: { files?: CommitFile[]; stats?: { additions?: number; deletions?: number } } | null = null;
+
+      const hasWebhookStats = commit.additions !== undefined && commit.deletions !== undefined;
+      if (!hasWebhookStats && filesChanged.length > 0) {
+        try {
+          const [owner, repoName] = repository.full_name.split('/');
+          const githubResponse = await fetch(
+            `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
+            {
+              headers: {
+                'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
+                'Accept': 'application/vnd.github.v3+json'
+              }
+            }
+          );
+          if (githubResponse.ok) {
+            const commitData = await githubResponse.json();
+            commitDataFromApi = commitData;
+            finalAdditions = commitData.stats?.additions ?? 0;
+            finalDeletions = commitData.stats?.deletions ?? 0;
+            console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
+          } else {
+            finalAdditions = commit.additions ?? 0;
+            finalDeletions = commit.deletions ?? 0;
+          }
+        } catch (apiError) {
+          console.error('Failed to fetch commit stats from GitHub API:', apiError);
+          finalAdditions = commit.additions ?? 0;
+          finalDeletions = commit.deletions ?? 0;
+        }
+      } else {
+        finalAdditions = commit.additions ?? 0;
+        finalDeletions = commit.deletions ?? 0;
+      }
+
+      // Store push event (with additions/deletions for analytics)
       const pushEvent = await storage.createPushEvent({
         repositoryId: storedRepo.id,
         integrationId: integration.id,
@@ -1973,6 +2065,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         branch,
         pushedAt: new Date(commit.timestamp),
         notificationSent: false,
+        additions: finalAdditions,
+        deletions: finalDeletions,
         aiSummary: null,
         aiImpact: null,
         aiCategory: null,
@@ -1980,77 +2074,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         aiGenerated: false,
       });
 
-      // Generate AI summary for the commit with better file change detection
+      // Store file-level stats for analytics (lines changed per file)
+      if (commitDataFromApi?.files?.length) {
+        try {
+          for (const f of commitDataFromApi.files) {
+            await databaseStorage.createPushEventFile({
+              pushEventId: pushEvent.id,
+              filePath: f.filename,
+              additions: f.additions ?? 0,
+              deletions: f.deletions ?? 0,
+            });
+          }
+        } catch (fileErr) {
+          console.error('Failed to store push event files:', fileErr);
+        }
+      }
+
+      // Generate AI summary for the commit
       let aiSummary = null;
       let aiImpact = null;
       let aiCategory = null;
       let aiDetails = null;
       let aiGenerated = false;
-      /** Actual model used by OpenAI (from API response); used in notification metadata so "AI Model Used" is correct. */
       let actualAiModelUsed = null as string | null;
-      let finalAdditions = commit.additions || 0;
-      let finalDeletions = commit.deletions || 0;
 
       try {
-        // Get more detailed file change information
-        const filesChanged = [
-          ...(commit.added || []),
-          ...(commit.modified || []),
-          ...(commit.removed || [])
-        ];
-
-        // Try to get actual diff stats from GitHub API if webhook data is missing
-        // Note: GitHub push webhooks don't include additions/deletions in commit objects
-        // Only pull request events include these fields, so we need to fetch from API for push events
-        let additions = commit.additions;
-        let deletions = commit.deletions;
-        
-        // Check if additions/deletions are actually provided in webhook (they're usually undefined for push events)
-        // For push webhooks, these fields are undefined. For PR webhooks, they're provided.
-        const hasWebhookStats = additions !== undefined && deletions !== undefined;
-
-        // If we don't have diff data from webhook, try to fetch it from GitHub API
-        if (!hasWebhookStats && filesChanged.length > 0) {
-          try {
-            // Get the repository owner and name from full_name
-            const [owner, repoName] = repository.full_name.split('/');
-            
-            // Fetch commit details from GitHub API
-            const githubResponse = await fetch(
-              `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
-              {
-                headers: {
-                  'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
-                  'Accept': 'application/vnd.github.v3+json'
-                }
-              }
-            );
-
-            if (githubResponse.ok) {
-              const commitData = await githubResponse.json();
-              finalAdditions = commitData.stats?.additions || 0;
-              finalDeletions = commitData.stats?.deletions || 0;
-              console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
-
-            } else {
-              const errorText = await githubResponse.text();
-              console.error(`❌ GitHub API error: ${githubResponse.status} - ${errorText}`);
-              
-              // If API fails and we have webhook data, use it (even if 0)
-              finalAdditions = additions || 0;
-              finalDeletions = deletions || 0;
-            }
-          } catch (apiError) {
-            console.error('Failed to fetch commit stats from GitHub API:', apiError);
-            finalAdditions = additions || 0;
-            finalDeletions = deletions || 0;
-          }
-        } else {
-          // Use webhook data when available (from pull request events)
-          finalAdditions = additions || 0;
-          finalDeletions = deletions || 0;
-        }
-
         const pushData = {
           repositoryName: repository.full_name,
           branch,
@@ -2174,8 +2222,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiImpact,
           aiCategory,
           aiDetails,
-          aiGenerated: aiGenerated, // Use the value we set above (true for real AI, false for fallback)
+          aiGenerated: aiGenerated,
         });
+
+        // Record AI usage per user so analytics can show "most used model"
+        if (aiGenerated && summary && summary.tokensUsed > 0) {
+          try {
+            await databaseStorage.createAiUsage({
+              userId: storedRepo.userId,
+              integrationId: integration.id,
+              pushEventId: pushEvent.id,
+              model: actualAiModelUsed || (integrationAiModelStr ?? 'gpt-5.2'),
+              tokensUsed: summary.tokensUsed,
+              cost: summary.cost,
+            });
+          } catch (usageErr) {
+            console.error('Failed to record AI usage:', usageErr);
+          }
+        }
       } catch (aiError) {
         console.error('Failed to generate AI summary:', aiError);
         // Continue without AI summary

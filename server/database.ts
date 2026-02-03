@@ -1,11 +1,12 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
-  users, repositories, integrations, pushEvents, slackWorkspaces, notifications, aiUsage, payments,
+  users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
   type PushEvent, type InsertPushEvent,
+  type PushEventFile, type InsertPushEventFile,
   type SlackWorkspace, type InsertSlackWorkspace,
   type Notification, type InsertNotification,
   type AiUsage, type InsertAiUsage,
@@ -428,6 +429,26 @@ export class DatabaseStorage implements IStorage {
 
   async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
     return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)) as any;
+  }
+
+  // Push event file methods (for analytics: lines changed per file)
+  async createPushEventFile(file: InsertPushEventFile): Promise<PushEventFile> {
+    const [result] = await db.insert(pushEventFiles).values(file).returning();
+    return result as any;
+  }
+
+  async getFileStatsByRepositoryId(repositoryId: number): Promise<{ filePath: string; additions: number; deletions: number }[]> {
+    const rows = await db
+      .select({
+        filePath: pushEventFiles.filePath,
+        additions: sql<number>`COALESCE(SUM(${pushEventFiles.additions}), 0)::int`,
+        deletions: sql<number>`COALESCE(SUM(${pushEventFiles.deletions}), 0)::int`,
+      })
+      .from(pushEventFiles)
+      .innerJoin(pushEvents, eq(pushEventFiles.pushEventId, pushEvents.id))
+      .where(eq(pushEvents.repositoryId, repositoryId))
+      .groupBy(pushEventFiles.filePath);
+    return rows as any;
   }
 
   // Payment methods

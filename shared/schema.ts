@@ -64,6 +64,8 @@ export const pushEvents = pgTable("push_events", {
   branch: text("branch").notNull(),
   pushedAt: timestamp("pushed_at").notNull(),
   notificationSent: boolean("notification_sent").default(false),
+  additions: integer("additions").default(0),
+  deletions: integer("deletions").default(0),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
   // AI Summary fields
   aiSummary: text("ai_summary"),
@@ -71,6 +73,14 @@ export const pushEvents = pgTable("push_events", {
   aiCategory: text("ai_category"),
   aiDetails: text("ai_details"),
   aiGenerated: boolean("ai_generated").notNull().default(false),
+});
+
+export const pushEventFiles = pgTable("push_event_files", {
+  id: serial("id").primaryKey(),
+  pushEventId: integer("push_event_id").notNull(),
+  filePath: text("file_path").notNull(),
+  additions: integer("additions").notNull().default(0),
+  deletions: integer("deletions").notNull().default(0),
 });
 
 export const slackWorkspaces = pgTable("slack_workspaces", {
@@ -139,6 +149,10 @@ export const insertPushEventSchema = createInsertSchema(pushEvents).omit({
   createdAt: true,
 });
 
+export const insertPushEventFileSchema = createInsertSchema(pushEventFiles).omit({
+  id: true,
+});
+
 export const insertSlackWorkspaceSchema = createInsertSchema(slackWorkspaces).omit({
   id: true,
   createdAt: true,
@@ -202,6 +216,8 @@ export type Integration = typeof integrations.$inferSelect;
 export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
 export type PushEvent = typeof pushEvents.$inferSelect;
 export type InsertPushEvent = z.infer<typeof insertPushEventSchema>;
+export type PushEventFile = typeof pushEventFiles.$inferSelect;
+export type InsertPushEventFile = z.infer<typeof insertPushEventFileSchema>;
 export type SlackWorkspace = typeof slackWorkspaces.$inferSelect;
 export type InsertSlackWorkspace = z.infer<typeof insertSlackWorkspaceSchema>;
 export type Notification = typeof notifications.$inferSelect;
