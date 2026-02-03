@@ -161,6 +161,9 @@ app.use(cors({
 }));
 
 // Slack slash commands: must receive raw body for signature verification (before body parsers)
+app.get("/api/slack/commands", (_req, res) => {
+  res.type("text/plain").send("PushLog slash commands endpoint. Configure your Slack app Request URL to this path (POST).");
+});
 app.post(
   "/api/slack/commands",
   express.raw({ type: "application/x-www-form-urlencoded", limit: "1mb" }),

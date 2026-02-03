@@ -81,22 +81,22 @@ function broadcastNotification(userId: number, notification: any) {
   }
 }
 
-/** Slack slash command handler. Must be mounted with express.raw({ type: 'application/x-www-form-urlencoded' }) so req.body is a Buffer. */
+/** Slack slash command handler. Must be mounted with express.raw({ type: 'application/x-www-form-urlencoded' }) so req.body is a Buffer. Always returns 200 so Slack shows our message instead of "dispatch_failed". */
 export async function slackCommandsHandler(req: Request, res: Response): Promise<void> {
   const rawBody = req.body;
   if (!rawBody || !(rawBody instanceof Buffer)) {
-    res.status(400).json({ response_type: "ephemeral", text: "Invalid request body." });
+    res.status(200).json({ response_type: "ephemeral", text: "Invalid request body." });
     return;
   }
   const signature = req.headers["x-slack-signature"] as string | undefined;
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) {
     console.error("SLACK_SIGNING_SECRET not configured");
-    res.status(500).json({ response_type: "ephemeral", text: "Slack commands are not configured." });
+    res.status(200).json({ response_type: "ephemeral", text: "Slack commands are not configured. Set SLACK_SIGNING_SECRET." });
     return;
   }
   if (!verifySlackRequest(rawBody, signature, signingSecret)) {
-    res.status(401).json({ response_type: "ephemeral", text: "Invalid signature." });
+    res.status(200).json({ response_type: "ephemeral", text: "Invalid request signature. Check that Request URL is exactly your app URL + /api/slack/commands and Signing Secret is set." });
     return;
   }
   const payload = parseSlackCommandBody(rawBody.toString("utf8"));
@@ -118,10 +118,10 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
   };
   try {
     const response = await handleSlackCommand(payload, getIntegrationsForChannel);
-    res.json(response);
+    res.status(200).json(response);
   } catch (err) {
     console.error("Slack command error:", err);
-    res.status(500).json({ response_type: "ephemeral", text: "Something went wrong. Try again later." });
+    res.status(200).json({ response_type: "ephemeral", text: "Something went wrong. Try again later." });
   }
 }
 
