@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
+import { Header } from "@/components/header";
 
 
 // Lazy load pages for better performance
@@ -42,16 +43,21 @@ const PageLoader = () => (
   </div>
 );
 
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/settings"];
+
 function Router() {
   const [location] = useLocation();
-  
+  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location);
+
   // Scroll to top on route change
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [location]);
-  
+
   return (
-    <Switch>
+    <>
+      {showPersistentHeader && <Header />}
+      <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/signup" component={Signup} />
@@ -88,6 +94,7 @@ function Router() {
       
       <Route component={NotFound} />
     </Switch>
+    </>
   );
 }
 

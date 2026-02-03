@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { handleTokenExpiration } from "@/lib/utils";
@@ -633,8 +632,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Email Verification Banner */}
         {userProfile && !userProfile.emailVerified && (
@@ -744,7 +741,7 @@ export default function Dashboard() {
                     {statsLoading ? (
                       <Skeleton className="h-8 w-8 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold text-purple-600">∞</p>
+                      <p className="text-2xl font-bold text-log-green">∞</p>
                     )}
                   </div>
                   {/* REAL PAYMENT VERSION: */}
@@ -757,8 +754,8 @@ export default function Dashboard() {
                     </div>
                   )} */}
                 </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="text-purple-600 w-6 h-6" />
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <CreditCard className="text-log-green w-6 h-6" />
                 </div>
               </div>
             </CardContent>

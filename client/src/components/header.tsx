@@ -28,7 +28,7 @@ export function Header() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -93,6 +93,12 @@ export function Header() {
 
   const { theme, setTheme, resolvedTheme } = useTheme();
 
+  const navLinks = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/integrations", label: "Integrations" },
+    { href: "/repositories", label: "Repositories" },
+  ] as const;
+
   const themeOptions: { value: Theme; label: string; icon: React.ReactNode }[] = [
     { value: "light", label: "Light", icon: <Sun className="h-4 w-4" /> },
     { value: "dark", label: "Dark", icon: <Moon className="h-4 w-4" /> },
@@ -113,24 +119,22 @@ export function Header() {
             </Link>
             {user && (
               <nav className="hidden md:flex space-x-8 ml-8">
-                <Link 
-                  href="/dashboard"
-                  className="text-log-green hover:text-foreground transition-colors"
-                >
-                  Dashboard
-                </Link>
-                <Link 
-                  href="/integrations"
-                  className="text-log-green hover:text-foreground transition-colors"
-                >
-                  Integrations
-                </Link>
-                <Link 
-                  href="/repositories"
-                  className="text-log-green hover:text-foreground transition-colors"
-                >
-                  Repositories
-                </Link>
+                {navLinks.map(({ href, label }) => {
+                  const isActive = location === href;
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      className={`transition-colors ${
+                        isActive
+                          ? "text-foreground font-semibold"
+                          : "text-log-green hover:text-foreground"
+                      }`}
+                    >
+                      {label}
+                    </Link>
+                  );
+                })}
               </nav>
             )}
           </div>

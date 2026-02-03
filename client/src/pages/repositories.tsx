@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Header } from "@/components/header";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { handleTokenExpiration } from "@/lib/utils";
@@ -535,8 +534,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-graphite">Repositories</h1>
