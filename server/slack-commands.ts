@@ -16,19 +16,28 @@ export type SlackCommandPayload = {
 
 /**
  * Verify that a request is from Slack using the signing secret.
- * Use the raw request body (string or Buffer) as received.
+ * Uses raw body and X-Slack-Request-Timestamp per Slack docs:
+ * https://api.slack.com/authentication/verifying-requests-from-slack
+ * Basestring is v0:{timestamp}:{body}, not v0:{body}.
  */
 export function verifySlackRequest(
   rawBody: string | Buffer,
   signature: string | undefined,
-  signingSecret: string
+  signingSecret: string,
+  timestampHeader?: string
 ): boolean {
   if (!signature || !signingSecret) return false;
   const body = typeof rawBody === "string" ? rawBody : rawBody.toString("utf8");
+  const timestamp = timestampHeader?.trim() || "";
+  if (!timestamp) return false;
+  // Replay protection: reject if older than 5 minutes
+  const now = Math.floor(Date.now() / 1000);
+  const ts = parseInt(timestamp, 10);
+  if (Number.isNaN(ts) || Math.abs(now - ts) > 60 * 5) return false;
   const [version, hash] = signature.split("=");
   if (version !== "v0" || !hash) return false;
-  const base = `v0:${body}`;
-  const expected = "v0=" + crypto.createHmac("sha256", signingSecret).update(base).digest("hex");
+  const sigBasestring = `v0:${timestamp}:${body}`;
+  const expected = "v0=" + crypto.createHmac("sha256", signingSecret).update(sigBasestring).digest("hex");
   try {
     return crypto.timingSafeEqual(Buffer.from(signature, "utf8"), Buffer.from(expected, "utf8"));
   } catch {

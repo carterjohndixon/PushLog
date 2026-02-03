@@ -95,8 +95,9 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
     res.status(200).json({ response_type: "ephemeral", text: "Slack commands are not configured. Set SLACK_SIGNING_SECRET." });
     return;
   }
-  if (!verifySlackRequest(rawBody, signature, signingSecret)) {
-    res.status(200).json({ response_type: "ephemeral", text: "Invalid request signature. Check that Request URL is exactly your app URL + /api/slack/commands and Signing Secret is set." });
+  const timestampHeader = req.headers["x-slack-request-timestamp"] as string | undefined;
+  if (!verifySlackRequest(rawBody, signature, signingSecret, timestampHeader)) {
+    res.status(200).json({ response_type: "ephemeral", text: "Invalid request signature. Check that Request URL is exactly your app URL + /api/slack/commands and Signing Secret matches the app." });
     return;
   }
   const payload = parseSlackCommandBody(rawBody.toString("utf8"));
