@@ -42,6 +42,7 @@ interface RepositoryCardData {
   lastPush?: string;
   private: boolean;
   monitorAllBranches?: boolean;
+  integrationCount?: number;
   [key: string]: any;
 }
 
@@ -811,6 +812,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
         onOpenChange={setIsDeleteRepoConfirmationOpen}
         repositoryToDelete={repositoryToDelete}
         deleteRepositoryMutation={deleteRepositoryMutation}
+        integrationCount={repositoryToDelete?.integrationCount ?? 0}
       />
 
       {/* Events Modal */}

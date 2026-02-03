@@ -30,6 +30,7 @@ export interface IStorage {
   // Integration methods
   getIntegration(id: number): Promise<Integration | undefined>;
   getIntegrationsByUserId(userId: number): Promise<Integration[]>;
+  getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]>;
   getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined>;
   createIntegration(integration: InsertIntegration): Promise<Integration>;
   updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined>;
@@ -174,6 +175,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.integrations.values()).filter(integration => integration.userId === userId);
   }
 
+  async getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]> {
+    return Array.from(this.integrations.values()).filter(integration => integration.repositoryId === repositoryId);
+  }
+
   async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
     return Array.from(this.integrations.values()).find(integration => integration.repositoryId === repositoryId);
   }
@@ -189,7 +194,8 @@ export class MemStorage implements IStorage {
       includeCommitSummaries: integration.includeCommitSummaries ?? null,
       aiModel: integration.aiModel ?? null,
       maxTokens: integration.maxTokens ?? null,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      openRouterApiKey: integration.openRouterApiKey ?? null
     };
     this.integrations.set(id, newIntegration);
     return newIntegration;
@@ -229,7 +235,9 @@ export class MemStorage implements IStorage {
       aiCategory: pushEvent.aiCategory ?? null,
       aiDetails: pushEvent.aiDetails ?? null,
       aiGenerated: pushEvent.aiGenerated ?? false,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      additions: pushEvent.additions ?? null,
+      deletions: pushEvent.deletions ?? null
     };
     this.pushEvents.set(id, newPushEvent);
     return newPushEvent;

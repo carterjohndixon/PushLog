@@ -115,8 +115,15 @@ export function IntegrationSetupModal({
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
+        const raw = await response.text();
+        let message = raw;
+        try {
+          const data = JSON.parse(raw);
+          message = data.details || data.error || raw;
+        } catch {
+          // use raw text
+        }
+        throw new Error(message);
       }
 
       return response.json();
@@ -217,11 +224,10 @@ export function IntegrationSetupModal({
     }
 
     const integrationData = {
-      userId: 0, // Server sets from session
-      repositoryId: repository.id,
-      slackWorkspaceId: workspace.id,
-      slackChannelId: channel.id,
-      slackChannelName: channel.name,
+      repositoryId: Number(repository.id),
+      slackWorkspaceId: Number(workspace.id),
+      slackChannelId: String(channel.id),
+      slackChannelName: String(channel.name),
       notificationLevel,
       includeCommitSummaries,
       isActive: true,

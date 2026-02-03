@@ -32,6 +32,7 @@ import {
   getSlackChannelsForWorkspace
 } from "./slack";
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
+import { z } from "zod";
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
@@ -953,19 +954,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch repositories from GitHub
         const repositories = await getUserRepositories(user.githubToken);
         
-        // Get already connected repositories
+        // Get already connected repositories and user integrations (for integration count per repo)
         const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
-        
+        const userIntegrations = await storage.getIntegrationsByUserId(userId);
+
         // Mark repositories that are already connected and include internal database ID
         const enrichedRepos = repositories.map(repo => {
           const connectedRepo = connectedRepos.find(connectedRepo => connectedRepo.githubId === repo.id.toString());
+          const integrationCount = connectedRepo
+            ? userIntegrations.filter(i => i.repositoryId === connectedRepo.id).length
+            : 0;
           return {
             ...repo,
             githubId: repo.id.toString(), // Always include the GitHub ID
             id: connectedRepo?.id, // Include the internal database ID if connected
             isConnected: !!connectedRepo,
             isActive: connectedRepo?.isActive ?? true, // Include the isActive field from database
-            monitorAllBranches: connectedRepo?.monitorAllBranches ?? false // Include the monitorAllBranches field from database
+            monitorAllBranches: connectedRepo?.monitorAllBranches ?? false, // Include the monitorAllBranches field from database
+            integrationCount,
           };
         });
 
@@ -1225,6 +1231,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Delete all integrations for this repository first (so they are not orphaned or cascade-deleted without user awareness)
+      const repoIntegrations = await storage.getIntegrationsByRepositoryId(repositoryId);
+      for (const integration of repoIntegrations) {
+        await storage.deleteIntegration(integration.id);
+      }
+
       await storage.deleteRepository(repositoryId);
       res.json({ success: true });
     } catch (error) {
@@ -1423,12 +1435,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/integrations", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const validatedData = insertIntegrationSchema.parse(req.body);
+      // Coerce numeric fields so string IDs from JSON/forms don't fail validation
+      const body = req.body as Record<string, unknown>;
+      const coercedBody = {
+        ...body,
+        userId: body.userId != null ? Number(body.userId) : userId,
+        repositoryId: body.repositoryId != null ? Number(body.repositoryId) : body.repositoryId,
+        slackWorkspaceId: body.slackWorkspaceId != null && body.slackWorkspaceId !== "" ? Number(body.slackWorkspaceId) : body.slackWorkspaceId,
+      };
+      const validatedData = insertIntegrationSchema.parse(coercedBody);
       
+      // Ensure repository exists and belongs to the user
+      const repository = await storage.getRepository(validatedData.repositoryId);
+      if (!repository) {
+        return res.status(404).json({ error: "Repository not found", details: "The selected repository does not exist." });
+      }
+      if (repository.userId !== userId) {
+        return res.status(403).json({ error: "Access denied", details: "You do not have access to this repository." });
+      }
+
       // Auto-enable the repository when creating an integration
       // This makes sense because if someone is creating an integration, they want to monitor the repository
-      const repository = await storage.getRepository(validatedData.repositoryId);
-      if (repository && repository.isActive === false) {
+      if (repository.isActive === false) {
         await storage.updateRepository(validatedData.repositoryId, { isActive: true });
       }
       
@@ -1486,6 +1514,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(integration);
     } catch (error) {
       console.error("Error creating integration:", error);
+      if (error instanceof z.ZodError) {
+        const first = error.errors[0];
+        const message = first ? `${first.path.join(".")}: ${first.message}` : "Validation failed";
+        return res.status(400).json({ error: "Invalid integration data", details: message });
+      }
       res.status(400).json({ error: "Invalid integration data" });
     }
   });

@@ -1226,6 +1226,7 @@ export default function Dashboard() {
           private: repositoryToDelete.private
         } : null}
         deleteRepositoryMutation={deleteRepositoryMutation}
+        integrationCount={repositoryToDelete?.integrationCount ?? 0}
       />
 
       <ConfirmIntegrationDeletionModal

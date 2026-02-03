@@ -170,6 +170,10 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(integrations).where(eq(integrations.userId, userId)) as any;
   }
 
+  async getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]> {
+    return await db.select().from(integrations).where(eq(integrations.repositoryId, repositoryId)) as any;
+  }
+
   async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
     const result = await db.select().from(integrations).where(eq(integrations.repositoryId, repositoryId)).limit(1);
     return result[0] as any;

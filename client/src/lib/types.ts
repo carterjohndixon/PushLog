@@ -40,6 +40,7 @@ export interface RepositoryCardData {
   lastPush?: string;
   totalPushes?: number;
   slackChannel?: string;
+  integrationCount?: number;
 }
 
 export interface SlackChannel {

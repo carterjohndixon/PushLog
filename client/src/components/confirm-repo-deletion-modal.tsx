@@ -30,6 +30,7 @@ interface ConfirmRepositoryDeletionModalProps {
   onOpenChange: (open: boolean) => void;
   repositoryToDelete: Repository | null;
   deleteRepositoryMutation: UseMutationResult<any, Error, number, unknown>;
+  integrationCount?: number;
 }
 
 export function ConfirmRepositoryDeletionModal({
@@ -37,6 +38,7 @@ export function ConfirmRepositoryDeletionModal({
   onOpenChange,
   repositoryToDelete,
   deleteRepositoryMutation,
+  integrationCount = 0,
 }: ConfirmRepositoryDeletionModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,19 +50,24 @@ export function ConfirmRepositoryDeletionModal({
           </div>
           <DialogDescription>
             Are you sure you want to delete this repository? This action cannot be undone.
+            {integrationCount > 0 && (
+              <span className="mt-2 block text-amber-600 dark:text-amber-500 font-medium">
+                This will also permanently remove {integrationCount} integration{integrationCount !== 1 ? "s" : ""} connected to this repository.
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
         
         {repositoryToDelete && (
           <div className="space-y-4">
-            <div className="p-4 bg-gray-50 rounded-lg">
+            <div className="p-4 bg-muted/50 rounded-lg">
               <div className="flex items-center space-x-3 mb-3">
                 <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
                   <Github className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-graphite">{repositoryToDelete.name}</p> 
-                  <p className="text-sm text-steel-gray">Repository</p>
+                  <p className="font-medium text-foreground">{repositoryToDelete.name}</p> 
+                  <p className="text-sm text-muted-foreground">Repository</p>
                 </div>
               </div>
             </div>
