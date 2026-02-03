@@ -2351,8 +2351,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Check if this is a real AI summary or a fallback. Some providers (e.g. OpenRouter/x-ai) return
         // valid summary content but report 0 tokens, so treat as real when we have valid content.
+        // When the API failed, ai.ts returns isFallback: true — do not treat that as real.
         const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
-        const isRealAISummary = summary.tokensUsed > 0 || hasValidContent;
+        const isRealAISummary = !summary.isFallback && (summary.tokensUsed > 0 || hasValidContent);
         
         if (!isRealAISummary) {
           console.error(`❌ AI summary invalid for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
@@ -2718,7 +2719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
-      const aiGenerated = summary.tokensUsed > 0 || hasValidContent;
+      const aiGenerated = !summary.isFallback && (summary.tokensUsed > 0 || hasValidContent);
       const aiSummary = aiGenerated ? summary.summary.summary : null;
       const aiImpact = aiGenerated ? summary.summary.impact : null;
       const aiCategory = aiGenerated ? summary.summary.category : null;

@@ -32,6 +32,8 @@ export interface AiUsageResult {
   tokensUsed: number;
   cost: number; // in cents
   actualModel?: string; // The actual model used by OpenAI
+  /** True when the API failed and we returned a generic fallback (do not treat as real AI summary). */
+  isFallback?: boolean;
 }
 
 export interface GenerateCodeSummaryOptions {
@@ -195,7 +197,8 @@ Respond with only valid JSON:
         details: `Changes made to ${pushData.filesChanged.join(', ')}`
       },
       tokensUsed: 0,
-      cost: 0
+      cost: 0,
+      isFallback: true,
     };
   }
 }
