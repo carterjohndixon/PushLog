@@ -33,6 +33,103 @@ interface IntegrationsProps {
   userProfile?: any;
 }
 
+function getStatusColor(status: string) {
+  switch (status) {
+    case 'active':
+      return 'bg-log-green text-white';
+    case 'paused':
+      return 'bg-steel-gray text-white';
+    case 'error':
+      return 'bg-red-500 text-white';
+    default:
+      return 'bg-steel-gray text-white';
+  }
+}
+
+interface IntegrationCardProps {
+  integration: ActiveIntegration;
+  onToggle: (integration: ActiveIntegration) => void;
+  onSettings: (integration: ActiveIntegration) => void;
+  onDelete: (integration: ActiveIntegration) => void;
+  togglePending: boolean;
+  deletePending: boolean;
+}
+
+function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending }: IntegrationCardProps) {
+  return (
+    <Card className="card-lift hover:shadow-md transition-shadow">
+      <CardContent className="p-6">
+        <div className="flex flex-col h-full">
+          <div className="flex items-start space-x-4 mb-4">
+            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+              integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
+            }`}>
+              <SiSlack className={`w-6 h-6 ${
+                integration.status === 'active' ? 'text-log-green' : 'text-steel-gray'
+              }`} />
+            </div>
+            <div className="flex-1">
+              <div className="mb-2">
+                <h3 className="font-semibold text-graphite">{integration.repositoryName}</h3>
+              </div>
+              <p className="text-sm text-steel-gray mb-2">
+                <SiSlack className="w-3 h-3 inline mr-1" />
+                #{integration.slackChannelName}
+              </p>
+              {integration.lastActivity && (
+                <div className="flex items-center space-x-1 text-xs text-steel-gray">
+                  <Activity className="w-3 h-3" />
+                  <span>Last activity: {integration.lastActivity}</span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="flex items-center space-x-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onToggle(integration)}
+                disabled={togglePending}
+                className="hover:bg-gray-100"
+              >
+                {integration.status === 'active' ? (
+                  <Pause className="w-4 h-4" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onSettings(integration)}
+                className="text-steel-gray hover:text-graphite"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDelete(integration)}
+                disabled={deletePending}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+            <Badge
+              variant={integration.status === 'active' ? "default" : "secondary"}
+              className={`text-xs ${getStatusColor(integration.status)}`}
+            >
+              {integration.status === 'active' ? 'Active' : 'Paused'}
+            </Badge>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Integrations({ userProfile }: IntegrationsProps) {
   const [isIntegrationModalOpen, setIsIntegrationModalOpen] = useState(false);
   const [isDeleteConfirmationOpen, setIsDeleteConfirmationOpen] = useState(false);
@@ -238,95 +335,6 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
         return <Clock className="w-4 h-4 text-steel-gray" />;
     }
   };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-log-green text-white';
-      case 'paused':
-        return 'bg-steel-gray text-white';
-      case 'error':
-        return 'bg-red-500 text-white';
-      default:
-        return 'bg-steel-gray text-white';
-    }
-  };
-
-  const IntegrationCard = ({ integration }: { integration: ActiveIntegration }) => (
-    <Card className="card-lift hover:shadow-md transition-shadow">
-      <CardContent className="p-6">
-        <div className="flex flex-col h-full">
-          {/* Top section with main content */}
-          <div className="flex items-start space-x-4 mb-4">
-            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-              integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
-            }`}>
-              <SiSlack className={`w-6 h-6 ${
-                integration.status === 'active' ? 'text-log-green' : 'text-steel-gray'
-              }`} />
-            </div>
-            <div className="flex-1">
-              <div className="mb-2">
-                <h3 className="font-semibold text-graphite">{integration.repositoryName}</h3>
-              </div>
-              <p className="text-sm text-steel-gray mb-2">
-                <SiSlack className="w-3 h-3 inline mr-1" />
-                #{integration.slackChannelName}
-              </p>
-              {integration.lastActivity && (
-                <div className="flex items-center space-x-1 text-xs text-steel-gray">
-                  <Activity className="w-3 h-3" />
-                  <span>Last activity: {integration.lastActivity}</span>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* Bottom section with actions and status */}
-          <div className="flex items-center justify-between mt-auto">
-            <div className="flex items-center space-x-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleToggleIntegration(integration)}
-                disabled={toggleIntegrationMutation.isPending}
-                className="hover:bg-gray-100"
-              >
-                {integration.status === 'active' ? (
-                  <Pause className="w-4 h-4" />
-                ) : (
-                  <Play className="w-4 h-4" />
-                )}
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleIntegrationSettings(integration)}
-                className="text-steel-gray hover:text-graphite"
-              >
-                <MoreVertical className="w-4 h-4" />
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDeleteIntegration(integration)}
-                disabled={deleteIntegrationMutation.isPending}
-                className="text-red-500 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-            <Badge 
-              variant={integration.status === 'active' ? "default" : "secondary"}
-              className={`text-xs ${getStatusColor(integration.status)}`}
-            >
-              {integration.status === 'active' ? 'Active' : 'Paused'}
-            </Badge>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 
   return (
     <div className="min-h-screen bg-forest-gradient">
@@ -547,7 +555,15 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
             ) : filteredIntegrations.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredIntegrations.map((integration) => (
-                  <IntegrationCard key={integration.id} integration={integration} />
+                  <IntegrationCard
+                    key={integration.id}
+                    integration={integration}
+                    onToggle={handleToggleIntegration}
+                    onSettings={handleIntegrationSettings}
+                    onDelete={handleDeleteIntegration}
+                    togglePending={toggleIntegrationMutation.isPending}
+                    deletePending={deleteIntegrationMutation.isPending}
+                  />
                 ))}
               </div>
             ) : (
@@ -580,7 +596,15 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
             {activeIntegrations.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {activeIntegrations.map((integration) => (
-                  <IntegrationCard key={integration.id} integration={integration} />
+                  <IntegrationCard
+                    key={integration.id}
+                    integration={integration}
+                    onToggle={handleToggleIntegration}
+                    onSettings={handleIntegrationSettings}
+                    onDelete={handleDeleteIntegration}
+                    togglePending={toggleIntegrationMutation.isPending}
+                    deletePending={deleteIntegrationMutation.isPending}
+                  />
                 ))}
               </div>
             ) : (
@@ -598,7 +622,15 @@ export default function Integrations({ userProfile }: IntegrationsProps) {
             {pausedIntegrations.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {pausedIntegrations.map((integration) => (
-                  <IntegrationCard key={integration.id} integration={integration} />
+                  <IntegrationCard
+                    key={integration.id}
+                    integration={integration}
+                    onToggle={handleToggleIntegration}
+                    onSettings={handleIntegrationSettings}
+                    onDelete={handleDeleteIntegration}
+                    togglePending={toggleIntegrationMutation.isPending}
+                    deletePending={deleteIntegrationMutation.isPending}
+                  />
                 ))}
               </div>
             ) : (
