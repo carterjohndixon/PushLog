@@ -137,7 +137,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.20",
     "cross-env": "^7.0.3",
-    "drizzle-kit": "^0.30.6",
+    "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.17",
@@ -149,5 +149,8 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "esbuild": "^0.25.0"
   }
 }

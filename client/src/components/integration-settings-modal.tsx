@@ -275,7 +275,6 @@ export function IntegrationSettingsModal({
                       if (!checked && aiModel.includes("/")) {
                         setAiModel("gpt-5.2");
                       }
-                      // When switching to OpenRouter, do not change aiModel; user must select from dropdown
                     }}
                   />
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
