@@ -32,8 +32,9 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
         if (response.ok) {
           const data = await response.json();
           if (data.success || data.id) {
+            const profile = data.user || data;
             setIsAuthenticated(true);
-            setUserProfile(data.user || data);
+            setUserProfile(profile);
             setLoading(false);
             return;
           }

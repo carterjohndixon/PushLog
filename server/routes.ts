@@ -2439,7 +2439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
         const isRealAISummary = !summary.isFallback && (summary.tokensUsed > 0 || hasValidContent);
         
-        if (!isRealAISummary) {
+        if (!isRealAISummary && !summary.isFallback) {
           console.error(`❌ AI summary invalid for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
         }
         

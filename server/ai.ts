@@ -146,13 +146,33 @@ Respond with only valid JSON:
     }
     
     // Parse the JSON response
-    let summary: CodeSummary;
+    let parsed: unknown;
     try {
-      summary = JSON.parse(jsonString) as CodeSummary;
+      parsed = JSON.parse(jsonString);
     } catch (parseError) {
       console.error('❌ Failed to parse AI response as JSON:', parseError);
       console.error('📄 Raw AI response:', jsonString);
       throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    }
+    
+    // Unwrap if model returned { "summary": { summary, impact, category, details } } (common with some OpenRouter models)
+    let summary: CodeSummary;
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      'summary' in parsed &&
+      parsed.summary &&
+      typeof parsed.summary === 'object' &&
+      'summary' in parsed.summary &&
+      'impact' in parsed.summary &&
+      'category' in parsed.summary
+    ) {
+      summary = parsed.summary as CodeSummary;
+    } else if (parsed && typeof parsed === 'object' && 'summary' in parsed && 'impact' in parsed && 'category' in parsed) {
+      summary = parsed as CodeSummary;
+    } else {
+      console.error('❌ Invalid AI response structure:', parsed);
+      throw new Error('AI response missing required fields');
     }
     
     // Validate summary structure
@@ -183,10 +203,11 @@ Respond with only valid JSON:
       actualModel // Include the actual model used
     };
   } catch (error) {
-    console.error('❌ Error generating code summary:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error(`❌ AI summary failed for model ${model}: ${errMsg}`);
     console.error('📊 Model attempted:', model);
     console.error('📊 Error details:', {
-      message: error instanceof Error ? error.message : String(error),
+      message: errMsg,
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : undefined
     });
