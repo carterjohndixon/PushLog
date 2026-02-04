@@ -257,12 +257,12 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
     }
 
-    const hasValidContent = summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category;
-    const aiGenerated = !!summary && !summary.isFallback && (summary.tokensUsed > 0 || !!hasValidContent);
-    const aiSummary = aiGenerated ? summary!.summary!.summary : null;
-    const aiImpact = aiGenerated ? summary!.summary!.impact : null;
-    const aiCategory = aiGenerated ? summary!.summary!.category : null;
-    const aiDetails = aiGenerated ? summary!.summary!.details : null;
+    const hasValidContent = !!(summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category);
+    const aiGenerated = !!summary && !summary.isFallback && hasValidContent;
+    const aiSummary = aiGenerated ? (summary!.summary!.summary ?? null) : null;
+    const aiImpact = aiGenerated ? (summary!.summary!.impact ?? null) : null;
+    const aiCategory = aiGenerated ? (summary!.summary!.category ?? null) : null;
+    const aiDetails = aiGenerated ? (summary!.summary!.details ?? null) : null;
 
     try {
       if (aiGenerated && aiSummary) {
