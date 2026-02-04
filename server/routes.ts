@@ -2154,6 +2154,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalCalls = openRouterRows.length;
       const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed ?? (u as any).tokens_used ?? 0), 0);
       const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + costFromRow(u), 0);
+      // Per-model totals (cost, call count, tokens) for /models page
+      const costByModelMap = new Map<string, { totalCostCents: number; totalCalls: number; totalTokens: number; lastAt: string | null }>();
+      for (const u of openRouterRows) {
+        const m = String(u?.model ?? "").trim() || "unknown";
+        const at = createdAtFromRow(u);
+        if (!costByModelMap.has(m)) {
+          costByModelMap.set(m, { totalCostCents: 0, totalCalls: 0, totalTokens: 0, lastAt: null });
+        }
+        const entry = costByModelMap.get(m)!;
+        entry.totalCostCents += costFromRow(u);
+        entry.totalCalls += 1;
+        entry.totalTokens += u.tokensUsed ?? (u as any).tokens_used ?? 0;
+        if (at && (!entry.lastAt || new Date(at).getTime() > new Date(entry.lastAt).getTime())) entry.lastAt = at;
+      }
+      const costByModel = Array.from(costByModelMap.entries()).map(([model, v]) => ({
+        model,
+        totalCostCents: v.totalCostCents,
+        totalCalls: v.totalCalls,
+        totalTokens: v.totalTokens,
+        lastAt: v.lastAt,
+      }));
       // Last-used per model (stored in UTC; frontend displays in user's timezone)
       let lastUsedByModel: Record<string, string> = {};
       try {
@@ -2176,6 +2197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalTokens,
         totalCostCents,
         totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 100).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
+        costByModel,
         lastUsedByModel,
         calls: openRouterRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);

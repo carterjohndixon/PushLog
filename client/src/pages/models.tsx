@@ -57,6 +57,16 @@ interface UsageCall {
   cost: number | null;
   costFormatted: string | null;
   createdAt: string;
+  /** OpenRouter generation id (gen-xxx) for usage-per-gen link */
+  generationId?: string | null;
+}
+
+interface CostByModelRow {
+  model: string;
+  totalCostCents: number;
+  totalCalls: number;
+  totalTokens: number;
+  lastAt: string | null;
 }
 
 interface OpenRouterUsage {
@@ -64,6 +74,8 @@ interface OpenRouterUsage {
   totalTokens: number;
   totalCostCents: number;
   totalCostFormatted: string | null;
+  /** Per-model totals from server */
+  costByModel?: CostByModelRow[];
   calls: UsageCall[];
   /** Last-used ISO timestamp per model (UTC); display with formatLocalDateTime for user's timezone */
   lastUsedByModel?: Record<string, string>;
@@ -82,14 +94,50 @@ interface IntegrationOption {
   aiModel?: string;
 }
 
+interface UsagePerGenResult {
+  generationId: string;
+  costUsd: number | null;
+  costCents: number | null;
+  tokensPrompt: number;
+  tokensCompletion: number;
+  tokensUsed: number;
+}
+
 export default function Models() {
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [contextFilter, setContextFilter] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<OpenRouterModel | null>(null);
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
+  const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
+  const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
+  const [usagePerGenLoading, setUsagePerGenLoading] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const fetchUsagePerGen = async (generationId: string) => {
+    setViewingGenerationId(generationId);
+    setUsagePerGenResult(null);
+    setUsagePerGenLoading(true);
+    try {
+      const res = await fetch(`/api/openrouter/usage-per-gen/${encodeURIComponent(generationId)}`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Failed to load");
+      setUsagePerGenResult({
+        generationId: data.generationId ?? generationId,
+        costUsd: data.costUsd ?? null,
+        costCents: data.costCents ?? null,
+        tokensPrompt: data.tokensPrompt ?? 0,
+        tokensCompletion: data.tokensCompletion ?? 0,
+        tokensUsed: data.tokensUsed ?? 0,
+      });
+    } catch (e) {
+      toast({ title: "Could not load usage", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+      setViewingGenerationId(null);
+    } finally {
+      setUsagePerGenLoading(false);
+    }
+  };
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -118,6 +166,7 @@ export default function Models() {
         totalTokens: data.totalTokens ?? 0,
         totalCostCents: data.totalCostCents ?? 0,
         totalCostFormatted: data.totalCostFormatted ?? null,
+        costByModel: Array.isArray(data.costByModel) ? data.costByModel : undefined,
         calls: Array.isArray(data.calls) ? data.calls : [],
         lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
       };
@@ -470,59 +519,96 @@ export default function Models() {
                     )}
                   </div>
                   {Array.isArray(usageData.calls) && usageData.calls.length > 0 ? (
-                    (() => {
-                      const byModel = usageData.calls.reduce<Record<string, { model: string; tokens: number; costCents: number; lastAt: string }>>((acc, c) => {
-                        const m = String(c?.model || "unknown");
-                        const createdAt = c?.createdAt != null ? String(c.createdAt) : "";
-                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: "" };
-                        acc[m].tokens += Number(c?.tokensUsed ?? 0);
-                        acc[m].costCents += Number(c?.cost ?? 0);
-                        const t = createdAt ? new Date(createdAt).getTime() : 0;
-                        const tPrev = acc[m].lastAt ? new Date(acc[m].lastAt).getTime() : 0;
-                        if (!Number.isNaN(t) && t > tPrev) acc[m].lastAt = createdAt;
-                        return acc;
-                      }, {});
-                      const rows = Object.values(byModel).sort((a, b) => {
-                        const tA = new Date(a.lastAt || 0).getTime();
-                        const tB = new Date(b.lastAt || 0).getTime();
-                        return tB - tA;
-                      });
-                      const formatLastUsed = (lastAt: string) => (lastAt ? formatLocalDateTime(lastAt) : "—");
-                      return (
-                        <div className="rounded-md border border-border overflow-hidden">
-                          <Table>
-                            <TableHeader>
-                              <TableRow className="bg-muted/50 border-border">
-                                <TableHead className="text-foreground">Model</TableHead>
-                                <TableHead className="text-foreground">Tokens</TableHead>
-                                <TableHead className="text-foreground">Cost</TableHead>
-                                <TableHead className="text-foreground">Last used</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {rows.map((r) => (
+                    <>
+                      <h4 className="text-sm font-semibold text-foreground mt-2 mb-2">Cost by model</h4>
+                      <div className="rounded-md border border-border overflow-hidden mb-6">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 border-border">
+                              <TableHead className="text-foreground">Model</TableHead>
+                              <TableHead className="text-foreground">Calls</TableHead>
+                              <TableHead className="text-foreground">Tokens</TableHead>
+                              <TableHead className="text-foreground">Cost</TableHead>
+                              <TableHead className="text-foreground">Last used</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(usageData.costByModel ?? [])
+                              .sort((a, b) => {
+                                const tA = (a.lastAt && !Number.isNaN(new Date(a.lastAt).getTime())) ? new Date(a.lastAt).getTime() : 0;
+                                const tB = (b.lastAt && !Number.isNaN(new Date(b.lastAt).getTime())) ? new Date(b.lastAt).getTime() : 0;
+                                return tB - tA;
+                              })
+                              .map((r) => (
                                 <TableRow key={r.model} className="border-border">
                                   <TableCell className="font-medium text-foreground">
                                     {getAiModelDisplayName(r.model)}
                                   </TableCell>
-                                  <TableCell className="text-muted-foreground">{r.tokens.toLocaleString()}</TableCell>
+                                  <TableCell className="text-muted-foreground">{r.totalCalls}</TableCell>
+                                  <TableCell className="text-muted-foreground">{r.totalTokens.toLocaleString()}</TableCell>
                                   <TableCell className="text-muted-foreground">
-                                    {r.costCents != null
-                                      ? r.costCents === 0
+                                    {r.totalCostCents != null
+                                      ? r.totalCostCents === 0
                                         ? "$0.00"
-                                        : `$${(r.costCents / 100).toFixed(4)}`
+                                        : `$${(r.totalCostCents / 100).toFixed(4)}`
                                       : "—"}
                                   </TableCell>
                                   <TableCell className="text-muted-foreground text-sm">
-                                    {formatLastUsed(r.lastAt)}
+                                    {r.lastAt ? formatLocalDateTime(r.lastAt) : "—"}
                                   </TableCell>
                                 </TableRow>
                               ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      );
-                    })()
+                          </TableBody>
+                        </Table>
+                      </div>
+                      <h4 className="text-sm font-semibold text-foreground mt-2 mb-2">Recent calls (usage per generation)</h4>
+                      <div className="rounded-md border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 border-border">
+                              <TableHead className="text-foreground">Model</TableHead>
+                              <TableHead className="text-foreground">Tokens</TableHead>
+                              <TableHead className="text-foreground">Cost</TableHead>
+                              <TableHead className="text-foreground">Date</TableHead>
+                              <TableHead className="text-foreground w-[80px]">View</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {usageData.calls.map((c) => (
+                              <TableRow key={c.id} className="border-border">
+                                <TableCell className="font-medium text-foreground text-sm">
+                                  {getAiModelDisplayName(c.model)}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">{c.costFormatted ?? "—"}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm">
+                                  {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
+                                </TableCell>
+                                <TableCell>
+                                  {c.generationId ? (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 text-xs text-log-green hover:text-log-green/90"
+                                      onClick={() => fetchUsagePerGen(c.generationId!)}
+                                      disabled={usagePerGenLoading && viewingGenerationId === c.generationId}
+                                    >
+                                      {usagePerGenLoading && viewingGenerationId === c.generationId ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <>View</>
+                                      )}
+                                    </Button>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
                   ) : (
                     <p className="text-sm text-muted-foreground">No OpenRouter calls yet. Use an integration with OpenRouter to see usage here.</p>
                   )}
@@ -630,6 +716,52 @@ export default function Models() {
             )}
           </CardContent>
         </Card>
+
+        {/* Usage per generation modal (View from Recent calls) */}
+        <Dialog
+          open={!!viewingGenerationId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setViewingGenerationId(null);
+              setUsagePerGenResult(null);
+            }
+          }}
+        >
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Usage for this call</DialogTitle>
+              <DialogDescription>
+                Fetched from OpenRouter for generation {viewingGenerationId?.slice(0, 20)}…
+              </DialogDescription>
+            </DialogHeader>
+            {usagePerGenLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : usagePerGenResult ? (
+              <div className="space-y-3 text-sm">
+                <p><span className="font-medium text-foreground">Cost:</span>{" "}
+                  {usagePerGenResult.costCents != null
+                    ? `$${(usagePerGenResult.costCents / 100).toFixed(4)}`
+                    : usagePerGenResult.costUsd != null
+                      ? `$${usagePerGenResult.costUsd.toFixed(4)}`
+                      : "—"}
+                </p>
+                <p><span className="font-medium text-foreground">Tokens (prompt):</span>{" "}{usagePerGenResult.tokensPrompt.toLocaleString()}</p>
+                <p><span className="font-medium text-foreground">Tokens (completion):</span>{" "}{usagePerGenResult.tokensCompletion.toLocaleString()}</p>
+                <p><span className="font-medium text-foreground">Total tokens:</span>{" "}{usagePerGenResult.tokensUsed.toLocaleString()}</p>
+                <a
+                  href={`https://openrouter.ai/api/v1/generation?id=${encodeURIComponent(usagePerGenResult.generationId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-log-green hover:underline text-sm"
+                >
+                  Open on OpenRouter <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         {/* Model detail modal */}
         <Dialog open={!!selectedModel} onOpenChange={(open) => !open && setSelectedModel(null)}>
