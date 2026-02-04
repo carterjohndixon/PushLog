@@ -104,7 +104,10 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
   }
   const payload = parseSlackCommandBody(rawBody.toString("utf8"));
   const getIntegrationsForChannel = async (teamId: string, channelId: string) => {
-    const integrations = await databaseStorage.getIntegrationsBySlackTeamAndChannel(teamId, channelId);
+    const tid = (teamId || "").trim();
+    const cid = (channelId || "").trim();
+    const integrations = await databaseStorage.getIntegrationsBySlackTeamAndChannel(tid, cid);
+    console.log("[Slack /pushlog] team_id=%s channel_id=%s channel_name=%s → %d integration(s)", tid, cid, (payload as any).channel_name ?? "", integrations.length);
     const result: { repositoryName: string; slackChannelName: string; aiModel: string | null; isActive: boolean }[] = [];
     for (const i of integrations) {
       const repo = await databaseStorage.getRepository(i.repositoryId);

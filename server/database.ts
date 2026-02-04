@@ -190,10 +190,18 @@ export class DatabaseStorage implements IStorage {
   async getIntegrationsBySlackTeamAndChannel(teamId: string, channelId: string): Promise<Integration[]> {
     const workspaces = await db.select({ id: slackWorkspaces.id }).from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId));
     const workspaceIds = workspaces.map((w) => w.id).filter((id): id is number => id != null);
-    if (workspaceIds.length === 0) return [];
-    return await db.select().from(integrations).where(
+    if (workspaceIds.length === 0) {
+      console.log("[Slack] No workspace found for team_id=%s (channel_id=%s). Check that this Slack workspace is connected in PushLog.", teamId, channelId);
+      return [];
+    }
+    const rows = await db.select().from(integrations).where(
       and(inArray(integrations.slackWorkspaceId, workspaceIds), eq(integrations.slackChannelId, channelId))
     ) as any;
+    if (rows.length === 0) {
+      const anyInChannel = await db.select({ id: integrations.id, slackChannelId: integrations.slackChannelId }).from(integrations).where(inArray(integrations.slackWorkspaceId, workspaceIds));
+      console.log("[Slack] No integration for channel_id=%s. Workspace has %d integration(s) in other channels: %s", channelId, anyInChannel.length, anyInChannel.map((i: any) => i.slackChannelId).join(", "));
+    }
+    return rows;
   }
 
   async createIntegration(integration: InsertIntegration): Promise<Integration> {
