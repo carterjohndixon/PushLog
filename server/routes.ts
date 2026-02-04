@@ -20,7 +20,8 @@ import {
   deleteWebhook,
   verifyWebhookSignature,
   validateGitHubToken,
-  getGitHubTokenScopes
+  getGitHubTokenScopes,
+  getCommit
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -185,8 +186,27 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       ...(commit?.modified || []),
       ...(commit?.removed || []),
     ];
-    const additions = commit?.additions ?? 0;
-    const deletions = commit?.deletions ?? 0;
+    let additions = commit?.additions ?? 0;
+    let deletions = commit?.deletions ?? 0;
+    // Push webhook payload does not include additions/deletions; fetch from GitHub API when missing
+    if (eventType === "push" && (additions === 0 && deletions === 0)) {
+      const repoName = repository.full_name || repository.name || "unknown";
+      const commitSha = commit?.id || commit?.sha;
+      if (repoName && commitSha && repoName.includes("/")) {
+        const [owner, repo] = repoName.split("/");
+        let token: string | null = process.env.GITHUB_PERSONAL_ACCESS_TOKEN || null;
+        if (!token?.trim()) {
+          const integrationUser = await databaseStorage.getUserById(integration.userId);
+          const raw = (integrationUser as any)?.githubToken;
+          token = raw && typeof raw === "string" ? raw : null;
+        }
+        const stats = await getCommit(owner, repo, commitSha, token);
+        if (stats) {
+          additions = stats.additions;
+          deletions = stats.deletions;
+        }
+      }
+    }
     const pushData = {
       repositoryName: repository.full_name || repository.name || "unknown",
       branch,
@@ -1997,8 +2017,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
           return {
-            id: u.id,
-            model: u.model,
+          id: u.id,
+          model: u.model,
             tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
             cost: c,
             costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : (c === 0 ? "$0.00" : null),

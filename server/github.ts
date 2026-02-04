@@ -350,6 +350,41 @@ export async function deleteWebhook(
 }
 
 /**
+ * Get a single commit (includes stats: additions, deletions).
+ * Use for push webhooks since the push payload does not include line counts.
+ * @param owner - repo owner
+ * @param repo - repo name (no .git)
+ * @param ref - commit SHA, branch name, or tag
+ * @param accessToken - optional; uses GITHUB_PERSONAL_ACCESS_TOKEN if not provided
+ */
+export async function getCommit(
+  owner: string,
+  repo: string,
+  ref: string,
+  accessToken?: string | null
+): Promise<{ additions: number; deletions: number } | null> {
+  const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(ref)}`,
+      { headers }
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    const additions = data.stats?.additions ?? 0;
+    const deletions = data.stats?.deletions ?? 0;
+    return { additions, deletions };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Verify webhook signature
  */
 export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
