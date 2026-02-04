@@ -23,6 +23,7 @@ interface NotificationMetadata {
   slackChannelName?: string;
   slackWorkspaceId?: number;
   integrationId?: number;
+  pushedAt?: string;
 }
 
 interface Notification {

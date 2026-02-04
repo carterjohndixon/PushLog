@@ -432,7 +432,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               {/* Basic Info for all notifications */}
               <div className="border-t border-border pt-4 text-sm text-muted-foreground">
                 <p><strong>Type:</strong> {(selectedNotification.type ?? '').replace(/_/g, ' ')}</p>
-                <p><strong>Created:</strong> {formatLocalDateTime(selectedNotification.createdAt ?? '')}</p>
+                <p><strong>Created:</strong> {formatLocalDateTime(metadata?.pushedAt || selectedNotification.createdAt || '')}</p>
                 {metadata?.pushEventId && (
                   <p><strong>Push Event ID:</strong> {metadata.pushEventId}</p>
                 )}

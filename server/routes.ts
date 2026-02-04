@@ -326,26 +326,29 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           cost: summary.cost ?? 0,
         });
       }
-      // In-app notification for the push (and that it was sent to Slack)
+      // Two notifications per push: the event + delivery confirmation (customer-friendly)
+      const repoDisplayName = storedRepo.name || pushData.repositoryName.split('/').pop() || pushData.repositoryName;
+      const sharedMetadata = {
+        pushEventId: pushEvent.id,
+        repositoryId: storedRepo.id,
+        repositoryName: pushData.repositoryName,
+        repositoryFullName: pushData.repositoryName,
+        branch: pushData.branch,
+        commitSha: pushData.commitSha,
+        commitMessage: pushData.commitMessage,
+        author: authorName,
+        aiGenerated: !!aiGenerated,
+        slackChannelName: integration.slackChannelName,
+        integrationId: integration.id,
+        pushedAt: pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : pushEvent.pushedAt,
+      };
       try {
         const pushNotif = await storage.createNotification({
           userId: integration.userId,
           type: 'push_event',
-          title: `Push to ${pushData.repositoryName}`,
-          message: `${pushData.commitMessage} on ${pushData.branch} — sent to #${integration.slackChannelName}`,
-          metadata: JSON.stringify({
-            pushEventId: pushEvent.id,
-            repositoryId: storedRepo.id,
-            repositoryName: pushData.repositoryName,
-            repositoryFullName: pushData.repositoryName,
-            branch: pushData.branch,
-            commitSha: pushData.commitSha,
-            commitMessage: pushData.commitMessage,
-            author: authorName,
-            aiGenerated: !!aiGenerated,
-            slackChannelName: integration.slackChannelName,
-            integrationId: integration.id,
-          }),
+          title: 'New Push Event',
+          message: `New push to ${repoDisplayName} by ${authorName}`,
+          metadata: JSON.stringify(sharedMetadata),
         });
         broadcastNotification(integration.userId, {
           id: pushNotif.id,
@@ -356,8 +359,26 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           createdAt: pushNotif.createdAt,
           isRead: false,
         });
+        const slackNotif = await storage.createNotification({
+          userId: integration.userId,
+          type: 'slack_message_sent',
+          title: 'Slack Message Sent',
+          message: aiGenerated
+            ? `AI summary sent to #${integration.slackChannelName} for ${repoDisplayName}`
+            : `Push notification sent to #${integration.slackChannelName} for ${repoDisplayName}`,
+          metadata: JSON.stringify(sharedMetadata),
+        });
+        broadcastNotification(integration.userId, {
+          id: slackNotif.id,
+          type: 'slack_message_sent',
+          title: slackNotif.title,
+          message: slackNotif.message,
+          metadata: slackNotif.metadata,
+          createdAt: slackNotif.createdAt,
+          isRead: false,
+        });
       } catch (notifErr) {
-        console.warn("⚠️ [Webhook] Failed to create push notification (non-fatal):", notifErr);
+        console.warn("⚠️ [Webhook] Failed to create notifications (non-fatal):", notifErr);
       }
     } catch (recordErr) {
       console.warn("⚠️ [Webhook] Failed to record push event/usage (non-fatal):", recordErr);
