@@ -8,7 +8,8 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
-import { registerRoutes, slackCommandsHandler } from "./routes";
+import { registerRoutes, slackCommandsHandler, githubWebhookHandler } from "./routes";
+import { verifyWebhookSignature } from "./github";
 import pkg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -149,11 +150,10 @@ app.use('/api/payments/', paymentLimiter);
 app.use(compression());
 
 // CORS configuration
-// Allow both production domain and localhost (for development)
+// Allow production domain only
 app.use(cors({
   origin: [
-    'https://pushlog.ai', 
-    
+    'https://pushlog.ai'
   ],
   credentials: true, // Required for cookies to work
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -168,6 +168,34 @@ app.post(
   "/api/slack/commands",
   express.raw({ type: "application/x-www-form-urlencoded", limit: "1mb" }),
   slackCommandsHandler
+);
+
+// GitHub webhook: must receive raw body for signature verification (before body parsers)
+app.post(
+  "/api/webhooks/github",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const raw = req.body;
+    if (!raw || !Buffer.isBuffer(raw)) {
+      res.status(400).json({ error: "Invalid body" });
+      return;
+    }
+    const sig = req.headers["x-hub-signature-256"] as string | undefined;
+    const secret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
+    if (sig && !verifyWebhookSignature(raw.toString("utf8"), sig, secret)) {
+      console.error("❌ Invalid webhook signature");
+      res.status(401).json({ error: "Invalid signature" });
+      return;
+    }
+    try {
+      (req as any).body = JSON.parse(raw.toString("utf8"));
+    } catch {
+      res.status(400).json({ error: "Invalid JSON" });
+      return;
+    }
+    next();
+  },
+  githubWebhookHandler
 );
 
 // Body parsing with security limits

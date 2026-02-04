@@ -129,6 +129,161 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
   }
 }
 
+/** GitHub webhook handler. Expects req.body to be already parsed (JSON). Mount in index with express.raw() and a middleware that verifies signature then parses body. */
+export async function githubWebhookHandler(req: Request, res: Response): Promise<void> {
+  try {
+    const eventType = req.headers["x-github-event"];
+    const repoName = req.body?.repository?.full_name || req.body?.repository?.name || "unknown";
+    console.log(`📥 [Webhook] Received ${eventType} for ${repoName}`);
+    let branch: string, commit: any, repository: any;
+    if (eventType === "pull_request") {
+      const { pull_request, action } = req.body;
+      if (!pull_request) {
+        res.status(200).json({ message: "Not a pull request event, skipping" });
+        return;
+      }
+      if (action !== "closed" || !pull_request.merged) {
+        res.status(200).json({ message: "Pull request not merged, skipping" });
+        return;
+      }
+      branch = pull_request.base.ref;
+      commit = { id: pull_request.merge_commit_sha, message: pull_request.title, author: { name: pull_request.user.login }, timestamp: pull_request.merged_at, additions: pull_request.additions || 0, deletions: pull_request.deletions || 0 };
+      repository = req.body.repository;
+    } else if (eventType === "push") {
+      const { ref, commits, repository: repo } = req.body;
+      if (!ref || !commits?.length) {
+        res.status(200).json({ message: "No commits to process" });
+        return;
+      }
+      branch = ref.replace("refs/heads/", "");
+      commit = commits[0];
+      repository = repo;
+    } else {
+      res.status(200).json({ message: `Unsupported event type: ${eventType}` });
+      return;
+    }
+    if (!repository) {
+      res.status(200).json({ message: "No repository information found" });
+      return;
+    }
+    const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
+    if (!storedRepo || !storedRepo.isActive) {
+      console.log(`⚠️ [Webhook] Repository ${repository.full_name} (GitHub id ${repository.id}) not in DB or not active.`);
+      res.status(200).json({ message: "Repository not active" });
+      return;
+    }
+    const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
+    if (!integration || !integration.isActive) {
+      console.log(`⚠️ [Webhook] No active integration for ${repository.full_name}.`);
+      res.status(200).json({ message: "Integration not active" });
+      return;
+    }
+
+    const authorName = commit?.author?.name || commit?.author?.username || "Unknown";
+    const filesFromCommit = [
+      ...(commit?.added || []),
+      ...(commit?.modified || []),
+      ...(commit?.removed || []),
+    ];
+    const additions = commit?.additions ?? 0;
+    const deletions = commit?.deletions ?? 0;
+    const pushData = {
+      repositoryName: repository.full_name || repository.name || "unknown",
+      branch,
+      commitMessage: commit?.message?.trim() || "(no message)",
+      filesChanged: filesFromCommit.length ? filesFromCommit : ["(no file list)"],
+      additions,
+      deletions,
+      commitSha: commit?.id || commit?.sha || "unknown",
+    };
+
+    let workspaceToken: string | null = null;
+    if (integration.slackWorkspaceId) {
+      const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
+      workspaceToken = workspace?.accessToken ?? null;
+    }
+    if (!workspaceToken) {
+      console.error(`⚠️ [Webhook] No Slack workspace token for integration ${integration.id}.`);
+      res.status(200).json({ message: "Slack workspace not configured" });
+      return;
+    }
+
+    console.log(`📤 [Webhook] Processing push: ${repository.full_name} @ ${branch} → Slack #${integration.slackChannelName}`);
+
+    const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
+    const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
+    const maxTokens = integration.maxTokens || 350;
+    let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
+    if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
+    if (!openRouterKeyRaw?.trim()) {
+      const userForKey = await databaseStorage.getUserById(integration.userId);
+      if ((userForKey as any)?.openRouterApiKey) {
+        openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
+      }
+    }
+    if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
+    const useOpenRouter = !!openRouterKeyRaw?.trim();
+    const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+
+    let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
+    try {
+      summary = await generateCodeSummary(
+        pushData,
+        aiModel,
+        maxTokens,
+        useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
+      );
+    } catch (aiErr) {
+      console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
+    }
+
+    const hasValidContent = summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category;
+    const aiGenerated = !!summary && !summary.isFallback && (summary.tokensUsed > 0 || !!hasValidContent);
+    const aiSummary = aiGenerated ? summary!.summary!.summary : null;
+    const aiImpact = aiGenerated ? summary!.summary!.impact : null;
+    const aiCategory = aiGenerated ? summary!.summary!.category : null;
+    const aiDetails = aiGenerated ? summary!.summary!.details : null;
+
+    try {
+      if (aiGenerated && aiSummary) {
+        const slackMessage = await generateSlackMessage(pushData, {
+          summary: aiSummary,
+          impact: aiImpact as "low" | "medium" | "high",
+          category: aiCategory!,
+          details: aiDetails!,
+        });
+        await sendSlackMessage(workspaceToken, {
+          channel: integration.slackChannelId,
+          text: slackMessage,
+          unfurl_links: false,
+        });
+        console.log(`✅ [Webhook] AI Slack message sent to #${integration.slackChannelName}`);
+      } else {
+        await sendPushNotification(
+          workspaceToken,
+          integration.slackChannelId,
+          pushData.repositoryName,
+          pushData.commitMessage,
+          authorName,
+          pushData.branch,
+          pushData.commitSha,
+          Boolean(integration.includeCommitSummaries)
+        );
+        console.log(`✅ [Webhook] Push notification sent to #${integration.slackChannelName}`);
+      }
+    } catch (slackErr) {
+      console.error("❌ [Webhook] Failed to send Slack message:", slackErr);
+      res.status(500).json({ error: "Webhook processed but Slack delivery failed" });
+      return;
+    }
+
+    res.status(200).json({ message: "Webhook processed successfully" });
+  } catch (error) {
+    console.error("❌ Webhook processing error:", error);
+    res.status(500).json({ error: "Webhook processing failed" });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints
   app.get("/health", (req, res) => {
@@ -2193,588 +2348,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // GitHub webhook endpoint
-  // Get a webhook for the user's repo? Use: POST /repos/{owner}/{repo}/hooks
-  app.post("/api/webhooks/github", async (req, res) => {
-    try {
-      const signature = req.headers['x-hub-signature-256'] as string;
-      const payload = JSON.stringify(req.body);
-      
-      // Verify webhook signature
-      const webhookSecret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
-      if (signature && !verifyWebhookSignature(payload, signature, webhookSecret)) {
-        console.error('❌ Invalid webhook signature');
-        return res.status(401).json({ error: "Invalid signature" });
-      }
-
-      // Handle both push and pull_request events
-      const eventType = req.headers['x-github-event'];
-      const repoName = req.body.repository?.full_name || req.body.repository?.name || "unknown";
-      console.log(`📥 [Webhook] Received ${eventType} for ${repoName}`);
-      let branch, commit, repository;
-      
-      if (eventType === 'pull_request') {
-        // Handle pull_request events (PR merges)
-        const { pull_request, action } = req.body;
-        
-        if (!pull_request) {
-          return res.status(200).json({ message: "Not a pull request event, skipping" });
-        }
-        
-        // Only process when PR is merged (not just closed)
-        if (action !== 'closed' || !pull_request.merged) {
-          return res.status(200).json({ message: "Pull request not merged, skipping" });
-        }
-        
-        branch = pull_request.base.ref;
-        commit = {
-          id: pull_request.merge_commit_sha,
-          message: pull_request.title,
-          author: { name: pull_request.user.login },
-          timestamp: pull_request.merged_at,
-          additions: pull_request.additions || 0,
-          deletions: pull_request.deletions || 0
-        };
-        repository = req.body.repository;
-        
-      } else if (eventType === 'push') {
-        // Handle push events (direct pushes to branches)
-        const { ref, commits, repository: repo } = req.body;
-        
-        // Extract branch name from ref
-        branch = ref.replace('refs/heads/', '');
-        
-        if (!commits || commits.length === 0) {
-          return res.status(200).json({ message: "No commits to process" });
-        }
-        
-        commit = commits[0]; // Process the first commit
-        repository = repo;
-        
-      } else {
-        return res.status(200).json({ message: `Unsupported event type: ${eventType}` });
-      }
-      
-      if (!repository) {
-        return res.status(200).json({ message: "No repository information found" });
-      }
-
-      // Find the repository in our database
-      const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
-      
-      if (!storedRepo || !storedRepo.isActive) {
-        console.log(`⚠️ [Webhook] Repository ${repository.full_name} (GitHub id ${repository.id}) not in DB or not active. Add/reconnect the repo in PushLog.`);
-        return res.status(200).json({ message: "Repository not active" });
-      }
-
-      // Get the integration for this repository
-      const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
-      
-      if (!integration || !integration.isActive) {
-        console.log(`⚠️ [Webhook] No active integration for ${repository.full_name}. Create an integration on the Dashboard.`);
-        return res.status(200).json({ message: "Integration not active" });
-      }
-
-      console.log(`📤 [Webhook] Processing push: ${repository.full_name} @ ${branch} → Slack #${integration.slackChannelName}`);
-
-      // Use integration's AI model; support both camelCase (aiModel) and snake_case (ai_model) from DB/driver
-      const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
-      const integrationAiModelStr = (typeof integrationAiModel === 'string' && integrationAiModel.trim()) ? integrationAiModel.trim() : null;
-
-      // Check branch filtering based on repository and integration settings
-      const monitorAllBranches = storedRepo.monitorAllBranches ?? false;
-      const notificationLevel = integration.notificationLevel || 'all';
-      
-      // If monitorAllBranches is false, only process main/master
-      if (!monitorAllBranches && branch !== 'main' && branch !== 'master') {
-        return res.status(200).json({ message: `Push to ${branch} branch ignored, only processing main/master` });
-      }
-      
-      // Check notification level filtering
-      if (notificationLevel === 'main_only') {
-        if (branch !== 'main' && branch !== 'master') {
-          return res.status(200).json({ message: `Push to ${branch} branch ignored due to 'main_only' notification level` });
-        }
-      }
-
-      // Fetch commit stats (and file-level data) from GitHub API before creating push event so we can store additions/deletions and file breakdown for analytics
-      const filesChanged = [
-        ...(commit.added || []),
-        ...(commit.modified || []),
-        ...(commit.removed || [])
-      ];
-      let finalAdditions = commit.additions ?? 0;
-      let finalDeletions = commit.deletions ?? 0;
-      type CommitFile = { filename: string; additions?: number; deletions?: number };
-      let commitDataFromApi: { files?: CommitFile[]; stats?: { additions?: number; deletions?: number } } | null = null;
-
-      const hasWebhookStats = commit.additions !== undefined && commit.deletions !== undefined;
-      if (!hasWebhookStats && filesChanged.length > 0) {
-        try {
-          const [owner, repoName] = repository.full_name.split('/');
-          const githubResponse = await fetch(
-            `https://api.github.com/repos/${owner}/${repoName}/commits/${commit.id}`,
-            {
-              headers: {
-                'Authorization': `token ${process.env.GITHUB_PERSONAL_ACCESS_TOKEN || ''}`,
-                'Accept': 'application/vnd.github.v3+json'
-              }
-            }
-          );
-          if (githubResponse.ok) {
-            const commitData = await githubResponse.json();
-            commitDataFromApi = commitData;
-            finalAdditions = commitData.stats?.additions ?? 0;
-            finalDeletions = commitData.stats?.deletions ?? 0;
-            console.log(`✅ Fetched stats from GitHub API: +${finalAdditions} -${finalDeletions}`);
-          } else {
-            finalAdditions = commit.additions ?? 0;
-            finalDeletions = commit.deletions ?? 0;
-          }
-        } catch (apiError) {
-          console.error('Failed to fetch commit stats from GitHub API:', apiError);
-          finalAdditions = commit.additions ?? 0;
-          finalDeletions = commit.deletions ?? 0;
-        }
-      } else {
-        finalAdditions = commit.additions ?? 0;
-        finalDeletions = commit.deletions ?? 0;
-      }
-
-      // Store push event (with additions/deletions for analytics)
-      const pushEvent = await storage.createPushEvent({
-        repositoryId: storedRepo.id,
-        integrationId: integration.id,
-        commitSha: commit.id,
-        commitMessage: commit.message,
-        author: commit.author.name,
-        branch,
-        pushedAt: new Date(commit.timestamp),
-        notificationSent: false,
-        additions: finalAdditions,
-        deletions: finalDeletions,
-        aiSummary: null,
-        aiImpact: null,
-        aiCategory: null,
-        aiDetails: null,
-        aiGenerated: false,
-      });
-
-      // Store file-level stats for analytics (lines changed per file)
-      if (commitDataFromApi?.files?.length) {
-        try {
-          for (const f of commitDataFromApi.files) {
-            await databaseStorage.createPushEventFile({
-              pushEventId: pushEvent.id,
-              filePath: f.filename,
-              additions: f.additions ?? 0,
-              deletions: f.deletions ?? 0,
-            });
-          }
-        } catch (fileErr) {
-          console.error('Failed to store push event files:', fileErr);
-        }
-      }
-
-      // Generate AI summary for the commit
-      let aiSummary = null;
-      let aiImpact = null;
-      let aiCategory = null;
-      let aiDetails = null;
-      let aiGenerated = false;
-      let actualAiModelUsed = null as string | null;
-
-      let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
-      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) {
-        if (openRouterKeyRaw) console.warn("⚠️ Stored OpenRouter key could not be decrypted (wrong ENCRYPTION_KEY?). Re-add key on Models page.");
-        openRouterKeyRaw = null;
-      }
-      if (!openRouterKeyRaw?.trim()) {
-        const userForKey = await databaseStorage.getUserById(storedRepo.userId);
-        if ((userForKey as any)?.openRouterApiKey) {
-          openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
-        }
-      }
-      if (!looksLikeOpenRouterKey(openRouterKeyRaw)) {
-        if (openRouterKeyRaw) console.warn("⚠️ Stored OpenRouter key could not be decrypted (wrong ENCRYPTION_KEY?). Re-add key on Models page.");
-        openRouterKeyRaw = null;
-      }
-      const useOpenRouter = !!openRouterKeyRaw?.trim();
-
-      try {
-        const pushData = {
-          repositoryName: repository.full_name,
-          branch,
-          commitMessage: commit.message,
-          filesChanged,
-          additions: finalAdditions, // Use the calculated values from GitHub API
-          deletions: finalDeletions, // Use the calculated values from GitHub API
-          commitSha: commit.id,
-        };
-
-        // OpenRouter: use aiModel as-is (e.g. openai/gpt-4o). PushLog: normalize to lowercase.
-        const aiModel = useOpenRouter
-          ? (integrationAiModelStr || 'openai/gpt-4o').trim()
-          : (integrationAiModelStr || 'gpt-5.2').toLowerCase();
-        console.log(`🤖 Using ${useOpenRouter ? 'OpenRouter' : 'PushLog'} AI for integration ${integration.id}: ${aiModel}`);
-        const maxTokens = integration.maxTokens || 350;
-        
-        let summary;
-        try {
-          summary = await generateCodeSummary(
-            pushData,
-            aiModel,
-            maxTokens,
-            useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
-          );
-        } catch (aiError) {
-          console.error(`❌ AI generation error for model ${aiModel}:`, aiError);
-          console.error(`❌ Error details:`, {
-            message: aiError instanceof Error ? aiError.message : String(aiError),
-            stack: aiError instanceof Error ? aiError.stack : undefined
-          });
-          // Re-throw to be handled by outer catch
-          throw aiError;
-        }
-        
-        // Check if this is a real AI summary or a fallback. Some providers (e.g. OpenRouter/x-ai) return
-        // valid summary content but report 0 tokens, so treat as real when we have valid content.
-        // When the API failed, ai.ts returns isFallback: true — do not treat that as real.
-        const hasValidContent = summary.summary?.summary?.trim() && summary.summary?.impact && summary.summary?.category;
-        const isRealAISummary = !summary.isFallback && (summary.tokensUsed > 0 || hasValidContent);
-        
-        if (!isRealAISummary && !summary.isFallback) {
-          console.error(`❌ AI summary invalid for model ${aiModel}. Summary object:`, JSON.stringify(summary, null, 2));
-        }
-        
-        if (isRealAISummary) {
-          aiSummary = summary.summary.summary;
-          aiImpact = summary.summary.impact;
-          aiCategory = summary.summary.category;
-          aiDetails = summary.summary.details;
-          aiGenerated = true;
-          actualAiModelUsed = summary.actualModel || aiModel;
-          console.log(`✅ AI summary generated successfully - Model: ${actualAiModelUsed}, Tokens: ${summary.tokensUsed}${summary.tokensUsed === 0 ? ' (provider did not report usage)' : ''}`);
-        } else {
-          // Fallback summary - AI generation failed
-          console.warn(`⚠️ AI summary generation failed for model ${aiModel}, using fallback summary`);
-          console.warn(`⚠️ Fallback summary: ${summary.summary.summary}`);
-          // Don't set aiGenerated = true for fallback summaries
-          aiGenerated = false;
-          aiSummary = null;
-          aiImpact = null;
-          aiCategory = null;
-          aiDetails = null;
-        }
-
-        // Deduct AI credits from user (only when using PushLog AI; OpenRouter uses user's own key)
-        if (!useOpenRouter) {
-          try {
-            const user = await databaseStorage.getUserById(storedRepo.userId);
-            if (user) {
-              const currentCredits = user.aiCredits || 0;
-              const creditsToDeduct = Math.ceil(summary.tokensUsed / 10); // 1 credit per 10 tokens
-              
-              if (currentCredits >= creditsToDeduct) {
-                const newCredits = currentCredits - creditsToDeduct;
-                await databaseStorage.updateUser(user.id, { aiCredits: newCredits });
-                
-                // Check if credits are low (less than 50)
-                if (newCredits < 50) {
-                  await storage.createNotification({
-                    userId: user.id,
-                    type: 'low_credits',
-                    title: 'Low AI Credits',
-                    message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`
-                  });
-                  
-                  // Broadcast notification for real-time updates
-                  broadcastNotification(user.id, {
-                    type: 'low_credits',
-                    title: 'Low AI Credits',
-                    message: `You have ${newCredits} AI credits remaining. Consider purchasing more to continue receiving AI summaries.`,
-                    createdAt: new Date().toISOString()
-                  });
-                }
-              } else {
-                // Create notification for insufficient credits
-                await storage.createNotification({
-                  userId: user.id,
-                  type: 'no_credits',
-                  title: 'No AI Credits',
-                  message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.'
-                });
-                
-                // Broadcast notification for real-time updates
-                broadcastNotification(user.id, {
-                  type: 'no_credits',
-                  title: 'No AI Credits',
-                  message: 'You have run out of AI credits. AI summaries are disabled until you purchase more credits.',
-                  createdAt: new Date().toISOString()
-                });
-                
-                // Skip AI processing for this push
-                aiGenerated = false;
-                aiSummary = null;
-                aiImpact = null;
-                aiCategory = null;
-                aiDetails = null;
-              }
-            }
-          } catch (creditError) {
-            console.error('Error processing credits:', creditError);
-            // Continue with AI processing even if credit deduction fails
-          }
-        }
-
-        // Update the push event with AI summary (only if we got a real AI summary)
-        await storage.updatePushEvent(pushEvent.id, {
-          aiSummary,
-          aiImpact,
-          aiCategory,
-          aiDetails,
-          aiGenerated: aiGenerated,
-        });
-
-        // Record AI usage per user so analytics can show "most used model"
-        if (aiGenerated && summary) {
-          try {
-            await databaseStorage.createAiUsage({
-              userId: storedRepo.userId,
-              integrationId: integration.id,
-              pushEventId: pushEvent.id,
-              model: actualAiModelUsed || (integrationAiModelStr ?? 'gpt-5.2'),
-              tokensUsed: summary.tokensUsed || 0,
-              cost: summary.cost || 0,
-            });
-          } catch (usageErr) {
-            console.error('Failed to record AI usage:', usageErr);
-          }
-        }
-      } catch (aiError) {
-        console.error('Failed to generate AI summary:', aiError);
-        // Continue without AI summary
-      }
-      
-      // Store push_event notification in database with metadata (do this BEFORE Slack to ensure it's always created)
-      try {
-        const pushNotification = await storage.createNotification({
-          userId: storedRepo.userId,
-          type: 'push_event',
-          title: 'New Push Event',
-          message: `New push to ${repository.name} by ${commit.author.name}`,
-          metadata: JSON.stringify({
-            pushEventId: pushEvent.id,
-            repositoryId: repository.id,
-            repositoryName: repository.name,
-            repositoryFullName: repository.full_name,
-            branch: branch,
-            commitSha: commit.id,
-            commitMessage: commit.message,
-            author: commit.author.name,
-            additions: finalAdditions,
-            deletions: finalDeletions,
-            filesChanged: filesChanged.length,
-            aiGenerated: aiGenerated,
-            aiModel: aiGenerated ? (actualAiModelUsed ?? integrationAiModelStr ?? integration.aiModel) : null,
-            aiSummary: aiGenerated ? aiSummary : null,
-            aiImpact: aiGenerated ? aiImpact : null,
-            aiCategory: aiGenerated ? aiCategory : null
-          })
-        });
-        console.log(`✅ Created push_event notification ${pushNotification.id} for user ${storedRepo.userId}`);
-        
-        // Broadcast push notification via SSE for real-time updates (use actual DB notification)
-        const pushNotificationSSE = {
-          id: pushNotification.id,
-          type: pushNotification.type,
-          title: pushNotification.title,
-          message: pushNotification.message,
-          metadata: pushNotification.metadata,
-          isRead: pushNotification.isRead,
-          createdAt: pushNotification.createdAt
-        };
-        broadcastNotification(storedRepo.userId, pushNotificationSSE);
-      } catch (pushNotificationError) {
-        console.error("❌ Failed to create push_event notification:", pushNotificationError);
-        console.error("Push notification error details:", {
-          userId: storedRepo.userId,
-          pushEventId: pushEvent.id,
-          error: pushNotificationError instanceof Error ? pushNotificationError.message : String(pushNotificationError),
-          stack: pushNotificationError instanceof Error ? pushNotificationError.stack : undefined
-        });
-      }
-      
-        try {
-          // Get workspace access token for sending Slack messages
-          let workspaceToken: string | null = null;
-          if (integration.slackWorkspaceId) {
-            const workspace = await databaseStorage.getSlackWorkspace(integration.slackWorkspaceId);
-            if (!workspace) {
-              console.error(`❌ Workspace ${integration.slackWorkspaceId} not found for integration ${integration.id}`);
-              throw new Error(`Workspace ${integration.slackWorkspaceId} not found`);
-            }
-            workspaceToken = workspace.accessToken || null;
-            console.log(`✅ Found workspace token for integration ${integration.id}, workspace: ${workspace.teamName}`);
-          } else {
-            console.error(`❌ Integration ${integration.id} has no slackWorkspaceId`);
-            throw new Error('Integration has no Slack workspace ID');
-          }
-          
-          if (!workspaceToken) {
-            console.error(`❌ No workspace token found for integration ${integration.id}`);
-            throw new Error('No workspace access token available');
-          }
-
-          console.log(`📤 Sending Slack notification to channel ${integration.slackChannelId} (${integration.slackChannelName})`);
-
-          if (aiGenerated && aiSummary) {
-            // Use AI-enhanced Slack message with corrected stats
-            const pushData = {
-              repositoryName: repository.full_name,
-              branch,
-              commitMessage: commit.message,
-              filesChanged: (commit.added || []).concat(commit.modified || []).concat(commit.removed || []),
-              additions: finalAdditions, // Use the corrected GitHub API data
-              deletions: finalDeletions, // Use the corrected GitHub API data
-              commitSha: commit.id,
-            };
-
-          const summary = { 
-            summary: aiSummary!, 
-            impact: aiImpact as 'low' | 'medium' | 'high', 
-            category: aiCategory!, 
-            details: aiDetails! 
-          };
-          
-          const slackMessage = await generateSlackMessage(pushData, summary);
-          
-          const result = await sendSlackMessage(workspaceToken, {
-            channel: integration.slackChannelId,
-            text: slackMessage,
-            unfurl_links: false
-          });
-          console.log(`✅ AI-enhanced Slack message sent successfully. Timestamp: ${result}`);
-        } else {
-          // Use regular push notification
-          console.log(`📤 Sending regular push notification (AI not generated or disabled)`);
-          const result = await sendPushNotification(
-            workspaceToken,
-            integration.slackChannelId,
-            repository.full_name,
-            commit.message,
-            commit.author.name,
-            branch,
-            commit.id,
-            Boolean(integration.includeCommitSummaries)
-          );
-          console.log(`✅ Regular Slack notification sent successfully. Timestamp: ${result}`);
-        }
-
-        // Mark notification as sent
-        await storage.updatePushEvent(pushEvent.id, { notificationSent: true });
-        console.log(`✅ Push event ${pushEvent.id} marked as notification sent`);
-
-        // Store Slack notification in database with metadata (only if Slack was sent successfully)
-        try {
-          const slackNotification = await storage.createNotification({
-            userId: storedRepo.userId,
-            type: 'slack_message_sent',
-            title: 'Slack Message Sent',
-            message: `Push notification sent to ${integration.slackChannelName} for ${repository.name}`,
-            metadata: JSON.stringify({
-              pushEventId: pushEvent.id,
-              repositoryId: repository.id,
-              repositoryName: repository.name,
-              repositoryFullName: repository.full_name,
-              branch: branch,
-              commitSha: commit.id,
-              commitMessage: commit.message,
-              author: commit.author.name,
-              slackChannelId: integration.slackChannelId,
-              slackChannelName: integration.slackChannelName,
-              slackWorkspaceId: integration.slackWorkspaceId,
-              integrationId: integration.id,
-              aiGenerated: aiGenerated,
-              aiModel: aiGenerated ? (actualAiModelUsed ?? integrationAiModelStr ?? integration.aiModel) : null,
-              aiSummary: aiGenerated ? aiSummary : null,
-              aiImpact: aiGenerated ? aiImpact : null,
-              aiCategory: aiGenerated ? aiCategory : null,
-              additions: finalAdditions,
-              deletions: finalDeletions,
-              filesChanged: filesChanged.length
-            })
-          });
-          console.log(`✅ Created slack_message_sent notification ${slackNotification.id} for user ${storedRepo.userId}`);
-          
-          // Broadcast Slack notification via SSE for real-time updates (use actual DB notification)
-          const slackNotificationSSE = {
-            id: slackNotification.id,
-            type: slackNotification.type,
-            title: slackNotification.title,
-            message: slackNotification.message,
-            metadata: slackNotification.metadata,
-            isRead: slackNotification.isRead,
-            createdAt: slackNotification.createdAt
-          };
-          broadcastNotification(storedRepo.userId, slackNotificationSSE);
-        } catch (slackNotificationError) {
-          console.error("❌ Failed to create slack_message_sent notification:", slackNotificationError);
-          console.error("Slack notification error details:", {
-            userId: storedRepo.userId,
-            pushEventId: pushEvent.id,
-            error: slackNotificationError instanceof Error ? slackNotificationError.message : String(slackNotificationError),
-            stack: slackNotificationError instanceof Error ? slackNotificationError.stack : undefined
-          });
-        }
-      } catch (slackError) {
-        const errMessage = slackError instanceof Error ? slackError.message : String(slackError);
-        console.error("❌ Failed to send Slack notification:", slackError);
-        console.error("Error details:", {
-          integrationId: integration.id,
-          slackWorkspaceId: integration.slackWorkspaceId,
-          slackChannelId: integration.slackChannelId,
-          error: errMessage,
-          stack: slackError instanceof Error ? slackError.stack : undefined
-        });
-        // Notify user in app so they know Slack delivery failed
-        try {
-          const failNotification = await storage.createNotification({
-            userId: storedRepo.userId,
-            type: 'slack_delivery_failed',
-            title: 'Slack delivery failed',
-            message: `Could not send push notification to #${integration.slackChannelName}: ${errMessage}`,
-            metadata: JSON.stringify({
-              integrationId: integration.id,
-              slackChannelId: integration.slackChannelId,
-              slackChannelName: integration.slackChannelName,
-              repositoryName: repository.name,
-              pushEventId: pushEvent.id,
-              error: errMessage
-            })
-          });
-          broadcastNotification(storedRepo.userId, {
-            id: failNotification.id,
-            type: failNotification.type,
-            title: failNotification.title,
-            message: failNotification.message,
-            metadata: failNotification.metadata,
-            isRead: failNotification.isRead,
-            createdAt: failNotification.createdAt
-          });
-        } catch (notifErr) {
-          console.error("Failed to create slack_delivery_failed notification:", notifErr);
-        }
-        // Don't throw - we still want to return success so GitHub doesn't retry
-      }
-
-      res.status(200).json({ message: "Webhook processed successfully" });
-    } catch (error) {
-      console.error("❌ Webhook processing error:", error);
-      console.error("Error stack:", error instanceof Error ? error.stack : undefined);
-      res.status(500).json({ error: "Webhook processing failed" });
-    }
-  });
+  // GitHub webhook is mounted in index.ts with express.raw() so signature is verified against raw body.
+  // Do not register it here so index can mount it with raw body parser first.
 
   // Test route: simulate push → AI summary → Slack (same code path as webhook). Enable with ENABLE_TEST_ROUTES=true.
   app.post("/api/test/simulate-push", authenticateToken, async (req, res) => {
