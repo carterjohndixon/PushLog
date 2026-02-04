@@ -480,6 +480,22 @@ export class DatabaseStorage implements IStorage {
     return rows as (AiUsage & { pushedAt: string | null })[];
   }
 
+  /** Last-used timestamp per model (max created_at) for the user. Used for "Last used" on /models in user's timezone. */
+  async getLastUsedByModelByUserId(userId: number): Promise<{ model: string; lastUsedAt: string }[]> {
+    const rows = await db
+      .select({
+        model: aiUsage.model,
+        lastUsedAt: sql<string>`MAX(${aiUsage.createdAt})`.as("last_used_at"),
+      })
+      .from(aiUsage)
+      .where(eq(aiUsage.userId, userId))
+      .groupBy(aiUsage.model);
+    return rows.map((r) => ({
+      model: r.model,
+      lastUsedAt: r.lastUsedAt != null ? String(r.lastUsedAt) : "",
+    }));
+  }
+
   // Push event file methods (for analytics: lines changed per file)
   async createPushEventFile(file: InsertPushEventFile): Promise<PushEventFile> {
     const [result] = await db.insert(pushEventFiles).values(file).returning();

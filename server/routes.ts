@@ -326,6 +326,39 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           cost: summary.cost ?? 0,
         });
       }
+      // In-app notification for the push (and that it was sent to Slack)
+      try {
+        const pushNotif = await storage.createNotification({
+          userId: integration.userId,
+          type: 'push_event',
+          title: `Push to ${pushData.repositoryName}`,
+          message: `${pushData.commitMessage} on ${pushData.branch} — sent to #${integration.slackChannelName}`,
+          metadata: JSON.stringify({
+            pushEventId: pushEvent.id,
+            repositoryId: storedRepo.id,
+            repositoryName: pushData.repositoryName,
+            repositoryFullName: pushData.repositoryName,
+            branch: pushData.branch,
+            commitSha: pushData.commitSha,
+            commitMessage: pushData.commitMessage,
+            author: authorName,
+            aiGenerated: !!aiGenerated,
+            slackChannelName: integration.slackChannelName,
+            integrationId: integration.id,
+          }),
+        });
+        broadcastNotification(integration.userId, {
+          id: pushNotif.id,
+          type: 'push_event',
+          title: pushNotif.title,
+          message: pushNotif.message,
+          metadata: pushNotif.metadata,
+          createdAt: pushNotif.createdAt,
+          isRead: false,
+        });
+      } catch (notifErr) {
+        console.warn("⚠️ [Webhook] Failed to create push notification (non-fatal):", notifErr);
+      }
     } catch (recordErr) {
       console.warn("⚠️ [Webhook] Failed to record push event/usage (non-fatal):", recordErr);
     }
@@ -1729,20 +1762,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 integration.slackChannelName
               );
               
-              // Store notification in database
-              await storage.createNotification({
+              // Store notification in database and broadcast for real-time updates
+              const slackNotif = await storage.createNotification({
                 userId: integration.userId,
                 type: 'slack_message_sent',
                 title: 'Slack Message Sent',
                 message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`
               });
-              
-              // Also broadcast via SSE for real-time updates
               broadcastNotification(integration.userId, {
+                id: slackNotif.id,
                 type: 'slack_message_sent',
-                title: 'Slack Message Sent',
-                message: `Welcome message sent to ${integration.slackChannelName} for ${updatedRepository.name}`,
-                createdAt: new Date().toISOString()
+                title: slackNotif.title,
+                message: slackNotif.message,
+                metadata: slackNotif.metadata,
+                createdAt: slackNotif.createdAt,
+                isRead: false,
               });
             }
           }
@@ -1982,6 +2016,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenRouter credits (total purchased, total used) – requires user's API key; provisioning keys only per OpenRouter docs
+  app.get("/api/openrouter/credits", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const user = await databaseStorage.getUserById(userId);
+      const rawKey = (user as any)?.openRouterApiKey;
+      const apiKey = rawKey && typeof rawKey === "string" ? decrypt(rawKey) : null;
+      if (!apiKey?.trim()) {
+        return res.status(400).json({ error: "No OpenRouter API key. Add a key on the Models page to view credits." });
+      }
+      const response = await fetch("https://openrouter.ai/api/v1/credits", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+      });
+      if (response.status === 401) {
+        return res.status(401).json({ error: "Invalid OpenRouter API key." });
+      }
+      if (response.status === 403) {
+        return res.status(403).json({
+          error: "Credits are only available with a provisioning key. Create one at openrouter.ai/keys.",
+        });
+      }
+      if (!response.ok) {
+        const text = await response.text();
+        console.warn("OpenRouter credits API non-OK:", response.status, text);
+        return res.status(response.status).json({ error: "Could not fetch credits. Try again later." });
+      }
+      const data = await response.json();
+      const totalCredits = data?.data?.total_credits ?? 0;
+      const totalUsage = data?.data?.total_usage ?? 0;
+      const remaining = Math.max(0, Number(totalCredits) - Number(totalUsage));
+      res.json({
+        totalCredits: Number(totalCredits),
+        totalUsage: Number(totalUsage),
+        remainingCredits: remaining,
+      });
+    } catch (err) {
+      console.error("OpenRouter credits error:", err);
+      res.status(500).json({ error: "Failed to fetch OpenRouter credits." });
+    }
+  });
+
   // OpenRouter usage for current user (calls, tokens, cost from our ai_usage where model is OpenRouter-style provider/model)
   app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
     try {
@@ -2008,11 +2086,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalCalls = openRouterRows.length;
       const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed ?? (u as any).tokens_used ?? 0), 0);
       const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + costFromRow(u), 0);
+      // Last-used per model (stored in UTC; frontend displays in user's timezone)
+      let lastUsedByModel: Record<string, string> = {};
+      try {
+        const lastUsedRows = await databaseStorage.getLastUsedByModelByUserId(userId);
+        for (const r of lastUsedRows) {
+          if (r.model && String(r.model).includes("/") && r.lastUsedAt) lastUsedByModel[r.model] = r.lastUsedAt;
+        }
+      } catch (_) {
+        // fallback: derive from current usage slice
+        openRouterRows.slice(0, 500).forEach((u: any) => {
+          const m = String(u?.model ?? "").trim();
+          const at = createdAtFromRow(u);
+          if (!m || !at) return;
+          const prev = lastUsedByModel[m] ? new Date(lastUsedByModel[m]).getTime() : 0;
+          if (new Date(at).getTime() > prev) lastUsedByModel[m] = at;
+        });
+      }
       res.json({
         totalCalls,
         totalTokens,
         totalCostCents,
         totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 100).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
+        lastUsedByModel,
         calls: openRouterRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);

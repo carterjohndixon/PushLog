@@ -65,6 +65,14 @@ interface OpenRouterUsage {
   totalCostCents: number;
   totalCostFormatted: string | null;
   calls: UsageCall[];
+  /** Last-used ISO timestamp per model (UTC); display with formatLocalDateTime for user's timezone */
+  lastUsedByModel?: Record<string, string>;
+}
+
+interface OpenRouterCredits {
+  totalCredits: number;
+  totalUsage: number;
+  remainingCredits: number;
 }
 
 interface IntegrationOption {
@@ -111,11 +119,44 @@ export default function Models() {
         totalCostCents: data.totalCostCents ?? 0,
         totalCostFormatted: data.totalCostFormatted ?? null,
         calls: Array.isArray(data.calls) ? data.calls : [],
+        lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
       };
     },
     enabled: userHasKey,
     retry: 1,
   });
+
+  const { data: creditsData, isLoading: creditsLoading, isError: creditsError, error: creditsErrorObj } = useQuery<OpenRouterCredits>({
+    queryKey: ["/api/openrouter/credits"],
+    queryFn: async () => {
+      const res = await fetch("/api/openrouter/credits", { credentials: "include" });
+      if (res.status === 403) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error ?? "Credits require a provisioning key");
+      }
+      if (!res.ok) throw new Error("Failed to load credits");
+      return res.json();
+    },
+    enabled: userHasKey,
+    retry: false,
+  });
+
+  // Last-used timestamp per model (from server aggregate or fallback from calls), displayed in user's local timezone
+  const lastUsedByModel = (userHasKey && usageData)
+    ? (usageData.lastUsedByModel && Object.keys(usageData.lastUsedByModel).length > 0
+        ? usageData.lastUsedByModel
+        : (usageData.calls?.length
+            ? usageData.calls.reduce<Record<string, string>>((acc, c) => {
+                const m = String(c?.model ?? "").trim();
+                if (!m) return acc;
+                const at = c?.createdAt != null ? String(c.createdAt) : "";
+                if (!at) return acc;
+                const prev = acc[m] ? new Date(acc[m]).getTime() : 0;
+                if (new Date(at).getTime() > prev) acc[m] = at;
+                return acc;
+              }, {})
+            : {}))
+    : {};
 
   const { data: integrations } = useQuery<IntegrationOption[]>({
     queryKey: ["/api/integrations"],
@@ -176,6 +217,7 @@ export default function Models() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/credits"] });
       setApiKeyInput("");
       toast({ title: "API key saved", description: "Your OpenRouter key is stored securely." });
     },
@@ -192,6 +234,7 @@ export default function Models() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/credits"] });
       toast({ title: "API key removed", description: "You can add a new key anytime." });
     },
     onError: (e: Error) => {
@@ -390,6 +433,41 @@ export default function Models() {
                         {usageData.totalCostFormatted ?? "—"}
                       </p>
                     </div>
+                    {creditsLoading ? (
+                      <div className="rounded-lg border border-border bg-muted/30 p-4">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">OpenRouter credits</p>
+                        <Skeleton className="h-7 w-24 mt-1" />
+                      </div>
+                    ) : creditsError || !creditsData ? (
+                      <div className="rounded-lg border border-border bg-muted/30 p-4">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">OpenRouter credits</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {creditsError && creditsErrorObj instanceof Error && creditsErrorObj.message.includes("provisioning")
+                            ? "Use a provisioning key at openrouter.ai/keys to see credits."
+                            : "—"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-border bg-muted/30 p-4">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                          <a
+                            href="https://openrouter.ai/docs/api/api-reference/credits/get-credits"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-log-green"
+                          >
+                            OpenRouter credits
+                          </a>
+                        </p>
+                        <p className="text-xl font-semibold text-foreground">
+                          <span className="text-log-green">{creditsData.remainingCredits.toLocaleString()}</span>
+                          <span className="text-sm font-normal text-muted-foreground"> available</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {creditsData.totalUsage.toLocaleString()} cost used
+                        </p>
+                      </div>
+                    )}
                   </div>
                   {Array.isArray(usageData.calls) && usageData.calls.length > 0 ? (
                     (() => {
@@ -502,6 +580,7 @@ export default function Models() {
                       <TableHead className="text-foreground">Context</TableHead>
                       <TableHead className="text-foreground">Prompt</TableHead>
                       <TableHead className="text-foreground">Completion</TableHead>
+                      {userHasKey && <TableHead className="text-foreground hidden lg:table-cell">Last used</TableHead>}
                       <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -527,6 +606,11 @@ export default function Models() {
                         <TableCell className="text-muted-foreground text-sm">
                           {formatPrice(m.pricing?.completion)}
                         </TableCell>
+                        {userHasKey && (
+                          <TableCell className="text-muted-foreground text-sm hidden lg:table-cell">
+                            {lastUsedByModel[m.id] ? formatLocalDateTime(lastUsedByModel[m.id]) : "—"}
+                          </TableCell>
+                        )}
                         <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
                           {m.description || "—"}
                         </TableCell>
@@ -589,7 +673,7 @@ export default function Models() {
                       </div>
                     )}
                   </div>
-                  {selectedModel.top_provider && (selectedModel.top_provider.context_length != null || selectedModel.top_provider.max_completion_tokens != null) && (
+                    {selectedModel.top_provider && (selectedModel.top_provider.context_length != null || selectedModel.top_provider.max_completion_tokens != null) && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Top provider</p>
                       {selectedModel.top_provider.context_length != null && (
@@ -598,6 +682,12 @@ export default function Models() {
                       {selectedModel.top_provider.max_completion_tokens != null && (
                         <p className="text-foreground">Max completion tokens: {selectedModel.top_provider.max_completion_tokens.toLocaleString()}</p>
                       )}
+                    </div>
+                  )}
+                  {userHasKey && lastUsedByModel[selectedModel.id] && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Last used (your timezone)</p>
+                      <p className="font-medium text-foreground">{formatLocalDateTime(lastUsedByModel[selectedModel.id])}</p>
                     </div>
                   )}
                   <a
