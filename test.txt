@@ -115,3 +115,5 @@ sd
 sds
 watching logs
 watching debug
+
+seriously I'm watching the logs
