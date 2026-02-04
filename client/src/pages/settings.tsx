@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { formatLocalDate } from "@/lib/date";
 import { 
   Download, 
   Trash2, 
@@ -192,7 +193,7 @@ export default function Settings() {
                     <div>
                       <p className="text-sm text-steel-gray">Account Created</p>
                       <p className="font-medium">
-                        {new Date(dataSummary.accountCreated).toLocaleDateString()}
+                        {formatLocalDate(dataSummary.accountCreated)}
                       </p>
                     </div>
                   </div>

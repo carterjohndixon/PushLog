@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { GitBranch, Bell, Cpu, Github, Folder, FileCode, TrendingUp } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
+import { formatLocalShortDate } from "@/lib/date";
 
 interface TopRepo {
   repositoryId: number;
@@ -47,8 +48,7 @@ const chartConfig = {
 };
 
 function formatShortDate(isoDate: string) {
-  const d = new Date(isoDate);
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return formatLocalShortDate(isoDate);
 }
 
 export default function Analytics() {

@@ -9,6 +9,7 @@ import {
 import { AlertTriangle, Clock, Github } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { UseMutationResult } from "@tanstack/react-query";
+import { formatLocalDate } from "@/lib/date";
 
 interface Integration {
   id: number;
@@ -68,12 +69,9 @@ export function ConfirmIntegrationDeletionModal({
 
             <div className="flex items-center space-x-2 text-sm text-muted-foreground">
               <Clock className="w-4 h-4" />
-              <span>Last used: {integrationToDelete.lastUsed ? 
-                new Date(integrationToDelete.lastUsed).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                }) : 'Never'}</span>
+              <span>Last used: {integrationToDelete.lastUsed
+                ? formatLocalDate(integrationToDelete.lastUsed)
+                : "Never"}</span>
             </div>
           </div>
         )}

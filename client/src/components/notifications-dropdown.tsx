@@ -14,25 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink, AlertCircle } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { getAiModelDisplayName } from "@/lib/utils";
+import { formatRelativeOrLocal, formatLocalDateTime } from "@/lib/date";
 import { useState } from "react";
-
-// Helper function to format notification dates
-function formatNotificationDate(dateString: string): string {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-  
-  if (diffInMinutes < 1) {
-    return 'Just now';
-  } else if (diffInMinutes < 60) {
-    return `${diffInMinutes}m ago`;
-  } else if (diffInMinutes < 1440) { // Less than 24 hours
-    const hours = Math.floor(diffInMinutes / 60);
-    return `${hours}h ago`;
-  } else {
-    return date.toLocaleDateString();
-  }
-}
 
 interface NotificationsDropdownProps {
   isEmailVerified: boolean;
@@ -96,7 +79,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   {notification.message}
                 </span>
                 <span className="text-xs text-muted-foreground/80">
-                  {formatNotificationDate(notification.createdAt)}
+                  {formatRelativeOrLocal(notification.createdAt)}
                 </span>
               </div>
             </div>
@@ -439,7 +422,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               {/* Basic Info for all notifications */}
               <div className="border-t border-border pt-4 text-sm text-muted-foreground">
                 <p><strong>Type:</strong> {selectedNotification.type.replace('_', ' ')}</p>
-                <p><strong>Created:</strong> {new Date(selectedNotification.createdAt).toLocaleString()}</p>
+                <p><strong>Created:</strong> {formatLocalDateTime(selectedNotification.createdAt)}</p>
                 {metadata?.pushEventId && (
                   <p><strong>Push Event ID:</strong> {metadata.pushEventId}</p>
                 )}

@@ -19,6 +19,7 @@ import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/footer";
 import { getAiModelDisplayName } from "@/lib/utils";
+import { formatLocalDateTime } from "@/lib/date";
 import { Link } from "wouter";
 import {
   Dialog,
@@ -392,16 +393,7 @@ export default function Models() {
                         return acc;
                       }, {});
                       const rows = Object.values(byModel).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
-                      const formatLastUsed = (lastAt: string) => {
-                        if (!lastAt) return "—";
-                        try {
-                          const d = new Date(lastAt);
-                          if (Number.isNaN(d.getTime())) return "—";
-                          return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" });
-                        } catch {
-                          return "—";
-                        }
-                      };
+                      const formatLastUsed = (lastAt: string) => (lastAt ? formatLocalDateTime(lastAt) : "—");
                       return (
                         <div className="rounded-md border border-border overflow-hidden">
                           <Table>
@@ -421,7 +413,11 @@ export default function Models() {
                                   </TableCell>
                                   <TableCell className="text-muted-foreground">{r.tokens.toLocaleString()}</TableCell>
                                   <TableCell className="text-muted-foreground">
-                                    {r.costCents ? `$${(r.costCents / 100).toFixed(4)}` : "—"}
+                                    {r.costCents != null
+                                      ? r.costCents === 0
+                                        ? "$0.00"
+                                        : `$${(r.costCents / 100).toFixed(4)}`
+                                      : "—"}
                                   </TableCell>
                                   <TableCell className="text-muted-foreground text-sm">
                                     {formatLastUsed(r.lastAt)}

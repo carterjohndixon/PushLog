@@ -1966,27 +1966,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      const usage = await databaseStorage.getAiUsageWithPushDateByUserId(userId);
       const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
-      const costFromRow = (u: any) => typeof u.cost === "number" ? u.cost : (u.cost != null ? Number(u.cost) : 0);
-      const createdAtFromRow = (u: any) => u.createdAt ?? (u as any).created_at ?? null;
+      const costFromRow = (u: any) => {
+        const v = u.cost ?? (u as any).cost;
+        return typeof v === "number" ? v : (v != null ? Number(v) : 0);
+      };
+      const createdAtFromRow = (u: any) => {
+        const created = u.createdAt ?? (u as any).created_at;
+        const pushed = u.pushedAt ?? (u as any).pushed_at;
+        if (created != null && String(created)) return created;
+        if (pushed != null && String(pushed)) return pushed;
+        return null;
+      };
       const totalCalls = openRouterRows.length;
-      const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed || 0), 0);
+      const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed ?? (u as any).tokens_used ?? 0), 0);
       const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + costFromRow(u), 0);
       res.json({
         totalCalls,
         totalTokens,
         totalCostCents,
-        totalCostFormatted: totalCostCents ? `$${(totalCostCents / 100).toFixed(4)}` : null,
+        totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 100).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
         calls: openRouterRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
           return {
             id: u.id,
             model: u.model,
-            tokensUsed: u.tokensUsed ?? 0,
+            tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
             cost: c,
-            costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : null,
+            costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : (c === 0 ? "$0.00" : null),
             createdAt: at,
           };
         }),

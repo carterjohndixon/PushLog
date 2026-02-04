@@ -460,6 +460,26 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)) as any;
   }
 
+  /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). */
+  async getAiUsageWithPushDateByUserId(userId: number): Promise<(AiUsage & { pushedAt: string | null })[]> {
+    const rows = await db
+      .select({
+        id: aiUsage.id,
+        userId: aiUsage.userId,
+        integrationId: aiUsage.integrationId,
+        pushEventId: aiUsage.pushEventId,
+        model: aiUsage.model,
+        tokensUsed: aiUsage.tokensUsed,
+        cost: aiUsage.cost,
+        createdAt: aiUsage.createdAt,
+        pushedAt: pushEvents.pushedAt,
+      })
+      .from(aiUsage)
+      .leftJoin(pushEvents, eq(aiUsage.pushEventId, pushEvents.id))
+      .where(eq(aiUsage.userId, userId));
+    return rows as (AiUsage & { pushedAt: string | null })[];
+  }
+
   // Push event file methods (for analytics: lines changed per file)
   async createPushEventFile(file: InsertPushEventFile): Promise<PushEventFile> {
     const [result] = await db.insert(pushEventFiles).values(file).returning();
