@@ -1966,7 +1966,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageWithPushDateByUserId(userId);
+      let usage: any[];
+      try {
+        usage = await databaseStorage.getAiUsageWithPushDateByUserId(userId);
+      } catch (joinErr) {
+        console.warn("OpenRouter usage: join query failed, falling back to simple query:", joinErr);
+        usage = await databaseStorage.getAiUsageByUserId(userId);
+      }
       const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
       const costFromRow = (u: any) => {
         const v = u.cost ?? (u as any).cost;

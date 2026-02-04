@@ -99,14 +99,22 @@ export default function Models() {
   });
   const allModels = modelsData?.models ?? [];
 
-  const { data: usageData, isLoading: usageLoading } = useQuery<OpenRouterUsage>({
+  const { data: usageData, isLoading: usageLoading, isError: usageError } = useQuery<OpenRouterUsage>({
     queryKey: ["/api/openrouter/usage"],
     queryFn: async () => {
       const res = await fetch("/api/openrouter/usage", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load usage");
-      return res.json();
+      const data = await res.json();
+      return {
+        totalCalls: data.totalCalls ?? 0,
+        totalTokens: data.totalTokens ?? 0,
+        totalCostCents: data.totalCostCents ?? 0,
+        totalCostFormatted: data.totalCostFormatted ?? null,
+        calls: Array.isArray(data.calls) ? data.calls : [],
+      };
     },
     enabled: userHasKey,
+    retry: 1,
   });
 
   const { data: integrations } = useQuery<IntegrationOption[]>({
@@ -331,6 +339,8 @@ export default function Models() {
             <CardContent>
               {usageLoading ? (
                 <Skeleton className="h-24 w-full" />
+              ) : usageError ? (
+                <p className="text-sm text-muted-foreground">Could not load usage. You can still browse and apply models below.</p>
               ) : usageData ? (
                 <>
                   {/* Models in use (integrations using OpenRouter) */}
@@ -366,12 +376,12 @@ export default function Models() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                     <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Total calls</p>
-                      <p className="text-xl font-semibold text-foreground">{usageData.totalCalls}</p>
+                      <p className="text-xl font-semibold text-foreground">{usageData.totalCalls ?? 0}</p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/30 p-4">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Total tokens</p>
                       <p className="text-xl font-semibold text-foreground">
-                        {usageData.totalTokens.toLocaleString()}
+                        {(usageData.totalTokens ?? 0).toLocaleString()}
                       </p>
                     </div>
                     <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -392,7 +402,11 @@ export default function Models() {
                         if (createdAt && (new Date(createdAt).getTime() > new Date(acc[m].lastAt).getTime())) acc[m].lastAt = createdAt;
                         return acc;
                       }, {});
-                      const rows = Object.values(byModel).sort((a, b) => new Date(b.lastAt).getTime() - new Date(a.lastAt).getTime());
+                      const rows = Object.values(byModel).sort((a, b) => {
+                        const tA = new Date(a.lastAt || 0).getTime();
+                        const tB = new Date(b.lastAt || 0).getTime();
+                        return tB - tA;
+                      });
                       const formatLastUsed = (lastAt: string) => (lastAt ? formatLocalDateTime(lastAt) : "—");
                       return (
                         <div className="rounded-md border border-border overflow-hidden">
