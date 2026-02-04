@@ -110,9 +110,10 @@ export const aiUsage = pgTable("ai_usage", {
   userId: integer("user_id").notNull(),
   integrationId: integer("integration_id").notNull(),
   pushEventId: integer("push_event_id").notNull(),
-  model: text("model").notNull(), // gpt-5.2, gpt-5.1, gpt-4o, gpt-4o-mini, gpt-4-turbo, gpt-4, gpt-3.5-turbo (14 working models total)
+  model: text("model").notNull(), // gpt-5.2, gpt-5.1, gpt-4o, openrouter: e.g. moonshotai/kimi-k2.5
   tokensUsed: integer("tokens_used").notNull(),
   cost: integer("cost").notNull(), // Cost in cents
+  openrouterGenerationId: text("openrouter_generation_id"), // OpenRouter gen-xxx for GET /api/v1/generation?id=...
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 

@@ -28,7 +28,6 @@ import {
   sendPushNotification, 
   sendIntegrationWelcomeMessage,
   sendSlackMessage,
-  testSlackConnection,
   generateSlackOAuthUrl,
   exchangeSlackCodeForToken,
   getSlackChannelsForWorkspace
@@ -324,6 +323,7 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           model: summary.actualModel || aiModel,
           tokensUsed: summary.tokensUsed,
           cost: summary.cost ?? 0,
+          openrouterGenerationId: summary.openrouterGenerationId ?? null,
         });
       }
       // Two notifications per push: the event + delivery confirmation (customer-friendly)
@@ -2081,21 +2081,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get OpenRouter usage from API call (EX URL: https://openrouter.ai/api/v1/generation?id=gen-1770184709-iqztzQCQskqVEDuNWa5Z)
-  // app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
-  //   try {
-  //     const generationId = req.params.id;
-  //     const userId = req.user!.userId;
-  //     const user = await databaseStorage.getUserById(userId);
-  //     const rawKey = (user as any)?.openRouterApiKey;
-  //     const apiKey = rawKey && typeof rawKey === "string" ? decrypt(rawKey) : null;
-      
-  //   }
-  //   catch (err) {
-  //     console.error("OpenRouter usage per gen error:", err);
-  //     res.status(500).json({ error: "Failed to fetch OpenRouter usage per gen." });
-  //   }
-  // });
+  // Get OpenRouter usage for a single generation (id = gen-xxx from x-openrouter-generation-id or stored in ai_usage)
+  app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.id;
+      if (!generationId?.trim()) {
+        return res.status(400).json({ error: "Missing generation id." });
+      }
+      const userId = req.user!.userId;
+      const user = await databaseStorage.getUserById(userId);
+      const rawKey = (user as any)?.openRouterApiKey;
+      const apiKey = rawKey && typeof rawKey === "string" ? decrypt(rawKey) : null;
+      if (!apiKey?.trim()) {
+        return res.status(400).json({ error: "No OpenRouter API key. Add a key on the Models page to view usage per gen." });
+      }
+      const url = new URL("https://openrouter.ai/api/v1/generation");
+      url.searchParams.set("id", generationId);
+      const response = await fetch(url.toString(), {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+      });
+      if (!response.ok) {
+        return res.status(response.status).json({
+          error: response.status === 404 ? "Generation not found." : "Failed to fetch generation.",
+        });
+      }
+      const json = (await response.json()) as { data?: Record<string, unknown> } & Record<string, unknown>;
+      const data = json?.data ?? json;
+      const raw = (data ?? {}) as Record<string, unknown>;
+      const costUsd = (raw.usage ?? raw.total_cost) as number | undefined;
+      const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
+      const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
+      res.status(200).json({
+        generationId,
+        costUsd: typeof costUsd === "number" ? costUsd : null,
+        costCents: typeof costUsd === "number" && costUsd >= 0 ? Math.round(costUsd * 100) : null,
+        tokensPrompt,
+        tokensCompletion,
+        tokensUsed: tokensPrompt + tokensCompletion,
+      });
+    } catch (err) {
+      console.error("OpenRouter usage per gen error:", err);
+      res.status(500).json({ error: "Failed to fetch OpenRouter usage per gen." });
+    }
+  });
 
   // OpenRouter usage for current user (calls, tokens, cost from our ai_usage where model is OpenRouter-style provider/model)
   app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
@@ -2150,12 +2181,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
           return {
-          id: u.id,
-          model: u.model,
+            id: u.id,
+            model: u.model,
             tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
             cost: c,
             costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : (c === 0 ? "$0.00" : null),
             createdAt: at,
+            generationId: u.openrouterGenerationId ?? (u as any).openrouterGenerationId ?? null,
           };
         }),
       });
@@ -2687,6 +2719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             model: (summary as any).actualModel ?? aiModel,
             tokensUsed: summary.tokensUsed,
             cost: summary.cost ?? 0,
+            openrouterGenerationId: (summary as any).openrouterGenerationId ?? null,
           });
         }
       } catch (recordErr) {

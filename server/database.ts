@@ -471,6 +471,7 @@ export class DatabaseStorage implements IStorage {
         model: aiUsage.model,
         tokensUsed: aiUsage.tokensUsed,
         cost: aiUsage.cost,
+        openrouterGenerationId: aiUsage.openrouterGenerationId,
         createdAt: aiUsage.createdAt,
         pushedAt: pushEvents.pushedAt,
       })

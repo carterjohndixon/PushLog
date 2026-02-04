@@ -33,6 +33,8 @@ export interface AiUsageResult {
   tokensUsed: number;
   cost: number; // in cents
   actualModel?: string; // The actual model used by OpenAI
+  /** OpenRouter generation id (gen-xxx) when using OpenRouter; use for GET /api/v1/generation?id=... */
+  openrouterGenerationId?: string | null;
   /** True when the API failed and we returned a generic fallback (do not treat as real AI summary). */
   isFallback?: boolean;
 }
@@ -56,6 +58,8 @@ type OpenRouterGenerationResponse = {
   tokens_completion?: number;
 };
 
+const OPENROUTER_GENERATION_ID_HEADER = 'x-openrouter-generation-id';
+
 /** Fetch usage/cost for an OpenRouter generation by ID (e.g. gen-xxx). Used when the completion response doesn't include cost. */
 async function fetchOpenRouterGenerationUsage(
   generationId: string,
@@ -67,7 +71,10 @@ async function fetchOpenRouterGenerationUsage(
     const res = await fetch(url.toString(), {
       headers: { Authorization: `Bearer ${apiKey.trim()}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`📊 OpenRouter generation lookup failed: ${res.status} ${res.statusText} for id=${generationId.slice(0, 24)}...`);
+      return null;
+    }
     const json = (await res.json()) as OpenRouterGenerationResponse;
     // API can return { data: { ... } } or the generation object at top level (e.g. from activity)
     const data = json?.data ?? (json as Record<string, unknown>);
@@ -81,7 +88,8 @@ async function fetchOpenRouterGenerationUsage(
       (typeof tokensPrompt === 'number' ? tokensPrompt : 0) +
       (typeof tokensCompletion === 'number' ? tokensCompletion : 0) || 0;
     return { tokensUsed, costCents };
-  } catch {
+  } catch (e) {
+    console.warn('📊 OpenRouter generation lookup error:', e);
     return null;
   }
 }
@@ -154,24 +162,50 @@ Respond with only valid JSON:
       max_completion_tokens: effectiveMaxTokens,
       temperature: 0.3, // All supported models support temperature
     };
-    
-    let completion;
-    try {
-      completion = await client.chat.completions.create(requestParams);
-    } catch (apiError: any) {
-      console.error('❌ OpenAI API Error Details:');
-      console.error('   Status:', apiError?.status);
-      console.error('   Message:', apiError?.message);
-      console.error('   Code:', apiError?.code);
-      console.error('   Type:', apiError?.type);
-      console.error('   Param:', apiError?.param);
-      if (apiError?.error) {
-        console.error('   Error Object:', JSON.stringify(apiError.error, null, 2));
+
+    let completion: OpenAI.Chat.Completions.ChatCompletion;
+    let openRouterGenerationId: string | null = null;
+
+    if (useOpenRouter && options?.openRouterApiKey) {
+      // Use fetch so we can read x-openrouter-generation-id header (needed for cost lookup)
+      try {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${options.openRouterApiKey.trim()}`,
+          },
+          body: JSON.stringify(requestParams),
+        });
+        openRouterGenerationId = res.headers.get(OPENROUTER_GENERATION_ID_HEADER)?.trim() || null;
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.error('❌ OpenRouter API Error:', res.status, res.statusText, errBody.slice(0, 300));
+          throw new Error(`OpenRouter ${res.status}: ${errBody.slice(0, 200)}`);
+        }
+        completion = (await res.json()) as OpenAI.Chat.Completions.ChatCompletion;
+      } catch (apiError: any) {
+        console.error('❌ OpenRouter request failed:', apiError?.message ?? apiError);
+        throw apiError;
       }
-      if (apiError?.response) {
-        console.error('   Response:', JSON.stringify(apiError.response, null, 2));
+    } else {
+      try {
+        completion = await client.chat.completions.create(requestParams);
+      } catch (apiError: any) {
+        console.error('❌ OpenAI API Error Details:');
+        console.error('   Status:', apiError?.status);
+        console.error('   Message:', apiError?.message);
+        console.error('   Code:', apiError?.code);
+        console.error('   Type:', apiError?.type);
+        console.error('   Param:', apiError?.param);
+        if (apiError?.error) {
+          console.error('   Error Object:', JSON.stringify(apiError.error, null, 2));
+        }
+        if (apiError?.response) {
+          console.error('   Response:', JSON.stringify(apiError.response, null, 2));
+        }
+        throw apiError; // Re-throw to be caught by outer catch
       }
-      throw apiError; // Re-throw to be caught by outer catch
     }
 
     // Log the actual model used by OpenAI (in case of model fallback)
@@ -334,14 +368,19 @@ Respond with only valid JSON:
       cost = Math.round(usage.cost * 100);
     } else if (!useOpenRouter) {
       cost = calculateTokenCost(model, tokensUsed);
-    } else if (useOpenRouter && options?.openRouterApiKey && completion.id) {
-      // OpenRouter didn't include cost in response (e.g. BYOK); fetch by generation ID
-      const genUsage = await fetchOpenRouterGenerationUsage(completion.id, options.openRouterApiKey);
-      if (genUsage) {
-        if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
-        cost = genUsage.costCents;
-        if (cost > 0 || tokensUsed > 0) {
-          console.log(`📊 OpenRouter generation lookup - Id: ${completion.id}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
+    } else if (useOpenRouter && options?.openRouterApiKey) {
+      // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id
+      const genId = openRouterGenerationId || completion.id;
+      if (genId) {
+        const genUsage = await fetchOpenRouterGenerationUsage(genId, options.openRouterApiKey);
+        if (genUsage) {
+          if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
+          cost = genUsage.costCents;
+          if (cost > 0 || tokensUsed > 0) {
+            console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
+          }
+        } else {
+          cost = 0;
         }
       } else {
         cost = 0;
@@ -356,7 +395,8 @@ Respond with only valid JSON:
       summary,
       tokensUsed,
       cost,
-      actualModel // Include the actual model used
+      actualModel, // Include the actual model used
+      openrouterGenerationId: openRouterGenerationId ?? null,
     };
   } catch (error) {
     const errMsg = error instanceof Error ? error.message : String(error);
