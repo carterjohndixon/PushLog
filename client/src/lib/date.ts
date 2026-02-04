@@ -83,3 +83,50 @@ export function formatRelativeOrLocal(dateString: string): string {
   }
   return formatLocalDate(date);
 }
+
+/** Ordinal suffix for day of month: 1st, 2nd, 3rd, 4th, 21st, 22nd, 23rd, 31st. */
+function getOrdinal(n: number): string {
+  const s = n % 100;
+  if (s >= 11 && s <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
+/**
+ * Format a "Created" timestamp for notifications: relative up to 7 days, then full date.
+ * All in user's local timezone.
+ * - &lt; 1 min: "Just now"
+ * - 1–60 min: "X minute(s) ago"
+ * - 1–24 h: "X hour(s) ago", then "1 day ago"
+ * - 2–7 days: "X days ago"
+ * - &gt; 7 days: "January 27th, 2026"
+ */
+export function formatCreatedAt(dateInput: string | Date | null | undefined): string {
+  try {
+    if (dateInput == null || dateInput === "") return "—";
+    const d = new Date(dateInput as string);
+    if (Number.isNaN(d.getTime())) return "—";
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return "Just now";
+    if (diffMinutes < 60) return diffMinutes === 1 ? "1 minute ago" : `${diffMinutes} minutes ago`;
+    if (diffHours < 24) return diffHours === 1 ? "1 hour ago" : `${diffHours} hours ago`;
+    if (diffDays === 1) return "1 day ago";
+    if (diffDays <= 7) return `${diffDays} days ago`;
+    // > 7 days: full date in user's timezone, e.g. "January 27th, 2026"
+    const month = d.toLocaleDateString(undefined, { month: "long" });
+    const day = d.getDate();
+    const year = d.getFullYear();
+    return `${month} ${getOrdinal(day)}, ${year}`;
+  } catch {
+    return "—";
+  }
+}

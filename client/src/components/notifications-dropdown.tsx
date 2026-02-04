@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink, AlertCircle } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { getAiModelDisplayName } from "@/lib/utils";
-import { formatRelativeOrLocal, formatLocalDateTime } from "@/lib/date";
+import { formatRelativeOrLocal, formatCreatedAt } from "@/lib/date";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useState } from "react";
 
@@ -432,7 +432,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               {/* Basic Info for all notifications */}
               <div className="border-t border-border pt-4 text-sm text-muted-foreground">
                 <p><strong>Type:</strong> {(selectedNotification.type ?? '').replace(/_/g, ' ')}</p>
-                <p><strong>Created:</strong> {formatLocalDateTime(metadata?.pushedAt || selectedNotification.createdAt || '')}</p>
+                <p><strong>Created:</strong> {formatCreatedAt((selectedNotification as any).createdAt ?? (selectedNotification as any).created_at)}</p>
                 {metadata?.pushEventId && (
                   <p><strong>Push Event ID:</strong> {metadata.pushEventId}</p>
                 )}

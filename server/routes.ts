@@ -2912,17 +2912,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort notifications by createdAt (newest first)
       notifications.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-      // Parse metadata JSON strings into objects for easier client-side access
+      // Parse metadata JSON strings and normalize createdAt (DB may return created_at)
       const notificationsWithParsedMetadata = notifications.map(n => {
-        if (n.metadata && typeof n.metadata === 'string') {
+        const created = (n as any).createdAt ?? (n as any).created_at;
+        let createdAt: string | null = null;
+        if (created != null && created !== '') {
           try {
-            return { ...n, metadata: JSON.parse(n.metadata) };
-          } catch (e) {
-            console.error('Failed to parse notification metadata:', e);
-            return n;
+            const d = typeof created === 'string' ? new Date(created) : (created as Date);
+            createdAt = d instanceof Date && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
+          } catch {
+            createdAt = null;
           }
         }
-        return n;
+        const base = { ...n, createdAt };
+        if (base.metadata && typeof base.metadata === 'string') {
+          try {
+            return { ...base, metadata: JSON.parse(base.metadata) };
+          } catch (e) {
+            console.error('Failed to parse notification metadata:', e);
+            return base;
+          }
+        }
+        return base;
       });
 
       // Count only unread notifications (not total)
