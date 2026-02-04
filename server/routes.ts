@@ -277,6 +277,39 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       return;
     }
 
+    try {
+      const pushedAt = commit?.timestamp ? new Date(commit.timestamp) : new Date();
+      const pushEvent = await storage.createPushEvent({
+        repositoryId: storedRepo.id,
+        integrationId: integration.id,
+        commitSha: pushData.commitSha,
+        commitMessage: pushData.commitMessage,
+        author: authorName,
+        branch: pushData.branch,
+        pushedAt,
+        notificationSent: true,
+        additions: pushData.additions,
+        deletions: pushData.deletions,
+        aiSummary: aiSummary ?? null,
+        aiImpact: aiImpact ?? null,
+        aiCategory: aiCategory ?? null,
+        aiDetails: aiDetails ?? null,
+        aiGenerated: !!aiGenerated,
+      });
+      if (aiGenerated && summary && (summary.tokensUsed > 0 || (summary.cost ?? 0) > 0)) {
+        await databaseStorage.createAiUsage({
+          userId: integration.userId,
+          integrationId: integration.id,
+          pushEventId: pushEvent.id,
+          model: summary.actualModel || aiModel,
+          tokensUsed: summary.tokensUsed,
+          cost: summary.cost ?? 0,
+        });
+      }
+    } catch (recordErr) {
+      console.warn("⚠️ [Webhook] Failed to record push event/usage (non-fatal):", recordErr);
+    }
+
     res.status(200).json({ message: "Webhook processed successfully" });
   } catch (error) {
     console.error("❌ Webhook processing error:", error);
@@ -1935,22 +1968,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.userId;
       const usage = await databaseStorage.getAiUsageByUserId(userId);
       const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
+      const costFromRow = (u: any) => typeof u.cost === "number" ? u.cost : (u.cost != null ? Number(u.cost) : 0);
+      const createdAtFromRow = (u: any) => u.createdAt ?? (u as any).created_at ?? null;
       const totalCalls = openRouterRows.length;
       const totalTokens = openRouterRows.reduce((sum: number, u: any) => sum + (u.tokensUsed || 0), 0);
-      const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + (u.cost || 0), 0);
+      const totalCostCents = openRouterRows.reduce((sum: number, u: any) => sum + costFromRow(u), 0);
       res.json({
         totalCalls,
         totalTokens,
         totalCostCents,
         totalCostFormatted: totalCostCents ? `$${(totalCostCents / 100).toFixed(4)}` : null,
-        calls: openRouterRows.slice(0, 100).map((u: any) => ({
-          id: u.id,
-          model: u.model,
-          tokensUsed: u.tokensUsed,
-          cost: u.cost,
-          costFormatted: u.cost ? `$${(u.cost / 100).toFixed(4)}` : null,
-          createdAt: u.createdAt,
-        })),
+        calls: openRouterRows.slice(0, 100).map((u: any) => {
+          const c = costFromRow(u);
+          const at = createdAtFromRow(u);
+          return {
+            id: u.id,
+            model: u.model,
+            tokensUsed: u.tokensUsed ?? 0,
+            cost: c,
+            costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : null,
+            createdAt: at,
+          };
+        }),
       });
     } catch (err) {
       console.error("OpenRouter usage error:", err);
@@ -2452,6 +2491,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
           Boolean(integration.includeCommitSummaries)
         );
         console.log(`🧪 [TEST] ✅ Regular Slack message sent. Timestamp: ${ts}`);
+      }
+
+      try {
+        const pushEvent = await storage.createPushEvent({
+          repositoryId: integration.repositoryId,
+          integrationId: integration.id,
+          commitSha: pushData.commitSha,
+          commitMessage: pushData.commitMessage,
+          author: "Test User",
+          branch: pushData.branch,
+          pushedAt: new Date(),
+          notificationSent: true,
+          additions: pushData.additions,
+          deletions: pushData.deletions,
+          aiSummary: aiSummary ?? null,
+          aiImpact: aiImpact ?? null,
+          aiCategory: aiCategory ?? null,
+          aiDetails: aiDetails ?? null,
+          aiGenerated: !!aiGenerated,
+        });
+        if (aiGenerated && summary && (summary.tokensUsed > 0 || (summary.cost ?? 0) > 0)) {
+          await databaseStorage.createAiUsage({
+            userId: integration.userId,
+            integrationId: integration.id,
+            pushEventId: pushEvent.id,
+            model: (summary as any).actualModel ?? aiModel,
+            tokensUsed: summary.tokensUsed,
+            cost: summary.cost ?? 0,
+          });
+        }
+      } catch (recordErr) {
+        console.warn("🧪 [TEST] Failed to record push event/usage (non-fatal):", recordErr);
       }
 
       res.json({
