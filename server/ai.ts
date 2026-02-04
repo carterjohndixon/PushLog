@@ -42,6 +42,50 @@ export interface GenerateCodeSummaryOptions {
   openRouterApiKey?: string;
 }
 
+/** OpenRouter generation API response: may be { data: generation } or the generation object at top level. */
+type OpenRouterGenerationResponse = {
+  data?: {
+    usage?: number;
+    total_cost?: number;
+    tokens_prompt?: number;
+    tokens_completion?: number;
+  };
+  usage?: number;
+  total_cost?: number;
+  tokens_prompt?: number;
+  tokens_completion?: number;
+};
+
+/** Fetch usage/cost for an OpenRouter generation by ID (e.g. gen-xxx). Used when the completion response doesn't include cost. */
+async function fetchOpenRouterGenerationUsage(
+  generationId: string,
+  apiKey: string
+): Promise<{ tokensUsed: number; costCents: number } | null> {
+  try {
+    const url = new URL('https://openrouter.ai/api/v1/generation');
+    url.searchParams.set('id', generationId);
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${apiKey.trim()}` },
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as OpenRouterGenerationResponse;
+    // API can return { data: { ... } } or the generation object at top level (e.g. from activity)
+    const data = json?.data ?? (json as Record<string, unknown>);
+    if (!data || typeof data !== 'object') return null;
+    const raw = data as Record<string, unknown>;
+    const costUsd = (raw.usage ?? raw.total_cost) as number | undefined;
+    const costCents = typeof costUsd === 'number' && costUsd >= 0 ? Math.round(costUsd * 100) : 0;
+    const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
+    const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
+    const tokensUsed =
+      (typeof tokensPrompt === 'number' ? tokensPrompt : 0) +
+      (typeof tokensCompletion === 'number' ? tokensCompletion : 0) || 0;
+    return { tokensUsed, costCents };
+  } catch {
+    return null;
+  }
+}
+
 export async function generateCodeSummary(
   pushData: PushEventData, 
   model: string = 'gpt-5.2', // PushLog: gpt-5.2, gpt-4o, etc. OpenRouter: e.g. openai/gpt-4o, anthropic/claude-3.5-sonnet
@@ -49,8 +93,8 @@ export async function generateCodeSummary(
   options?: GenerateCodeSummaryOptions
 ): Promise<AiUsageResult> {
   const useOpenRouter = !!options?.openRouterApiKey?.trim();
-  // Reasoning models (e.g. Kimi K2.5) put analysis in reasoning first, then content; need enough tokens for both
-  const effectiveMaxTokens = useOpenRouter ? Math.max(maxTokens, 700) : maxTokens;
+  // Reasoning models (e.g. Kimi K2.5) output reasoning then content; need enough tokens so JSON isn't cut off
+  const effectiveMaxTokens = useOpenRouter ? Math.max(maxTokens, 1400) : maxTokens;
   const client = useOpenRouter
     ? new OpenAI({
         apiKey: options!.openRouterApiKey!.trim(),
@@ -190,6 +234,39 @@ Respond with only valid JSON:
       return null;
     }
 
+    /** If the model hit max_tokens, JSON can be cut off (unclosed "details" string). Try to close it and parse. */
+    const repairTruncatedSummaryJson = (raw: string): string | null => {
+      const t = raw.trim();
+      if (!t.startsWith('{') || !t.includes('"summary"')) return null;
+      let inString = false;
+      let escape = false;
+      let lastGood = -1;
+      for (let i = 0; i < t.length; i++) {
+        const c = t[i];
+        if (escape) {
+          escape = false;
+          continue;
+        }
+        if (c === '\\' && inString) {
+          escape = true;
+          continue;
+        }
+        if (c === '"') {
+          inString = !inString;
+          if (!inString) lastGood = i;
+          continue;
+        }
+      }
+      if (inString && lastGood >= 0) {
+        let truncated = t.slice(0, lastGood + 1);
+        truncated = truncated.replace(/,(\s*)$/, '$1'); // no trailing comma
+        const openBraces = (truncated.match(/\{/g)?.length ?? 0) - (truncated.match(/\}/g)?.length ?? 0);
+        const repaired = truncated + '}'.repeat(Math.max(0, openBraces) + 1);
+        return repaired;
+      }
+      return null;
+    };
+
     let parsed: unknown;
     try {
       parsed = JSON.parse(jsonString);
@@ -200,6 +277,16 @@ Respond with only valid JSON:
           parsed = JSON.parse(extracted);
         } catch {
           // ignore
+        }
+      }
+      if (parsed == null || typeof parsed !== 'object') {
+        const repaired = repairTruncatedSummaryJson(jsonString);
+        if (repaired) {
+          try {
+            parsed = JSON.parse(repaired);
+          } catch {
+            // ignore
+          }
         }
       }
     }
@@ -234,16 +321,31 @@ Respond with only valid JSON:
       console.error('❌ Invalid AI response structure:', summary);
       throw new Error('AI response missing required fields');
     }
-    
+    if (typeof summary.details !== 'string') {
+      summary.details = summary.summary || '';
+    }
+
     // Calculate usage and cost
-    const tokensUsed = completion.usage?.total_tokens || 0;
+    let tokensUsed = completion.usage?.total_tokens || 0;
     const usage = completion.usage as { total_tokens?: number; cost?: number } | undefined;
     let cost: number;
     if (useOpenRouter && typeof usage?.cost === 'number') {
-      // OpenRouter returns cost in USD (as "credits"); store in cents for ai_usage
+      // OpenRouter returned cost in the completion response (USD); store in cents
       cost = Math.round(usage.cost * 100);
     } else if (!useOpenRouter) {
       cost = calculateTokenCost(model, tokensUsed);
+    } else if (useOpenRouter && options?.openRouterApiKey && completion.id) {
+      // OpenRouter didn't include cost in response (e.g. BYOK); fetch by generation ID
+      const genUsage = await fetchOpenRouterGenerationUsage(completion.id, options.openRouterApiKey);
+      if (genUsage) {
+        if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
+        cost = genUsage.costCents;
+        if (cost > 0 || tokensUsed > 0) {
+          console.log(`📊 OpenRouter generation lookup - Id: ${completion.id}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
+        }
+      } else {
+        cost = 0;
+      }
     } else {
       cost = 0;
     }

@@ -2081,6 +2081,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get OpenRouter usage from API call (EX URL: https://openrouter.ai/api/v1/generation?id=gen-1770184709-iqztzQCQskqVEDuNWa5Z)
+  // app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
+  //   try {
+  //     const generationId = req.params.id;
+  //     const userId = req.user!.userId;
+  //     const user = await databaseStorage.getUserById(userId);
+  //     const rawKey = (user as any)?.openRouterApiKey;
+  //     const apiKey = rawKey && typeof rawKey === "string" ? decrypt(rawKey) : null;
+      
+  //   }
+  //   catch (err) {
+  //     console.error("OpenRouter usage per gen error:", err);
+  //     res.status(500).json({ error: "Failed to fetch OpenRouter usage per gen." });
+  //   }
+  // });
+
   // OpenRouter usage for current user (calls, tokens, cost from our ai_usage where model is OpenRouter-style provider/model)
   app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
     try {
