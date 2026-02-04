@@ -394,12 +394,14 @@ export default function Models() {
                   {Array.isArray(usageData.calls) && usageData.calls.length > 0 ? (
                     (() => {
                       const byModel = usageData.calls.reduce<Record<string, { model: string; tokens: number; costCents: number; lastAt: string }>>((acc, c) => {
-                        const m = c.model || "unknown";
-                        const createdAt = c.createdAt ?? "";
-                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: createdAt };
-                        acc[m].tokens += c.tokensUsed ?? 0;
-                        acc[m].costCents += c.cost ?? 0;
-                        if (createdAt && (new Date(createdAt).getTime() > new Date(acc[m].lastAt).getTime())) acc[m].lastAt = createdAt;
+                        const m = String(c?.model || "unknown");
+                        const createdAt = c?.createdAt != null ? String(c.createdAt) : "";
+                        if (!acc[m]) acc[m] = { model: m, tokens: 0, costCents: 0, lastAt: "" };
+                        acc[m].tokens += Number(c?.tokensUsed ?? 0);
+                        acc[m].costCents += Number(c?.cost ?? 0);
+                        const t = createdAt ? new Date(createdAt).getTime() : 0;
+                        const tPrev = acc[m].lastAt ? new Date(acc[m].lastAt).getTime() : 0;
+                        if (!Number.isNaN(t) && t > tPrev) acc[m].lastAt = createdAt;
                         return acc;
                       }, {});
                       const rows = Object.values(byModel).sort((a, b) => {

@@ -15,6 +15,7 @@ import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink, AlertCircle
 import { useNotifications } from "@/hooks/use-notifications";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { formatRelativeOrLocal, formatLocalDateTime } from "@/lib/date";
+import { ErrorBoundary } from "@/components/error-boundary";
 import { useState } from "react";
 
 interface NotificationsDropdownProps {
@@ -155,6 +156,14 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
     {/* Notification Details Dialog */}
     <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
       <DialogContent className="sm:max-w-md">
+        <ErrorBoundary fallback={
+          <div className="py-4 text-center text-muted-foreground text-sm">
+            <p>Couldn’t load notification details.</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => setSelectedNotification(null)}>
+              Close
+            </Button>
+          </div>
+        }>
         <DialogHeader>
           <DialogTitle className="flex items-center">
             {selectedNotification?.type === 'push_event' ? (
@@ -170,21 +179,22 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           </DialogTitle>
         </DialogHeader>
         {selectedNotification && (() => {
-          // Parse metadata if it's a string
+          // Parse metadata if it's a string (guard against throw)
           let metadata: any = null;
-          if (selectedNotification.metadata) {
-            try {
-              metadata = typeof selectedNotification.metadata === 'string' 
-                ? JSON.parse(selectedNotification.metadata) 
+          try {
+            if (selectedNotification.metadata) {
+              metadata = typeof selectedNotification.metadata === 'string'
+                ? JSON.parse(selectedNotification.metadata)
                 : selectedNotification.metadata;
-            } catch (e) {
-              console.error('Failed to parse notification metadata:', e);
             }
+          } catch (e) {
+            console.error('Failed to parse notification metadata:', e);
           }
 
-          const isPushEvent = selectedNotification.type === 'push_event';
-          const isSlackMessage = selectedNotification.type === 'slack_message_sent';
-          const isSlackDeliveryFailed = selectedNotification.type === 'slack_delivery_failed';
+          const notifType = selectedNotification.type ?? '';
+          const isPushEvent = notifType === 'push_event';
+          const isSlackMessage = notifType === 'slack_message_sent';
+          const isSlackDeliveryFailed = notifType === 'slack_delivery_failed';
           const commitUrl = metadata?.repositoryFullName && metadata?.commitSha
             ? `https://github.com/${metadata.repositoryFullName}/commit/${metadata.commitSha}`
             : null;
@@ -288,15 +298,15 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                             metadata.aiImpact === 'medium' ? 'text-yellow-600' :
                             'text-green-600'
                           }`}>
-                            {metadata.aiImpact.toUpperCase()}
+                            {String(metadata.aiImpact ?? '').toUpperCase()}
                           </span>
                         </div>
                       )}
-                      
-                      {metadata.aiCategory && (
+
+                      {metadata.aiCategory != null && String(metadata.aiCategory) && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Category:</span>{' '}
-                          <span className="text-muted-foreground capitalize">{metadata.aiCategory}</span>
+                          <span className="text-muted-foreground capitalize">{String(metadata.aiCategory)}</span>
                         </div>
                       )}
                     </div>
@@ -410,7 +420,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                             metadata.aiImpact === 'medium' ? 'text-yellow-600' :
                             'text-green-600'
                           }`}>
-                            {metadata.aiImpact.toUpperCase()}
+                            {String(metadata.aiImpact ?? '').toUpperCase()}
                           </span>
                         </div>
                       )}
@@ -421,8 +431,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
               {/* Basic Info for all notifications */}
               <div className="border-t border-border pt-4 text-sm text-muted-foreground">
-                <p><strong>Type:</strong> {selectedNotification.type.replace('_', ' ')}</p>
-                <p><strong>Created:</strong> {formatLocalDateTime(selectedNotification.createdAt)}</p>
+                <p><strong>Type:</strong> {(selectedNotification.type ?? '').replace(/_/g, ' ')}</p>
+                <p><strong>Created:</strong> {formatLocalDateTime(selectedNotification.createdAt ?? '')}</p>
                 {metadata?.pushEventId && (
                   <p><strong>Push Event ID:</strong> {metadata.pushEventId}</p>
                 )}
@@ -435,7 +445,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 >
                   Close
                 </Button>
-                {selectedNotification.type !== 'email_verification' && (
+                {(selectedNotification.type ?? '') !== 'email_verification' && (
                   <Button
                     variant="destructive"
                     onClick={(e) => {
@@ -451,6 +461,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             </div>
           );
         })()}
+        </ErrorBoundary>
       </DialogContent>
     </Dialog>
     </>

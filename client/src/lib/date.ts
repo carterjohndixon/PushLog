@@ -53,13 +53,17 @@ export function formatLocalShortDate(dateInput: string | Date): string {
  * Use for "Last used", "Created", timestamps, etc.
  */
 export function formatLocalDateTime(dateInput: string | Date): string {
-  const d = new Date(dateInput);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZoneName: "short",
-  });
+  try {
+    const d = new Date(dateInput as string);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZoneName: "short",
+    });
+  } catch {
+    return "—";
+  }
 }
 
 /**
