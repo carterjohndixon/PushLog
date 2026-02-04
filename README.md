@@ -6,8 +6,6 @@ A web-based SaaS platform that connects your GitHub and Slack accounts to automa
 
 ## What is PushLog?
 
-<!-- test: trigger notifications for Created timestamp display - Feb 4 2026 -->
-
 PushLog is a **web application** that you can access directly in your browser. Simply visit the website, connect your GitHub and Slack accounts, and start receiving intelligent notifications about your code pushes automatically.
 
 ## Features
