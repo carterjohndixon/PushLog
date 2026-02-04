@@ -12,7 +12,7 @@ import {
   type AiUsage, type InsertAiUsage,
   type Payment, type InsertPayment
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -183,6 +183,16 @@ export class DatabaseStorage implements IStorage {
   async getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]> {
     return await db.select().from(integrations).where(
       and(eq(integrations.slackWorkspaceId, workspaceId), eq(integrations.slackChannelId, channelId))
+    ) as any;
+  }
+
+  /** Get all integrations for a Slack team + channel. Use for slash commands so we see integrations from any user who connected this team. */
+  async getIntegrationsBySlackTeamAndChannel(teamId: string, channelId: string): Promise<Integration[]> {
+    const workspaces = await db.select({ id: slackWorkspaces.id }).from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId));
+    const workspaceIds = workspaces.map((w) => w.id).filter((id): id is number => id != null);
+    if (workspaceIds.length === 0) return [];
+    return await db.select().from(integrations).where(
+      and(inArray(integrations.slackWorkspaceId, workspaceIds), eq(integrations.slackChannelId, channelId))
     ) as any;
   }
 
