@@ -49,6 +49,8 @@ export async function generateCodeSummary(
   options?: GenerateCodeSummaryOptions
 ): Promise<AiUsageResult> {
   const useOpenRouter = !!options?.openRouterApiKey?.trim();
+  // Reasoning models (e.g. Kimi K2.5) put analysis in reasoning first, then content; need enough tokens for both
+  const effectiveMaxTokens = useOpenRouter ? Math.max(maxTokens, 700) : maxTokens;
   const client = useOpenRouter
     ? new OpenAI({
         apiKey: options!.openRouterApiKey!.trim(),
@@ -92,7 +94,7 @@ Focus on:
 Respond with only valid JSON:
 `;
 
-    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : 'OpenAI'} API Request - Model: ${model}, Max Tokens: ${maxTokens}`);
+    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : 'OpenAI'} API Request - Model: ${model}, Max Tokens: ${effectiveMaxTokens}`);
     const requestParams: any = {
       model: model,
       messages: [
@@ -105,7 +107,7 @@ Respond with only valid JSON:
           content: prompt
         }
       ],
-      max_completion_tokens: maxTokens,
+      max_completion_tokens: effectiveMaxTokens,
       temperature: 0.3, // All supported models support temperature
     };
     
@@ -130,10 +132,12 @@ Respond with only valid JSON:
 
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
-    
-    // message.content can be a string or an array of parts (e.g. OpenRouter/Kimi: [{ type: "text", text: "..." }])
-    const rawContent = completion.choices[0]?.message?.content;
-    let response: string;
+    const msg = completion.choices[0]?.message as unknown as Record<string, unknown> | undefined;
+
+
+    // Get response text: prefer content; some OpenRouter models (e.g. Kimi K2.5) put output in reasoning
+    let response: string = '';
+    const rawContent = msg?.content;
     if (typeof rawContent === 'string') {
       response = rawContent;
     } else if (Array.isArray(rawContent)) {
@@ -141,8 +145,17 @@ Respond with only valid JSON:
         .filter((part) => part?.type === 'text' && typeof part.text === 'string')
         .map((part) => part.text)
         .join('');
-    } else {
-      response = '';
+    }
+    if (!response?.trim() && msg) {
+      const reasoning = msg.reasoning;
+      if (typeof reasoning === 'string' && reasoning.trim()) {
+        response = reasoning.trim();
+      } else if (Array.isArray(msg.reasoning_details)) {
+        const parts = (msg.reasoning_details as { type?: string; text?: string }[])
+          .filter((p) => p?.type === 'reasoning.text' && typeof p.text === 'string')
+          .map((p) => p.text);
+        if (parts.length) response = parts.join('\n').trim();
+      }
     }
     if (!response?.trim()) {
       console.error('📄 Raw completion.choices[0]:', JSON.stringify(completion.choices?.[0], null, 2));
@@ -150,22 +163,50 @@ Respond with only valid JSON:
     }
 
     let jsonString = response.trim();
-    
     // Remove markdown code blocks if present
     if (jsonString.startsWith('```json')) {
       jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
     } else if (jsonString.startsWith('```')) {
       jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
     }
-    
-    // Parse the JSON response
+
+    // Try to extract a JSON object if the response is prose with embedded JSON (e.g. reasoning models)
+    const extractSummaryJson = (text: string): string | null => {
+      const codeBlock = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (codeBlock) return codeBlock[1].trim();
+      const lastBrace = text.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        for (let i = lastBrace; i >= 0; i--) {
+          if (text[i] !== '{') continue;
+          const slice = text.slice(i, lastBrace + 1);
+          try {
+            const o = JSON.parse(slice);
+            if (o && typeof o === 'object' && ('summary' in o || ('summary' in o && 'impact' in o))) return slice;
+          } catch {
+            // continue
+          }
+        }
+      }
+      return null;
+    }
+
     let parsed: unknown;
     try {
       parsed = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error('❌ Failed to parse AI response as JSON:', parseError);
-      console.error('📄 Raw AI response:', jsonString);
-      throw new Error(`Failed to parse AI response: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+    } catch {
+      const extracted = extractSummaryJson(response);
+      if (extracted) {
+        try {
+          parsed = JSON.parse(extracted);
+        } catch {
+          // ignore
+        }
+      }
+    }
+    if (parsed == null || typeof parsed !== 'object') {
+      console.error('❌ Failed to parse AI response as JSON');
+      console.error('📄 Raw AI response (first 500 chars):', jsonString.slice(0, 500));
+      throw new Error('Failed to parse AI response: no valid JSON found');
     }
     
     // Unwrap if model returned { "summary": { summary, impact, category, details } } (common with some OpenRouter models)
