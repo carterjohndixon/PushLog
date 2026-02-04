@@ -12,7 +12,7 @@ import {
   type AiUsage, type InsertAiUsage,
   type Payment, type InsertPayment
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, desc } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -457,7 +457,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
-    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)) as any;
+    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)).orderBy(desc(aiUsage.createdAt)) as any;
   }
 
   /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). */
@@ -477,7 +477,8 @@ export class DatabaseStorage implements IStorage {
       })
       .from(aiUsage)
       .leftJoin(pushEvents, eq(aiUsage.pushEventId, pushEvents.id))
-      .where(eq(aiUsage.userId, userId));
+      .where(eq(aiUsage.userId, userId))
+      .orderBy(desc(aiUsage.createdAt));
     return rows as (AiUsage & { pushedAt: string | null })[];
   }
 

@@ -582,7 +582,7 @@ export default function Models() {
                                 <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
                                 <TableCell className="text-muted-foreground text-sm">{c.costFormatted ?? "—"}</TableCell>
                                 <TableCell className="text-muted-foreground text-sm">
-                                  {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
+                                  {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
                                 </TableCell>
                                 <TableCell>
                                   {c.generationId ? (

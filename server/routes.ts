@@ -2147,8 +2147,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const createdAtFromRow = (u: any) => {
         const created = u.createdAt ?? (u as any).created_at;
         const pushed = u.pushedAt ?? (u as any).pushed_at;
-        if (created != null && String(created)) return created;
-        if (pushed != null && String(pushed)) return pushed;
+        if (created != null && String(created).trim()) return created;
+        if (pushed != null && String(pushed).trim()) return pushed;
+        return null;
+      };
+      const toIsoString = (v: unknown): string | null => {
+        if (v == null) return null;
+        if (typeof v === "string") return v;
+        if (typeof v === "number" && !Number.isNaN(v)) return new Date(v).toISOString();
+        if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
         return null;
       };
       const totalCalls = openRouterRows.length;
@@ -2202,14 +2209,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         calls: openRouterRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
+          const createdAtStr = toIsoString(at);
           return {
             id: u.id,
             model: u.model,
             tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
             cost: c,
             costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : (c === 0 ? "$0.00" : null),
-            createdAt: at,
-            generationId: u.openrouterGenerationId ?? (u as any).openrouterGenerationId ?? null,
+            createdAt: createdAtStr,
+            generationId: u.openrouterGenerationId ?? (u as any).openrouter_generation_id ?? (u as any).openrouterGenerationId ?? null,
           };
         }),
       });

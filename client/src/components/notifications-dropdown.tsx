@@ -202,7 +202,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           return (
             <div className="space-y-4">
               <div>
-                <h3 className="font-medium text-foreground">
+                <h3 className="font-medium text-foreground text-base">
                   {selectedNotification.title || selectedNotification.message}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -210,9 +210,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 </p>
               </div>
 
-              {/* Push Event Details */}
+              {/* Push Event Details — layout matches Notification Details spec */}
               {isPushEvent && metadata && (
-                <div className="border-t border-border pt-4 space-y-3">
+                <div className="border-t border-border pt-4 space-y-4">
                   <h4 className="font-semibold text-foreground text-sm">Push Event Details</h4>
                   
                   {metadata.repositoryFullName && (
@@ -239,7 +239,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   {metadata.commitMessage && (
                     <div className="text-sm">
                       <span className="font-medium text-foreground">Commit Message:</span>
-                      <p className="text-muted-foreground mt-1 pl-4 border-l-2 border-border">
+                      <p className="text-muted-foreground mt-2 pl-4 border-l-2 border-border whitespace-pre-wrap">
                         {metadata.commitMessage}
                       </p>
                     </div>
@@ -248,8 +248,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   {(metadata.additions !== undefined || metadata.deletions !== undefined) && (
                     <div className="text-sm">
                       <span className="font-medium text-foreground">Changes:</span>{' '}
-                      <span className="text-green-600">+{metadata.additions || 0}</span>{' '}
-                      <span className="text-red-600">-{metadata.deletions || 0}</span>
+                      <span className="text-green-600">+{metadata.additions ?? 0}</span>{' '}
+                      <span className="text-red-600">-{metadata.deletions ?? 0}</span>
                       {metadata.filesChanged !== undefined && (
                         <span className="text-muted-foreground"> ({metadata.filesChanged} files)</span>
                       )}
@@ -258,11 +258,11 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   
                   {commitUrl && (
                     <div className="text-sm">
-                      <a 
-                        href={commitUrl} 
-                        target="_blank" 
+                      <a
+                        href={commitUrl}
+                        target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sky-blue hover:underline flex items-center gap-1"
+                        className="text-sky-blue hover:underline inline-flex items-center gap-1"
                       >
                         <GitBranch className="w-4 h-4" />
                         View Commit on GitHub
@@ -271,25 +271,22 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                     </div>
                   )}
 
-                  {/* AI Summary Details */}
+                  {/* AI Summary — Model, Summary paragraph, Impact, Category */}
                   {metadata.aiGenerated && (
-                    <div className="mt-4 pt-4 border-t border-border space-y-2">
+                    <div className="pt-4 border-t border-border space-y-3">
                       <h5 className="font-semibold text-foreground text-sm">AI Summary</h5>
-                      
                       {metadata.aiModel && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Model:</span>{' '}
                           <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
                         </div>
                       )}
-                      
                       {metadata.aiSummary && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Summary:</span>
-                          <p className="text-muted-foreground mt-1">{metadata.aiSummary}</p>
+                          <p className="text-muted-foreground mt-2">{metadata.aiSummary}</p>
                         </div>
                       )}
-                      
                       {metadata.aiImpact && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Impact:</span>{' '}
@@ -302,7 +299,6 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                           </span>
                         </div>
                       )}
-
                       {metadata.aiCategory != null && String(metadata.aiCategory) && (
                         <div className="text-sm">
                           <span className="font-medium text-foreground">Category:</span>{' '}
@@ -429,12 +425,12 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 </div>
               )}
 
-              {/* Basic Info for all notifications */}
-              <div className="border-t border-border pt-4 text-sm text-muted-foreground">
-                <p><strong>Type:</strong> {(selectedNotification.type ?? '').replace(/_/g, ' ')}</p>
-                <p><strong>Created:</strong> {formatCreatedAt((selectedNotification as any).createdAt ?? (selectedNotification as any).created_at)}</p>
-                {metadata?.pushEventId && (
-                  <p><strong>Push Event ID:</strong> {metadata.pushEventId}</p>
+              {/* Basic info: Type, Created, Push Event ID */}
+              <div className="border-t border-border pt-4 text-sm text-muted-foreground space-y-1">
+                <p><strong className="text-foreground">Type:</strong> {(selectedNotification.type ?? '').replace(/_/g, ' ')}</p>
+                <p><strong className="text-foreground">Created:</strong> {formatCreatedAt((selectedNotification as any).createdAt ?? (selectedNotification as any).created_at)}</p>
+                {metadata?.pushEventId != null && (
+                  <p><strong className="text-foreground">Push Event ID:</strong> {metadata.pushEventId}</p>
                 )}
               </div>
 
