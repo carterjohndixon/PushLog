@@ -443,7 +443,7 @@ export function IntegrationSettingsModal({
                   <p>⚠️ This integration is currently paused. Enable it above to start sending notifications to Slack.</p>
                 </div>
               )}
-              <div className="mt-3 pt-3 border-t border-border">
+              <div className="mt-3 pt-3 border-t border-border space-y-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -455,9 +455,16 @@ export function IntegrationSettingsModal({
                   <Send className="w-3.5 h-3.5 mr-2" />
                   {testSlackMutation.isPending ? "Sending…" : "Send test message to Slack"}
                 </Button>
-                <p className="text-xs text-muted-foreground mt-1.5">
+                <p className="text-xs text-muted-foreground">
                   Sends a test message to #{integration?.slackChannelName}. If it fails, reconnect Slack or invite the app to the channel.
                 </p>
+                <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded text-xs text-amber-800 dark:text-amber-200">
+                  <p>
+                    💡 Not receiving messages? Run{" "}
+                    <code className="bg-amber-500/20 px-1 py-0.5 rounded font-mono">/invite @PushLog</code>{" "}
+                    in <strong>#{integration?.slackChannelName}</strong> to let the bot post.
+                  </p>
+                </div>
               </div>
             </div>
           </div>

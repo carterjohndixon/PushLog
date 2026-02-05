@@ -113,8 +113,9 @@ export default function Models() {
   const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
   const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
   const [usagePerGenLoading, setUsagePerGenLoading] = useState(false);
-  const [recentCallsOpen, setRecentCallsOpen] = useState(true);
+  const [recentCallsOpen, setRecentCallsOpen] = useState(false);
   const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
+  const [recentCallsSearch, setRecentCallsSearch] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -428,7 +429,10 @@ export default function Models() {
                 Usage & cost
               </CardTitle>
               <CardDescription>
-                Calls and token usage from PushLog using your OpenRouter key. Cost is estimated from our recorded usage.
+                Calls and token usage from PushLog using your OpenRouter key. Cost is estimated from our recorded usage and may show $0.00 for some calls — see{" "}
+                <a href="https://openrouter.ai/activity" target="_blank" rel="noopener noreferrer" className="text-log-green hover:underline">
+                  openrouter.ai/activity
+                </a>{" "}for exact costs.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -536,13 +540,35 @@ export default function Models() {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(usageData.costByModel ?? [])
-                              .sort((a, b) => {
-                                const tA = (a.lastAt && !Number.isNaN(new Date(a.lastAt).getTime())) ? new Date(a.lastAt).getTime() : 0;
-                                const tB = (b.lastAt && !Number.isNaN(new Date(b.lastAt).getTime())) ? new Date(b.lastAt).getTime() : 0;
-                                return tB - tA;
-                              })
-                              .map((r) => (
+                            {(() => {
+                              // Issue #12: Deduplicate models — group by canonical base name (part after provider/)
+                              const deduped = new Map<string, CostByModelRow>();
+                              for (const r of usageData.costByModel ?? []) {
+                                // Canonical key: use base model name (e.g. "gpt-4o" from "openai/gpt-4o")
+                                const slashIdx = r.model.indexOf("/");
+                                const canonical = slashIdx >= 0 ? r.model.slice(slashIdx + 1) : r.model;
+                                const existing = deduped.get(canonical);
+                                if (existing) {
+                                  existing.totalCalls += r.totalCalls;
+                                  existing.totalTokens += r.totalTokens;
+                                  existing.totalCostCents += r.totalCostCents;
+                                  // Keep the most recent lastAt
+                                  if (r.lastAt && (!existing.lastAt || new Date(r.lastAt).getTime() > new Date(existing.lastAt).getTime())) {
+                                    existing.lastAt = r.lastAt;
+                                  }
+                                  // Keep the longer/more specific model id for display
+                                  if (r.model.length > existing.model.length) existing.model = r.model;
+                                } else {
+                                  deduped.set(canonical, { ...r });
+                                }
+                              }
+                              return Array.from(deduped.values())
+                                .sort((a, b) => {
+                                  const tA = (a.lastAt && !Number.isNaN(new Date(a.lastAt).getTime())) ? new Date(a.lastAt).getTime() : 0;
+                                  const tB = (b.lastAt && !Number.isNaN(new Date(b.lastAt).getTime())) ? new Date(b.lastAt).getTime() : 0;
+                                  return tB - tA;
+                                });
+                            })().map((r) => (
                                 <TableRow key={r.model} className="border-border">
                                   <TableCell className="font-medium text-foreground">
                                     {getAiModelDisplayName(r.model)}
@@ -569,12 +595,12 @@ export default function Models() {
                           <CollapsibleTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2 text-foreground hover:bg-muted/50">
                               {recentCallsOpen ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
-                              <span className="text-sm font-semibold">Recent calls (usage per generation)</span>
+                              <span className="text-sm font-semibold">Recent calls</span>
                               <span className="text-muted-foreground font-normal text-xs ml-1">({usageData.calls.length})</span>
                             </Button>
                           </CollapsibleTrigger>
                           <Select value={recentCallsModelFilter || "all"} onValueChange={(v) => setRecentCallsModelFilter(v === "all" ? "" : v)}>
-                            <SelectTrigger className="w-[220px] h-8 text-sm bg-background border-border text-foreground">
+                            <SelectTrigger className="w-[200px] h-8 text-sm bg-background border-border text-foreground">
                               <SelectValue placeholder="All models" />
                             </SelectTrigger>
                             <SelectContent>
@@ -584,6 +610,15 @@ export default function Models() {
                               ))}
                             </SelectContent>
                           </Select>
+                          <div className="relative flex-1 min-w-[140px] max-w-[220px]">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                            <Input
+                              placeholder="Search calls…"
+                              value={recentCallsSearch}
+                              onChange={(e) => setRecentCallsSearch(e.target.value)}
+                              className="h-8 pl-8 text-sm bg-background border-border text-foreground"
+                            />
+                          </div>
                         </div>
                         <CollapsibleContent>
                           <div className="rounded-md border border-border overflow-hidden">
@@ -598,10 +633,19 @@ export default function Models() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {(recentCallsModelFilter
-                                  ? usageData.calls.filter((c) => c.model === recentCallsModelFilter)
-                                  : usageData.calls
-                                ).map((c) => (
+                                {usageData.calls
+                                  .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
+                                  .filter((c) => {
+                                    if (!recentCallsSearch.trim()) return true;
+                                    const q = recentCallsSearch.toLowerCase();
+                                    return (
+                                      c.model.toLowerCase().includes(q) ||
+                                      getAiModelDisplayName(c.model).toLowerCase().includes(q) ||
+                                      (c.costFormatted ?? '').toLowerCase().includes(q) ||
+                                      String(c.tokensUsed ?? '').includes(q)
+                                    );
+                                  })
+                                .map((c) => (
                                   <TableRow key={c.id} className="border-border">
                                     <TableCell className="font-medium text-foreground text-sm">
                                       {getAiModelDisplayName(c.model)}
@@ -643,8 +687,15 @@ export default function Models() {
                               </TableBody>
                             </Table>
                           </div>
-                          {recentCallsModelFilter && usageData.calls.filter((c) => c.model === recentCallsModelFilter).length === 0 && (
-                            <p className="text-sm text-muted-foreground py-3">No calls for this model.</p>
+                          {(recentCallsModelFilter || recentCallsSearch.trim()) &&
+                            usageData.calls
+                              .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
+                              .filter((c) => {
+                                if (!recentCallsSearch.trim()) return true;
+                                const q = recentCallsSearch.toLowerCase();
+                                return c.model.toLowerCase().includes(q) || getAiModelDisplayName(c.model).toLowerCase().includes(q) || (c.costFormatted ?? '').toLowerCase().includes(q) || String(c.tokensUsed ?? '').includes(q);
+                              }).length === 0 && (
+                            <p className="text-sm text-muted-foreground py-3">No calls match your filters.</p>
                           )}
                         </CollapsibleContent>
                       </Collapsible>
@@ -666,7 +717,15 @@ export default function Models() {
               Browse OpenRouter models
             </CardTitle>
             <CardDescription>
-              Search and filter by name or context length. Click a model for details and to apply it to an integration.
+              Search and filter by name or context length. Click a model for details and to apply it to an integration.{" "}
+              <a
+                href="https://openrouter.ai/models"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-log-green hover:underline font-medium"
+              >
+                View all models on OpenRouter <ExternalLink className="w-3 h-3 inline" />
+              </a>
             </CardDescription>
             <div className="flex flex-col sm:flex-row gap-3 pt-2">
               <div className="relative flex-1">

@@ -324,7 +324,7 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       }
       // Two notifications per push: the event + delivery confirmation (customer-friendly)
       const repoDisplayName = storedRepo.name || pushData.repositoryName.split('/').pop() || pushData.repositoryName;
-      const sharedMetadata = {
+      const sharedMetadata: Record<string, unknown> = {
         pushEventId: pushEvent.id,
         repositoryId: storedRepo.id,
         repositoryName: pushData.repositoryName,
@@ -337,6 +337,14 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
         slackChannelName: integration.slackChannelName,
         integrationId: integration.id,
         pushedAt: pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : pushEvent.pushedAt,
+        additions: pushData.additions ?? 0,
+        deletions: pushData.deletions ?? 0,
+        filesChanged: pushData.filesChanged?.length ?? 0,
+        // AI fields (Issue #15): include model, summary, impact, category so notification detail can show them
+        aiModel: aiModel ?? null,
+        aiSummary: aiSummary ?? null,
+        aiImpact: aiImpact ?? null,
+        aiCategory: aiCategory ?? null,
       };
       try {
         const pushNotif = await storage.createNotification({

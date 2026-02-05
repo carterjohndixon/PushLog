@@ -128,14 +128,17 @@ export function IntegrationSetupModal({
 
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] }); // Also refresh repositories
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       onOpenChange(false);
+      const channelName = channels?.find(c => c.id === variables.slackChannelId)?.name ?? '';
       toast({
         title: "Integration Created",
-        description: "Your repository is now connected to Slack and monitoring has been enabled!",
+        description: channelName
+          ? `Connected! Make sure to run /invite @PushLog in #${channelName} so the bot can post messages.`
+          : "Your repository is now connected to Slack and monitoring has been enabled!",
       });
     },
     onError: (error: any) => {
@@ -399,6 +402,20 @@ export function IntegrationSetupModal({
               ) : (
                 <div className="text-sm text-muted-foreground">No channels available</div>
               )}
+            </div>
+          )}
+
+          {/* Slack invite reminder (shown after channel is selected) */}
+          {selectedChannel && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-sm">
+              <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                ⚠️ Don't forget to invite PushLog
+              </p>
+              <p className="text-amber-700 dark:text-amber-300 text-xs">
+                After creating the integration, run{" "}
+                <code className="bg-amber-500/20 px-1 py-0.5 rounded font-mono text-xs">/invite @PushLog</code>{" "}
+                in <strong>#{channels?.find(c => c.id === selectedChannel)?.name}</strong> so the bot can send messages.
+              </p>
             </div>
           )}
 
