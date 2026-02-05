@@ -309,17 +309,17 @@ export function IntegrationSettingsModal({
                         {aiModel ? getAiModelDisplayName(aiModel) : null}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border text-foreground" position="popper">
                       {AI_MODELS.map((model) => (
                         <SelectItem
                           key={model.id}
                           value={model.id}
-                          className="py-3 h-auto cursor-pointer"
+                          className="py-3 h-auto cursor-pointer group"
                           textValue={model.name}
                         >
                           <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
-                            <span className="font-medium text-sm leading-tight">{model.name}</span>
-                            <span className="text-xs text-foreground leading-relaxed break-words">
+                            <span className="font-medium text-sm leading-tight text-foreground group-data-[highlighted]:text-accent-foreground">{model.name}</span>
+                            <span className="text-xs text-foreground/90 leading-relaxed break-words group-data-[highlighted]:text-accent-foreground">
                               ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
                             </span>
                           </div>
