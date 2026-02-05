@@ -1,0 +1,12 @@
+declare global {
+  var notificationStreams: Map<number, any> | undefined;
+}
+
+export default function broadcastNotification(userId: number, notification: any) {
+  if (global.notificationStreams?.has(userId)) {
+      const stream = global.notificationStreams.get(userId);
+      if (stream) {
+          stream.write(`data: ${JSON.stringify({ type: 'notification', data: notification })}\n\n`);
+      }
+  }
+}

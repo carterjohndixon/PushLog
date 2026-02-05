@@ -5,7 +5,6 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 
@@ -42,6 +41,7 @@ import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
+import broadcastNotification from "./helper/broadcastNotification";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -53,11 +53,6 @@ function sanitizeIntegrationForClient(integration: any) {
 /** True only if the string looks like a real OpenRouter API key (decrypt can return ciphertext on failure). */
 function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
   return !!s?.trim().startsWith("sk-or-");
-}
-
-// Extend global type for notification streams
-declare global {
-  var notificationStreams: Map<number, any> | undefined;
 }
 
 // Helper function to get user ID from OAuth state
@@ -72,16 +67,6 @@ async function getUserIdFromOAuthState(state: string): Promise<number | null> {
 }
 
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
-
-// Helper function to broadcast notifications to connected clients
-function broadcastNotification(userId: number, notification: any) {
-  if (global.notificationStreams?.has(userId)) {
-    const stream = global.notificationStreams.get(userId);
-    if (stream) {
-      stream.write(`data: ${JSON.stringify({ type: 'notification', data: notification })}\n\n`);
-    }
-  }
-}
 
 /** Slack slash command handler. Must be mounted with express.raw({ type: 'application/x-www-form-urlencoded' }) so req.body is a Buffer. Always returns 200 so Slack shows our message instead of "dispatch_failed". */
 export async function slackCommandsHandler(req: Request, res: Response): Promise<void> {
@@ -244,85 +229,27 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
     const useOpenRouter = !!openRouterKeyRaw?.trim();
     const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
+    const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
     let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
     try {
       summary = await generateCodeSummary(
         pushData,
         aiModel,
         maxTokens,
-        useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
+        useOpenRouter
+          ? {
+              openRouterApiKey: openRouterKeyRaw!.trim(),
+              notificationContext: {
+                userId: integration.userId,
+                repositoryName: repoDisplayName,
+                integrationId: integration.id,
+                slackChannelName: integration.slackChannelName,
+              },
+            }
+          : undefined
       );
     } catch (aiErr: any) {
       console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
-      // Notify user when OpenRouter fails (rate limit, data policy, etc.) so they see it in-app
-      const isOpenRouterErr = !!(aiErr?.message && String(aiErr.message).includes("OpenRouter"));
-      console.warn("📬 [Webhook] OpenRouter notification check: useOpenRouter=%s, isOpenRouterErr=%s, userId=%s", useOpenRouter, isOpenRouterErr, integration?.userId);
-      if (useOpenRouter && isOpenRouterErr) {
-        try {
-          const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
-          const openRouterNotif = await storage.createNotification({
-            userId: integration.userId,
-            type: "openrouter_error",
-            title: "OpenRouter error",
-            message: aiErr.message.slice(0, 500),
-            metadata: JSON.stringify({
-              repositoryName: repoDisplayName,
-              integrationId: integration.id,
-              slackChannelName: integration.slackChannelName,
-            }),
-          });
-          console.log("📬 [Webhook] Created OpenRouter error notification for user", integration.userId, "id:", openRouterNotif.id);
-          try {
-            broadcastNotification(integration.userId, {
-              id: openRouterNotif.id,
-              type: "openrouter_error",
-              title: openRouterNotif.title,
-              message: openRouterNotif.message,
-              metadata: openRouterNotif.metadata,
-              createdAt: openRouterNotif.createdAt,
-              isRead: false,
-            });
-          } catch (broadcastErr) {
-            console.warn("⚠️ [Webhook] Broadcast of OpenRouter notification failed (user may not be connected):", broadcastErr);
-          }
-        } catch (notifErr) {
-          console.warn("⚠️ [Webhook] Failed to create OpenRouter error notification:", notifErr);
-        }
-      }
-    }
-
-    // OpenRouter failed but generateCodeSummary returned a fallback (it doesn't throw). Notify user in-app.
-    if (summary?.openRouterError) {
-      try {
-        const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
-        const openRouterNotif = await storage.createNotification({
-          userId: integration.userId,
-          type: "openrouter_error",
-          title: "OpenRouter error",
-          message: summary.openRouterError.slice(0, 500),
-          metadata: JSON.stringify({
-            repositoryName: repoDisplayName,
-            integrationId: integration.id,
-            slackChannelName: integration.slackChannelName,
-          }),
-        });
-        console.warn("📬 [Webhook] Created OpenRouter error notification for user", integration.userId, "id:", openRouterNotif.id);
-        try {
-          broadcastNotification(integration.userId, {
-            id: openRouterNotif.id,
-            type: "openrouter_error",
-            title: openRouterNotif.title,
-            message: openRouterNotif.message,
-            metadata: openRouterNotif.metadata,
-            createdAt: openRouterNotif.createdAt,
-            isRead: false,
-          });
-        } catch (broadcastErr) {
-          console.warn("⚠️ [Webhook] Broadcast of OpenRouter notification failed (user may not be connected):", broadcastErr);
-        }
-      } catch (notifErr) {
-        console.warn("⚠️ [Webhook] Failed to create OpenRouter error notification:", notifErr);
-      }
     }
 
     const hasValidContent = !!(summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category);

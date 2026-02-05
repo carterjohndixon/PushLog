@@ -1,6 +1,8 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import { calculateTokenCost } from './stripe';
+import broadcastNotification from './helper/broadcastNotification';
+import { storage } from './storage';
 
 dotenv.config();
 
@@ -44,6 +46,13 @@ export interface AiUsageResult {
 export interface GenerateCodeSummaryOptions {
   /** When set, use OpenRouter with this API key and treat model as OpenRouter model id (e.g. openai/gpt-4o). No PushLog credit deduction. */
   openRouterApiKey?: string;
+  /** When set, OpenRouter errors will create an in-app notification for this user and broadcast it. */
+  notificationContext?: {
+    userId: number;
+    repositoryName: string;
+    integrationId: number;
+    slackChannelName: string;
+  };
 }
 
 /** OpenRouter generation API response: may be { data: generation } or the generation object at top level. */
@@ -447,6 +456,38 @@ Respond with only valid JSON:
     });
 
     const openRouterErrorMsg = (error instanceof Error && String(error.message).includes('OpenRouter')) ? (error instanceof Error ? error.message : String(error)) : undefined;
+    if (openRouterErrorMsg) {
+      console.warn('📬 [AI] OpenRouter error captured for in-app notification:', openRouterErrorMsg.slice(0, 100));
+      // Create in-app notification and broadcast so the user sees it in the notification dropdown
+      const ctx = options?.notificationContext;
+      if (ctx) {
+        try {
+          const openRouterNotif = await storage.createNotification({
+            userId: ctx.userId,
+            type: 'openrouter_error',
+            title: 'OpenRouter error',
+            message: openRouterErrorMsg.slice(0, 500),
+            metadata: JSON.stringify({
+              repositoryName: ctx.repositoryName,
+              integrationId: ctx.integrationId,
+              slackChannelName: ctx.slackChannelName,
+            }),
+          });
+          console.warn('📬 [AI] Created OpenRouter error notification for user', ctx.userId, 'id:', openRouterNotif.id);
+          broadcastNotification(ctx.userId, {
+            id: openRouterNotif.id,
+            type: 'openrouter_error',
+            title: openRouterNotif.title,
+            message: openRouterNotif.message,
+            metadata: openRouterNotif.metadata,
+            createdAt: openRouterNotif.createdAt,
+            isRead: false,
+          });
+        } catch (notifErr) {
+          console.warn('⚠️ [AI] Failed to create/broadcast OpenRouter error notification:', notifErr);
+        }
+      }
+    }
 
     // Fallback summary if AI fails (use correct additions/deletions values)
     return {
