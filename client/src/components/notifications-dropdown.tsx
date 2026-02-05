@@ -50,13 +50,13 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           {notifications.map((notification) => (
           <div 
             key={notification.id} 
-            className={`flex items-center justify-between p-4 [&:hover]:!bg-muted ${
+            className={`flex items-center justify-between gap-2 p-4 min-w-0 [&:hover]:!bg-muted ${
               notification.type === 'email_verification' ? 'bg-amber-500/10 dark:bg-amber-500/20 border-b border-border' : 
               notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' ? 'bg-destructive/10 border-l-4 border-destructive' :
               !notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : ''
             }`}
           >
-            <div className="flex items-center flex-1">
+            <div className="flex items-center flex-1 min-w-0 overflow-hidden">
               {notification.type === 'push_event' ? (
                 <GitBranch className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_message_sent' ? (
@@ -68,8 +68,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   notification.type === 'email_verification' ? 'text-amber-500' : 'text-steel-gray'
                 }`} />
               )}
-              <div className="flex flex-col flex-1">
-                <span className={`text-sm font-medium ${
+              <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+                <span className={`text-sm font-medium truncate ${
                   notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
                   notification.type === 'slack_message_sent' ? 'text-sky-blue' :
@@ -77,7 +77,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 }`}>
                   {notification.title || notification.message}
                 </span>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground line-clamp-2 break-words">
                   {notification.message}
                 </span>
                 <span className="text-xs text-muted-foreground/80">
@@ -85,7 +85,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 </span>
               </div>
             </div>
-            <div className="flex items-center space-x-1 ml-2">
+            <div className="flex items-center space-x-1 flex-shrink-0">
               <Button
                 variant="ghost"
                 size="sm"
