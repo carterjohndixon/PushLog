@@ -252,8 +252,36 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
         maxTokens,
         useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
       );
-    } catch (aiErr) {
+    } catch (aiErr: any) {
       console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
+      // Notify user when OpenRouter fails (rate limit, data policy, etc.) so they see it in-app
+      if (useOpenRouter && aiErr?.message && String(aiErr.message).includes("OpenRouter")) {
+        try {
+          const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
+          const openRouterNotif = await storage.createNotification({
+            userId: integration.userId,
+            type: "openrouter_error",
+            title: "OpenRouter error",
+            message: aiErr.message.slice(0, 500),
+            metadata: JSON.stringify({
+              repositoryName: repoDisplayName,
+              integrationId: integration.id,
+              slackChannelName: integration.slackChannelName,
+            }),
+          });
+          broadcastNotification(integration.userId, {
+            id: openRouterNotif.id,
+            type: "openrouter_error",
+            title: openRouterNotif.title,
+            message: openRouterNotif.message,
+            metadata: openRouterNotif.metadata,
+            createdAt: openRouterNotif.createdAt,
+            isRead: false,
+          });
+        } catch (notifErr) {
+          console.warn("⚠️ [Webhook] Failed to create OpenRouter error notification:", notifErr);
+        }
+      }
     }
 
     const hasValidContent = !!(summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category);
