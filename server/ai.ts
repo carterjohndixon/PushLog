@@ -37,6 +37,8 @@ export interface AiUsageResult {
   openrouterGenerationId?: string | null;
   /** True when the API failed and we returned a generic fallback (do not treat as real AI summary). */
   isFallback?: boolean;
+  /** When set, the failure was an OpenRouter error (rate limit, data policy, etc.) so the caller can notify the user. */
+  openRouterError?: string;
 }
 
 export interface GenerateCodeSummaryOptions {
@@ -443,7 +445,9 @@ Respond with only valid JSON:
       additions: pushData.additions,
       deletions: pushData.deletions
     });
-    
+
+    const openRouterErrorMsg = (error instanceof Error && String(error.message).includes('OpenRouter')) ? (error instanceof Error ? error.message : String(error)) : undefined;
+
     // Fallback summary if AI fails (use correct additions/deletions values)
     return {
       summary: {
@@ -455,6 +459,7 @@ Respond with only valid JSON:
       tokensUsed: 0,
       cost: 0,
       isFallback: true,
+      openRouterError: openRouterErrorMsg,
     };
   }
 }

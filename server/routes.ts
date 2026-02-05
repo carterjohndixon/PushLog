@@ -291,6 +291,40 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       }
     }
 
+    // OpenRouter failed but generateCodeSummary returned a fallback (it doesn't throw). Notify user in-app.
+    if (summary?.openRouterError) {
+      try {
+        const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
+        const openRouterNotif = await storage.createNotification({
+          userId: integration.userId,
+          type: "openrouter_error",
+          title: "OpenRouter error",
+          message: summary.openRouterError.slice(0, 500),
+          metadata: JSON.stringify({
+            repositoryName: repoDisplayName,
+            integrationId: integration.id,
+            slackChannelName: integration.slackChannelName,
+          }),
+        });
+        console.warn("📬 [Webhook] Created OpenRouter error notification for user", integration.userId, "id:", openRouterNotif.id);
+        try {
+          broadcastNotification(integration.userId, {
+            id: openRouterNotif.id,
+            type: "openrouter_error",
+            title: openRouterNotif.title,
+            message: openRouterNotif.message,
+            metadata: openRouterNotif.metadata,
+            createdAt: openRouterNotif.createdAt,
+            isRead: false,
+          });
+        } catch (broadcastErr) {
+          console.warn("⚠️ [Webhook] Broadcast of OpenRouter notification failed (user may not be connected):", broadcastErr);
+        }
+      } catch (notifErr) {
+        console.warn("⚠️ [Webhook] Failed to create OpenRouter error notification:", notifErr);
+      }
+    }
+
     const hasValidContent = !!(summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category);
     const aiGenerated = !!summary && !summary.isFallback && hasValidContent;
     const aiSummary = aiGenerated ? (summary!.summary!.summary ?? null) : null;
