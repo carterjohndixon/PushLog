@@ -85,3 +85,5 @@ migrations/*.sql
 .cursor
 
 /launch
+
+MEMORY.md
