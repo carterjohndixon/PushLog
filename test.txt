@@ -150,3 +150,6 @@ fasdff
 
 test 
 Testingtesstt
+
+Seeing open router cost
+Grok 4.1 fast
