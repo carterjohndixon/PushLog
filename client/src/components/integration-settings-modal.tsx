@@ -309,17 +309,17 @@ export function IntegrationSettingsModal({
                         {aiModel ? getAiModelDisplayName(aiModel) : null}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border hover:text-log-green" position="popper">
+                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
                       {AI_MODELS.map((model) => (
                         <SelectItem
                           key={model.id}
                           value={model.id}
-                          className="py-3 h-auto cursor-pointer hover:text-log-green"
+                          className="py-3 h-auto cursor-pointer"
                           textValue={model.name}
                         >
                           <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
                             <span className="font-medium text-sm leading-tight">{model.name}</span>
-                            <span className="text-xs text-muted-foreground leading-relaxed break-words">
+                            <span className="text-xs text-foreground leading-relaxed break-words">
                               ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
                             </span>
                           </div>
@@ -368,12 +368,12 @@ export function IntegrationSettingsModal({
                             <SelectItem
                               key={model.id}
                               value={model.id}
-                              className="py-2 cursor-pointer min-w-0"
-                              textValue={model.name}
+                              className="py-2 cursor-pointer min-w-0 group"
+                              textValue={`${model.name} (${model.id})`}
                             >
-                              <span className="flex items-center min-w-0 gap-2 overflow-hidden">
-                                <span className="font-medium text-sm truncate">{model.name}</span>
-                                <span className="text-muted-foreground text-xs truncate shrink-0">({model.id})</span>
+                              <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
+                                <span className="font-medium text-sm truncate min-w-0 flex-1">{model.name}</span>
+                                <span className="text-muted-foreground group-data-[highlighted]:text-accent-foreground text-xs truncate min-w-0">({model.id})</span>
                               </span>
                             </SelectItem>
                           ))}

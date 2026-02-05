@@ -725,7 +725,6 @@ export class DatabaseStorage implements IStorage {
         credits: payment.credits,
         status: payment.status,
         createdAt: payment.createdAt
-        // Exclude stripePaymentIntentId
       }))
     };
   }
