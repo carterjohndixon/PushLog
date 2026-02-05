@@ -255,7 +255,9 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
     } catch (aiErr: any) {
       console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
       // Notify user when OpenRouter fails (rate limit, data policy, etc.) so they see it in-app
-      if (useOpenRouter && aiErr?.message && String(aiErr.message).includes("OpenRouter")) {
+      const isOpenRouterErr = !!(aiErr?.message && String(aiErr.message).includes("OpenRouter"));
+      console.log("📬 [Webhook] OpenRouter notification check: useOpenRouter=%s, isOpenRouterErr=%s, userId=%s", useOpenRouter, isOpenRouterErr, integration?.userId);
+      if (useOpenRouter && isOpenRouterErr) {
         try {
           const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
           const openRouterNotif = await storage.createNotification({
