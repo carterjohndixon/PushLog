@@ -219,11 +219,11 @@ Respond with only valid JSON:
             || tryHeader('openrouter-generation-id');
         }
         if (!openRouterGenerationId) {
-          // Diagnostic: log all header names so we can see if OpenRouter sends generation id under a different name
+          // x-openrouter-generation-id is often stripped by CDNs (e.g. Cloudflare). Cost will be 0 unless gen id is in response body.
           const headerNames = typeof res.headers.entries === 'function'
             ? Array.from(res.headers.entries()).map(([k]) => k)
             : [];
-          console.warn('📊 OpenRouter: no generation id in response header (cost lookup will use completion.id or be 0). Header names:', headerNames.join(', ') || '(none)');
+          console.warn('📊 OpenRouter: no generation id in response header (CDN may strip it). Headers:', headerNames.join(', ') || '(none)');
         } else {
           console.log('📊 OpenRouter: generation id from header:', openRouterGenerationId.slice(0, 28) + '...');
         }
@@ -247,12 +247,15 @@ Respond with only valid JSON:
         }
         const completionJson = await res.json();
         completion = completionJson as OpenAI.Chat.Completions.ChatCompletion;
-        // OpenRouter may return generation id only in body when header is missing; scan for gen-xxx anywhere
+        // OpenRouter may return generation id only in body when header is missing (header is often stripped by CDN e.g. Cloudflare)
         if (!openRouterGenerationId && completionJson) {
           const fromBody = findGenIdInObject(completionJson);
           if (fromBody) {
             openRouterGenerationId = fromBody;
             console.log('📊 OpenRouter: generation id from response body:', openRouterGenerationId.slice(0, 28) + '...');
+          } else {
+            const topKeys = typeof completionJson === 'object' && completionJson !== null ? Object.keys(completionJson as object).join(', ') : '—';
+            console.warn('📊 OpenRouter: no gen id in header or body. Response keys:', topKeys, '| completion.id:', (completion as { id?: string }).id ?? '—');
           }
         }
       } catch (apiError: any) {
@@ -454,11 +457,11 @@ Respond with only valid JSON:
             console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
           }
         } else {
-          console.warn('📊 OpenRouter: generation lookup returned no usage/cost (id may be chatcmpl-xxx; API expects gen-xxx)');
+          console.warn('📊 OpenRouter: generation lookup returned no usage/cost (id may be chatcmpl-xxx; API expects gen-xxx). Check https://openrouter.ai/activity for actual cost.');
           cost = 0;
         }
       } else {
-        console.warn('📊 OpenRouter: no generation id or completion.id, cost set to 0');
+        console.warn('📊 OpenRouter: no generation id or completion.id; cost set to 0. Generation id is often stripped by CDN (e.g. Cloudflare). See https://openrouter.ai/activity for actual usage.');
         cost = 0;
       }
     } else {
