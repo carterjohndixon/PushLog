@@ -71,6 +71,22 @@ type OpenRouterGenerationResponse = {
 
 const OPENROUTER_GENERATION_ID_HEADER = 'x-openrouter-generation-id';
 
+/** OpenRouter gen-xxx id pattern; used to find generation id in response body when header is missing. */
+const GEN_ID_REGEX = /^gen-[a-zA-Z0-9_-]+$/;
+
+/** Recursively find first string value that looks like an OpenRouter generation id (gen-xxx). Max depth 4. */
+function findGenIdInObject(obj: unknown, depth = 0): string | null {
+  if (depth > 4 || obj === null || obj === undefined) return null;
+  if (typeof obj === 'string' && GEN_ID_REGEX.test(obj.trim())) return obj.trim();
+  if (typeof obj === 'object' && obj !== null) {
+    for (const v of Object.values(obj)) {
+      const found = findGenIdInObject(v, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 /** Fetch usage/cost for an OpenRouter generation by ID. OpenRouter expects gen-xxx; chatcmpl-xxx (completion.id) often returns 404. */
 async function fetchOpenRouterGenerationUsage(
   generationId: string,
@@ -229,13 +245,13 @@ Respond with only valid JSON:
           }
           throw new Error(`OpenRouter ${res.status}: ${errBody.slice(0, 200)}`);
         }
-        completion = (await res.json()) as OpenAI.Chat.Completions.ChatCompletion;
-        // Some OpenRouter responses include generation id in the body when header is missing
-        if (!openRouterGenerationId && completion) {
-          const body = completion as unknown as Record<string, unknown>;
-          const fromBody = (body.openrouter_generation_id ?? body.generation_id ?? (body.usage as Record<string, unknown>)?.openrouter_generation_id) as string | undefined;
-          if (typeof fromBody === 'string' && fromBody.trim().startsWith('gen-')) {
-            openRouterGenerationId = fromBody.trim();
+        const completionJson = await res.json();
+        completion = completionJson as OpenAI.Chat.Completions.ChatCompletion;
+        // OpenRouter may return generation id only in body when header is missing; scan for gen-xxx anywhere
+        if (!openRouterGenerationId && completionJson) {
+          const fromBody = findGenIdInObject(completionJson);
+          if (fromBody) {
+            openRouterGenerationId = fromBody;
             console.log('📊 OpenRouter: generation id from response body:', openRouterGenerationId.slice(0, 28) + '...');
           }
         }
