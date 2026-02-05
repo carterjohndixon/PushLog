@@ -23,12 +23,12 @@ interface NotificationsDropdownProps {
 }
 
 export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdownProps) {
-  const { notifications, count, hasUnread, markAllAsRead, removeNotification, readNotification, clearAllNotifications } = useNotifications();
+  const { notifications, count, hasUnread, markAllAsRead, removeNotification, readNotification, clearAllNotifications, refetchNotifications } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => { if (open) refetchNotifications(); }}>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 

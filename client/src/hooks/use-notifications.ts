@@ -54,7 +54,7 @@ export function useNotifications() {
   const [currentToken, setCurrentToken] = useState<string | null>(null);
 
   // Fetch notifications from database
-  const { data: initialData } = useQuery<NotificationsResponse>({
+  const { data: initialData, refetch: refetchNotifications } = useQuery<NotificationsResponse>({
     queryKey: ['/api/notifications/all'],
     queryFn: fetchNotifications,
     enabled: true,
@@ -246,6 +246,7 @@ export function useNotifications() {
     markAllAsRead,
     readNotification,
     removeNotification,
-    clearAllNotifications
+    clearAllNotifications,
+    refetchNotifications,
   };
 } 

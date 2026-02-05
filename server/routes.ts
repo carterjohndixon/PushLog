@@ -269,15 +269,20 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
               slackChannelName: integration.slackChannelName,
             }),
           });
-          broadcastNotification(integration.userId, {
-            id: openRouterNotif.id,
-            type: "openrouter_error",
-            title: openRouterNotif.title,
-            message: openRouterNotif.message,
-            metadata: openRouterNotif.metadata,
-            createdAt: openRouterNotif.createdAt,
-            isRead: false,
-          });
+          console.log("📬 [Webhook] Created OpenRouter error notification for user", integration.userId, "id:", openRouterNotif.id);
+          try {
+            broadcastNotification(integration.userId, {
+              id: openRouterNotif.id,
+              type: "openrouter_error",
+              title: openRouterNotif.title,
+              message: openRouterNotif.message,
+              metadata: openRouterNotif.metadata,
+              createdAt: openRouterNotif.createdAt,
+              isRead: false,
+            });
+          } catch (broadcastErr) {
+            console.warn("⚠️ [Webhook] Broadcast of OpenRouter notification failed (user may not be connected):", broadcastErr);
+          }
         } catch (notifErr) {
           console.warn("⚠️ [Webhook] Failed to create OpenRouter error notification:", notifErr);
         }
