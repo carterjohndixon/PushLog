@@ -314,12 +314,12 @@ export function IntegrationSettingsModal({
                         <SelectItem
                           key={model.id}
                           value={model.id}
-                          className="py-3 h-auto cursor-pointer group"
+                          className="py-3 h-auto cursor-pointer group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground"
                           textValue={model.name}
                         >
                           <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
-                            <span className="font-medium text-sm leading-tight text-foreground group-data-[highlighted]:text-accent-foreground">{model.name}</span>
-                            <span className="text-xs text-foreground/90 leading-relaxed break-words group-data-[highlighted]:text-accent-foreground">
+                            <span className="font-medium text-sm leading-tight text-foreground group-data-[highlighted]:text-primary-foreground">{model.name}</span>
+                            <span className="text-xs text-foreground/90 leading-relaxed break-words group-data-[highlighted]:text-primary-foreground">
                               ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
                             </span>
                           </div>

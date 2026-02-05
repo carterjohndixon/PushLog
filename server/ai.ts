@@ -192,6 +192,13 @@ Respond with only valid JSON:
         if (!res.ok) {
           const errBody = await res.text();
           console.error('❌ OpenRouter API Error:', res.status, res.statusText, errBody.slice(0, 300));
+          // User-friendly message for data policy / free model 404 so they know to fix OpenRouter settings
+          if (res.status === 404 && /data policy|Free model publication|privacy/i.test(errBody)) {
+            throw new Error(
+              'OpenRouter rejected the request: your account\'s data policy does not allow this model (e.g. free models). ' +
+              'Configure it at https://openrouter.ai/settings/privacy and enable "Free model publication" or the option that matches your model.'
+            );
+          }
           throw new Error(`OpenRouter ${res.status}: ${errBody.slice(0, 200)}`);
         }
         completion = (await res.json()) as OpenAI.Chat.Completions.ChatCompletion;
