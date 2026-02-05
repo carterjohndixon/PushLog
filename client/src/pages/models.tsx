@@ -194,22 +194,55 @@ export default function Models() {
     retry: false,
   });
 
-  // Last-used timestamp per model (from server aggregate or fallback from calls), displayed in user's local timezone
-  const lastUsedByModel = (userHasKey && usageData)
-    ? (usageData.lastUsedByModel && Object.keys(usageData.lastUsedByModel).length > 0
-        ? usageData.lastUsedByModel
-        : (usageData.calls?.length
-            ? usageData.calls.reduce<Record<string, string>>((acc, c) => {
-                const m = String(c?.model ?? "").trim();
-                if (!m) return acc;
-                const at = c?.createdAt != null ? String(c.createdAt) : "";
-                if (!at) return acc;
-                const prev = acc[m] ? new Date(acc[m]).getTime() : 0;
-                if (new Date(at).getTime() > prev) acc[m] = at;
-                return acc;
-              }, {})
-            : {}))
-    : {};
+  // Last-used timestamp per model — merge all sources so the browse table can match by full id or base name
+  const lastUsedByModel = (() => {
+    if (!userHasKey || !usageData) return {} as Record<string, string>;
+    const map: Record<string, string> = {};
+    const upsert = (key: string, at: string) => {
+      if (!key || !at) return;
+      const prev = map[key] ? new Date(map[key]).getTime() : 0;
+      if (new Date(at).getTime() > prev) map[key] = at;
+    };
+    // 1. Server-side lastUsedByModel (keyed by stored model string e.g. "x-ai/grok-4.1-fast")
+    if (usageData.lastUsedByModel) {
+      for (const [m, at] of Object.entries(usageData.lastUsedByModel)) {
+        upsert(m, at);
+        const slash = m.indexOf("/");
+        if (slash >= 0) upsert(m.slice(slash + 1), at);
+      }
+    }
+    // 2. costByModel (has lastAt per model)
+    if (usageData.costByModel) {
+      for (const r of usageData.costByModel) {
+        if (r.lastAt) {
+          upsert(r.model, r.lastAt);
+          const slash = r.model.indexOf("/");
+          if (slash >= 0) upsert(r.model.slice(slash + 1), r.lastAt);
+        }
+      }
+    }
+    // 3. Recent calls fallback
+    if (usageData.calls?.length) {
+      for (const c of usageData.calls) {
+        const m = String(c?.model ?? "").trim();
+        const at = c?.createdAt != null ? String(c.createdAt) : "";
+        if (m && at) {
+          upsert(m, at);
+          const slash = m.indexOf("/");
+          if (slash >= 0) upsert(m.slice(slash + 1), at);
+        }
+      }
+    }
+    return map;
+  })();
+
+  // Lookup helper: try full model id first, then base name (after /)
+  const getLastUsed = (modelId: string): string | undefined => {
+    if (lastUsedByModel[modelId]) return lastUsedByModel[modelId];
+    const slash = modelId.indexOf("/");
+    if (slash >= 0) return lastUsedByModel[modelId.slice(slash + 1)];
+    return undefined;
+  };
 
   const { data: integrations } = useQuery<IntegrationOption[]>({
     queryKey: ["/api/integrations"],
@@ -770,7 +803,16 @@ export default function Models() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredModels.slice(0, 100).map((m) => (
+                    {filteredModels
+                      .slice()
+                      .sort((a, b) => {
+                        // Models you've used appear first, sorted by most recently used
+                        const aTime = getLastUsed(a.id) ? new Date(getLastUsed(a.id)!).getTime() : 0;
+                        const bTime = getLastUsed(b.id) ? new Date(getLastUsed(b.id)!).getTime() : 0;
+                        if (aTime !== bTime) return bTime - aTime;
+                        return 0; // keep original order for unused models
+                      })
+                      .slice(0, 100).map((m) => (
                       <TableRow
                         key={m.id}
                         className="border-border cursor-pointer hover:bg-muted/50 transition-colors"
@@ -793,7 +835,7 @@ export default function Models() {
                         </TableCell>
                         {userHasKey && (
                           <TableCell className="text-muted-foreground text-sm hidden lg:table-cell">
-                            {lastUsedByModel[m.id] ? formatLocalDateTime(lastUsedByModel[m.id]) : "—"}
+                            {getLastUsed(m.id) ? formatLocalDateTime(getLastUsed(m.id)!) : "—"}
                           </TableCell>
                         )}
                         <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
@@ -915,10 +957,10 @@ export default function Models() {
                       )}
                     </div>
                   )}
-                  {userHasKey && lastUsedByModel[selectedModel.id] && (
+                  {userHasKey && getLastUsed(selectedModel.id) && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Last used (your timezone)</p>
-                      <p className="font-medium text-foreground">{formatLocalDateTime(lastUsedByModel[selectedModel.id])}</p>
+                      <p className="font-medium text-foreground">{formatLocalDateTime(getLastUsed(selectedModel.id)!)}</p>
                     </div>
                   )}
                   <a

@@ -113,8 +113,10 @@ async function fetchOpenRouterGenerationUsage(
       return null;
     }
     const raw = data as Record<string, unknown>;
-    const costUsd = (raw.usage ?? raw.total_cost) as number | undefined;
-    const costCents = typeof costUsd === 'number' && costUsd >= 0 ? Math.round(costUsd * 100) : 0;
+    // Prefer total_cost (the final billed amount) over usage
+    const costUsd = (raw.total_cost ?? raw.usage) as number | undefined;
+    // Store in cents (integer); ceil so tiny costs like $0.000244 become at least 1 cent instead of 0
+    const costCents = typeof costUsd === 'number' && costUsd > 0 ? Math.max(1, Math.round(costUsd * 100)) : 0;
     const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
     const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
     const tokensUsed =
