@@ -156,7 +156,6 @@ export function IntegrationSettingsModal({
     if (!useOpenRouter) {
       updates.openRouterApiKey = "";
     }
-    // OpenRouter API key is managed on the Models page (user-level); we do not send it here.
 
     updateIntegrationMutation.mutate({
       id: integration.id,
@@ -164,7 +163,6 @@ export function IntegrationSettingsModal({
     });
   };
 
-  // Update local state when integration prop changes
   useEffect(() => {
     if (integration) {
       setNotificationLevel(integration.notificationLevel || 'all');
@@ -303,7 +301,6 @@ export function IntegrationSettingsModal({
               </div>
 
               {!useOpenRouter ? (
-                /* PushLog: built-in model dropdown */
                 <div className="space-y-2">
                   <Label htmlFor="ai-model">PushLog AI Model</Label>
                   <Select value={aiModel} onValueChange={setAiModel}>
@@ -312,12 +309,12 @@ export function IntegrationSettingsModal({
                         {aiModel ? getAiModelDisplayName(aiModel) : null}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border hover:text-foreground" position="popper">
                       {AI_MODELS.map((model) => (
                         <SelectItem
                           key={model.id}
                           value={model.id}
-                          className="py-3 h-auto cursor-pointer"
+                          className="py-3 h-auto cursor-pointer hover:text-foreground"
                           textValue={model.name}
                         >
                           <div className="flex flex-col gap-1 w-full min-w-0 pr-4">

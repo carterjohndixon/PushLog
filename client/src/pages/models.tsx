@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink } from "lucide-react";
+import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface OpenRouterModel {
   id: string;
@@ -112,6 +113,8 @@ export default function Models() {
   const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
   const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
   const [usagePerGenLoading, setUsagePerGenLoading] = useState(false);
+  const [recentCallsOpen, setRecentCallsOpen] = useState(true);
+  const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -561,53 +564,90 @@ export default function Models() {
                           </TableBody>
                         </Table>
                       </div>
-                      <h4 className="text-sm font-semibold text-foreground mt-2 mb-2">Recent calls (usage per generation)</h4>
-                      <div className="rounded-md border border-border overflow-hidden">
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-muted/50 border-border">
-                              <TableHead className="text-foreground">Model</TableHead>
-                              <TableHead className="text-foreground">Tokens</TableHead>
-                              <TableHead className="text-foreground">Cost</TableHead>
-                              <TableHead className="text-foreground">Date</TableHead>
-                              <TableHead className="text-foreground w-[80px]">View</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {usageData.calls.map((c) => (
-                              <TableRow key={c.id} className="border-border">
-                                <TableCell className="font-medium text-foreground text-sm">
-                                  {getAiModelDisplayName(c.model)}
-                                </TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{c.costFormatted ?? "—"}</TableCell>
-                                <TableCell className="text-muted-foreground text-sm">
-                                  {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
-                                </TableCell>
-                                <TableCell>
-                                  {c.generationId ? (
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 text-xs text-log-green hover:text-log-green/90"
-                                      onClick={() => fetchUsagePerGen(c.generationId!)}
-                                      disabled={usagePerGenLoading && viewingGenerationId === c.generationId}
-                                    >
-                                      {usagePerGenLoading && viewingGenerationId === c.generationId ? (
-                                        <Loader2 className="w-3 h-3 animate-spin" />
+                      <Collapsible open={recentCallsOpen} onOpenChange={setRecentCallsOpen}>
+                        <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2 text-foreground hover:bg-muted/50">
+                              {recentCallsOpen ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
+                              <span className="text-sm font-semibold">Recent calls (usage per generation)</span>
+                              <span className="text-muted-foreground font-normal text-xs ml-1">({usageData.calls.length})</span>
+                            </Button>
+                          </CollapsibleTrigger>
+                          <Select value={recentCallsModelFilter || "all"} onValueChange={(v) => setRecentCallsModelFilter(v === "all" ? "" : v)}>
+                            <SelectTrigger className="w-[220px] h-8 text-sm bg-background border-border text-foreground">
+                              <SelectValue placeholder="All models" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All models</SelectItem>
+                              {Array.from(new Set(usageData.calls.map((c) => c.model))).sort().map((m) => (
+                                <SelectItem key={m} value={m}>{getAiModelDisplayName(m)}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <CollapsibleContent>
+                          <div className="rounded-md border border-border overflow-hidden">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-muted/50 border-border">
+                                  <TableHead className="text-foreground">Model</TableHead>
+                                  <TableHead className="text-foreground">Tokens</TableHead>
+                                  <TableHead className="text-foreground">Cost</TableHead>
+                                  <TableHead className="text-foreground">Date</TableHead>
+                                  <TableHead className="text-foreground w-[80px]">View</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {(recentCallsModelFilter
+                                  ? usageData.calls.filter((c) => c.model === recentCallsModelFilter)
+                                  : usageData.calls
+                                ).map((c) => (
+                                  <TableRow key={c.id} className="border-border">
+                                    <TableCell className="font-medium text-foreground text-sm">
+                                      {getAiModelDisplayName(c.model)}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">
+                                      {c.costFormatted != null && c.costFormatted !== ""
+                                        ? c.costFormatted
+                                        : typeof c.cost === "number"
+                                          ? c.cost === 0
+                                            ? "$0.00"
+                                            : `$${(c.cost / 100).toFixed(4)}`
+                                          : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-muted-foreground text-sm">
+                                      {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
+                                    </TableCell>
+                                    <TableCell>
+                                      {c.generationId ? (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 text-xs text-log-green hover:text-log-green/90"
+                                          onClick={() => fetchUsagePerGen(c.generationId!)}
+                                          disabled={usagePerGenLoading && viewingGenerationId === c.generationId}
+                                        >
+                                          {usagePerGenLoading && viewingGenerationId === c.generationId ? (
+                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                          ) : (
+                                            <>View</>
+                                          )}
+                                        </Button>
                                       ) : (
-                                        <>View</>
+                                        <span className="text-xs text-muted-foreground">—</span>
                                       )}
-                                    </Button>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">—</span>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                          {recentCallsModelFilter && usageData.calls.filter((c) => c.model === recentCallsModelFilter).length === 0 && (
+                            <p className="text-sm text-muted-foreground py-3">No calls for this model.</p>
+                          )}
+                        </CollapsibleContent>
+                      </Collapsible>
                     </>
                   ) : (
                     <p className="text-sm text-muted-foreground">No OpenRouter calls yet. Use an integration with OpenRouter to see usage here.</p>

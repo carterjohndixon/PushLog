@@ -178,6 +178,17 @@ Respond with only valid JSON:
           body: JSON.stringify(requestParams),
         });
         openRouterGenerationId = res.headers.get(OPENROUTER_GENERATION_ID_HEADER)?.trim() || null;
+        if (!openRouterGenerationId && typeof res.headers.get === 'function') {
+          const tryHeader = (name: string) => res.headers.get(name)?.trim() || null;
+          openRouterGenerationId = tryHeader('x-openrouter-generation-id')
+            || tryHeader('X-OpenRouter-Generation-Id')
+            || tryHeader('openrouter-generation-id');
+        }
+        if (!openRouterGenerationId) {
+          console.warn('📊 OpenRouter: no generation id in response header (cost lookup will use completion.id or be 0)');
+        } else {
+          console.log('📊 OpenRouter: generation id from header:', openRouterGenerationId.slice(0, 28) + '...');
+        }
         if (!res.ok) {
           const errBody = await res.text();
           console.error('❌ OpenRouter API Error:', res.status, res.statusText, errBody.slice(0, 300));
@@ -372,6 +383,9 @@ Respond with only valid JSON:
       // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id
       const genId = openRouterGenerationId || completion.id;
       if (genId) {
+        if (!openRouterGenerationId && completion.id) {
+          console.log('📊 OpenRouter: using completion.id for cost lookup (header had no gen id):', String(completion.id).slice(0, 24) + '...');
+        }
         const genUsage = await fetchOpenRouterGenerationUsage(genId, options.openRouterApiKey);
         if (genUsage) {
           if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
@@ -380,9 +394,11 @@ Respond with only valid JSON:
             console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
           }
         } else {
+          console.warn('📊 OpenRouter: generation lookup returned no usage/cost (id may be chatcmpl-xxx; API expects gen-xxx)');
           cost = 0;
         }
       } else {
+        console.warn('📊 OpenRouter: no generation id or completion.id, cost set to 0');
         cost = 0;
       }
     } else {
