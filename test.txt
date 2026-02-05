@@ -119,3 +119,5 @@ watching debug
 seriously I'm watching the logs
 
 testing gpt free model
+
+testing openrouter error notification
