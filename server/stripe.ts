@@ -140,8 +140,8 @@ export function calculateTokenCost(modelId: string, tokensUsed: number): number 
     throw new Error('Invalid AI model');
   }
   
-  // Calculate cost in cents
-  return Math.ceil((tokensUsed / 1000) * model.costPerToken);
+  // Calculate cost in units of $0.0001 (costPerToken is in cents per 1K tokens; multiply by 100 to convert cents → $0.0001 units)
+  return Math.ceil((tokensUsed / 1000) * model.costPerToken * 100);
 }
 
 export { stripe };

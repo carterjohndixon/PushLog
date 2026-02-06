@@ -704,7 +704,7 @@ export default function Models() {
                                     {r.totalCostCents != null
                                       ? r.totalCostCents === 0
                                         ? "$0.00"
-                                        : `$${(r.totalCostCents / 100).toFixed(4)}`
+                                        : `$${(r.totalCostCents / 10000).toFixed(4)}`
                                       : "—"}
                                   </TableCell>
                                   <TableCell className="text-muted-foreground text-sm">
@@ -782,7 +782,7 @@ export default function Models() {
                                         : typeof c.cost === "number"
                                           ? c.cost === 0
                                             ? "$0.00"
-                                            : `$${(c.cost / 100).toFixed(4)}`
+                                            : `$${(c.cost / 10000).toFixed(4)}`
                                           : "—"}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">
@@ -975,7 +975,7 @@ export default function Models() {
               <div className="space-y-3 text-sm">
                 <p><span className="font-medium text-foreground">Cost:</span>{" "}
                   {usagePerGenResult.costCents != null
-                    ? `$${(usagePerGenResult.costCents / 100).toFixed(4)}`
+                    ? `$${(usagePerGenResult.costCents / 10000).toFixed(4)}`
                     : usagePerGenResult.costUsd != null
                       ? `$${usagePerGenResult.costUsd.toFixed(4)}`
                       : "—"}

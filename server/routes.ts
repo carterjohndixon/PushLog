@@ -94,7 +94,7 @@ function scheduleDelayedCostUpdate(opts: {
             cost: genUsage.costCents,
             ...(genUsage.tokensUsed > 0 ? { tokensUsed: genUsage.tokensUsed } : {}),
           } as any);
-          console.log(`💰 Delayed cost update succeeded (attempt ${attempt}): push=${pushEventId}, cost=$${(genUsage.costCents / 100).toFixed(4)}, tokens=${genUsage.tokensUsed}`);
+          console.log(`💰 Delayed cost update succeeded (attempt ${attempt}): push=${pushEventId}, cost=$${(genUsage.costCents / 10000).toFixed(4)}, tokens=${genUsage.tokensUsed}`);
         } else if (attempt < retries) {
           // Cost still $0 — OpenRouter may not have computed it yet; retry with longer delay
           console.log(`💰 Delayed cost update: still $0 on attempt ${attempt}/${retries}, retrying in ${delayMs * 2}ms...`);
@@ -2174,7 +2174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const generationId = (usage as any).openrouterGenerationId ?? (usage as any).openrouter_generation_id ?? idParam;
         return res.status(200).json({
           generationId: generationId ?? idParam,
-          costUsd: cost >= 0 ? cost / 100 : null,
+          costUsd: cost >= 0 ? cost / 10000 : null,
           costCents: cost >= 0 ? cost : null,
           tokensPrompt: 0,
           tokensCompletion: tokensUsed,
@@ -2210,7 +2210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
       const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
       const costCents =
-        typeof costUsd === "number" && costUsd >= 0.01 ? Math.round(costUsd * 100) : null;
+        typeof costUsd === "number" && costUsd > 0 ? Math.round(costUsd * 10000) : null;
       res.status(200).json({
         generationId: idParam,
         costUsd: typeof costUsd === "number" && costUsd >= 0 ? costUsd : null,
@@ -2306,7 +2306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalCalls,
         totalTokens,
         totalCostCents,
-        totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 100).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
+        totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 10000).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
         costByModel,
         lastUsedByModel,
         calls: openRouterRows.slice(0, 100).map((u: any) => {
@@ -2318,7 +2318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             model: u.model,
             tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
             cost: c,
-            costFormatted: c > 0 ? `$${(c / 100).toFixed(4)}` : (c === 0 ? "$0.00" : null),
+            costFormatted: c > 0 ? `$${(c / 10000).toFixed(4)}` : (c === 0 ? "$0.00" : null),
             createdAt: createdAtStr,
             generationId: u.openrouterGenerationId ?? (u as any).openrouter_generation_id ?? (u as any).openrouterGenerationId ?? null,
           };

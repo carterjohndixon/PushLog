@@ -30,7 +30,7 @@ export interface CodeSummary {
 export interface AiUsageResult {
   summary: CodeSummary;
   tokensUsed: number;
-  cost: number; // in cents
+  cost: number; // in units of $0.0001 (ten-thousandths of a dollar)
   actualModel?: string; // The actual model used by OpenAI
   /** OpenRouter generation id (gen-xxx) when using OpenRouter; use for GET /api/v1/generation?id=... */
   openrouterGenerationId?: string | null;
@@ -112,8 +112,8 @@ export async function fetchOpenRouterGenerationUsage(
     const raw = data as Record<string, unknown>;
     // Prefer total_cost (the final billed amount) over usage
     const costUsd = (raw.total_cost ?? raw.usage) as number | undefined;
-    // Store in cents (integer); ceil so tiny costs like $0.000244 become at least 1 cent instead of 0
-    const costCents = typeof costUsd === 'number' && costUsd > 0 ? Math.max(1, Math.round(costUsd * 100)) : 0;
+    // Store in units of $0.0001 (ten-thousandths of a dollar) for sub-cent precision
+    const costCents = typeof costUsd === 'number' && costUsd > 0 ? Math.round(costUsd * 10000) : 0;
     const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
     const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
     const tokensUsed =
@@ -437,8 +437,8 @@ Respond with only valid JSON:
     const usage = completion.usage as { total_tokens?: number; cost?: number } | undefined;
     let cost: number;
     if (useOpenRouter && typeof usage?.cost === 'number' && usage.cost > 0) {
-      // OpenRouter returned a non-zero cost in the completion response (USD); store in cents
-      cost = Math.round(usage.cost * 100);
+      // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
+      cost = Math.round(usage.cost * 10000);
     } else if (!useOpenRouter) {
       cost = calculateTokenCost(model, tokensUsed);
     } else if (useOpenRouter && options?.openRouterApiKey) {
@@ -453,7 +453,7 @@ Respond with only valid JSON:
           if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
           cost = genUsage.costCents;
           if (cost > 0 || tokensUsed > 0) {
-            console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}`);
+            console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 10000).toFixed(4)}`);
           }
         } else {
           console.warn('📊 OpenRouter: generation lookup returned no usage/cost (id may be chatcmpl-xxx; API expects gen-xxx). Check https://openrouter.ai/activity for actual cost.');
@@ -467,7 +467,7 @@ Respond with only valid JSON:
       cost = 0;
     }
 
-    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 100).toFixed(4)}${useOpenRouter && openRouterGenerationId ? `, OpenRouter gen id: ${openRouterGenerationId.slice(0, 20)}...` : ''}`);
+    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 10000).toFixed(4)}${useOpenRouter && openRouterGenerationId ? `, OpenRouter gen id: ${openRouterGenerationId.slice(0, 20)}...` : ''}`);
     
     return {
       summary,
