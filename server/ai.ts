@@ -6,9 +6,6 @@ import { storage } from './storage';
 
 dotenv.config();
 
-// AI summary generation (OpenAI + OpenRouter, e.g. x-ai/grok-4.1-fast)
-// Test push for webhook.
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });

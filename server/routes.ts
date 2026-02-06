@@ -470,6 +470,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      res.status(200).json(usage);
+    } catch (error) {
+      console.error('❌ OpenRouter usage error:', error);
+      res.status(500).json({ error: 'Failed to get OpenRouter usage' });
+    }
+  });
+  
+  app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.id;
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByPushEventId(Number(generationId), userId);
+      res.status(200).json(usage);
+    } catch (error) {
+      console.error('❌ OpenRouter usage per gen error:', error);
+      res.status(500).json({ error: 'Failed to get OpenRouter usage per gen' });
+    }
+  });
+
+  app.patch("/api/openrouter/update-usage/:id", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.id;
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.updateAiUsage(Number(generationId), userId, req.body);
+      res.status(200).json(usage);
+    } catch (error) {
+      console.error('❌ OpenRouter update usage error:', error);
+      res.status(500).json({ error: 'Failed to update OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
+  app.delete("/api/openrouter/delete-usage/:id", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.id;
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.deleteAiUsage(Number(generationId), userId);
+      res.status(200).json(usage);
+    } catch (error) {
+      console.error('❌ OpenRouter delete usage error:', error);
+      res.status(500).json({ error: 'Failed to delete OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   app.get("/health/detailed", async (req, res) => {
     try {
       // Check database connection
@@ -2187,21 +2234,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastAt: v.lastAt,
       }));
       // Last-used per model (stored in UTC; frontend displays in user's timezone)
+      // Build from costByModelMap (always available) + dedicated query as supplement
       let lastUsedByModel: Record<string, string> = {};
+      // Primary: use costByModelMap which already computed lastAt from createdAt/pushedAt
+      for (const [m, entry] of Array.from(costByModelMap.entries())) {
+        if (entry.lastAt) {
+          const iso = toIsoString(entry.lastAt);
+          if (iso) lastUsedByModel[m] = iso;
+        }
+      }
+      // Supplement: dedicated DB aggregate (may have more models or more recent data)
       try {
         const lastUsedRows = await databaseStorage.getLastUsedByModelByUserId(userId);
         for (const r of lastUsedRows) {
-          if (r.model && String(r.model).includes("/") && r.lastUsedAt) lastUsedByModel[r.model] = r.lastUsedAt;
+          if (!r.model || !String(r.model).includes("/") || !r.lastUsedAt) continue;
+          const iso = toIsoString(r.lastUsedAt);
+          if (!iso) continue;
+          const prev = lastUsedByModel[r.model] ? new Date(lastUsedByModel[r.model]).getTime() : 0;
+          if (new Date(iso).getTime() > prev) lastUsedByModel[r.model] = iso;
         }
       } catch (_) {
-        // fallback: derive from current usage slice
-        openRouterRows.slice(0, 500).forEach((u: any) => {
-          const m = String(u?.model ?? "").trim();
-          const at = createdAtFromRow(u);
-          if (!m || !at) return;
-          const prev = lastUsedByModel[m] ? new Date(lastUsedByModel[m]).getTime() : 0;
-          if (new Date(at).getTime() > prev) lastUsedByModel[m] = at;
-        });
+        // costByModelMap already covers this
       }
       res.json({
         totalCalls,

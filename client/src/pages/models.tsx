@@ -31,6 +31,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AiUsage } from "@shared/schema";
 
 interface OpenRouterModel {
   id: string;
@@ -112,36 +113,11 @@ export default function Models() {
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
   const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
-  const [usagePerGenLoading, setUsagePerGenLoading] = useState(false);
   const [recentCallsOpen, setRecentCallsOpen] = useState(false);
   const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
   const [recentCallsSearch, setRecentCallsSearch] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const fetchUsagePerGen = async (generationId: string) => {
-    setViewingGenerationId(generationId);
-    setUsagePerGenResult(null);
-    setUsagePerGenLoading(true);
-    try {
-      const res = await fetch(`/api/openrouter/usage-per-gen/${encodeURIComponent(generationId)}`, { credentials: "include" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data?.error ?? "Failed to load");
-      setUsagePerGenResult({
-        generationId: data.generationId ?? generationId,
-        costUsd: data.costUsd ?? null,
-        costCents: data.costCents ?? null,
-        tokensPrompt: data.tokensPrompt ?? 0,
-        tokensCompletion: data.tokensCompletion ?? 0,
-        tokensUsed: data.tokensUsed ?? 0,
-      });
-    } catch (e) {
-      toast({ title: "Could not load usage", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
-      setViewingGenerationId(null);
-    } finally {
-      setUsagePerGenLoading(false);
-    }
-  };
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -341,6 +317,112 @@ export default function Models() {
     });
   };
 
+  // /api/openrouter/usage: get all usage for the current user
+  // /api/openrouter/usage-per-gen/:id
+  // /api/openrouter/update-usage/:id: update usage for a specific generation
+  // /api/openrouter/delete-usage/:id: delete usage for a specific generation
+
+  const fetchAllUsageMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/openrouter/usage", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load usage");
+      const data = await res.json();
+      return {
+        totalCalls: data.totalCalls ?? 0,
+        totalTokens: data.totalTokens ?? 0,
+        totalCostCents: data.totalCostCents ?? 0,
+        totalCostFormatted: data.totalCostFormatted ?? null,
+        costByModel: Array.isArray(data.costByModel) ? data.costByModel : undefined,
+        calls: Array.isArray(data.calls) ? data.calls : [],
+        lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
+      } as OpenRouterUsage;
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/openrouter/usage"], data);
+      toast({ title: "Usage refreshed", description: "OpenRouter usage data updated." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to fetch usage", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const fetchUsagePerGenMutation = useMutation({
+    mutationFn: async (generationId: string) => {
+      const res = await fetch(`/api/openrouter/usage-per-gen/${encodeURIComponent(generationId)}`, { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? "Failed to load");
+      return {
+        generationId: data.generationId ?? generationId,
+        costUsd: data.costUsd ?? null,
+        costCents: data.costCents ?? null,
+        tokensPrompt: data.tokensPrompt ?? 0,
+        tokensCompletion: data.tokensCompletion ?? 0,
+        tokensUsed: data.tokensUsed ?? 0,
+      } as UsagePerGenResult;
+    },
+    onSuccess: (data, generationId) => {
+      queryClient.setQueryData<UsagePerGenResult>([`/api/openrouter/usage-per-gen/${encodeURIComponent(generationId)}`], data);
+      setUsagePerGenResult(data);
+    },
+    onError: (e: Error, generationId) => {
+      toast({ title: "Could not load usage", description: e.message, variant: "destructive" });
+      setViewingGenerationId(null);
+      setUsagePerGenResult(null);
+    },
+  });
+
+  const updateUsagePerGenMutation = useMutation({
+    mutationFn: async ({ generationId, usage }: { generationId: string; usage: Partial<AiUsage> }) => {
+      const res = await apiRequest("PATCH", `/api/openrouter/update-usage/${encodeURIComponent(generationId)}`, usage);
+      if (!res.ok) throw new Error("Update failed");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
+      toast({ title: "Usage updated", description: "OpenRouter usage record updated." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Update failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const deleteUsagePerGenMutation = useMutation({
+    mutationFn: async (generationId: string) => {
+      const res = await apiRequest("DELETE", `/api/openrouter/delete-usage/${encodeURIComponent(generationId)}`);
+      if (!res.ok) throw new Error("Delete failed");
+      return res.json();
+    },
+    onSuccess: (_, generationId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
+      setViewingGenerationId(null);
+      setUsagePerGenResult(null);
+      toast({ title: "Usage deleted", description: "Record removed from your usage history." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const handleFetchAllUsage = () => fetchAllUsageMutation.mutate();
+
+  const handleViewUsagePerGen = (generationId: string) => {
+    setViewingGenerationId(generationId);
+    setUsagePerGenResult(null);
+    fetchUsagePerGenMutation.mutate(generationId);
+  };
+
+  const handleRefreshUsagePerGen = () => {
+    if (viewingGenerationId) fetchUsagePerGenMutation.mutate(viewingGenerationId);
+  };
+
+  const handleUpdateUsagePerGen = (generationId: string, usage: Partial<AiUsage>) => {
+    updateUsagePerGenMutation.mutate({ generationId, usage });
+  };
+
+  const handleDeleteUsagePerGen = (generationId: string) => {
+    deleteUsagePerGenMutation.mutate(generationId);
+  };
+
   const filteredModels = allModels.filter((m) => {
     const q = searchQuery.toLowerCase();
     const matchesSearch =
@@ -467,6 +549,16 @@ export default function Models() {
                   openrouter.ai/activity
                 </a>{" "}for exact costs.
               </CardDescription>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={handleFetchAllUsage}
+                disabled={fetchAllUsageMutation.isPending}
+              >
+                {fetchAllUsageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                Refresh usage
+              </Button>
             </CardHeader>
             <CardContent>
               {usageLoading ? (
@@ -702,10 +794,10 @@ export default function Models() {
                                           variant="ghost"
                                           size="sm"
                                           className="h-7 text-xs text-log-green hover:text-log-green/90"
-                                          onClick={() => fetchUsagePerGen(c.generationId!)}
-                                          disabled={usagePerGenLoading && viewingGenerationId === c.generationId}
+                                          onClick={() => handleViewUsagePerGen(c.generationId!)}
+                                          disabled={fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId}
                                         >
-                                          {usagePerGenLoading && viewingGenerationId === c.generationId ? (
+                                          {fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId ? (
                                             <Loader2 className="w-3 h-3 animate-spin" />
                                           ) : (
                                             <>View</>
@@ -798,7 +890,7 @@ export default function Models() {
                       <TableHead className="text-foreground">Context</TableHead>
                       <TableHead className="text-foreground">Prompt</TableHead>
                       <TableHead className="text-foreground">Completion</TableHead>
-                      {userHasKey && <TableHead className="text-foreground hidden lg:table-cell">Last used</TableHead>}
+                      {userHasKey && <TableHead className="text-foreground">Last used</TableHead>}
                       <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -834,7 +926,7 @@ export default function Models() {
                           {formatPrice(m.pricing?.completion)}
                         </TableCell>
                         {userHasKey && (
-                          <TableCell className="text-muted-foreground text-sm hidden lg:table-cell">
+                          <TableCell className="text-muted-foreground text-sm">
                             {getLastUsed(m.id) ? formatLocalDateTime(getLastUsed(m.id)!) : "—"}
                           </TableCell>
                         )}
@@ -875,7 +967,7 @@ export default function Models() {
                 Fetched from OpenRouter for generation {viewingGenerationId?.slice(0, 20)}…
               </DialogDescription>
             </DialogHeader>
-            {usagePerGenLoading ? (
+            {fetchUsagePerGenMutation.isPending ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               </div>
@@ -899,6 +991,27 @@ export default function Models() {
                 >
                   Open on OpenRouter <ExternalLink className="w-3 h-3" />
                 </a>
+                <div className="flex flex-wrap gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshUsagePerGen}
+                    disabled={fetchUsagePerGenMutation.isPending}
+                  >
+                    {fetchUsagePerGenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    Refresh
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => viewingGenerationId && handleDeleteUsagePerGen(viewingGenerationId)}
+                    disabled={deleteUsagePerGenMutation.isPending}
+                  >
+                    {deleteUsagePerGenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                    Delete from history
+                  </Button>
+                </div>
               </div>
             ) : null}
           </DialogContent>

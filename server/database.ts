@@ -10,9 +10,11 @@ import {
   type SlackWorkspace, type InsertSlackWorkspace,
   type Notification, type InsertNotification,
   type AiUsage, type InsertAiUsage,
-  type Payment, type InsertPayment
+  type Payment, type InsertPayment,
+  type AnalyticsStats, type InsertAnalyticsStats,
+  analyticsStats
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -57,6 +59,18 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
   };
 }
 
+function convertToAnalyticsStats(dbAnalyticsStats: typeof analyticsStats.$inferSelect): AnalyticsStats {
+  return {
+    id: dbAnalyticsStats.id as number,
+    userId: dbAnalyticsStats.userId as number,
+    activeIntegrations: dbAnalyticsStats.activeIntegrations as number,
+    totalRepositories: dbAnalyticsStats.totalRepositories,
+    dailyPushes: dbAnalyticsStats.dailyPushes as number,
+    totalNotifications: dbAnalyticsStats.totalNotifications as number,
+    createdAt: dbAnalyticsStats.createdAt as string
+  } as AnalyticsStats;
+}
+
 interface OAuthSession {
   token: string;
   state: string;
@@ -66,13 +80,36 @@ interface OAuthSession {
 
 export class DatabaseStorage implements IStorage {
   private users: Map<number, User>;
+  private analyticsStats: Map<number, AnalyticsStats>;
   private oauthSessions: Map<string, OAuthSession>;
   private nextId: number;
+  private analyticsStatsNextId: number;
 
   constructor() {
-    this.users = new Map();
-    this.oauthSessions = new Map();
+    this.users = new Map<number, User>();
+    this.analyticsStats = new Map<number, AnalyticsStats>();
+    this.oauthSessions = new Map<string, OAuthSession>();
     this.nextId = 1;
+    this.analyticsStatsNextId = 1;
+  }
+
+  async init(): Promise<void> {
+    // Initialize users
+    const result = await db.select().from(users).orderBy(desc(users.id));
+    for (const user of result) {
+      this.users.set(user.id as number, convertToUser(user as any));
+    }
+
+    // Initialize analytics stats
+    const analyticsStatsResult = await db.select().from(analyticsStats).orderBy(desc(analyticsStats.id));
+    for (const analyticsStat of analyticsStatsResult) {
+      this.analyticsStats.set(analyticsStat.id as number, convertToAnalyticsStats(analyticsStat as any));
+    }
+
+    const nextId = (await db.select({ max: max(users.id) }).from(users))[0].max as number;
+    this.nextId = nextId ? nextId + 1 : 1;
+    const analyticsStatsNextId = (await db.select({ max: max(analyticsStats.id) }).from(analyticsStats))[0].max as number;
+    this.analyticsStatsNextId = analyticsStatsNextId ? analyticsStatsNextId + 1 : 1;
   }
 
   // User methods
@@ -220,8 +257,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteIntegration(id: number): Promise<boolean> {
-    const result = await db.delete(integrations).where(eq(integrations.id, id)) as any;
-    return true;
+    const result = await db.delete(integrations).where(eq(integrations.id, id)).returning();
+    return result[0] !== undefined;
   }
 
   // Push event methods
@@ -319,12 +356,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics methods
-  async getStatsForUser(userId: number): Promise<{
-    activeIntegrations: number;
-    totalRepositories: number;
-    dailyPushes: number;
-    totalNotifications: number;
-  }> {
+  async getStatsForUser(userId: number): Promise<AnalyticsStats> {
     const userIntegrations = await this.getIntegrationsByUserId(userId);
     const userRepositories = await this.getRepositoriesByUserId(userId);
     
@@ -353,12 +385,17 @@ export class DatabaseStorage implements IStorage {
     
     const totalNotifications = slackMessagesSent + pushEventNotifications;
 
-    return {
+    const newAnalyticsStats: AnalyticsStats = {
+      id: this.nextId++,
+      userId,
       activeIntegrations,
       totalRepositories,
       dailyPushes,
-      totalNotifications
+      totalNotifications,
+      createdAt: new Date().toISOString()
     };
+    this.analyticsStats.set(newAnalyticsStats.id, newAnalyticsStats);
+    return newAnalyticsStats;
   }
 
   async storeOAuthSession(session: OAuthSession): Promise<void> {
@@ -450,14 +487,42 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  // AI Usage methods
+  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
+    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)).orderBy(desc(aiUsage.createdAt)) as any;
+  }
+
+  /** Get the single AI usage row for a push event (one usage record per push when AI summary is generated). */
+  async getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined> {
+    const rows = await db
+      .select()
+      .from(aiUsage)
+      .where(and(eq(aiUsage.pushEventId, pushEventId), eq(aiUsage.userId, userId)))
+      .limit(1);
+    return rows[0] as AiUsage | undefined;
+  }
+
   async createAiUsage(usage: InsertAiUsage): Promise<AiUsage> {
     const [result] = await db.insert(aiUsage).values(usage).returning();
     return result as any;
   }
 
-  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
-    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)).orderBy(desc(aiUsage.createdAt)) as any;
+  async updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
+    const allowed = ['model', 'tokensUsed', 'cost', 'openrouterGenerationId'] as const;
+    const set: Record<string, unknown> = {};
+    for (const key of allowed) {
+      if (updates[key] !== undefined) set[key] = updates[key];
+    }
+    if (Object.keys(set).length === 0) {
+      const [existing] = await db.select().from(aiUsage).where(and(eq(aiUsage.pushEventId, pushEventId), eq(aiUsage.userId, userId))).limit(1);
+      return existing as AiUsage | undefined;
+    }
+    const [result] = await db.update(aiUsage).set(set).where(and(eq(aiUsage.pushEventId, pushEventId), eq(aiUsage.userId, userId))).returning();
+    return result as AiUsage | undefined;
+  }
+
+  async deleteAiUsage(pushEventId: number, userId: number): Promise<boolean> {
+    const deleted = await db.delete(aiUsage).where(and(eq(aiUsage.pushEventId, pushEventId), eq(aiUsage.userId, userId))).returning({ id: aiUsage.id });
+    return deleted.length > 0;
   }
 
   /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). */

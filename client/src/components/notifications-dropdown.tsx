@@ -273,14 +273,37 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                     </div>
                   )}
 
-                  {/* AI Summary — Model, Summary paragraph, Impact, Category */}
+                  {/* AI Summary — Model breakdown, Summary, Impact, Category */}
                   {metadata.aiGenerated && (
                     <div className="pt-4 border-t border-border space-y-3">
                       <h5 className="font-semibold text-foreground text-sm">AI Summary</h5>
                       {metadata.aiModel && (
-                        <div className="text-sm">
-                          <span className="font-medium text-foreground">Model:</span>{' '}
-                          <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
+                        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                          <div className="text-sm">
+                            <span className="font-medium text-foreground">Model:</span>{' '}
+                            <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
+                          </div>
+                          {String(metadata.aiModel).includes('/') ? (
+                            <>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground/80">Provider:</span>{' '}
+                                {String(metadata.aiModel).split('/')[0]}
+                              </div>
+                              <div className="text-xs text-muted-foreground font-mono">
+                                <span className="font-medium text-foreground/80">ID:</span>{' '}
+                                {metadata.aiModel}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium text-foreground/80">Source:</span>{' '}
+                                <span className="text-log-green">OpenRouter</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground/80">Source:</span>{' '}
+                              <span className="text-log-green">PushLog AI</span>
+                            </div>
+                          )}
                         </div>
                       )}
                       {metadata.aiSummary && (
@@ -422,15 +445,39 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                     </div>
                   )}
 
-                  {/* AI Model Used */}
+                  {/* AI Model Used — breakdown card */}
                   {metadata.aiModel && (
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <div className="text-sm">
-                        <span className="font-medium text-foreground">AI Model Used:</span>{' '}
-                        <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
+                    <div className="mt-4 pt-4 border-t border-border space-y-3">
+                      <h5 className="font-semibold text-foreground text-sm">AI Model</h5>
+                      <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-1.5">
+                        <div className="text-sm">
+                          <span className="font-medium text-foreground">Model:</span>{' '}
+                          <span className="text-muted-foreground">{getAiModelDisplayName(metadata.aiModel)}</span>
+                        </div>
+                        {String(metadata.aiModel).includes('/') ? (
+                          <>
+                            <div className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground/80">Provider:</span>{' '}
+                              {String(metadata.aiModel).split('/')[0]}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono">
+                              <span className="font-medium text-foreground/80">ID:</span>{' '}
+                              {metadata.aiModel}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              <span className="font-medium text-foreground/80">Source:</span>{' '}
+                              <span className="text-log-green">OpenRouter</span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground/80">Source:</span>{' '}
+                            <span className="text-log-green">PushLog AI</span>
+                          </div>
+                        )}
                       </div>
                       {metadata.aiGenerated === false && (
-                        <p className="text-xs text-muted-foreground mt-1">
+                        <p className="text-xs text-muted-foreground">
                           AI summary was not generated (fallback message used)
                         </p>
                       )}
@@ -452,6 +499,12 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                           }`}>
                             {String(metadata.aiImpact ?? '').toUpperCase()}
                           </span>
+                        </div>
+                      )}
+                      {metadata.aiCategory != null && String(metadata.aiCategory) && (
+                        <div className="text-sm">
+                          <span className="font-medium text-foreground">Category:</span>{' '}
+                          <span className="text-muted-foreground capitalize">{String(metadata.aiCategory)}</span>
                         </div>
                       )}
                     </div>

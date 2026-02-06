@@ -5,7 +5,9 @@ import {
   type Integration, type InsertIntegration,
   type PushEvent, type InsertPushEvent,
   type SlackWorkspace, type InsertSlackWorkspace,
-  type Notification, type InsertNotification
+  type Notification, type InsertNotification,
+  type AiUsage, type InsertAiUsage,
+  AnalyticsStats,
 } from "@shared/schema";
 import { DatabaseStorage } from './database';
 
@@ -50,13 +52,15 @@ export interface IStorage {
   createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace>;
   updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
 
+  // OpenRouter methos
+  getAiUsageByUserId(userId: number): Promise<AiUsage[]>;
+  getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined>;
+  createAiUsage(aiUsage: InsertAiUsage): Promise<AiUsage>;
+  updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined>;
+  deleteAiUsage(pushEventId: number, userId: number): Promise<boolean>;
+
   // Analytics methods
-  getStatsForUser(userId: number): Promise<{
-    activeIntegrations: number;
-    totalRepositories: number;
-    dailyPushes: number;
-    totalNotifications: number;
-  }>;
+  getStatsForUser(userId: number): Promise<AnalyticsStats>;
 
   // Notification methods
   getNotificationsByUserId(userId: number): Promise<Notification[]>;
@@ -81,6 +85,10 @@ export class MemStorage implements IStorage {
   private currentPushEventId = 1;
   private currentSlackWorkspaceId = 1;
   private currentNotificationId = 1;
+  private analyticsStats: Map<number, AnalyticsStats> = new Map();
+  private currentAnalyticsStatsId = 1;
+  private aiUsage: Map<number, AiUsage> = new Map();
+  private currentAiUsageId = 1;
 
   // User methods
   async getUser(id: number): Promise<User | undefined> {
@@ -290,13 +298,48 @@ export class MemStorage implements IStorage {
     return updatedSlackWorkspace;
   }
 
+  // OpenRouter methods
+  /** Get the user's OpenRouter usage history. */
+  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
+    return Array.from(this.aiUsage.values()).filter(usage => usage.userId === userId) as AiUsage[];
+  }
+
+  /** Get the OpenRouter usage for a specific push event. */
+  async getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined> {
+    return Array.from(this.aiUsage.values()).filter(usage => usage.userId === userId && usage.pushEventId === pushEventId).shift();
+  }
+
+  async createAiUsage(aiUsage: InsertAiUsage): Promise<AiUsage> {
+    const id = this.currentAiUsageId++;
+    const newAiUsage: AiUsage = {
+      ...aiUsage,
+      id,
+      openrouterGenerationId: aiUsage.openrouterGenerationId ?? null,
+      createdAt: new Date().toISOString()
+    };
+    this.aiUsage.set(id, newAiUsage);
+    return newAiUsage;
+  }
+
+  async updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
+    const aiUsage = this.aiUsage.get(pushEventId) as AiUsage | undefined;
+    if (!aiUsage || aiUsage.userId !== userId) return undefined;
+    const updatedAiUsage = { ...aiUsage, ...updates } as AiUsage;
+    this.aiUsage.set(pushEventId, updatedAiUsage);
+    return updatedAiUsage;
+  }
+
+  async deleteAiUsage(pushEventId: number, userId: number): Promise<boolean> {
+    const aiUsage = this.aiUsage.get(pushEventId) as AiUsage | undefined;
+    if (!aiUsage || aiUsage.userId !== userId) return false;
+    return this.aiUsage.delete(pushEventId);
+  }
+
   // Analytics methods
-  async getStatsForUser(userId: number): Promise<{
-    activeIntegrations: number;
-    totalRepositories: number;
-    dailyPushes: number;
-    totalNotifications: number;
-  }> {
+  async getStatsForUser(userId: number): Promise<AnalyticsStats> {
+    const analyticsStats = this.analyticsStats.get(userId);
+    if (analyticsStats) return analyticsStats;
+
     const userIntegrations = await this.getIntegrationsByUserId(userId);
     const userRepositories = await this.getRepositoriesByUserId(userId);
     
@@ -316,12 +359,17 @@ export class MemStorage implements IStorage {
       event.notificationSent
     ).length;
 
-    return {
+    const newAnalyticsStats: AnalyticsStats = {
+      id: this.currentAnalyticsStatsId++,
+      userId,
       activeIntegrations,
       totalRepositories,
       dailyPushes,
-      totalNotifications
+      totalNotifications,
+      createdAt: new Date().toISOString()
     };
+    this.analyticsStats.set(newAnalyticsStats.id, newAnalyticsStats);
+    return newAnalyticsStats;
   }
 
   // Notification methods

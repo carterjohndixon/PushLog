@@ -117,6 +117,16 @@ export const aiUsage = pgTable("ai_usage", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+export const analyticsStats = pgTable("analytics_stats", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  activeIntegrations: integer("active_integrations").notNull(),
+  totalRepositories: integer("total_repositories").notNull(),
+  dailyPushes: integer("daily_pushes").notNull(),
+  totalNotifications: integer("total_notifications").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const payments = pgTable("payments", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull(),
@@ -167,6 +177,11 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 });
 
 export const insertAiUsageSchema = createInsertSchema(aiUsage).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertAnalyticsStatsSchema = createInsertSchema(analyticsStats).omit({
   id: true,
   createdAt: true,
 });
@@ -228,5 +243,7 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type AiUsage = typeof aiUsage.$inferSelect;
 export type InsertAiUsage = z.infer<typeof insertAiUsageSchema>;
+export type AnalyticsStats = typeof analyticsStats.$inferSelect;
+export type InsertAnalyticsStats = z.infer<typeof insertAnalyticsStatsSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
