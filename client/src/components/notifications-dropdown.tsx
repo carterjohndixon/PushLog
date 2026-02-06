@@ -156,7 +156,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
 
     {/* Notification Details Dialog */}
     <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[70vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <ErrorBoundary fallback={
           <div className="py-4 text-center text-muted-foreground text-sm">
             <p>Couldn’t load notification details.</p>
