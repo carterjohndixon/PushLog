@@ -4,16 +4,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { BarChart, Bar, LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { GitBranch, Bell, Cpu, Github, Folder, FileCode, TrendingUp } from "lucide-react";
+import { GitBranch, Bell, Cpu, Github, Folder, FileCode, TrendingUp, TrendingDown, Activity, Layers, DollarSign, BarChart3 } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { formatLocalShortDate } from "@/lib/date";
+import { Footer } from "@/components/footer";
 
 interface TopRepo {
   repositoryId: number;
@@ -31,6 +32,35 @@ interface AnalyticsData {
   topRepos: TopRepo[];
 }
 
+interface AnalyticsStatsSnapshot {
+  id: number;
+  userId: number;
+  activeIntegrations: number;
+  totalRepositories: number;
+  dailyPushes: number;
+  totalNotifications: number;
+  createdAt: string;
+}
+
+interface StatsResponse {
+  latest: AnalyticsStatsSnapshot;
+  trend: {
+    dailyPushes: number;
+    totalNotifications: number;
+    activeIntegrations: number;
+    totalRepositories: number;
+  } | null;
+  history: AnalyticsStatsSnapshot[];
+}
+
+interface CostData {
+  totalSpend: number;
+  totalSpendFormatted: string;
+  totalCalls: number;
+  dailyCost: { date: string; totalCost: number; callCount: number }[];
+  costByModel: { model: string; cost: number; calls: number; tokens: number }[];
+}
+
 interface RepoDetailData {
   repository: { id: number; name: string; fullName: string };
   fileStats: { filePath: string; additions: number; deletions: number }[];
@@ -38,17 +68,34 @@ interface RepoDetailData {
 }
 
 const chartConfig = {
-  count: {
-    label: "Count",
-    color: "hsl(var(--log-green))",
-  },
-  date: {
-    label: "Date",
-  },
+  count: { label: "Count", color: "hsl(var(--log-green))" },
+  date: { label: "Date" },
 };
+
+const PIE_COLORS = [
+  "hsl(var(--log-green))",
+  "hsl(var(--accent))",
+  "hsl(142 60% 45%)",
+  "hsl(160 50% 50%)",
+  "hsl(180 40% 45%)",
+  "hsl(200 50% 50%)",
+  "hsl(220 45% 55%)",
+  "hsl(260 40% 55%)",
+];
 
 function formatShortDate(isoDate: string) {
   return formatLocalShortDate(isoDate);
+}
+
+function TrendBadge({ value, label }: { value: number; label?: string }) {
+  if (value === 0) return null;
+  const isUp = value > 0;
+  return (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${isUp ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}>
+      {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+      {isUp ? "+" : ""}{value}{label ? ` ${label}` : ""}
+    </span>
+  );
 }
 
 export default function Analytics() {
@@ -70,6 +117,24 @@ export default function Analytics() {
     },
   });
 
+  const { data: statsData, isLoading: statsLoading } = useQuery<StatsResponse>({
+    queryKey: ["/api/analytics/stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/analytics/stats", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load stats");
+      return res.json();
+    },
+  });
+
+  const { data: costData, isLoading: costLoading } = useQuery<CostData>({
+    queryKey: ["/api/analytics/cost"],
+    queryFn: async () => {
+      const res = await fetch("/api/analytics/cost", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load cost data");
+      return res.json();
+    },
+  });
+
   const { data: repoDetail, isLoading: repoDetailLoading } = useQuery<RepoDetailData>({
     queryKey: ["/api/analytics/repos", selectedRepoId],
     queryFn: async () => {
@@ -86,76 +151,260 @@ export default function Analytics() {
   if (error) {
     const message = error instanceof Error ? error.message : "Failed to load analytics. Please try again.";
     return (
-      <div className="min-h-screen bg-forest-gradient">
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="min-h-screen bg-background flex flex-col">
+        <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center py-12 space-y-4">
             <p className="text-destructive">{message}</p>
-            <Button variant="outline" onClick={() => refetch()}>
-              Try again
-            </Button>
+            <Button variant="outline" onClick={() => refetch()}>Try again</Button>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
 
-  const pushesData = (data?.pushesByDay ?? []).map((d) => ({
-    ...d,
-    dateLabel: formatShortDate(d.date),
-  }));
-  const slackData = (data?.slackMessagesByDay ?? []).map((d) => ({
-    ...d,
-    dateLabel: formatShortDate(d.date),
-  }));
+  const pushesData = (data?.pushesByDay ?? []).map((d) => ({ ...d, dateLabel: formatShortDate(d.date) }));
+  const slackData = (data?.slackMessagesByDay ?? []).map((d) => ({ ...d, dateLabel: formatShortDate(d.date) }));
   const topRepos = data?.topRepos ?? [];
-  const mostUsedModel = data?.aiModelUsage?.[0];
+  const latest = statsData?.latest;
+  const trend = statsData?.trend;
+  const history = (statsData?.history ?? []).slice().reverse(); // oldest first for chart
+  const dailyCostData = (costData?.dailyCost ?? []).map(d => ({
+    ...d,
+    dateLabel: formatShortDate(d.date),
+    costUsd: d.totalCost / 10000,
+  }));
 
   return (
-    <div className="min-h-screen bg-forest-gradient">
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="min-h-screen bg-background flex flex-col">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Analytics</h1>
-          <p className="text-muted-foreground mt-2">
-            GitHub pushes, Slack messages, AI model usage, and repo activity
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <BarChart3 className="w-7 h-7 text-log-green" />
+            Analytics
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Activity overview, push trends, AI costs, and repository insights.
           </p>
         </div>
 
-        {/* Summary: Most used AI model */}
-        {mostUsedModel && !isLoading && (
-          <Card className="mb-6 border-log-green/30 bg-primary/5">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-lg bg-log-green/20 flex items-center justify-center">
-                  <Cpu className="w-6 h-6 text-log-green" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Your most used AI model</p>
-                  <p className="text-xl font-semibold text-foreground">{getAiModelDisplayName(mostUsedModel.model)}</p>
-                  <p className="text-sm text-muted-foreground">{mostUsedModel.count} summaries generated</p>
-                </div>
-              </div>
+        {/* Summary stat cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+          {statsLoading ? (
+            <>
+              {[1, 2, 3, 4].map(i => (
+                <Card key={i} className="border-border">
+                  <CardContent className="pt-5 pb-4">
+                    <Skeleton className="h-4 w-20 mb-2" />
+                    <Skeleton className="h-8 w-16" />
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          ) : latest ? (
+            <>
+              <Card className="border-border">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity className="w-4 h-4 text-log-green" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Active Integrations</p>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{latest.activeIntegrations}</p>
+                  {trend && <TrendBadge value={trend.activeIntegrations} />}
+                </CardContent>
+              </Card>
+              <Card className="border-border">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Layers className="w-4 h-4 text-log-green" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Repositories</p>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{latest.totalRepositories}</p>
+                  {trend && <TrendBadge value={trend.totalRepositories} />}
+                </CardContent>
+              </Card>
+              <Card className="border-border">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <GitBranch className="w-4 h-4 text-log-green" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Pushes (24h)</p>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{latest.dailyPushes}</p>
+                  {trend && <TrendBadge value={trend.dailyPushes} />}
+                </CardContent>
+              </Card>
+              <Card className="border-border">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Bell className="w-4 h-4 text-log-green" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Notifications</p>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{latest.totalNotifications}</p>
+                  {trend && <TrendBadge value={trend.totalNotifications} />}
+                </CardContent>
+              </Card>
+            </>
+          ) : null}
+        </div>
+
+        {/* Trends over time (line chart from analytics_stats history) */}
+        {history.length > 1 && (
+          <Card className="card-lift mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <TrendingUp className="w-5 h-5 text-log-green" />
+                Activity Trends
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer config={chartConfig} className="h-[240px] w-full">
+                <LineChart data={history.map(h => ({
+                  date: formatShortDate(h.createdAt),
+                  pushes: h.dailyPushes,
+                  notifications: h.totalNotifications,
+                }))} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line type="monotone" dataKey="pushes" name="Daily Pushes" stroke="hsl(var(--log-green))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="notifications" name="Notifications" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ChartContainer>
             </CardContent>
           </Card>
         )}
 
-        {/* Top Repositories by activity */}
+        {/* AI Cost Breakdown */}
+        {costData && (costData.totalCalls > 0 || !costLoading) && costData.totalCalls > 0 && (
+          <Card className="card-lift mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <DollarSign className="w-5 h-5 text-log-green" />
+                AI Cost Breakdown
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Spend</p>
+                  <p className="text-xl font-semibold text-foreground">{costData.totalSpendFormatted}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Calls</p>
+                  <p className="text-xl font-semibold text-foreground">{costData.totalCalls}</p>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Avg per Call</p>
+                  <p className="text-xl font-semibold text-foreground">
+                    {costData.totalCalls > 0 ? `$${(costData.totalSpend / costData.totalCalls / 10000).toFixed(4)}` : "—"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Daily cost area chart */}
+              {dailyCostData.some(d => d.costUsd > 0) && (
+                <div className="mb-6">
+                  <p className="text-sm font-medium text-foreground mb-3">Daily spend (last 30 days)</p>
+                  <ChartContainer config={chartConfig} className="h-[200px] w-full">
+                    <AreaChart data={dailyCostData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                      <XAxis dataKey="dateLabel" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+                      <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Area type="monotone" dataKey="costUsd" name="Cost ($)" stroke="hsl(var(--log-green))" fill="hsl(var(--log-green) / 0.15)" strokeWidth={2} />
+                    </AreaChart>
+                  </ChartContainer>
+                </div>
+              )}
+
+              {/* Cost by model list */}
+              {costData.costByModel.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium text-foreground mb-3">Cost by model</p>
+                  <div className="space-y-2">
+                    {costData.costByModel.map(({ model, cost, calls, tokens }) => (
+                      <div key={model} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
+                        <div className="min-w-0">
+                          <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{calls} calls, {tokens.toLocaleString()} tokens</span>
+                        </div>
+                        <span className="text-sm font-medium text-foreground shrink-0 ml-2">
+                          {cost > 0 ? `$${(cost / 10000).toFixed(4)}` : "$0.00"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* GitHub Pushes chart */}
+        <Card className="card-lift mb-8 border-border shadow-forest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <GitBranch className="w-5 h-5 text-log-green" />
+              GitHub Pushes (last 30 days)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[280px] w-full rounded-lg" />
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[280px] w-full">
+                <BarChart data={pushesData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis dataKey="dateLabel" tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" fill="hsl(var(--log-green))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Slack Messages chart */}
+        <Card className="card-lift mb-8 border-border shadow-forest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Bell className="w-5 h-5 text-log-green" />
+              Slack Messages Sent (last 30 days)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-[280px] w-full rounded-lg" />
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[280px] w-full">
+                <BarChart data={slackData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                  <XAxis dataKey="dateLabel" tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
+                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Repositories */}
         {topRepos.length > 0 && (
-          <Card className="mb-8">
+          <Card className="card-lift mb-8 border-border shadow-forest">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <TrendingUp className="w-5 h-5 text-log-green" />
-                Top Repositories (by changes)
+                Top Repositories
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Click a repo to see lines changed per file and folder
-              </p>
+              <p className="text-sm text-muted-foreground">Click a repo to see file and folder breakdown</p>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <div className="space-y-2">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-14 w-full rounded-lg" />
-                  ))}
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -173,7 +422,7 @@ export default function Analytics() {
                       <div className="flex items-center gap-4 shrink-0 ml-2">
                         <span className="text-sm text-muted-foreground">{repo.pushCount} pushes</span>
                         <span className="text-sm text-green-600 dark:text-green-400">+{repo.totalAdditions}</span>
-                        <span className="text-sm text-red-600 dark:text-red-400">−{repo.totalDeletions}</span>
+                        <span className="text-sm text-red-600 dark:text-red-400">{repo.totalDeletions > 0 ? `\u2212${repo.totalDeletions}` : "0"}</span>
                       </div>
                     </button>
                   ))}
@@ -183,91 +432,26 @@ export default function Analytics() {
           </Card>
         )}
 
-        {/* GitHub Pushes */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <GitBranch className="w-5 h-5 text-log-green" />
-              GitHub Pushes (last 30 days)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-[280px] w-full rounded-lg" />
-            ) : (
-              <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                <BarChart data={pushesData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis
-                    dataKey="dateLabel"
-                    tick={{ fill: "hsl(var(--muted-foreground))" }}
-                    tickLine={false}
-                  />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="hsl(var(--log-green))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Slack Messages Sent */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <Bell className="w-5 h-5 text-log-green" />
-              Slack Messages Sent (last 30 days)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {isLoading ? (
-              <Skeleton className="h-[280px] w-full rounded-lg" />
-            ) : (
-              <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                <BarChart data={slackData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis
-                    dataKey="dateLabel"
-                    tick={{ fill: "hsl(var(--muted-foreground))" }}
-                    tickLine={false}
-                  />
-                  <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ChartContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Most Used AI Models */}
-        <Card>
+        {/* AI Model Usage */}
+        <Card className="card-lift border-border shadow-forest">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Cpu className="w-5 h-5 text-log-green" />
               AI Model Usage (all time)
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Tracked per summary so you can see which model you use most
-            </p>
+            <p className="text-sm text-muted-foreground">Tracked per summary so you can see which model you use most</p>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="space-y-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <Skeleton key={i} className="h-12 w-full rounded-lg" />
-                ))}
+                {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
               </div>
             ) : !data?.aiModelUsage?.length ? (
               <p className="text-muted-foreground py-4">No AI usage recorded yet. Summaries will be tracked when you push.</p>
             ) : (
               <div className="space-y-2">
                 {data.aiModelUsage.map(({ model, count }) => (
-                  <div
-                    key={model}
-                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border"
-                  >
+                  <div key={model} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
                     <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
                     <span className="text-muted-foreground">{count} summaries</span>
                   </div>
@@ -284,7 +468,7 @@ export default function Analytics() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Github className="w-5 h-5 text-log-green" />
-              {repoDetail?.repository?.fullName ?? "Repository"} — lines changed
+              {repoDetail?.repository?.fullName ?? "Repository"} -- lines changed
             </DialogTitle>
           </DialogHeader>
           {repoDetailLoading ? (
@@ -303,7 +487,6 @@ export default function Analytics() {
               >
                 View on GitHub <Github className="w-3 h-3" />
               </a>
-
               {repoDetail.folderStats.length > 0 && (
                 <div>
                   <h4 className="font-medium text-foreground flex items-center gap-2 mb-2">
@@ -311,11 +494,11 @@ export default function Analytics() {
                   </h4>
                   <div className="rounded-lg border border-border overflow-hidden">
                     <table className="w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
-                      <tr className="border-b border-border">
+                      <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_hsl(var(--border))]">
+                        <tr className="border-b border-border">
                           <th className="text-left p-2 font-medium text-foreground">Folder</th>
                           <th className="text-right p-2 text-muted-foreground">+ Additions</th>
-                          <th className="text-right p-2 text-muted-foreground">− Deletions</th>
+                          <th className="text-right p-2 text-muted-foreground">&minus; Deletions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -323,7 +506,7 @@ export default function Analytics() {
                           <tr key={folder} className="border-b border-border/50 last:border-0">
                             <td className="p-2 font-mono text-foreground">{folder}</td>
                             <td className="p-2 text-right text-green-600 dark:text-green-400">+{additions}</td>
-                            <td className="p-2 text-right text-red-600 dark:text-red-400">−{deletions}</td>
+                            <td className="p-2 text-right text-red-600 dark:text-red-400">&minus;{deletions}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -331,7 +514,6 @@ export default function Analytics() {
                   </div>
                 </div>
               )}
-
               {repoDetail.fileStats.length > 0 && (
                 <div>
                   <h4 className="font-medium text-foreground flex items-center gap-2 mb-2">
@@ -343,7 +525,7 @@ export default function Analytics() {
                         <tr className="border-b border-border">
                           <th className="text-left p-2 font-medium text-foreground">File</th>
                           <th className="text-right p-2 text-muted-foreground">+ Additions</th>
-                          <th className="text-right p-2 text-muted-foreground">− Deletions</th>
+                          <th className="text-right p-2 text-muted-foreground">&minus; Deletions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -351,7 +533,7 @@ export default function Analytics() {
                           <tr key={filePath} className="border-b border-border/50 last:border-0">
                             <td className="p-2 font-mono text-foreground truncate max-w-[200px]" title={filePath}>{filePath}</td>
                             <td className="p-2 text-right text-green-600 dark:text-green-400">+{additions}</td>
-                            <td className="p-2 text-right text-red-600 dark:text-red-400">−{deletions}</td>
+                            <td className="p-2 text-right text-red-600 dark:text-red-400">&minus;{deletions}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -362,7 +544,6 @@ export default function Analytics() {
                   )}
                 </div>
               )}
-
               {!repoDetail.fileStats.length && !repoDetail.folderStats.length && (
                 <p className="text-muted-foreground py-4">No file-level data yet. Data is recorded when GitHub sends file stats with each push.</p>
               )}
@@ -370,6 +551,7 @@ export default function Analytics() {
           ) : null}
         </DialogContent>
       </Dialog>
+      <Footer />
     </div>
   );
 }

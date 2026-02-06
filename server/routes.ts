@@ -377,6 +377,36 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
             userId: integration.userId,
           });
         }
+        // Budget check: notify user if monthly spend exceeds their budget
+        try {
+          const userForBudget = await databaseStorage.getUserById(integration.userId);
+          const monthlyBudget = (userForBudget as any)?.monthlyBudget;
+          if (monthlyBudget != null && monthlyBudget > 0) {
+            const allUsage = await databaseStorage.getAiUsageByUserId(integration.userId);
+            const now = new Date();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const monthlySpend = allUsage
+              .filter(u => new Date(u.createdAt) >= monthStart)
+              .reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : 0), 0);
+            if (monthlySpend >= monthlyBudget) {
+              await storage.createNotification({
+                userId: integration.userId,
+                type: "budget_alert",
+                title: "Monthly budget exceeded",
+                message: `Your AI spend this month ($${(monthlySpend / 10000).toFixed(4)}) has exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}.`,
+                metadata: JSON.stringify({ monthlySpend, monthlyBudget }),
+              });
+              broadcastNotification(integration.userId, {
+                type: "budget_alert",
+                title: "Monthly budget exceeded",
+                message: `AI spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)} budget`,
+              });
+            }
+          }
+        } catch (budgetErr) {
+          // Non-fatal
+          console.warn("Budget check error:", budgetErr);
+        }
       }
       // Two notifications per push: the event + delivery confirmation (customer-friendly)
       const repoDisplayName = storedRepo.name || pushData.repositoryName.split('/').pop() || pushData.repositoryName;
@@ -2330,6 +2360,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenRouter: daily usage aggregation for cost-over-time chart on /models page
+  app.get("/api/openrouter/usage/daily", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
+      const days = 30;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+      const dateKeys: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dateKeys.push(d.toISOString().slice(0, 10));
+      }
+      const daily = dateKeys.map(date => ({ date, totalCost: 0, callCount: 0 }));
+      for (const u of openRouterRows) {
+        const d = new Date(u.createdAt);
+        if (Number.isNaN(d.getTime()) || d < startDate) continue;
+        const key = d.toISOString().slice(0, 10);
+        const entry = daily.find(dc => dc.date === key);
+        if (entry) {
+          entry.totalCost += typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
+          entry.callCount += 1;
+        }
+      }
+      res.json(daily);
+    } catch (err) {
+      console.error("OpenRouter daily usage error:", err);
+      res.status(500).json({ error: "Failed to load daily usage" });
+    }
+  });
+
+  // OpenRouter: set/update monthly budget
+  app.patch("/api/openrouter/budget", authenticateToken, async (req, res) => {
+    try {
+      const { budget } = req.body; // budget in USD (e.g. 5.00), or null to clear
+      const userId = req.user!.userId;
+      const budgetUnits = budget != null && Number(budget) > 0 ? Math.round(Number(budget) * 10000) : null;
+      await databaseStorage.updateUser(userId, { monthlyBudget: budgetUnits } as any);
+      res.json({ success: true, monthlyBudget: budgetUnits });
+    } catch (err) {
+      console.error("Budget update error:", err);
+      res.status(500).json({ error: "Failed to update budget" });
+    }
+  });
+
+  // OpenRouter: get current month spend for budget progress
+  app.get("/api/openrouter/monthly-spend", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthlyUsage = usage.filter(u => {
+        const d = new Date(u.createdAt);
+        return d >= monthStart;
+      });
+      const totalSpend = monthlyUsage.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
+      res.json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount: monthlyUsage.length });
+    } catch (err) {
+      console.error("Monthly spend error:", err);
+      res.status(500).json({ error: "Failed to load monthly spend" });
+    }
+  });
+
+  // Favorite models CRUD
+  app.get("/api/openrouter/favorites", authenticateToken, async (req, res) => {
+    try {
+      const favorites = await databaseStorage.getFavoriteModelsByUserId(req.user!.userId);
+      res.json(favorites);
+    } catch (err) {
+      console.error("Favorites list error:", err);
+      res.status(500).json({ error: "Failed to load favorites" });
+    }
+  });
+
+  app.post("/api/openrouter/favorites", authenticateToken, async (req, res) => {
+    try {
+      const { modelId } = req.body;
+      if (!modelId || typeof modelId !== "string") return res.status(400).json({ error: "modelId is required" });
+      const fav = await databaseStorage.addFavoriteModel(req.user!.userId, modelId.trim());
+      res.status(201).json(fav);
+    } catch (err: any) {
+      if (err?.code === "23505") return res.status(409).json({ error: "Already favorited" });
+      console.error("Favorite add error:", err);
+      res.status(500).json({ error: "Failed to add favorite" });
+    }
+  });
+
+  app.delete("/api/openrouter/favorites/:modelId", authenticateToken, async (req, res) => {
+    try {
+      const modelId = decodeURIComponent(req.params.modelId);
+      const removed = await databaseStorage.removeFavoriteModel(req.user!.userId, modelId);
+      res.json({ success: removed });
+    } catch (err) {
+      console.error("Favorite remove error:", err);
+      res.status(500).json({ error: "Failed to remove favorite" });
+    }
+  });
+
   // OpenRouter models list with full details (context_length, pricing) for Models page search/filter
   app.get("/api/openrouter/models", async (req, res) => {
     try {
@@ -2558,6 +2690,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err) {
       console.error("Analytics repo detail:", err);
       res.status(500).json({ error: "Failed to load repo analytics" });
+    }
+  });
+
+  // Analytics: summary stats from analytics_stats table (latest snapshot + historical for trends)
+  app.get("/api/analytics/stats", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      // Create a fresh snapshot
+      const latest = await databaseStorage.getStatsForUser(userId);
+      // Fetch recent history (last 30 snapshots) for trend charts
+      const history = await databaseStorage.getAnalyticsStatsHistory(userId, 30);
+      // Compute trend: compare latest to previous snapshot
+      const prev = history.length > 1 ? history[1] : null;
+      const trend = prev ? {
+        dailyPushes: latest.dailyPushes - prev.dailyPushes,
+        totalNotifications: latest.totalNotifications - prev.totalNotifications,
+        activeIntegrations: latest.activeIntegrations - prev.activeIntegrations,
+        totalRepositories: latest.totalRepositories - prev.totalRepositories,
+      } : null;
+      res.json({ latest, trend, history });
+    } catch (err) {
+      console.error("Analytics stats error:", err);
+      res.status(500).json({ error: "Failed to load analytics stats" });
+    }
+  });
+
+  // Analytics: AI cost breakdown (daily cost + cost by model for charts)
+  app.get("/api/analytics/cost", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.getAiUsageByUserId(userId);
+      // Daily cost aggregation (last 30 days)
+      const days = 30;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+      const dateKeys: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dateKeys.push(d.toISOString().slice(0, 10));
+      }
+      const dailyCost: { date: string; totalCost: number; callCount: number }[] = dateKeys.map(date => ({ date, totalCost: 0, callCount: 0 }));
+      const costByModel: Record<string, { cost: number; calls: number; tokens: number }> = {};
+      let totalSpend = 0;
+      for (const u of usage) {
+        const c = typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
+        const t = typeof u.tokensUsed === "number" ? u.tokensUsed : Number(u.tokensUsed) || 0;
+        const m = String(u.model || "unknown");
+        totalSpend += c;
+        if (!costByModel[m]) costByModel[m] = { cost: 0, calls: 0, tokens: 0 };
+        costByModel[m].cost += c;
+        costByModel[m].calls += 1;
+        costByModel[m].tokens += t;
+        // Daily aggregation
+        const d = new Date(u.createdAt);
+        if (!Number.isNaN(d.getTime()) && d >= startDate) {
+          const key = d.toISOString().slice(0, 10);
+          const entry = dailyCost.find(dc => dc.date === key);
+          if (entry) {
+            entry.totalCost += c;
+            entry.callCount += 1;
+          }
+        }
+      }
+      const costByModelArr = Object.entries(costByModel)
+        .map(([model, v]) => ({ model, ...v }))
+        .sort((a, b) => b.cost - a.cost);
+      res.json({
+        totalSpend,
+        totalSpendFormatted: `$${(totalSpend / 10000).toFixed(4)}`,
+        totalCalls: usage.length,
+        dailyCost,
+        costByModel: costByModelArr,
+      });
+    } catch (err) {
+      console.error("Analytics cost error:", err);
+      res.status(500).json({ error: "Failed to load cost analytics" });
     }
   });
 
@@ -2960,6 +3170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           googleConnected: !!user.googleId,
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
+          monthlyBudget: (user as any).monthlyBudget ?? null,
         }
       };
       res.json(payload);

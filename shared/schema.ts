@@ -22,6 +22,7 @@ export const users = pgTable("users", {
   stripeCustomerId: text("stripe_customer_id"),
   preferredAiModel: text("preferred_ai_model").default("gpt-5.2"),
   openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, integrations can use OpenRouter with this key
+  monthlyBudget: integer("monthly_budget"), // Monthly AI spend budget in units of $0.0001; nullable = no budget
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -137,6 +138,13 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+export const favoriteModels = pgTable("favorite_models", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  modelId: text("model_id").notNull(), // OpenRouter model id e.g. "anthropic/claude-opus-4.6"
+  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -187,6 +195,11 @@ export const insertAnalyticsStatsSchema = createInsertSchema(analyticsStats).omi
 });
 
 export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit({
   id: true,
   createdAt: true,
 });
@@ -247,3 +260,5 @@ export type AnalyticsStats = typeof analyticsStats.$inferSelect;
 export type InsertAnalyticsStats = z.infer<typeof insertAnalyticsStatsSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+export type FavoriteModel = typeof favoriteModels.$inferSelect;
+export type InsertFavoriteModel = z.infer<typeof insertFavoriteModelSchema>;

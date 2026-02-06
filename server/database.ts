@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
+  favoriteModels,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -12,6 +13,7 @@ import {
   type AiUsage, type InsertAiUsage,
   type Payment, type InsertPayment,
   type AnalyticsStats, type InsertAnalyticsStats,
+  type FavoriteModel,
   analyticsStats
 } from "@shared/schema";
 import { eq, and, sql, inArray, desc, max } from "drizzle-orm";
@@ -385,17 +387,28 @@ export class DatabaseStorage implements IStorage {
     
     const totalNotifications = slackMessagesSent + pushEventNotifications;
 
-    const newAnalyticsStats: AnalyticsStats = {
-      id: this.nextId++,
+    // Persist snapshot to the database
+    const [inserted] = await db.insert(analyticsStats).values({
       userId,
       activeIntegrations,
       totalRepositories,
       dailyPushes,
       totalNotifications,
-      createdAt: new Date().toISOString()
-    };
-    this.analyticsStats.set(newAnalyticsStats.id, newAnalyticsStats);
-    return newAnalyticsStats;
+    }).returning();
+    const result = inserted as unknown as AnalyticsStats;
+    this.analyticsStats.set(result.id, result);
+    return result;
+  }
+
+  /** Get the last N analytics_stats snapshots for a user (most recent first). */
+  async getAnalyticsStatsHistory(userId: number, limit: number = 30): Promise<AnalyticsStats[]> {
+    const rows = await db
+      .select()
+      .from(analyticsStats)
+      .where(eq(analyticsStats.userId, userId))
+      .orderBy(desc(analyticsStats.createdAt))
+      .limit(limit);
+    return rows as AnalyticsStats[];
   }
 
   async storeOAuthSession(session: OAuthSession): Promise<void> {
@@ -596,6 +609,23 @@ export class DatabaseStorage implements IStorage {
   async getUserByStripeCustomerId(customerId: string): Promise<User | null> {
     const [result] = await db.select().from(users).where(eq(users.stripeCustomerId, customerId));
     return result ? convertToUser(result as any) : null;
+  }
+
+  // Favorite models methods
+  async getFavoriteModelsByUserId(userId: number): Promise<FavoriteModel[]> {
+    return await db.select().from(favoriteModels).where(eq(favoriteModels.userId, userId)).orderBy(desc(favoriteModels.createdAt)) as any;
+  }
+
+  async addFavoriteModel(userId: number, modelId: string): Promise<FavoriteModel> {
+    const [result] = await db.insert(favoriteModels).values({ userId, modelId }).returning();
+    return result as any;
+  }
+
+  async removeFavoriteModel(userId: number, modelId: string): Promise<boolean> {
+    const deleted = await db.delete(favoriteModels)
+      .where(and(eq(favoriteModels.userId, userId), eq(favoriteModels.modelId, modelId)))
+      .returning({ id: favoriteModels.id });
+    return deleted.length > 0;
   }
 
   async getDatabaseHealth(): Promise<string> {

@@ -13,13 +13,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/footer";
 import { getAiModelDisplayName } from "@/lib/utils";
-import { formatLocalDateTime } from "@/lib/date";
+import { formatLocalDateTime, formatRelativeOrLocal, formatCreatedAt } from "@/lib/date";
 import { Link } from "wouter";
 import {
   Dialog,
@@ -31,6 +31,9 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
+import { formatLocalShortDate } from "@/lib/date";
 import { AiUsage } from "@shared/schema";
 
 interface OpenRouterModel {
@@ -116,6 +119,8 @@ export default function Models() {
   const [recentCallsOpen, setRecentCallsOpen] = useState(false);
   const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
   const [recentCallsSearch, setRecentCallsSearch] = useState("");
+  const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
+  const [compareOpen, setCompareOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -150,6 +155,17 @@ export default function Models() {
         calls: Array.isArray(data.calls) ? data.calls : [],
         lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
       };
+    },
+    enabled: userHasKey,
+    retry: 1,
+  });
+
+  const { data: dailyUsageData } = useQuery<{ date: string; totalCost: number; callCount: number }[]>({
+    queryKey: ["/api/openrouter/usage/daily"],
+    queryFn: async () => {
+      const res = await fetch("/api/openrouter/usage/daily", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load daily usage");
+      return res.json();
     },
     enabled: userHasKey,
     retry: 1,
@@ -229,6 +245,65 @@ export default function Models() {
       return Array.isArray(data) ? data : [];
     },
     enabled: userHasKey,
+  });
+
+  // Favorite models
+  const { data: favoriteModels } = useQuery<{ id: number; modelId: string }[]>({
+    queryKey: ["/api/openrouter/favorites"],
+    queryFn: async () => {
+      const res = await fetch("/api/openrouter/favorites", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: userHasKey,
+  });
+  const favoriteIds = new Set((favoriteModels ?? []).map(f => f.modelId));
+
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: async (modelId: string) => {
+      if (favoriteIds.has(modelId)) {
+        await apiRequest("DELETE", `/api/openrouter/favorites/${encodeURIComponent(modelId)}`);
+      } else {
+        await apiRequest("POST", "/api/openrouter/favorites", { modelId });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/favorites"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Favorite failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  // Budget
+  const [budgetInput, setBudgetInput] = useState("");
+  const { data: monthlySpendData } = useQuery<{ totalSpend: number; totalSpendUsd: number; callCount: number }>({
+    queryKey: ["/api/openrouter/monthly-spend"],
+    queryFn: async () => {
+      const res = await fetch("/api/openrouter/monthly-spend", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    enabled: userHasKey,
+    retry: 1,
+  });
+  const userBudget = (profileResponse?.user as any)?.monthlyBudget as number | null | undefined;
+  const budgetUsd = userBudget != null && userBudget > 0 ? userBudget / 10000 : null;
+
+  const setBudgetMutation = useMutation({
+    mutationFn: async (budget: number | null) => {
+      const res = await apiRequest("PATCH", "/api/openrouter/budget", { budget });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/openrouter/monthly-spend"] });
+      setBudgetInput("");
+      toast({ title: "Budget updated" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Budget update failed", description: e.message, variant: "destructive" });
+    },
   });
 
   const applyToIntegrationMutation = useMutation({
@@ -539,26 +614,26 @@ export default function Models() {
         {userHasKey && (
           <Card className="card-lift mb-8 border-border shadow-forest">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <DollarSign className="w-5 h-5 text-log-green" />
-                Usage & cost
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <DollarSign className="w-5 h-5 text-log-green" />
+                  Usage & cost
+                </CardTitle>
+                <button
+                  onClick={handleFetchAllUsage}
+                  disabled={fetchAllUsageMutation.isPending}
+                  className="text-muted-foreground hover:text-log-green transition-colors duration-200 disabled:opacity-40 p-1.5 rounded-md hover:bg-muted/50"
+                  title="Refresh usage"
+                >
+                  <RefreshCw className={`w-4 h-4 ${fetchAllUsageMutation.isPending ? "animate-spin" : ""}`} />
+                </button>
+              </div>
               <CardDescription>
                 Calls and token usage from PushLog using your OpenRouter key. Cost is estimated from our recorded usage and may show $0.00 for some calls — see{" "}
                 <a href="https://openrouter.ai/activity" target="_blank" rel="noopener noreferrer" className="text-log-green hover:underline">
                   openrouter.ai/activity
                 </a>{" "}for exact costs.
               </CardDescription>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={handleFetchAllUsage}
-                disabled={fetchAllUsageMutation.isPending}
-              >
-                {fetchAllUsageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                Refresh usage
-              </Button>
             </CardHeader>
             <CardContent>
               {usageLoading ? (
@@ -650,6 +725,115 @@ export default function Models() {
                       </div>
                     )}
                   </div>
+                  {/* Budget progress bar */}
+                  {monthlySpendData && (
+                    <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
+                        {budgetUsd != null ? (
+                          <span className="text-xs text-muted-foreground">
+                            ${monthlySpendData.totalSpendUsd.toFixed(4)} / ${budgetUsd.toFixed(2)} budget
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">${monthlySpendData.totalSpendUsd.toFixed(4)} this month</span>
+                        )}
+                      </div>
+                      {budgetUsd != null && (
+                        <div className="w-full h-2 rounded-full bg-border overflow-hidden mb-2">
+                          <div
+                            className={`h-full rounded-full transition-all ${monthlySpendData.totalSpendUsd >= budgetUsd ? "bg-red-500" : "bg-log-green"}`}
+                            style={{ width: `${Math.min(100, (monthlySpendData.totalSpendUsd / budgetUsd) * 100)}%` }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder={budgetUsd != null ? `$${budgetUsd.toFixed(2)}` : "Set budget ($)"}
+                          value={budgetInput}
+                          onChange={(e) => setBudgetInput(e.target.value)}
+                          className="h-7 w-32 text-xs bg-background border-border text-foreground"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          disabled={setBudgetMutation.isPending}
+                          onClick={() => {
+                            const val = budgetInput.trim() ? parseFloat(budgetInput) : null;
+                            setBudgetMutation.mutate(val);
+                          }}
+                        >
+                          {setBudgetMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : budgetInput.trim() ? "Set" : "Clear"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Smart stats: avg cost, cheapest/most expensive model */}
+                  {usageData.costByModel && usageData.costByModel.length > 0 && usageData.totalCalls > 0 && (
+                    <div className="flex flex-wrap gap-3 mb-6">
+                      <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                        <span className="text-muted-foreground">Avg/call:</span>
+                        <span className="font-medium text-foreground">
+                          ${(usageData.totalCostCents / usageData.totalCalls / 10000).toFixed(4)}
+                        </span>
+                      </div>
+                      {(() => {
+                        const withCost = usageData.costByModel.filter(r => r.totalCalls > 0);
+                        const cheapest = withCost.length > 0
+                          ? withCost.reduce((a, b) => (a.totalCostCents / a.totalCalls) < (b.totalCostCents / b.totalCalls) ? a : b)
+                          : null;
+                        const priciest = withCost.length > 0
+                          ? withCost.reduce((a, b) => (a.totalCostCents / a.totalCalls) > (b.totalCostCents / b.totalCalls) ? a : b)
+                          : null;
+                        return (
+                          <>
+                            {cheapest && (
+                              <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                                <span className="text-muted-foreground">Cheapest:</span>
+                                <span className="font-medium text-foreground">{getAiModelDisplayName(cheapest.model)}</span>
+                                <span className="text-xs text-muted-foreground">${(cheapest.totalCostCents / cheapest.totalCalls / 10000).toFixed(4)}/call</span>
+                              </div>
+                            )}
+                            {priciest && priciest.model !== cheapest?.model && (
+                              <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                                <span className="text-muted-foreground">Priciest:</span>
+                                <span className="font-medium text-foreground">{getAiModelDisplayName(priciest.model)}</span>
+                                <span className="text-xs text-muted-foreground">${(priciest.totalCostCents / priciest.totalCalls / 10000).toFixed(4)}/call</span>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Cost over time chart */}
+                  {dailyUsageData && dailyUsageData.some(d => d.totalCost > 0) && (
+                    <div className="mb-6">
+                      <h4 className="text-sm font-semibold text-foreground mb-3">Cost over time (last 30 days)</h4>
+                      <ChartContainer config={{ count: { label: "Cost", color: "hsl(var(--log-green))" } }} className="h-[180px] w-full">
+                        <AreaChart
+                          data={dailyUsageData.map(d => ({
+                            dateLabel: formatLocalShortDate(d.date),
+                            costUsd: d.totalCost / 10000,
+                            calls: d.callCount,
+                          }))}
+                          margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                          <XAxis dataKey="dateLabel" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+                          <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Area type="monotone" dataKey="costUsd" name="Cost ($)" stroke="hsl(var(--log-green))" fill="hsl(var(--log-green) / 0.15)" strokeWidth={2} />
+                        </AreaChart>
+                      </ChartContainer>
+                    </div>
+                  )}
+
                   {Array.isArray(usageData.calls) && usageData.calls.length > 0 ? (
                     <>
                       <h4 className="text-sm font-semibold text-foreground mt-2 mb-2">Cost by model</h4>
@@ -708,7 +892,7 @@ export default function Models() {
                                       : "—"}
                                   </TableCell>
                                   <TableCell className="text-muted-foreground text-sm">
-                                    {r.lastAt ? formatLocalDateTime(r.lastAt) : "—"}
+                                    {r.lastAt ? formatRelativeOrLocal(r.lastAt) : "—"}
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -786,7 +970,7 @@ export default function Models() {
                                           : "—"}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground text-sm">
-                                      {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
+                                      {(c.createdAt ?? (c as any).created_at) ? formatRelativeOrLocal((c.createdAt ?? (c as any).created_at) as string) : "—"}
                                     </TableCell>
                                     <TableCell>
                                       {c.generationId ? (
@@ -834,6 +1018,42 @@ export default function Models() {
           </Card>
         )}
 
+        {/* Pinned / favorite models */}
+        {userHasKey && favoriteModels && favoriteModels.length > 0 && (
+          <Card className="card-lift mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                Pinned Models
+              </CardTitle>
+              <CardDescription>Your favorited models for quick access.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {favoriteModels.map(fav => {
+                  const model = allModels.find(m => m.id === fav.modelId);
+                  return (
+                    <button
+                      key={fav.modelId}
+                      className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30 hover:bg-muted/60 transition-colors text-left group"
+                      onClick={() => model && setSelectedModel(model)}
+                    >
+                      <Star
+                        className="w-4 h-4 text-yellow-500 fill-yellow-500 shrink-0 cursor-pointer hover:scale-110 transition-transform"
+                        onClick={(e) => { e.stopPropagation(); toggleFavoriteMutation.mutate(fav.modelId); }}
+                      />
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground text-sm truncate">{model?.name || fav.modelId}</p>
+                        <p className="text-xs text-muted-foreground font-mono truncate">{fav.modelId}</p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Models list */}
         <Card className="card-lift border-border shadow-forest">
           <CardHeader>
@@ -877,6 +1097,23 @@ export default function Models() {
                 />
               </div>
             </div>
+            {compareIds.size > 0 && (
+              <div className="flex items-center gap-3 pt-3">
+                <span className="text-sm text-muted-foreground">{compareIds.size} selected</span>
+                <Button
+                  variant="glow"
+                  size="sm"
+                  className="text-white"
+                  disabled={compareIds.size < 2}
+                  onClick={() => setCompareOpen(true)}
+                >
+                  Compare{compareIds.size >= 2 ? ` (${compareIds.size})` : ""}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setCompareIds(new Set())}>
+                  Clear
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             {modelsLoading ? (
@@ -886,6 +1123,7 @@ export default function Models() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 border-border">
+                      <TableHead className="w-8"></TableHead>
                       <TableHead className="text-foreground">Model</TableHead>
                       <TableHead className="text-foreground">Context</TableHead>
                       <TableHead className="text-foreground">Prompt</TableHead>
@@ -910,10 +1148,35 @@ export default function Models() {
                         className="border-border cursor-pointer hover:bg-muted/50 transition-colors"
                         onClick={() => setSelectedModel(m)}
                       >
+                        <TableCell className="w-8 pr-0">
+                          <input
+                            type="checkbox"
+                            className="accent-[hsl(var(--log-green))] w-3.5 h-3.5 cursor-pointer"
+                            checked={compareIds.has(m.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => {
+                              const next = new Set(compareIds);
+                              if (e.target.checked) {
+                                if (next.size < 4) next.add(m.id);
+                              } else {
+                                next.delete(m.id);
+                              }
+                              setCompareIds(next);
+                            }}
+                          />
+                        </TableCell>
                         <TableCell>
-                          <div>
-                            <p className="font-medium text-foreground">{m.name || m.id}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
+                          <div className="flex items-center gap-2">
+                            {userHasKey && (
+                              <Star
+                                className={`w-4 h-4 shrink-0 cursor-pointer transition-colors ${favoriteIds.has(m.id) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30 hover:text-yellow-500"}`}
+                                onClick={(e) => { e.stopPropagation(); toggleFavoriteMutation.mutate(m.id); }}
+                              />
+                            )}
+                            <div>
+                              <p className="font-medium text-foreground">{m.name || m.id}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -927,7 +1190,7 @@ export default function Models() {
                         </TableCell>
                         {userHasKey && (
                           <TableCell className="text-muted-foreground text-sm">
-                            {getLastUsed(m.id) ? formatLocalDateTime(getLastUsed(m.id)!) : "—"}
+                            {getLastUsed(m.id) ? formatRelativeOrLocal(getLastUsed(m.id)!) : "—"}
                           </TableCell>
                         )}
                         <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
@@ -1017,6 +1280,104 @@ export default function Models() {
           </DialogContent>
         </Dialog>
 
+        {/* Comparison dialog */}
+        <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Compare Models</DialogTitle>
+              <DialogDescription>Side-by-side comparison of selected models.</DialogDescription>
+            </DialogHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left p-2 text-muted-foreground font-medium">Property</th>
+                    {Array.from(compareIds).map(id => {
+                      const m = allModels.find(mod => mod.id === id);
+                      return (
+                        <th key={id} className="text-left p-2 text-foreground font-medium min-w-[150px]">
+                          {m?.name || id}
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-border/50">
+                    <td className="p-2 text-muted-foreground">ID</td>
+                    {Array.from(compareIds).map(id => (
+                      <td key={id} className="p-2 font-mono text-xs text-foreground">{id}</td>
+                    ))}
+                  </tr>
+                  <tr className="border-b border-border/50">
+                    <td className="p-2 text-muted-foreground">Context Length</td>
+                    {Array.from(compareIds).map(id => {
+                      const m = allModels.find(mod => mod.id === id);
+                      return <td key={id} className="p-2 text-foreground">{m?.context_length?.toLocaleString() ?? "—"}</td>;
+                    })}
+                  </tr>
+                  <tr className="border-b border-border/50">
+                    <td className="p-2 text-muted-foreground">Prompt (per 1K)</td>
+                    {Array.from(compareIds).map(id => {
+                      const m = allModels.find(mod => mod.id === id);
+                      return <td key={id} className="p-2 text-foreground">{formatPrice(m?.pricing?.prompt)}</td>;
+                    })}
+                  </tr>
+                  <tr className="border-b border-border/50">
+                    <td className="p-2 text-muted-foreground">Completion (per 1K)</td>
+                    {Array.from(compareIds).map(id => {
+                      const m = allModels.find(mod => mod.id === id);
+                      return <td key={id} className="p-2 text-foreground">{formatPrice(m?.pricing?.completion)}</td>;
+                    })}
+                  </tr>
+                  {userHasKey && (
+                    <>
+                      <tr className="border-b border-border/50">
+                        <td className="p-2 text-muted-foreground">Your Calls</td>
+                        {Array.from(compareIds).map(id => {
+                          const row = usageData?.costByModel?.find(r => r.model === id);
+                          return <td key={id} className="p-2 text-foreground">{row?.totalCalls ?? 0}</td>;
+                        })}
+                      </tr>
+                      <tr className="border-b border-border/50">
+                        <td className="p-2 text-muted-foreground">Your Tokens</td>
+                        {Array.from(compareIds).map(id => {
+                          const row = usageData?.costByModel?.find(r => r.model === id);
+                          return <td key={id} className="p-2 text-foreground">{(row?.totalTokens ?? 0).toLocaleString()}</td>;
+                        })}
+                      </tr>
+                      <tr className="border-b border-border/50">
+                        <td className="p-2 text-muted-foreground">Your Cost</td>
+                        {Array.from(compareIds).map(id => {
+                          const row = usageData?.costByModel?.find(r => r.model === id);
+                          return <td key={id} className="p-2 text-foreground">
+                            {row && row.totalCostCents > 0 ? `$${(row.totalCostCents / 10000).toFixed(4)}` : "$0.00"}
+                          </td>;
+                        })}
+                      </tr>
+                      <tr className="border-b border-border/50">
+                        <td className="p-2 text-muted-foreground">Last Used</td>
+                        {Array.from(compareIds).map(id => (
+                          <td key={id} className="p-2 text-foreground text-sm">
+                            {getLastUsed(id) ? formatRelativeOrLocal(getLastUsed(id)!) : "—"}
+                          </td>
+                        ))}
+                      </tr>
+                    </>
+                  )}
+                  <tr>
+                    <td className="p-2 text-muted-foreground">Description</td>
+                    {Array.from(compareIds).map(id => {
+                      const m = allModels.find(mod => mod.id === id);
+                      return <td key={id} className="p-2 text-foreground text-xs">{m?.description?.slice(0, 120) || "—"}{(m?.description?.length ?? 0) > 120 ? "…" : ""}</td>;
+                    })}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Model detail modal */}
         <Dialog open={!!selectedModel} onOpenChange={(open) => !open && setSelectedModel(null)}>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
@@ -1072,8 +1433,8 @@ export default function Models() {
                   )}
                   {userHasKey && getLastUsed(selectedModel.id) && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Last used (your timezone)</p>
-                      <p className="font-medium text-foreground">{formatLocalDateTime(getLastUsed(selectedModel.id)!)}</p>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Last used</p>
+                      <p className="font-medium text-foreground">{formatCreatedAt(getLastUsed(selectedModel.id)!)}</p>
                     </div>
                   )}
                   <a
