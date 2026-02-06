@@ -480,7 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to get OpenRouter usage' });
     }
   });
-  
+
   app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
     try {
       const generationId = req.params.id;
@@ -2162,13 +2162,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const json = (await response.json()) as { data?: Record<string, unknown> } & Record<string, unknown>;
       const data = json?.data ?? json;
       const raw = (data ?? {}) as Record<string, unknown>;
-      const costUsd = (raw.usage ?? raw.total_cost) as number | undefined;
+      // Prefer total_cost (final billed amount); fall back to usage
+      const costUsd = (raw.total_cost ?? raw.usage) as number | undefined;
       const tokensPrompt = (raw.tokens_prompt as number | undefined) ?? 0;
       const tokensCompletion = (raw.tokens_completion as number | undefined) ?? 0;
+      const costCents =
+        typeof costUsd === "number" && costUsd >= 0.01 ? Math.round(costUsd * 100) : null;
       res.status(200).json({
         generationId,
-        costUsd: typeof costUsd === "number" ? costUsd : null,
-        costCents: typeof costUsd === "number" && costUsd >= 0 ? Math.round(costUsd * 100) : null,
+        costUsd: typeof costUsd === "number" && costUsd >= 0 ? costUsd : null,
+        costCents,
         tokensPrompt,
         tokensCompletion,
         tokensUsed: tokensPrompt + tokensCompletion,
