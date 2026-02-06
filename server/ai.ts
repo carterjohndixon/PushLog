@@ -85,7 +85,7 @@ function findGenIdInObject(obj: unknown, depth = 0): string | null {
 }
 
 /** Fetch usage/cost for an OpenRouter generation by ID. OpenRouter expects gen-xxx; chatcmpl-xxx (completion.id) often returns 404. */
-async function fetchOpenRouterGenerationUsage(
+export async function fetchOpenRouterGenerationUsage(
   generationId: string,
   apiKey: string
 ): Promise<{ tokensUsed: number; costCents: number } | null> {
@@ -436,8 +436,8 @@ Respond with only valid JSON:
     let tokensUsed = completion.usage?.total_tokens || 0;
     const usage = completion.usage as { total_tokens?: number; cost?: number } | undefined;
     let cost: number;
-    if (useOpenRouter && typeof usage?.cost === 'number') {
-      // OpenRouter returned cost in the completion response (USD); store in cents
+    if (useOpenRouter && typeof usage?.cost === 'number' && usage.cost > 0) {
+      // OpenRouter returned a non-zero cost in the completion response (USD); store in cents
       cost = Math.round(usage.cost * 100);
     } else if (!useOpenRouter) {
       cost = calculateTokenCost(model, tokensUsed);

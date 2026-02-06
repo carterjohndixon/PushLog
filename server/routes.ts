@@ -35,7 +35,7 @@ import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema"
 import { z } from "zod";
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
-import { generateCodeSummary, generateSlackMessage } from './ai';
+import { generateCodeSummary, generateSlackMessage, fetchOpenRouterGenerationUsage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
@@ -67,6 +67,52 @@ async function getUserIdFromOAuthState(state: string): Promise<number | null> {
 }
 
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
+
+/**
+ * Schedule a delayed cost update for an OpenRouter generation.
+ * OpenRouter calculates costs asynchronously, so the cost is often $0 in the immediate response.
+ * This retries the generation API after a delay and updates the ai_usage record with the real cost.
+ */
+function scheduleDelayedCostUpdate(opts: {
+  generationId: string;
+  apiKey: string;
+  pushEventId: number;
+  userId: number;
+  delayMs?: number;
+  retries?: number;
+}) {
+  const { generationId, apiKey, pushEventId, userId, delayMs = 15_000, retries = 2 } = opts;
+  let attempt = 0;
+
+  const tryUpdate = () => {
+    attempt++;
+    setTimeout(async () => {
+      try {
+        const genUsage = await fetchOpenRouterGenerationUsage(generationId, apiKey);
+        if (genUsage && genUsage.costCents > 0) {
+          await databaseStorage.updateAiUsage(pushEventId, userId, {
+            cost: genUsage.costCents,
+            ...(genUsage.tokensUsed > 0 ? { tokensUsed: genUsage.tokensUsed } : {}),
+          } as any);
+          console.log(`💰 Delayed cost update succeeded (attempt ${attempt}): push=${pushEventId}, cost=$${(genUsage.costCents / 100).toFixed(4)}, tokens=${genUsage.tokensUsed}`);
+        } else if (attempt < retries) {
+          // Cost still $0 — OpenRouter may not have computed it yet; retry with longer delay
+          console.log(`💰 Delayed cost update: still $0 on attempt ${attempt}/${retries}, retrying in ${delayMs * 2}ms...`);
+          setTimeout(tryUpdate, 0); // schedule next attempt (the setTimeout inside tryUpdate handles the actual delay)
+        } else {
+          console.log(`💰 Delayed cost update: cost still $0 after ${attempt} attempts for push=${pushEventId}. Check openrouter.ai/activity for actual cost.`);
+        }
+      } catch (err) {
+        console.warn(`💰 Delayed cost update error (attempt ${attempt}):`, err instanceof Error ? err.message : err);
+        if (attempt < retries) {
+          setTimeout(tryUpdate, 0);
+        }
+      }
+    }, attempt === 1 ? delayMs : delayMs * 2); // Double the delay for retries
+  };
+
+  tryUpdate();
+}
 
 /** Slack slash command handler. Must be mounted with express.raw({ type: 'application/x-www-form-urlencoded' }) so req.body is a Buffer. Always returns 200 so Slack shows our message instead of "dispatch_failed". */
 export async function slackCommandsHandler(req: Request, res: Response): Promise<void> {
@@ -321,6 +367,16 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           cost: summary.cost ?? 0,
           openrouterGenerationId: summary.openrouterGenerationId ?? null,
         });
+        // If cost is $0 and we have an OpenRouter generation id, schedule a delayed retry to fetch the real cost
+        // OpenRouter computes costs asynchronously so the immediate response often has cost=0
+        if ((summary.cost ?? 0) === 0 && summary.openrouterGenerationId && useOpenRouter && openRouterKeyRaw) {
+          scheduleDelayedCostUpdate({
+            generationId: summary.openrouterGenerationId,
+            apiKey: openRouterKeyRaw.trim(),
+            pushEventId: pushEvent.id,
+            userId: integration.userId,
+          });
+        }
       }
       // Two notifications per push: the event + delivery confirmation (customer-friendly)
       const repoDisplayName = storedRepo.name || pushData.repositoryName.split('/').pop() || pushData.repositoryName;
@@ -467,53 +523,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❌ Deployment webhook error:', error);
       res.status(500).json({ error: 'Deployment failed' });
-    }
-  });
-
-  app.get("/api/openrouter/usage", authenticateToken, async (req, res) => {
-    try {
-      const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByUserId(userId);
-      res.status(200).json(usage);
-    } catch (error) {
-      console.error('❌ OpenRouter usage error:', error);
-      res.status(500).json({ error: 'Failed to get OpenRouter usage' });
-    }
-  });
-
-  app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
-    try {
-      const generationId = req.params.id;
-      const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByPushEventId(Number(generationId), userId);
-      res.status(200).json(usage);
-    } catch (error) {
-      console.error('❌ OpenRouter usage per gen error:', error);
-      res.status(500).json({ error: 'Failed to get OpenRouter usage per gen' });
-    }
-  });
-
-  app.patch("/api/openrouter/update-usage/:id", authenticateToken, async (req, res) => {
-    try {
-      const generationId = req.params.id;
-      const userId = req.user!.userId;
-      const usage = await databaseStorage.updateAiUsage(Number(generationId), userId, req.body);
-      res.status(200).json(usage);
-    } catch (error) {
-      console.error('❌ OpenRouter update usage error:', error);
-      res.status(500).json({ error: 'Failed to update OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
-    }
-  });
-
-  app.delete("/api/openrouter/delete-usage/:id", authenticateToken, async (req, res) => {
-    try {
-      const generationId = req.params.id;
-      const userId = req.user!.userId;
-      const usage = await databaseStorage.deleteAiUsage(Number(generationId), userId);
-      res.status(200).json(usage);
-    } catch (error) {
-      console.error('❌ OpenRouter delete usage error:', error);
-      res.status(500).json({ error: 'Failed to delete OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
 
@@ -2077,6 +2086,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.patch("/api/openrouter/update-usage/:id", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.id;
+      const userId = req.user!.userId;
+      const usage = await databaseStorage.updateAiUsage(Number(generationId), userId, req.body);
+      res.status(200).json(usage);
+    } catch (error) {
+      console.error('❌ OpenRouter update usage error:', error);
+      res.status(500).json({ error: 'Failed to update OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
+    }
+  });
+
   // OpenRouter: remove user's saved key
   app.delete("/api/openrouter/key", authenticateToken, async (req, res) => {
     try {
@@ -2132,14 +2153,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get OpenRouter usage for a single generation (id = gen-xxx from x-openrouter-generation-id or stored in ai_usage)
+  // Get OpenRouter usage for a single generation: by push event id (numeric) from DB, or by gen-xxx from OpenRouter API
   app.get("/api/openrouter/usage-per-gen/:id", authenticateToken, async (req, res) => {
     try {
-      const generationId = req.params.id;
-      if (!generationId?.trim()) {
+      const idParam = req.params.id;
+      if (!idParam?.trim()) {
         return res.status(400).json({ error: "Missing generation id." });
       }
       const userId = req.user!.userId;
+
+      // Numeric id = push event id: look up our ai_usage row (has openrouter_generation_id + cost stored with push)
+      const pushId = /^\d+$/.test(idParam) ? parseInt(idParam, 10) : NaN;
+      if (!Number.isNaN(pushId)) {
+        const usage = await databaseStorage.getAiUsageByPushEventId(pushId, userId);
+        if (!usage) {
+          return res.status(404).json({ error: "Usage not found for this push." });
+        }
+        const cost = typeof usage.cost === "number" ? usage.cost : Number(usage.cost) || 0;
+        const tokensUsed = typeof usage.tokensUsed === "number" ? usage.tokensUsed : Number(usage.tokensUsed) || 0;
+        const generationId = (usage as any).openrouterGenerationId ?? (usage as any).openrouter_generation_id ?? idParam;
+        return res.status(200).json({
+          generationId: generationId ?? idParam,
+          costUsd: cost >= 0 ? cost / 100 : null,
+          costCents: cost >= 0 ? cost : null,
+          tokensPrompt: 0,
+          tokensCompletion: tokensUsed,
+          tokensUsed,
+        });
+      }
+
+      // Otherwise treat as OpenRouter generation id (gen-xxx): fetch from OpenRouter API
       const user = await databaseStorage.getUserById(userId);
       const rawKey = (user as any)?.openRouterApiKey;
       const apiKey = rawKey && typeof rawKey === "string" ? decrypt(rawKey) : null;
@@ -2147,7 +2190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No OpenRouter API key. Add a key on the Models page to view usage per gen." });
       }
       const url = new URL("https://openrouter.ai/api/v1/generation");
-      url.searchParams.set("id", generationId);
+      url.searchParams.set("id", idParam);
       const response = await fetch(url.toString(), {
         headers: {
           Accept: "application/json",
@@ -2169,7 +2212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const costCents =
         typeof costUsd === "number" && costUsd >= 0.01 ? Math.round(costUsd * 100) : null;
       res.status(200).json({
-        generationId,
+        generationId: idParam,
         costUsd: typeof costUsd === "number" && costUsd >= 0 ? costUsd : null,
         costCents,
         tokensPrompt,
@@ -2811,6 +2854,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             cost: summary.cost ?? 0,
             openrouterGenerationId: (summary as any).openrouterGenerationId ?? null,
           });
+          // Schedule delayed cost update if cost is $0 and we have an OpenRouter generation id
+          if ((summary.cost ?? 0) === 0 && (summary as any).openrouterGenerationId && useOpenRouter && openRouterKeyRaw) {
+            scheduleDelayedCostUpdate({
+              generationId: (summary as any).openrouterGenerationId,
+              apiKey: openRouterKeyRaw.trim(),
+              pushEventId: pushEvent.id,
+              userId: integration.userId,
+            });
+          }
         }
       } catch (recordErr) {
         console.warn("🧪 [TEST] Failed to record push event/usage (non-fatal):", recordErr);
