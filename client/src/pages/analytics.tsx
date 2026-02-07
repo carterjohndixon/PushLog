@@ -338,11 +338,16 @@ export default function Analytics() {
                 <div>
                   <p className="text-sm font-medium text-foreground mb-3">Cost by model</p>
                   <div className="space-y-2">
-                    {costData.costByModel.map(({ model, cost, calls, tokens }) => (
-                      <div key={model} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-                        <div className="min-w-0">
+                    {costData.costByModel.map(({ model, cost, calls, tokens }, i) => (
+                      <div
+                        key={model}
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border border-l-4"
+                        style={{ borderLeftColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                      >
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className="rounded-full w-2 h-2 shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                           <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
-                          <span className="text-xs text-muted-foreground ml-2">{calls} calls, {tokens.toLocaleString()} tokens</span>
+                          <span className="text-xs text-muted-foreground">{calls} calls, {tokens.toLocaleString()} tokens</span>
                         </div>
                         <span className="text-sm font-medium text-foreground shrink-0 ml-2">
                           {cost > 0 ? `$${(cost / 10000).toFixed(4)}` : "$0.00"}
@@ -465,9 +470,16 @@ export default function Analytics() {
               <p className="text-muted-foreground py-4">No AI usage recorded yet. Summaries will be tracked when you push.</p>
             ) : (
               <div className="space-y-2">
-                {data.aiModelUsage.map(({ model, count }) => (
-                  <div key={model} className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border">
-                    <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
+                {data.aiModelUsage.map(({ model, count }, i) => (
+                  <div
+                    key={model}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border border-l-4"
+                    style={{ borderLeftColor: PIE_COLORS[i % PIE_COLORS.length] }}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="rounded-full w-2 h-2 shrink-0" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
+                      <span className="font-medium text-foreground">{getAiModelDisplayName(model)}</span>
+                    </div>
                     <span className="text-muted-foreground">{count} summaries</span>
                   </div>
                 ))}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,7 @@ interface ProfileUser {
   id: number;
   username: string;
   hasOpenRouterKey?: boolean;
+  preferredAiModel?: string;
 }
 
 interface UsageCall {
@@ -121,6 +122,8 @@ export default function Models() {
   const [recentCallsSearch, setRecentCallsSearch] = useState("");
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [compareOpen, setCompareOpen] = useState(false);
+  const [defaultModelId, setDefaultModelId] = useState<string>("");
+  const [replaceAllConfirmOpen, setReplaceAllConfirmOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -129,6 +132,12 @@ export default function Models() {
     queryFn: fetchProfile,
   });
   const userHasKey = !!profileResponse?.user?.hasOpenRouterKey;
+  const profileUser = profileResponse?.user as ProfileUser | undefined;
+  const savedPreferredModel = profileUser?.preferredAiModel ?? "";
+
+  useEffect(() => {
+    if (savedPreferredModel) setDefaultModelId((prev) => prev || savedPreferredModel);
+  }, [savedPreferredModel]);
 
   const { data: modelsData, isLoading: modelsLoading } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
@@ -323,6 +332,42 @@ export default function Models() {
     },
     onError: (e: Error) => {
       toast({ title: "Failed to apply model", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const setDefaultModelMutation = useMutation({
+    mutationFn: async (modelId: string) => {
+      const res = await apiRequest("PATCH", "/api/user", { preferredAiModel: modelId });
+      return res.json();
+    },
+    onSuccess: (_, modelId) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: "Default model updated",
+        description: `New integrations will use ${getAiModelDisplayName(modelId)}.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to set default model", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const replaceAllIntegrationsMutation = useMutation({
+    mutationFn: async (modelId: string) => {
+      const res = await apiRequest("POST", "/api/integrations/replace-all-model", { modelId });
+      return res.json();
+    },
+    onSuccess: (data: { updatedCount: number; preferredAiModel: string }) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      setReplaceAllConfirmOpen(false);
+      toast({
+        title: "Integrations updated",
+        description: `${data.updatedCount} integration(s) now use ${getAiModelDisplayName(data.preferredAiModel)}. This is also your default for new integrations.`,
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to update integrations", description: e.message, variant: "destructive" });
     },
   });
 
@@ -609,6 +654,63 @@ export default function Models() {
             )}
           </CardContent>
         </Card>
+
+        {/* Default AI model (when key is set) */}
+        {userHasKey && (
+          <Card className="card-lift mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Sparkles className="w-5 h-5 text-log-green" />
+                Default AI model
+              </CardTitle>
+              <CardDescription>
+                This model is used for new integrations. Optionally replace all active integrations with this model.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <Select
+                  value={defaultModelId || savedPreferredModel || ""}
+                  onValueChange={(v) => setDefaultModelId(v)}
+                >
+                  <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
+                    <SelectValue placeholder="Select default model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allModels.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {getAiModelDisplayName(m.id)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="default"
+                    className="bg-log-green hover:bg-log-green/90"
+                    disabled={!(defaultModelId || savedPreferredModel) || setDefaultModelMutation.isPending}
+                    onClick={() => setDefaultModelMutation.mutate(defaultModelId || savedPreferredModel)}
+                  >
+                    {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    disabled={!(defaultModelId || savedPreferredModel) || replaceAllIntegrationsMutation.isPending || !integrations?.length}
+                    onClick={() => setReplaceAllConfirmOpen(true)}
+                  >
+                    {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
+                  </Button>
+                </div>
+              </div>
+              {savedPreferredModel && (
+                <p className="text-sm text-muted-foreground">
+                  Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Usage section (when key is set) */}
         {userHasKey && (
@@ -1374,6 +1476,34 @@ export default function Models() {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Replace all integrations confirmation */}
+        <Dialog open={replaceAllConfirmOpen} onOpenChange={setReplaceAllConfirmOpen}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">Replace all active integrations?</DialogTitle>
+              <DialogDescription>
+                Every active integration will use{" "}
+                <span className="font-medium text-foreground">
+                  {getAiModelDisplayName(defaultModelId || savedPreferredModel)}
+                </span>
+                {" "}for commit summaries. This will also set it as your default for new integrations.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setReplaceAllConfirmOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                className="bg-log-green hover:bg-log-green/90"
+                disabled={replaceAllIntegrationsMutation.isPending}
+                onClick={() => replaceAllIntegrationsMutation.mutate(defaultModelId || savedPreferredModel)}
+              >
+                {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>

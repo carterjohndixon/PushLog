@@ -16,6 +16,8 @@ export interface ProfileUser {
   googleConnected?: boolean;
   aiCredits?: number;
   hasOpenRouterKey?: boolean;
+  /** Default OpenRouter AI model for new integrations (e.g. anthropic/claude-3.5-sonnet) */
+  preferredAiModel?: string;
 }
 
 export interface ProfileResponse {

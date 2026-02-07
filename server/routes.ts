@@ -3171,6 +3171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
           monthlyBudget: (user as any).monthlyBudget ?? null,
+          preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
         }
       };
       res.json(payload);
@@ -3180,6 +3181,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Profile failed: users table is missing open_router_api_key. Run: migrations/add-openrouter-api-key-users.sql");
       }
       res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // Update current user (e.g. preferred AI model for new integrations)
+  app.patch("/api/user", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const body = req.body as { preferredAiModel?: string };
+      const updates: Record<string, unknown> = {};
+      if (typeof body.preferredAiModel === "string" && body.preferredAiModel.trim()) {
+        updates.preferredAiModel = body.preferredAiModel.trim();
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid updates" });
+      }
+      const user = await databaseStorage.updateUser(userId, updates as any);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      res.json({ success: true, preferredAiModel: (user as any).preferredAiModel });
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Failed to update user" });
+    }
+  });
+
+  // Replace all active integrations with a given OpenRouter model (and set as user default)
+  app.post("/api/integrations/replace-all-model", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const modelId = typeof req.body?.modelId === "string" ? req.body.modelId.trim() : "";
+      if (!modelId) {
+        return res.status(400).json({ error: "modelId is required" });
+      }
+      const integrations = await storage.getIntegrationsByUserId(userId);
+      const active = integrations.filter((i) => i.isActive !== false);
+      for (const integration of active) {
+        await storage.updateIntegration(integration.id, { aiModel: modelId });
+      }
+      await databaseStorage.updateUser(userId, { preferredAiModel: modelId } as any);
+      res.json({
+        success: true,
+        updatedCount: active.length,
+        preferredAiModel: modelId,
+      });
+    } catch (error) {
+      console.error("Error replacing integrations model:", error);
+      res.status(500).json({ error: "Failed to update integrations" });
     }
   });
 
