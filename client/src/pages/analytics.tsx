@@ -87,6 +87,19 @@ function formatShortDate(isoDate: string) {
   return formatLocalShortDate(isoDate);
 }
 
+/** Last 30 calendar days (YYYY-MM-DD), oldest first, for trend charts. */
+function getLast30DayDates(): string[] {
+  const out: string[] = [];
+  const d = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const x = new Date(d);
+    x.setDate(x.getDate() - i);
+    const y = x.getFullYear(), m = x.getMonth() + 1, day = x.getDate();
+    out.push(`${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`);
+  }
+  return out;
+}
+
 function TrendBadge({ value, label }: { value: number; label?: string }) {
   if (value === 0) return null;
   const isUp = value > 0;
@@ -168,7 +181,13 @@ export default function Analytics() {
   const topRepos = data?.topRepos ?? [];
   const latest = statsData?.latest;
   const trend = statsData?.trend;
-  const history = (statsData?.history ?? []).slice().reverse(); // oldest first for chart
+  const pushesByDay = data?.pushesByDay ?? [];
+  const slackByDay = data?.slackMessagesByDay ?? [];
+  const activityTrendData = getLast30DayDates().map((date) => ({
+    date: formatShortDate(date),
+    pushes: pushesByDay.find((p) => p.date === date)?.count ?? 0,
+    notifications: slackByDay.find((s) => s.date === date)?.count ?? 0,
+  }));
   const dailyCostData = (costData?.dailyCost ?? []).map(d => ({
     ...d,
     dateLabel: formatShortDate(d.date),
@@ -247,8 +266,8 @@ export default function Analytics() {
           ) : null}
         </div>
 
-        {/* Trends over time (line chart from analytics_stats history) */}
-        {history.length > 1 && (
+        {/* Activity trends: last 30 days from push and Slack data (one point per calendar day) */}
+        {activityTrendData.length > 0 && (
           <Card className="card-lift mb-8 border-border shadow-forest">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
@@ -258,17 +277,13 @@ export default function Analytics() {
             </CardHeader>
             <CardContent>
               <ChartContainer config={chartConfig} className="h-[240px] w-full">
-                <LineChart data={history.map(h => ({
-                  date: formatShortDate(h.createdAt),
-                  pushes: h.dailyPushes,
-                  notifications: h.totalNotifications,
-                }))} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+                <LineChart data={activityTrendData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                   <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
                   <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Line type="monotone" dataKey="pushes" name="Daily Pushes" stroke="hsl(var(--log-green))" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="notifications" name="Notifications" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="notifications" name="Daily Notifications" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} />
                 </LineChart>
               </ChartContainer>
             </CardContent>
