@@ -43,6 +43,9 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 
+/** OpenRouter model id used when user is over monthly budget (free tier). */
+const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
+
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
   if (!integration) return integration;
@@ -273,29 +276,75 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
     }
     if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
     const useOpenRouter = !!openRouterKeyRaw?.trim();
-    const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+    let effectiveAiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+
+    // Budget check before AI: if over budget, use free OpenRouter model or skip AI and send urgent notification
+    let overBudgetSkipAi = false;
+    try {
+      const userForBudget = await databaseStorage.getUserById(integration.userId);
+      const monthlyBudget = (userForBudget as any)?.monthlyBudget;
+      if (monthlyBudget != null && monthlyBudget > 0) {
+        const allUsage = await databaseStorage.getAiUsageByUserId(integration.userId);
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        const monthlySpend = allUsage
+          .filter(u => new Date(u.createdAt) >= monthStart)
+          .reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : 0), 0);
+        if (monthlySpend >= monthlyBudget) {
+          const urgentMetadata = JSON.stringify({ monthlySpend, monthlyBudget, urgent: true });
+          const budgetNotif = await storage.createNotification({
+            userId: integration.userId,
+            type: "budget_alert",
+            title: "Monthly budget exceeded",
+            message: useOpenRouter
+              ? `Your AI budget is reached. Summaries are now using the free model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
+              : `Your AI spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. Reset your budget on the Models page to get AI summaries again.`,
+            metadata: urgentMetadata,
+          });
+          broadcastNotification(integration.userId, {
+            id: budgetNotif.id,
+            type: "budget_alert",
+            title: budgetNotif.title,
+            message: budgetNotif.message,
+            metadata: budgetNotif.metadata,
+            createdAt: budgetNotif.createdAt,
+            isRead: false,
+          });
+          if (useOpenRouter) {
+            effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
+            console.log(`📊 [Webhook] User over budget; using free model ${effectiveAiModel} for this push.`);
+          } else {
+            overBudgetSkipAi = true;
+          }
+        }
+      }
+    } catch (budgetErr) {
+      console.warn("Budget pre-check error:", budgetErr);
+    }
 
     const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
     let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
-    try {
-      summary = await generateCodeSummary(
-        pushData,
-        aiModel,
-        maxTokens,
-        useOpenRouter
-          ? {
-              openRouterApiKey: openRouterKeyRaw!.trim(),
-              notificationContext: {
-                userId: integration.userId,
-                repositoryName: repoDisplayName,
-                integrationId: integration.id,
-                slackChannelName: integration.slackChannelName,
-              },
-            }
-          : undefined
-      );
-    } catch (aiErr: any) {
-      console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
+    if (!overBudgetSkipAi) {
+      try {
+        summary = await generateCodeSummary(
+          pushData,
+          effectiveAiModel,
+          maxTokens,
+          useOpenRouter
+            ? {
+                openRouterApiKey: openRouterKeyRaw!.trim(),
+                notificationContext: {
+                  userId: integration.userId,
+                  repositoryName: repoDisplayName,
+                  integrationId: integration.id,
+                  slackChannelName: integration.slackChannelName,
+                },
+              }
+            : undefined
+        );
+      } catch (aiErr: any) {
+        console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);
+      }
     }
 
     const hasValidContent = !!(summary?.summary?.summary?.trim() && summary?.summary?.impact && summary?.summary?.category);
@@ -362,7 +411,7 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           userId: integration.userId,
           integrationId: integration.id,
           pushEventId: pushEvent.id,
-          model: summary.actualModel || aiModel,
+          model: summary.actualModel || effectiveAiModel,
           tokensUsed: summary.tokensUsed,
           cost: summary.cost ?? 0,
           openrouterGenerationId: summary.openrouterGenerationId ?? null,
@@ -377,36 +426,7 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
             userId: integration.userId,
           });
         }
-        // Budget check: notify user if monthly spend exceeds their budget
-        try {
-          const userForBudget = await databaseStorage.getUserById(integration.userId);
-          const monthlyBudget = (userForBudget as any)?.monthlyBudget;
-          if (monthlyBudget != null && monthlyBudget > 0) {
-            const allUsage = await databaseStorage.getAiUsageByUserId(integration.userId);
-            const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-            const monthlySpend = allUsage
-              .filter(u => new Date(u.createdAt) >= monthStart)
-              .reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : 0), 0);
-            if (monthlySpend >= monthlyBudget) {
-              await storage.createNotification({
-                userId: integration.userId,
-                type: "budget_alert",
-                title: "Monthly budget exceeded",
-                message: `Your AI spend this month ($${(monthlySpend / 10000).toFixed(4)}) has exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}.`,
-                metadata: JSON.stringify({ monthlySpend, monthlyBudget }),
-              });
-              broadcastNotification(integration.userId, {
-                type: "budget_alert",
-                title: "Monthly budget exceeded",
-                message: `AI spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)} budget`,
-              });
-            }
-          }
-        } catch (budgetErr) {
-          // Non-fatal
-          console.warn("Budget check error:", budgetErr);
-        }
+        // Budget notification is sent in the pre-AI check when user is over budget
       }
       // Two notifications per push: the event + delivery confirmation (customer-friendly)
       const repoDisplayName = storedRepo.name || pushData.repositoryName.split('/').pop() || pushData.repositoryName;
@@ -427,7 +447,7 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
         deletions: pushData.deletions ?? 0,
         filesChanged: pushData.filesChanged?.length ?? 0,
         // AI fields (Issue #15): include model, summary, impact, category so notification detail can show them
-        aiModel: aiModel ?? null,
+        aiModel: effectiveAiModel ?? null,
         aiSummary: aiSummary ?? null,
         aiImpact: aiImpact ?? null,
         aiCategory: aiCategory ?? null,

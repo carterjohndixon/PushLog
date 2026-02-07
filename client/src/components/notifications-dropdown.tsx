@@ -52,7 +52,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             key={notification.id} 
             className={`flex items-center justify-between gap-2 p-4 min-w-0 [&:hover]:!bg-muted ${
               notification.type === 'email_verification' ? 'bg-amber-500/10 dark:bg-amber-500/20 border-b border-border' : 
-              notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' ? 'bg-destructive/10 border-l-4 border-destructive' :
+              (notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' || (notification as { type: string }).type === 'budget_alert') ? 'bg-destructive/10 border-l-4 border-destructive' :
               !notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : ''
             }`}
           >
@@ -61,7 +61,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <GitBranch className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_message_sent' ? (
                 <MessageSquare className="w-5 h-5 text-sky-blue mr-3 flex-shrink-0" />
-              ) : notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' ? (
+              ) : notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || (notification as { type: string }).type === 'budget_alert' ? (
                 <AlertCircle className="w-5 h-5 text-destructive mr-3 flex-shrink-0" />
               ) : (
                 <Mail className={`w-5 h-5 mr-3 flex-shrink-0 ${
@@ -73,9 +73,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
                   notification.type === 'slack_message_sent' ? 'text-sky-blue' :
-                  notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' ? 'text-destructive' : 'text-foreground'
+                  notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || (notification as { type: string }).type === 'budget_alert' ? 'text-destructive' : 'text-foreground'
                 }`}>
-                  {notification.title || notification.message}
+                  {(notification as { type: string }).type === 'budget_alert' ? 'Urgent: ' + (notification.title || notification.message) : (notification.title || notification.message)}
                 </span>
                 <span className="text-xs text-muted-foreground line-clamp-2 break-words">
                   {notification.message}
@@ -171,7 +171,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               <GitBranch className="w-5 h-5 text-log-green mr-2" />
             ) : selectedNotification?.type === 'slack_message_sent' ? (
               <MessageSquare className="w-5 h-5 text-sky-blue mr-2" />
-            ) : selectedNotification?.type === 'slack_delivery_failed' || selectedNotification?.type === 'openrouter_error' ? (
+            ) : selectedNotification?.type === 'slack_delivery_failed' || selectedNotification?.type === 'openrouter_error' || (selectedNotification as { type?: string })?.type === 'budget_alert' ? (
               <AlertCircle className="w-5 h-5 text-destructive mr-2" />
             ) : (
               <Mail className="w-5 h-5 text-amber-500 mr-2" />

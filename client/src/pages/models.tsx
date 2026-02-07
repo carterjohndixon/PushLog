@@ -856,12 +856,12 @@ export default function Models() {
                           placeholder={budgetUsd != null ? `$${budgetUsd.toFixed(2)}` : "Set budget ($)"}
                           value={budgetInput}
                           onChange={(e) => setBudgetInput(e.target.value)}
-                          className="h-7 w-32 text-xs bg-background border-border text-foreground"
+                          className="h-8 min-w-[10rem] w-40 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
                         />
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-7 text-xs"
+                          className="h-8 min-w-[4.5rem] border-border bg-background text-xs font-medium hover:bg-muted hover:border-log-green/50"
                           disabled={setBudgetMutation.isPending}
                           onClick={() => {
                             const val = budgetInput.trim() ? parseFloat(budgetInput) : null;
