@@ -827,52 +827,6 @@ export default function Models() {
                       </div>
                     )}
                   </div>
-                  {/* Budget progress bar */}
-                  {monthlySpendData && (
-                    <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
-                        {budgetUsd != null ? (
-                          <span className="text-xs text-muted-foreground">
-                            ${monthlySpendData.totalSpendUsd.toFixed(4)} / ${budgetUsd.toFixed(2)} budget
-                          </span>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">${monthlySpendData.totalSpendUsd.toFixed(4)} this month</span>
-                        )}
-                      </div>
-                      {budgetUsd != null && (
-                        <div className="w-full h-2 rounded-full bg-border overflow-hidden mb-2">
-                          <div
-                            className={`h-full rounded-full transition-all ${monthlySpendData.totalSpendUsd >= budgetUsd ? "bg-red-500" : "bg-log-green"}`}
-                            style={{ width: `${Math.min(100, (monthlySpendData.totalSpendUsd / budgetUsd) * 100)}%` }}
-                          />
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder={budgetUsd != null ? `$${budgetUsd.toFixed(2)}` : "Set budget ($)"}
-                          value={budgetInput}
-                          onChange={(e) => setBudgetInput(e.target.value)}
-                          className="h-8 min-w-[10rem] w-40 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 min-w-[4.5rem] border-border bg-background text-xs font-medium hover:bg-muted hover:border-log-green/50"
-                          disabled={setBudgetMutation.isPending}
-                          onClick={() => {
-                            const val = budgetInput.trim() ? parseFloat(budgetInput) : null;
-                            setBudgetMutation.mutate(val);
-                          }}
-                        >
-                          {setBudgetMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : budgetInput.trim() ? "Set" : "Clear"}
-                        </Button>
-                      </div>
-                    </div>
-                  )}
 
                   {/* Smart stats: avg cost, cheapest/most expensive model */}
                   {usageData.costByModel && usageData.costByModel.length > 0 && usageData.totalCalls > 0 && (
@@ -1116,6 +1070,68 @@ export default function Models() {
                   )}
                 </>
               ) : null}
+              {/* Budget: always show when user has key (set budget / monthly spend) */}
+              <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
+                  {monthlySpendData ? (
+                    budgetUsd != null ? (
+                      <span className="text-xs text-muted-foreground">
+                        ${monthlySpendData.totalSpendUsd.toFixed(4)} / ${budgetUsd.toFixed(2)} budget
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">${monthlySpendData.totalSpendUsd.toFixed(4)} this month</span>
+                    )
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </div>
+                {/* Current spend and budget amounts */}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-sm">
+                  <span className="text-muted-foreground">
+                    Spent this month:{" "}
+                    <span className="font-medium text-foreground">
+                      {monthlySpendData != null ? `$${monthlySpendData.totalSpendUsd.toFixed(4)}` : "—"}
+                    </span>
+                  </span>
+                  {budgetUsd != null && (
+                    <span className="text-muted-foreground">
+                      Budget: <span className="font-medium text-foreground">${budgetUsd.toFixed(2)}</span>
+                    </span>
+                  )}
+                </div>
+                {budgetUsd != null && monthlySpendData && (
+                  <div className="w-full h-2 rounded-full bg-border overflow-hidden mb-2">
+                    <div
+                      className={`h-full rounded-full transition-all ${monthlySpendData.totalSpendUsd >= budgetUsd ? "bg-red-500" : "bg-log-green"}`}
+                      style={{ width: `${Math.min(100, (monthlySpendData.totalSpendUsd / budgetUsd) * 100)}%` }}
+                    />
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder={budgetUsd != null ? `$${budgetUsd.toFixed(2)}` : "Set budget ($)"}
+                    value={budgetInput}
+                    onChange={(e) => setBudgetInput(e.target.value)}
+                    className="h-8 min-w-[10rem] w-40 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 min-w-[4.5rem] border-border bg-background text-xs font-medium hover:bg-muted hover:border-log-green/50"
+                    disabled={setBudgetMutation.isPending}
+                    onClick={() => {
+                      const val = budgetInput.trim() ? parseFloat(budgetInput) : null;
+                      setBudgetMutation.mutate(val);
+                    }}
+                  >
+                    {setBudgetMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : budgetInput.trim() ? "Set" : "Clear"}
+                  </Button>
+                </div>
+              </div>
             </CardContent>
           </Card>
         )}
