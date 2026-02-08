@@ -146,6 +146,25 @@ const paymentLimiter = rateLimit({
 });
 app.use('/api/payments/', paymentLimiter);
 
+// AUTH-VULN-17: Prevent caching of auth responses (tokens, credentials, user data)
+const AUTH_NO_CACHE_PATHS = [
+  '/api/login',
+  '/api/signup',
+  '/api/logout',
+  '/api/user',
+  '/api/profile',
+  '/api/forgot-password',
+  '/api/reset-password',
+];
+app.use((req, res, next) => {
+  if (AUTH_NO_CACHE_PATHS.includes(req.path)) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
+  next();
+});
+
 // Compression
 app.use(compression());
 
