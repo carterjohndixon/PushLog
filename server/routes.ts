@@ -42,6 +42,12 @@ import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
+import {
+  isLockedOut as isAccountLockedOut,
+  getRetryAfterSeconds as getAccountRetryAfterSeconds,
+  recordFailedAttempt as recordLoginFailedAttempt,
+  clearAttempts as clearLoginAttempts,
+} from "./accountLoginLimit";
 
 /** OpenRouter model id used when user is over monthly budget (free tier). */
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
@@ -622,6 +628,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { identifier, password } = req.body;
 
+      // AUTH-VULN-11: Per-account rate limit (stops distributed brute force against one account)
+      if (isAccountLockedOut(identifier)) {
+        const retryAfter = getAccountRetryAfterSeconds(identifier);
+        if (retryAfter > 0) {
+          res.setHeader("Retry-After", String(retryAfter));
+        }
+        return res.status(429).json({
+          error: "Too many failed login attempts for this account. Try again later.",
+          retryAfterSeconds: retryAfter,
+        });
+      }
+
       // Try to find user by email or username
       let user = await databaseStorage.getUserByEmail(identifier);
       if (!user) {
@@ -629,14 +647,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!user) {
+        recordLoginFailedAttempt(identifier);
         return res.status(401).send("Invalid email/username or password");
       }
 
       // Verify password
       const passwordMatch = await bcrypt.compare(password, user.password || '');
       if (!passwordMatch) {
+        recordLoginFailedAttempt(identifier);
         return res.status(401).send("Invalid email/username or password");
       }
+
+      clearLoginAttempts(identifier);
 
       // Set session data
       req.session.userId = user.id;
