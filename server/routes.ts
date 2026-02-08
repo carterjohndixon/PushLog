@@ -71,6 +71,32 @@ async function getUserIdFromOAuthState(state: string): Promise<number | null> {
 
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
 
+/** Same password rules as signup; used for reset-password and change-password (AUTH-VULN-21). Returns error message or null if valid. */
+function validatePasswordRequirements(password: string): string | null {
+  const requirements = {
+    minLength: password.length >= 8,
+    hasUpperCase: /[A-Z]/.test(password),
+    hasLowerCase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  };
+  const missing = Object.entries(requirements)
+    .filter(([, meets]) => !meets)
+    .map(([req]) => {
+      switch (req) {
+        case "minLength": return "at least 8 characters";
+        case "hasUpperCase": return "an uppercase letter";
+        case "hasLowerCase": return "a lowercase letter";
+        case "hasNumber": return "a number";
+        case "hasSpecialChar": return "a special character";
+        default: return "";
+      }
+    })
+    .filter(Boolean);
+  if (missing.length === 0) return null;
+  return `Password must contain ${missing.join(", ")}`;
+}
+
 /**
  * Schedule a delayed cost update for an OpenRouter generation.
  * OpenRouter calculates costs asynchronously, so the cost is often $0 in the immediate response.
@@ -1122,32 +1148,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { username, email, password } = req.body;
 
-      // Validate password requirements
-      const passwordRequirements = {
-        minLength: password.length >= 8,
-        hasUpperCase: /[A-Z]/.test(password),
-        hasLowerCase: /[a-z]/.test(password),
-        hasNumber: /[0-9]/.test(password),
-        hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password)
-      };
-
-      const missingRequirements = Object.entries(passwordRequirements)
-        .filter(([, meets]) => !meets)
-        .map(([req]) => {
-          switch(req) {
-            case 'minLength': return 'at least 8 characters';
-            case 'hasUpperCase': return 'an uppercase letter';
-            case 'hasLowerCase': return 'a lowercase letter';
-            case 'hasNumber': return 'a number';
-            case 'hasSpecialChar': return 'a special character';
-            default: return '';
-          }
-        });
-
-      if (missingRequirements.length > 0) {
-        return res.status(400).send(
-          `Password must contain ${missingRequirements.join(', ')}`
-        );
+      const passwordError = validatePasswordRequirements(password);
+      if (passwordError) {
+        return res.status(400).json({ error: passwordError });
       }
 
       // AUTH-VULN-20: Use one generic message for both conflicts so we don't leak
@@ -3700,6 +3703,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json("Reset token has expired");
       }
 
+      // AUTH-VULN-21: Enforce same password rules as signup on reset
+      const passwordError = validatePasswordRequirements(password);
+      if (passwordError) {
+        return res.status(400).json({ error: passwordError });
+      }
+
       // Check if new password is same as old password
       if (user.password) {
         const isSamePassword = await bcrypt.compare(password, user.password);
@@ -3718,6 +3727,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         resetPasswordTokenExpiry: null
       });
 
+      // AUTH-VULN-02: Invalidate all existing sessions for this user so stolen sessions cannot be used after reset
+      await databaseStorage.deleteSessionsForUser(user.id);
+
       res.status(200).json({
         success: true,
         message: "Password has been reset successfully"
@@ -3725,6 +3737,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Reset password error:", error);
       res.status(500).json("Failed to reset password");
+    }
+  });
+
+  // Change password (logged-in user; requires current password). Invalidates all other sessions.
+  app.post("/api/change-password", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const { currentPassword, newPassword } = req.body;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: "Current password and new password are required" });
+      }
+
+      const user = await databaseStorage.getUserById(userId);
+      if (!user?.password) {
+        return res.status(400).json({ error: "Cannot change password for this account" });
+      }
+
+      const currentMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!currentMatch) {
+        return res.status(400).json({ error: "Current password is incorrect" });
+      }
+
+      const passwordError = validatePasswordRequirements(newPassword);
+      if (passwordError) {
+        return res.status(400).json({ error: passwordError });
+      }
+
+      const isSamePassword = await bcrypt.compare(newPassword, user.password);
+      if (isSamePassword) {
+        return res.status(400).json({ error: "New password must be different from your current password" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
+      await databaseStorage.updateUser(userId, { password: hashedPassword });
+
+      // Invalidate all other sessions so stolen sessions are logged out; keep current session
+      const sessionId = req.sessionID;
+      if (sessionId) {
+        await databaseStorage.deleteSessionsForUserExcept(userId, sessionId);
+      }
+
+      res.status(200).json({
+        success: true,
+        message: "Password changed successfully. Other sessions have been signed out.",
+      });
+    } catch (error) {
+      console.error("Change password error:", error);
+      res.status(500).json({ error: "Failed to change password" });
     }
   });
 

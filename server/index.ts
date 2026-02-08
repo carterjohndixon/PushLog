@@ -155,6 +155,7 @@ const AUTH_NO_CACHE_PATHS = [
   '/api/profile',
   '/api/forgot-password',
   '/api/reset-password',
+  '/api/change-password',
 ];
 app.use((req, res, next) => {
   if (AUTH_NO_CACHE_PATHS.includes(req.path)) {

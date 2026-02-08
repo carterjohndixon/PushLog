@@ -699,6 +699,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Delete all sessions for a user (sess JSON contains userId).
+   * Used on password reset (AUTH-VULN-02) so stolen sessions are invalidated.
+   */
+  async deleteSessionsForUser(userId: number): Promise<void> {
+    await db.execute(sql`DELETE FROM user_sessions WHERE (sess->>'userId')::int = ${userId}`);
+  }
+
+  /**
+   * Delete all sessions for a user except the given sid (e.g. current session).
+   * Used on change-password so other devices are logged out but user stays logged in.
+   */
+  async deleteSessionsForUserExcept(userId: number, exceptSid: string): Promise<void> {
+    await db.execute(sql`DELETE FROM user_sessions WHERE (sess->>'userId')::int = ${userId} AND sid != ${exceptSid}`);
+  }
+
+  /**
    * Delete a user account and all associated data (GDPR compliance)
    */
   async deleteUserAccount(userId: number): Promise<{ success: boolean; deletedData: any }> {

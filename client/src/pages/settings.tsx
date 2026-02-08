@@ -17,8 +17,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Github,
-  Mail,
-  CreditCard
+  CreditCard,
+  KeyRound
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -60,6 +60,9 @@ export default function Settings() {
   const [, setLocation] = useLocation();
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [isExporting, setIsExporting] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Fetch account data summary
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
@@ -149,6 +152,35 @@ export default function Settings() {
         variant: "destructive",
       });
     }
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: async () => {
+      if (newPassword !== confirmPassword) {
+        throw new Error("New passwords do not match");
+      }
+      const res = await apiRequest("POST", "/api/change-password", {
+        currentPassword,
+        newPassword,
+      });
+      return res;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Password changed",
+        description: "Your password has been updated. Other sessions have been signed out.",
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Change password failed",
+        description: error?.message ?? "Please check your current password and try again.",
+        variant: "destructive",
+      });
+    },
   });
 
   return (
@@ -324,21 +356,88 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Danger Zone */}
-          <Card className="border-red-200">
+          {/* Change password (logged in) */}
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <KeyRound className="w-5 h-5 text-log-green dark:text-emerald-400" />
+                Change password
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Enter your current password and choose a new one. Other devices will be signed out.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="current-password" className="text-foreground">Current password</Label>
+                <Input
+                  id="current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="mt-1 bg-background text-foreground border-input"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="new-password" className="text-foreground">New password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="mt-1 bg-background text-foreground border-input"
+                  autoComplete="new-password"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  At least 8 characters, with uppercase, lowercase, number, and special character
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password" className="text-foreground">Confirm new password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="mt-1 bg-background text-foreground border-input"
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button
+                onClick={() => changePasswordMutation.mutate()}
+                disabled={
+                  !currentPassword ||
+                  !newPassword ||
+                  newPassword !== confirmPassword ||
+                  changePasswordMutation.isPending
+                }
+                variant="glow"
+                className="text-white"
+              >
+                {changePasswordMutation.isPending ? "Updating..." : "Change password"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card className="border-red-200 dark:border-red-900/60 bg-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
                 <AlertTriangle className="w-5 h-5" />
                 Danger Zone
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-muted-foreground">
                 Irreversible actions that will permanently affect your account
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <h3 className="font-semibold text-red-800 mb-2">Delete Account</h3>
-                <p className="text-sm text-red-700 mb-4">
+              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg p-4">
+                <h3 className="font-semibold text-red-800 dark:text-red-200 mb-2">Delete Account</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mb-4">
                   Permanently delete your account and all associated data. This action cannot be undone.
                   All your repositories, integrations, push events, and Slack connections will be deleted.
                 </p>
@@ -352,7 +451,7 @@ export default function Settings() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle className="text-red-600">
+                      <AlertDialogTitle className="text-red-600 dark:text-red-400">
                         Are you absolutely sure?
                       </AlertDialogTitle>
                       <AlertDialogDescription className="space-y-4">
@@ -360,11 +459,11 @@ export default function Settings() {
                           This action cannot be undone. This will permanently delete your account
                           and remove all your data from our servers.
                         </p>
-                        <div className="bg-gray-100 p-3 rounded-md">
-                          <p className="text-sm font-medium text-graphite mb-2">
+                        <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded-md">
+                          <p className="text-sm font-medium text-foreground mb-2">
                             Data that will be deleted:
                           </p>
-                          <ul className="text-sm text-steel-gray list-disc list-inside">
+                          <ul className="text-sm text-muted-foreground list-disc list-inside">
                             <li>Your account and profile</li>
                             <li>All connected repositories</li>
                             <li>All integrations and settings</li>
