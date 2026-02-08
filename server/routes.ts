@@ -1311,29 +1311,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/logout", (req, res) => {
-    // Capture session ID before destroy(); req.session may be invalidated after.
+  app.post("/api/logout", async (req, res) => {
+    // Capture session ID before any async work; req.sessionID is what's stored in DB.
     const sessionId = req.sessionID;
+
+    const doLogout = () => {
+      clearLogoutCookie(res);
+      res.json({ success: true, message: "Logged out successfully" });
+    };
+
+    // AUTH-VULN-03: Delete the session row FIRST so it's gone before we respond.
+    // Then destroy the in-memory session. This guarantees the cookie cannot be reused.
+    try {
+      if (sessionId) {
+        await databaseStorage.deleteUserSession(sessionId);
+      }
+    } catch (e) {
+      console.error("Failed to delete session from DB on logout:", e);
+    }
 
     req.session.destroy((err) => {
       if (err) {
-        return res.status(500).json({ error: "Failed to logout" });
+        console.error("Session destroy error on logout:", err);
       }
-
-      // AUTH-VULN-03: Explicitly delete session row so cookie reuse cannot revive it.
-      // The session store's destroy() may not always remove the DB row; this guarantees invalidation.
-      databaseStorage
-        .deleteUserSession(sessionId)
-        .then(() => {
-          clearLogoutCookie(res);
-          res.json({ success: true, message: "Logged out successfully" });
-        })
-        .catch((e) => {
-          console.error("Failed to delete session from DB on logout:", e);
-          // Still clear cookie and respond success so client state is consistent.
-          clearLogoutCookie(res);
-          res.json({ success: true, message: "Logged out successfully" });
-        });
+      doLogout();
     });
   });
 
