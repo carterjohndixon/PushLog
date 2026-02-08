@@ -1150,16 +1150,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       }
 
-      // Check if username is already taken
+      // AUTH-VULN-20: Use one generic message for both conflicts so we don't leak
+      // whether email or username is already in use (prevents user enumeration).
       const existingUsername = await databaseStorage.getUserByUsername(username);
-      if (existingUsername) {
-        return res.status(400).send("Username is already taken");
-      }
-
-      // Check if email is already taken
       const existingEmail = await databaseStorage.getUserByEmail(email);
-      if (existingEmail) {
-        return res.status(400).send("Email is already registered");
+      if (existingUsername || existingEmail) {
+        return res.status(400).json({
+          error: "Registration failed. Please try a different email or username, or sign in if you already have an account.",
+        });
       }
 
       // Hash password
