@@ -1312,22 +1312,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/logout", (req, res) => {
+    // Capture session ID before destroy(); req.session may be invalidated after.
+    const sessionId = req.sessionID;
+
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ error: "Failed to logout" });
       }
-      
-      // Clear the session cookie explicitly
-      // The cookie name is 'connect.sid' by default for express-session
-      res.clearCookie('connect.sid', {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
-      });
-      
-      res.json({ success: true, message: "Logged out successfully" });
+
+      // AUTH-VULN-03: Explicitly delete session row so cookie reuse cannot revive it.
+      // The session store's destroy() may not always remove the DB row; this guarantees invalidation.
+      databaseStorage
+        .deleteUserSession(sessionId)
+        .then(() => {
+          clearLogoutCookie(res);
+          res.json({ success: true, message: "Logged out successfully" });
+        })
+        .catch((e) => {
+          console.error("Failed to delete session from DB on logout:", e);
+          // Still clear cookie and respond success so client state is consistent.
+          clearLogoutCookie(res);
+          res.json({ success: true, message: "Logged out successfully" });
+        });
     });
   });
+
+  /**
+   * Clear the session cookie with options that MUST match the cookie set at login
+   * (server/index.ts session config). Mismatch (e.g. sameSite/strict vs lax, or
+   * missing path) can prevent the browser from clearing the cookie (AUTH-VULN-03).
+   */
+  function clearLogoutCookie(res: Response): void {
+    res.clearCookie("connect.sid", {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+    });
+  }
 
   // Get user repositories
   app.get("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {

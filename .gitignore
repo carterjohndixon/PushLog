@@ -87,3 +87,6 @@ migrations/*.sql
 /launch
 
 MEMORY.md
+
+/shannon_res/*
+.playwright-mcp

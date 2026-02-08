@@ -640,6 +640,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Delete a session row from user_sessions (connect-pg-simple table).
+   * Used on logout to guarantee server-side invalidation even if the session
+   * store's destroy() fails or is not invoked. Ensures AUTH-VULN-03 remediation.
+   */
+  async deleteUserSession(sid: string): Promise<void> {
+    await db.execute(sql`DELETE FROM user_sessions WHERE sid = ${sid}`);
+  }
+
+  /**
    * Delete a user account and all associated data (GDPR compliance)
    */
   async deleteUserAccount(userId: number): Promise<{ success: boolean; deletedData: any }> {
