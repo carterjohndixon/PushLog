@@ -628,9 +628,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (retryAfterSeconds > 0) {
           res.setHeader("Retry-After", String(retryAfterSeconds));
         }
-        return res.status(429).json({
-          error: "Too many failed login attempts for this account. Try again later.",
+        // 423 Locked = account lockout (distinct from 429 = IP rate limit). Message uses "locked"
+        // so security tests (AUTH-VULN-12) and clients recognize account lockout.
+        return res.status(423).json({
+          error: "Account temporarily locked due to repeated failed login attempts. Try again after the lockout period.",
           retryAfterSeconds,
+          accountLocked: true,
         });
       }
 
