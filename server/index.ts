@@ -105,10 +105,10 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Stricter rate limiting for auth endpoints
+// Stricter rate limiting for auth endpoints (per-IP; per-account lockout is in routes)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isLoadTesting ? 100 : (isDevelopment ? 20 : 5), // More permissive in dev/load testing
+  max: isLoadTesting ? 100 : (isDevelopment ? 50 : 30), // Allow enough to trigger per-account lockout (5) + correct attempt; 30/15min per IP
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
