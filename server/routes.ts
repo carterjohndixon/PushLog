@@ -3137,6 +3137,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Current user (session check) - returns 401 if not authenticated. Use for auth checks / Postman.
+  app.get("/api/user", authenticateToken, (req, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+    res.json({
+      success: true,
+      user: {
+        id: req.user.userId,
+        username: req.user.username,
+        email: req.user.email ?? null,
+        isUsernameSet: !!req.user.username,
+        emailVerified: req.user.emailVerified,
+        githubConnected: req.user.githubConnected,
+        googleConnected: req.user.googleConnected,
+      },
+    });
+  });
+
   // Protected route example - Get user profile
   app.get("/api/profile", authenticateToken, async (req, res) => {
     try {
