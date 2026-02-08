@@ -145,6 +145,14 @@ export const favoriteModels = pgTable("favorite_models", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+/** Per-account login lockout (AUTH-VULN-11/12). Shared across instances. */
+export const loginLockout = pgTable("login_lockout", {
+  identifier: text("identifier").primaryKey(), // email or username, normalized lower
+  failedCount: integer("failed_count").notNull().default(0),
+  lockoutUntil: timestamp("lockout_until", { withTimezone: true, mode: "date" }), // null or past = not locked
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,

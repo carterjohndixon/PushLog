@@ -42,12 +42,6 @@ import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
-import {
-  isLockedOut as isAccountLockedOut,
-  getRetryAfterSeconds as getAccountRetryAfterSeconds,
-  recordFailedAttempt as recordLoginFailedAttempt,
-  clearAttempts as clearLoginAttempts,
-} from "./accountLoginLimit";
 
 /** OpenRouter model id used when user is over monthly budget (free tier). */
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
@@ -628,15 +622,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { identifier, password } = req.body;
 
-      // AUTH-VULN-11: Per-account rate limit (stops distributed brute force against one account)
-      if (isAccountLockedOut(identifier)) {
-        const retryAfter = getAccountRetryAfterSeconds(identifier);
-        if (retryAfter > 0) {
-          res.setHeader("Retry-After", String(retryAfter));
+      // AUTH-VULN-11/12: Per-account lockout (DB-backed, shared across instances)
+      const { locked, retryAfterSeconds } = await databaseStorage.getLoginLockout(identifier);
+      if (locked) {
+        if (retryAfterSeconds > 0) {
+          res.setHeader("Retry-After", String(retryAfterSeconds));
         }
         return res.status(429).json({
           error: "Too many failed login attempts for this account. Try again later.",
-          retryAfterSeconds: retryAfter,
+          retryAfterSeconds,
         });
       }
 
@@ -647,18 +641,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (!user) {
-        recordLoginFailedAttempt(identifier);
+        await databaseStorage.recordLoginFailedAttempt(identifier);
         return res.status(401).send("Invalid email/username or password");
       }
 
       // Verify password
       const passwordMatch = await bcrypt.compare(password, user.password || '');
       if (!passwordMatch) {
-        recordLoginFailedAttempt(identifier);
+        await databaseStorage.recordLoginFailedAttempt(identifier);
         return res.status(401).send("Invalid email/username or password");
       }
 
-      clearLoginAttempts(identifier);
+      await databaseStorage.clearLoginAttempts(identifier);
 
       // Set session data
       req.session.userId = user.id;

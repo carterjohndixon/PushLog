@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
-  favoriteModels,
+  favoriteModels, loginLockout,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -168,6 +168,56 @@ export class DatabaseStorage implements IStorage {
   async getUserByResetToken(resetToken: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.resetPasswordToken, resetToken)).limit(1);
     return result[0] ? convertToUser(result[0] as any) : null;
+  }
+
+  // Per-account login lockout (shared across instances; AUTH-VULN-11/12)
+  private static readonly LOGIN_MAX_FAILED_ATTEMPTS = 5;
+  private static readonly LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+
+  async getLoginLockout(identifier: string): Promise<{ locked: boolean; retryAfterSeconds: number }> {
+    const key = identifier.trim().toLowerCase();
+    const rows = await db.select().from(loginLockout).where(eq(loginLockout.identifier, key)).limit(1);
+    const row = rows[0];
+    const now = new Date();
+    if (!row || !row.lockoutUntil) {
+      return { locked: false, retryAfterSeconds: 0 };
+    }
+    if (row.lockoutUntil <= now) {
+      await db.delete(loginLockout).where(eq(loginLockout.identifier, key));
+      return { locked: false, retryAfterSeconds: 0 };
+    }
+    const retryAfterSeconds = Math.ceil((row.lockoutUntil.getTime() - now.getTime()) / 1000);
+    return { locked: true, retryAfterSeconds };
+  }
+
+  async recordLoginFailedAttempt(identifier: string): Promise<void> {
+    const key = identifier.trim().toLowerCase();
+    const now = new Date();
+    const lockoutUntil = new Date(now.getTime() + DatabaseStorage.LOGIN_LOCKOUT_WINDOW_MS);
+    const rows = await db.select().from(loginLockout).where(eq(loginLockout.identifier, key)).limit(1);
+    const row = rows[0];
+    if (row?.lockoutUntil && row.lockoutUntil > now) return; // already locked, don't extend
+    const newCount = row ? (row.failedCount ?? 0) + 1 : 1;
+    const setLockoutUntil = newCount >= DatabaseStorage.LOGIN_MAX_FAILED_ATTEMPTS ? lockoutUntil : (row?.lockoutUntil ?? null);
+    if (!row) {
+      await db.insert(loginLockout).values({
+        identifier: key,
+        failedCount: newCount,
+        lockoutUntil: setLockoutUntil,
+        updatedAt: now,
+      });
+    } else {
+      await db.update(loginLockout).set({
+        failedCount: newCount,
+        lockoutUntil: setLockoutUntil,
+        updatedAt: now,
+      }).where(eq(loginLockout.identifier, key));
+    }
+  }
+
+  async clearLoginAttempts(identifier: string): Promise<void> {
+    const key = identifier.trim().toLowerCase();
+    await db.delete(loginLockout).where(eq(loginLockout.identifier, key));
   }
 
   // Repository methods
