@@ -57,6 +57,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     stripeCustomerId: dbUser.stripeCustomerId,
     preferredAiModel: dbUser.preferredAiModel ?? "gpt-5.2",
     openRouterApiKey: (dbUser as any).openRouterApiKey ?? null,
+    monthlyBudget: (dbUser as any).monthlyBudget ?? null,
     createdAt: dbUser.createdAt
   };
 }

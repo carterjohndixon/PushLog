@@ -231,6 +231,7 @@ export type User = {
   stripeCustomerId: string | null;
   preferredAiModel: string;
   openRouterApiKey: string | null;
+  monthlyBudget: number | null;
   createdAt: string;
 };
 

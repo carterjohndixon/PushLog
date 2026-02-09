@@ -54,6 +54,7 @@ interface ProfileUser {
   username: string;
   hasOpenRouterKey?: boolean;
   preferredAiModel?: string;
+  monthlyBudget?: number | null;
 }
 
 interface UsageCall {
@@ -296,7 +297,7 @@ export default function Models() {
     enabled: userHasKey,
     retry: 1,
   });
-  const userBudget = (profileResponse?.user as any)?.monthlyBudget as number | null | undefined;
+  const userBudget = profileUser?.monthlyBudget;
   const budgetUsd = userBudget != null && userBudget > 0 ? userBudget / 10000 : null;
 
   const setBudgetMutation = useMutation({

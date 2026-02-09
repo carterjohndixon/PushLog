@@ -3267,7 +3267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           googleConnected: !!user.googleId,
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
-          monthlyBudget: (user as any).monthlyBudget ?? null,
+          monthlyBudget: user.monthlyBudget ?? null,
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
         }
       };

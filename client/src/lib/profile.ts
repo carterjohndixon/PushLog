@@ -18,6 +18,8 @@ export interface ProfileUser {
   hasOpenRouterKey?: boolean;
   /** Default OpenRouter AI model for new integrations (e.g. anthropic/claude-3.5-sonnet) */
   preferredAiModel?: string;
+  /** Monthly AI spend budget in units of $0.0001 (display as userBudget / 10000); null = no budget */
+  monthlyBudget?: number | null;
 }
 
 export interface ProfileResponse {
