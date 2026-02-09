@@ -854,7 +854,7 @@ export default function Dashboard() {
                   }
                 })()
               ) : repositories && repositories.some(repo => repo.isConnected) ? (
-                <div className="max-h-64 overflow-y-auto space-y-3 pr-2">
+                <div className="max-h-80 overflow-y-auto space-y-3 pr-2 min-h-0">
                   {repositories
                     .filter(repo => repo.isConnected)
                     .map((repo) => {
@@ -995,7 +995,7 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : integrations && integrations.length > 0 ? (
-                <div className="space-y-4">
+                <div className="max-h-80 overflow-y-auto space-y-4 pr-2 min-h-0">
                   {integrations
                     .sort((a, b) => {
                       // Active integrations first, then paused ones
