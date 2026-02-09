@@ -55,6 +55,7 @@ interface ProfileUser {
   hasOpenRouterKey?: boolean;
   preferredAiModel?: string;
   monthlyBudget?: number | null;
+  overBudgetBehavior?: "free_model" | "skip_ai";
 }
 
 interface UsageCall {
@@ -313,6 +314,23 @@ export default function Models() {
     },
     onError: (e: Error) => {
       toast({ title: "Budget update failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const overBudgetBehaviorMutation = useMutation({
+    mutationFn: async (behavior: "free_model" | "skip_ai") => {
+      const res = await apiRequest("PATCH", "/api/user", { overBudgetBehavior: behavior });
+      return res.json();
+    },
+    onSuccess: (_, behavior) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: "Setting saved",
+        description: behavior === "skip_ai" ? "When over budget, AI summaries will be paused (plain push only)." : "When over budget, summaries will use the free model.",
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to save", description: e.message, variant: "destructive" });
     },
   });
 
@@ -1131,6 +1149,27 @@ export default function Models() {
                   >
                     {setBudgetMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : budgetInput.trim() ? "Set" : "Clear"}
                   </Button>
+                </div>
+                <div className="mt-3 pt-3 border-t border-border">
+                  <Label className="text-xs text-muted-foreground uppercase tracking-wide">When over budget</Label>
+                  <Select
+                    value={profileUser?.overBudgetBehavior ?? "skip_ai"}
+                    onValueChange={(v: "free_model" | "skip_ai") => overBudgetBehaviorMutation.mutate(v)}
+                    disabled={overBudgetBehaviorMutation.isPending}
+                  >
+                    <SelectTrigger className="mt-1.5 h-8 w-full max-w-xs text-sm bg-background border-border">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="free_model">Use free model (summary still sent)</SelectItem>
+                      <SelectItem value="skip_ai">Skip AI (plain push only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {profileUser?.overBudgetBehavior !== "free_model"
+                      ? "Slack will get commit info only until next month or you raise the budget."
+                      : "Summaries continue with a free model so you stay within budget."}
+                  </p>
                 </div>
               </div>
             </CardContent>

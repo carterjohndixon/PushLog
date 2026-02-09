@@ -317,14 +317,16 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
           .filter(u => new Date(u.createdAt) >= monthStart)
           .reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : 0), 0);
         if (monthlySpend >= monthlyBudget) {
+          const overBudgetBehavior = (userForBudget as any)?.overBudgetBehavior === "skip_ai" ? "skip_ai" : "free_model";
           const urgentMetadata = JSON.stringify({ monthlySpend, monthlyBudget, urgent: true });
+          const useFreeModel = useOpenRouter && overBudgetBehavior === "free_model";
           const budgetNotif = await storage.createNotification({
             userId: integration.userId,
             type: "budget_alert",
             title: "Monthly budget exceeded",
-            message: useOpenRouter
+            message: useFreeModel
               ? `Your AI budget is reached. Summaries are now using the free model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
-              : `Your AI spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. Reset your budget on the Models page to get AI summaries again.`,
+              : `Your AI spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. ${useOpenRouter ? "AI summaries are paused until you raise your budget or next month (change this in Models → When over budget)." : "Reset your budget on the Models page to get AI summaries again."}`,
             metadata: urgentMetadata,
           });
           broadcastNotification(integration.userId, {
@@ -337,8 +339,13 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
             isRead: false,
           });
           if (useOpenRouter) {
-            effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
-            console.log(`📊 [Webhook] User over budget; using free model ${effectiveAiModel} for this push.`);
+            if (overBudgetBehavior === "skip_ai") {
+              overBudgetSkipAi = true;
+              console.log(`📊 [Webhook] User over budget; skipping AI (user preference: skip_ai).`);
+            } else {
+              effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
+              console.log(`📊 [Webhook] User over budget; using free model ${effectiveAiModel} for this push.`);
+            }
           } else {
             overBudgetSkipAi = true;
           }
@@ -3268,6 +3275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
           monthlyBudget: user.monthlyBudget ?? null,
+          overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai",
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
         }
       };
@@ -3281,21 +3289,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update current user (e.g. preferred AI model for new integrations)
+  // Update current user (e.g. preferred AI model, over-budget behavior)
   app.patch("/api/user", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const body = req.body as { preferredAiModel?: string };
+      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string };
       const updates: Record<string, unknown> = {};
       if (typeof body.preferredAiModel === "string" && body.preferredAiModel.trim()) {
         updates.preferredAiModel = body.preferredAiModel.trim();
+      }
+      if (body.overBudgetBehavior === "skip_ai" || body.overBudgetBehavior === "free_model") {
+        updates.overBudgetBehavior = body.overBudgetBehavior;
       }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid updates" });
       }
       const user = await databaseStorage.updateUser(userId, updates as any);
       if (!user) return res.status(404).json({ error: "User not found" });
-      res.json({ success: true, preferredAiModel: (user as any).preferredAiModel });
+      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string } = { success: true };
+      if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
+      if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
+      res.json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ error: "Failed to update user" });

@@ -20,6 +20,8 @@ export interface ProfileUser {
   preferredAiModel?: string;
   /** Monthly AI spend budget in units of $0.0001 (display as userBudget / 10000); null = no budget */
   monthlyBudget?: number | null;
+  /** When over budget: "free_model" = use free model; "skip_ai" = plain push, no AI */
+  overBudgetBehavior?: "free_model" | "skip_ai";
 }
 
 export interface ProfileResponse {
