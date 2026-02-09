@@ -3295,11 +3295,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.userId;
       const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string };
       const updates: Record<string, unknown> = {};
-      if (typeof body.preferredAiModel === "string" && body.preferredAiModel.trim()) {
-        updates.preferredAiModel = body.preferredAiModel.trim();
-      }
-      if (body.overBudgetBehavior === "skip_ai" || body.overBudgetBehavior === "free_model") {
+      if (body.overBudgetBehavior && body.overBudgetBehavior === "free_model" || body.overBudgetBehavior === "skip_ai") {
         updates.overBudgetBehavior = body.overBudgetBehavior;
+      }
+      if (body.preferredAiModel) {
+        updates.preferredAiModel = body.preferredAiModel;
       }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid updates" });
