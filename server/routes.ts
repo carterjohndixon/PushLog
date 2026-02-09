@@ -1386,8 +1386,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      // If no GitHub token, still return connected repos from DB so the dashboard list matches the stats
       if (!user.githubId || !user.githubToken) {
-        return res.status(404).json({ error: "No repositories found. Please check your GitHub connection." });
+        const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
+        const userIntegrations = await storage.getIntegrationsByUserId(userId);
+        const cardData = connectedRepos.map((repo) => ({
+          id: repo.id,
+          githubId: repo.githubId,
+          name: repo.name,
+          fullName: repo.fullName,
+          owner: repo.owner,
+          branch: repo.branch ?? "main",
+          isActive: repo.isActive ?? true,
+          isConnected: true,
+          private: false,
+          integrationCount: userIntegrations.filter((i) => i.repositoryId === repo.id).length,
+        }));
+        return res.json(cardData);
       }
 
       // Validate GitHub token before fetching repositories

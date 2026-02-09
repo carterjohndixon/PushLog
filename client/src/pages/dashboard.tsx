@@ -136,19 +136,8 @@ export default function Dashboard() {
   }, [toast]);
 
   const handleGitHubConnect = async () => {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your GitHub account.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     try {
-      // Use apiRequest to make an authenticated request
+      // Auth is via session cookie (credentials: "include"); no localStorage token check needed
       const response = await apiRequest("GET", "/api/github/connect");
       
       // Parse the JSON response to get the URL
