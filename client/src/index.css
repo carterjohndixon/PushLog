@@ -216,4 +216,36 @@
   .opacity-0-init {
     opacity: 0;
   }
+
+  /* Shine sweep effect for CTA buttons */
+  @keyframes shine-sweep {
+    0% { transform: translateX(-100%) skewX(-15deg); }
+    100% { transform: translateX(200%) skewX(-15deg); }
+  }
+  .btn-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-shine::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(
+      105deg,
+      transparent 20%,
+      rgba(255, 255, 255, 0.25) 50%,
+      transparent 80%
+    );
+    transform: translateX(-100%) skewX(-15deg);
+    animation: shine-sweep 3s ease-in-out infinite;
+    animation-delay: 1.5s;
+    pointer-events: none;
+  }
+  .btn-shine:hover::after {
+    animation-duration: 1.5s;
+    animation-delay: 0s;
+  }
 }

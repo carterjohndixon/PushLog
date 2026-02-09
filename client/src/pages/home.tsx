@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { BlurText } from "@/components/ui/blur-text";
 import { 
   Github, 
   Zap, 
@@ -143,9 +144,24 @@ export default function Home() {
             <div className="flex justify-center mb-6 opacity-0-init animate-landing-in animate-landing-in-delay-1">
               <Logo size="xl" className="shadow-lg" />
             </div>
-            <h1 className="text-5xl font-bold text-hero mb-6 opacity-0-init animate-landing-in animate-landing-in-delay-2">
-              Bridge Your GitHub & Slack
-              <span className="text-brand-gradient"> Seamlessly</span>
+            <h1 className="text-5xl font-bold text-hero mb-6">
+              <BlurText
+                text="Bridge Your GitHub & Slack"
+                delay={80}
+                animateBy="words"
+                direction="top"
+                stepDuration={0.4}
+                className="text-hero"
+              />
+              <br />
+              <BlurText
+                text="Seamlessly"
+                delay={80}
+                animateBy="words"
+                direction="top"
+                stepDuration={0.5}
+                className="text-brand-gradient"
+              />
             </h1>
             <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
               Automate your development workflow with intelligent push notifications, code summaries, 
@@ -154,7 +170,7 @@ export default function Home() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <Button 
                 onClick={ user ? handleGitHubConnect : () => window.location.href = '/login'}
-                className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-all font-semibold text-lg btn-glow"
+                className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-all font-semibold text-lg btn-glow btn-shine"
               >
                 <Github className="mr-2 w-5 h-5" />
                 {user ? 'Connect GitHub' : 'Get Started'}
