@@ -18,7 +18,9 @@ import {
   CheckCircle,
   Github,
   CreditCard,
-  KeyRound
+  KeyRound,
+  EyeIcon,
+  EyeOffIcon
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -63,6 +65,9 @@ export default function Settings() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Fetch account data summary
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
@@ -370,42 +375,72 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="current-password" className="text-foreground">Current password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 bg-background text-foreground border-input"
-                  autoComplete="current-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="current-password"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="mt-1 bg-background text-foreground border-input pr-10"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showCurrentPassword ? "Hide password" : "Show password"}
+                  >
+                    {showCurrentPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="new-password" className="text-foreground">New password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 bg-background text-foreground border-input"
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="mt-1 bg-background text-foreground border-input pr-10"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                  >
+                    {showNewPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                  </button>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   At least 8 characters, with uppercase, lowercase, number, and special character
                 </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirm-password" className="text-foreground">Confirm new password</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="mt-1 bg-background text-foreground border-input"
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="mt-1 bg-background text-foreground border-input pr-10"
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  >
+                    {showConfirmPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <Button
                 onClick={() => changePasswordMutation.mutate()}
