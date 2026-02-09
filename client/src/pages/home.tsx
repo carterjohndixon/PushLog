@@ -4,7 +4,6 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,15 +19,15 @@ import {
   GitBranch,
   Link as LinkIcon,
   Bell,
-  Play,
   Check,
   Plus,
   Pause,
-  Settings
+  Settings,
+  ChevronRight,
+  Sparkles
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 
 interface User {
@@ -121,26 +120,38 @@ export default function Home() {
     return;
   };
 
+  const scrollToDashboard = () => {
+    document.getElementById("dashboard-preview")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
     <div className="min-h-screen bg-forest-gradient">
       <Header />
       
       {/* Hero Section */}
-      <section className="bg-muted/60 py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative bg-muted/60 py-20 overflow-hidden">
+        {/* Subtle glow behind hero */}
+        <div className="absolute inset-0 pointer-events-none flex justify-center -top-1/4" aria-hidden>
+          <div className="w-[600px] h-[400px] rounded-full bg-primary/10 blur-[100px]" />
+        </div>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
           <div className="text-center mb-16">
-            <div className="flex justify-center mb-6">
+            <Badge variant="secondary" className="mb-6 opacity-0-init animate-landing-in animate-landing-in-delay-1 inline-flex items-center gap-1.5 px-3 py-1 text-primary border-primary/30">
+              <Sparkles className="w-3.5 h-3.5" />
+              AI-powered summaries
+            </Badge>
+            <div className="flex justify-center mb-6 opacity-0-init animate-landing-in animate-landing-in-delay-1">
               <Logo size="xl" className="shadow-lg" />
             </div>
-            <h1 className="text-5xl font-bold text-hero mb-6">
+            <h1 className="text-5xl font-bold text-hero mb-6 opacity-0-init animate-landing-in animate-landing-in-delay-2">
               Bridge Your GitHub & Slack
               <span className="text-brand-gradient"> Seamlessly</span>
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
               Automate your development workflow with intelligent push notifications, code summaries, 
               and team collaboration tools that keep everyone in sync.
             </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <Button 
                 onClick={ user ? handleGitHubConnect : () => window.location.href = '/login'}
                 className="bg-log-green text-white px-8 py-4 rounded-lg hover:bg-green-600 transition-all font-semibold text-lg btn-glow"
@@ -148,40 +159,46 @@ export default function Home() {
                 <Github className="mr-2 w-5 h-5" />
                 {user ? 'Connect GitHub' : 'Get Started'}
               </Button>
-              {/* <Button 
+              <Button 
                 variant="outline"
-                className="border-2 border-sky-blue text-sky-blue px-8 py-4 rounded-lg hover:bg-sky-blue hover:text-white transition-colors font-semibold text-lg"
+                onClick={scrollToDashboard}
+                className="border-2 border-border hover:border-primary/50 hover:bg-muted/50 px-8 py-4 rounded-lg font-semibold text-lg transition-all"
               >
-                <Play className="mr-2 w-5 h-5" />
-                Watch Demo
-              </Button> */}
+                See the dashboard
+                <ChevronRight className="ml-2 w-5 h-5" />
+              </Button>
             </div>
+            <p className="text-sm text-muted-foreground mt-6 opacity-0-init animate-landing-in animate-landing-in-delay-5">
+              Free to start · No credit card required
+            </p>
           </div>
 
           {/* Integration Flow Preview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-            <Card className="text-center shadow-lg">
+          <div className="flex flex-col md:flex-row gap-6 md:gap-2 max-w-4xl mx-auto items-center justify-center">
+            <Card className="w-full md:max-w-[240px] text-center shadow-lg border-border bg-card hover:shadow-xl hover:border-primary/30 transition-all duration-300 opacity-0-init animate-landing-in animate-landing-in-delay-3">
               <CardContent className="p-6">
                 <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <Github className="text-log-green text-2xl w-8 h-8" />
+                  <Github className="text-log-green dark:text-emerald-400 text-2xl w-8 h-8" />
                 </div>
                 <h3 className="font-semibold text-hero mb-2">Push Detection</h3>
                 <p className="text-muted-foreground text-sm">Automatically detects new commits and changes</p>
               </CardContent>
             </Card>
-            <Card className="text-center shadow-lg">
+            <ChevronRight className="w-8 h-8 text-muted-foreground hidden md:block shrink-0 opacity-0-init animate-landing-in animate-landing-in-delay-4" />
+            <Card className="w-full md:max-w-[240px] text-center shadow-lg border-border bg-card hover:shadow-xl hover:border-primary/30 transition-all duration-300 opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <CardContent className="p-6">
                 <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <Brain className="text-log-green text-2xl w-8 h-8" />
+                  <Brain className="text-log-green dark:text-emerald-400 text-2xl w-8 h-8" />
                 </div>
                 <h3 className="font-semibold text-hero mb-2">AI Summary</h3>
                 <p className="text-muted-foreground text-sm">Generates intelligent code summaries</p>
               </CardContent>
             </Card>
-            <Card className="text-center shadow-lg">
+            <ChevronRight className="w-8 h-8 text-muted-foreground hidden md:block shrink-0 opacity-0-init animate-landing-in animate-landing-in-delay-5" />
+            <Card className="w-full md:max-w-[240px] text-center shadow-lg border-border bg-card hover:shadow-xl hover:border-primary/30 transition-all duration-300 opacity-0-init animate-landing-in animate-landing-in-delay-5">
               <CardContent className="p-6">
                 <div className="w-16 h-16 bg-primary/10 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                  <SiSlack className="text-log-green text-2xl w-8 h-8" />
+                  <SiSlack className="text-log-green dark:text-emerald-400 text-2xl w-8 h-8" />
                 </div>
                 <h3 className="font-semibold text-hero mb-2">Team Notification</h3>
                 <p className="text-muted-foreground text-sm">Sends formatted updates to Slack channels</p>
@@ -192,7 +209,7 @@ export default function Home() {
       </section>
 
       {/* Dashboard Preview */}
-      <section className="py-20 bg-muted/50">
+      <section id="dashboard-preview" className="py-20 bg-muted/50 scroll-mt-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-hero mb-4">
@@ -204,7 +221,19 @@ export default function Home() {
           </div>
 
           {/* Dashboard Mockup */}
-          <Card className="overflow-hidden shadow-2xl">
+          <Card className="overflow-hidden shadow-2xl border-border bg-card rounded-t-[var(--card-radius)]">
+            {/* Browser-style chrome */}
+            <div className="bg-muted/80 border-b border-border px-4 py-3 flex items-center gap-2">
+              <div className="flex gap-1.5">
+                <span className="w-3 h-3 rounded-full bg-red-400/80" />
+                <span className="w-3 h-3 rounded-full bg-amber-400/80" />
+                <span className="w-3 h-3 rounded-full bg-emerald-400/80" />
+              </div>
+              <div className="flex-1 flex justify-center">
+                <span className="text-xs text-muted-foreground font-medium">PushLog Dashboard</span>
+              </div>
+              <div className="w-12" />
+            </div>
             {/* Dashboard Header */}
             <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -560,7 +589,7 @@ export default function Home() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Real-time Notifications */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Zap className="text-white text-xl w-6 h-6" />
@@ -573,7 +602,7 @@ export default function Home() {
             </Card>
 
             {/* AI Code Summaries */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-2">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Brain className="text-white text-xl w-6 h-6" />
@@ -586,7 +615,7 @@ export default function Home() {
             </Card>
 
             {/* Multi-Repository Support */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-3">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center mb-4">
                   <Layers className="text-foreground text-xl w-6 h-6" />
@@ -599,7 +628,7 @@ export default function Home() {
             </Card>
 
             {/* Custom Webhooks */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Webhook className="text-white text-xl w-6 h-6" />
@@ -612,7 +641,7 @@ export default function Home() {
             </Card>
 
             {/* Team Management */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-5">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Users className="text-white text-xl w-6 h-6" />
@@ -625,7 +654,7 @@ export default function Home() {
             </Card>
 
             {/* Analytics & Insights */}
-            <Card className="card-lift hover:shadow-xl transition-shadow">
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-6">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-secondary rounded-lg flex items-center justify-center mb-4">
                   <TrendingUp className="text-foreground text-xl w-6 h-6" />
