@@ -10,7 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useTheme, type Theme } from "@/lib/theme";
@@ -23,7 +22,6 @@ export function Header() {
     retry: false,
   });
   const user: ProfileUser | null = profileResponse?.user ?? null;
-  const { toast } = useToast();
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
@@ -35,24 +33,16 @@ export function Header() {
     }
     queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY });
     queryClient.clear();
+    // When already on home, setLocation("/") is a no-op so Home never remounts and
+    // its local user state stays set. Force a full reload so Home remounts and shows logged-out state.
+    if (location === "/") {
+      window.location.href = "/";
+      return;
+    }
     setLocation("/");
   };
 
-  const handleProtectedNavigation = (e: React.MouseEvent, path: string) => {
-    e.preventDefault();
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to access this page.",
-        variant: "destructive",
-      });
-      setLocation('/login');
-      return;
-    }
-    setLocation(path);
-  };
-
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
