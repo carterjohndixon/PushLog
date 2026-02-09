@@ -435,7 +435,7 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 rounded-lg p-4 text-foreground">
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-900/60 rounded-lg p-4 text-foreground">
                 <h3 className="font-semibold text-red-800 dark:text-red-200 mb-2">Delete Account</h3>
                 <p className="text-sm text-red-700 dark:text-red-300 mb-4">
                   Permanently delete your account and all associated data. This action cannot be undone.
