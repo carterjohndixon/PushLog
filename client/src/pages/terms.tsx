@@ -6,27 +6,27 @@ import { Link } from "wouter";
 
 export default function Terms() {
   return (
-    <div className="min-h-screen flex flex-col bg-white">
+    <div className="min-h-screen flex flex-col bg-background">
       <Header />
       
       <main className="flex-1 container mx-auto px-4 py-12 max-w-4xl">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-graphite mb-4">Terms of Service</h1>
-          <p className="text-steel-gray text-lg">
+          <h1 className="text-4xl font-bold text-foreground mb-4">Terms of Service</h1>
+          <p className="text-muted-foreground text-lg">
             Last updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </p>
         </div>
 
         <div className="space-y-6">
           {/* Introduction */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-sky-blue" />
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <FileText className="w-5 h-5 text-primary" />
                 Introduction
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 Welcome to PushLog. By accessing or using PushLog ("the Service"), you agree to be bound by these 
                 Terms of Service ("Terms"). PushLog is a personal project created and operated by Carter Dixon.
@@ -39,14 +39,14 @@ export default function Terms() {
           </Card>
 
           {/* Description of Service */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-foreground">
                 <Shield className="w-5 h-5 text-log-green" />
                 Description of Service
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 PushLog is a web-based service that connects your GitHub repositories with Slack workspaces to 
                 provide automated push notifications with AI-powered code summaries. The Service includes:
@@ -61,14 +61,14 @@ export default function Terms() {
           </Card>
 
           {/* Account Terms */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Scale className="w-5 h-5 text-sky-blue" />
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Scale className="w-5 h-5 text-primary" />
                 Account Terms
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li>You must be 13 years or older to use this Service.</li>
                 <li>You must provide accurate and complete information when creating an account.</li>
@@ -81,14 +81,14 @@ export default function Terms() {
           </Card>
 
           {/* Acceptable Use */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Ban className="w-5 h-5 text-red-500" />
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Ban className="w-5 h-5 text-red-500 dark:text-red-400" />
                 Acceptable Use
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>You agree NOT to use the Service to:</p>
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li>Violate any laws or regulations</li>
@@ -107,20 +107,20 @@ export default function Terms() {
           </Card>
 
           {/* Third-Party Services */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Third-Party Services</CardTitle>
+              <CardTitle className="text-foreground">Third-Party Services</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 The Service integrates with third-party services including GitHub, Slack, OpenAI, and Stripe. 
                 Your use of these services is subject to their respective terms of service:
               </p>
               <ul className="list-disc list-inside space-y-1 ml-4">
-                <li><a href="https://docs.github.com/en/site-policy/github-terms/github-terms-of-service" target="_blank" rel="noopener noreferrer" className="text-sky-blue hover:underline">GitHub Terms of Service</a></li>
-                <li><a href="https://slack.com/terms-of-service" target="_blank" rel="noopener noreferrer" className="text-sky-blue hover:underline">Slack Terms of Service</a></li>
-                <li><a href="https://openai.com/policies/terms-of-use" target="_blank" rel="noopener noreferrer" className="text-sky-blue hover:underline">OpenAI Terms of Use</a></li>
-                <li><a href="https://stripe.com/legal/consumer" target="_blank" rel="noopener noreferrer" className="text-sky-blue hover:underline">Stripe Services Agreement</a></li>
+                <li><a href="https://docs.github.com/en/site-policy/github-terms/github-terms-of-service" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">GitHub Terms of Service</a></li>
+                <li><a href="https://slack.com/terms-of-service" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Slack Terms of Service</a></li>
+                <li><a href="https://openai.com/policies/terms-of-use" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">OpenAI Terms of Use</a></li>
+                <li><a href="https://stripe.com/legal/consumer" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Stripe Services Agreement</a></li>
               </ul>
               <p className="mt-4">
                 I am not responsible for the actions, content, or policies of these third-party services.
@@ -129,11 +129,11 @@ export default function Terms() {
           </Card>
 
           {/* Payment Terms */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Payment Terms</CardTitle>
+              <CardTitle className="text-foreground">Payment Terms</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li>Some features require purchasing AI credits.</li>
                 <li>All payments are processed securely through Stripe.</li>
@@ -145,11 +145,11 @@ export default function Terms() {
           </Card>
 
           {/* Intellectual Property */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Intellectual Property</CardTitle>
+              <CardTitle className="text-foreground">Intellectual Property</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 The Service and its original content, features, and functionality are owned by Carter Dixon 
                 and are protected by international copyright, trademark, and other intellectual property laws.
@@ -162,15 +162,15 @@ export default function Terms() {
           </Card>
 
           {/* Disclaimer of Warranties */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <AlertTriangle className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />
                 Disclaimer of Warranties
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
-              <p className="uppercase font-semibold text-graphite">
+            <CardContent className="space-y-4 text-muted-foreground">
+              <p className="uppercase font-semibold text-foreground">
                 THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, 
                 EITHER EXPRESS OR IMPLIED.
               </p>
@@ -190,11 +190,11 @@ export default function Terms() {
           </Card>
 
           {/* Limitation of Liability */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Limitation of Liability</CardTitle>
+              <CardTitle className="text-foreground">Limitation of Liability</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 TO THE MAXIMUM EXTENT PERMITTED BY LAW, CARTER DIXON SHALL NOT BE LIABLE FOR ANY INDIRECT, 
                 INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING BUT NOT LIMITED TO:
@@ -209,14 +209,14 @@ export default function Terms() {
           </Card>
 
           {/* Termination */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-steel-gray" />
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <RefreshCw className="w-5 h-5 text-muted-foreground" />
                 Termination
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 I may terminate or suspend your account and access to the Service immediately, without prior 
                 notice or liability, for any reason, including if you breach these Terms.
@@ -233,11 +233,11 @@ export default function Terms() {
           </Card>
 
           {/* Changes to Terms */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Changes to Terms</CardTitle>
+              <CardTitle className="text-foreground">Changes to Terms</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 I reserve the right to modify or replace these Terms at any time. If a revision is material, 
                 I will provide at least 30 days' notice prior to any new terms taking effect.
@@ -250,11 +250,11 @@ export default function Terms() {
           </Card>
 
           {/* Governing Law */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Governing Law</CardTitle>
+              <CardTitle className="text-foreground">Governing Law</CardTitle>
             </CardHeader>
-            <CardContent className="text-steel-gray">
+            <CardContent className="text-muted-foreground">
               <p>
                 These Terms shall be governed by and construed in accordance with the laws of the United States, 
                 without regard to its conflict of law provisions.
@@ -263,22 +263,22 @@ export default function Terms() {
           </Card>
 
           {/* Contact */}
-          <Card>
+          <Card className="border-border bg-card">
             <CardHeader>
-              <CardTitle>Contact</CardTitle>
+              <CardTitle className="text-foreground">Contact</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-steel-gray">
+            <CardContent className="space-y-4 text-muted-foreground">
               <p>
                 If you have any questions about these Terms, please contact me:
               </p>
               <p>
                 <strong>Email:</strong>{" "}
-                <a href="mailto:carter@pushlog.ai" className="text-sky-blue hover:underline">
+                <a href="mailto:carter@pushlog.ai" className="text-primary hover:underline">
                   carter@pushlog.ai
                 </a>
               </p>
               <p className="mt-4">
-                See also: <Link href="/policy" className="text-sky-blue hover:underline">Privacy Policy</Link>
+                See also: <Link href="/policy" className="text-primary hover:underline">Privacy Policy</Link>
               </p>
             </CardContent>
           </Card>
