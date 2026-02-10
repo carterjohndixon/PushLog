@@ -411,36 +411,27 @@ export class DatabaseStorage implements IStorage {
 
   // Analytics methods
   async getStatsForUser(userId: number): Promise<AnalyticsStats> {
-    const userIntegrations = await this.getIntegrationsByUserId(userId);
-    const userRepositories = await this.getRepositoriesByUserId(userId);
-
-    const activeIntegrations = userIntegrations.filter((integration) => integration.isActive).length;
-    const totalRepositories = userRepositories.length;
-    const repoIds = userRepositories.map((r) => r.id);
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-    // Daily pushes: COUNT only (no full table load)
-    let dailyPushes = 0;
-    let pushEventNotifications = 0;
-    if (repoIds.length > 0) {
-      const [dailyRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(pushEvents)
-        .where(and(inArray(pushEvents.repositoryId, repoIds), gte(pushEvents.pushedAt, oneDayAgo)));
-      dailyPushes = dailyRow?.count ?? 0;
-      const [notifRow] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(pushEvents)
-        .where(and(inArray(pushEvents.repositoryId, repoIds), eq(pushEvents.notificationSent, true)));
-      pushEventNotifications = notifRow?.count ?? 0;
-    }
-
-    // Slack messages sent: COUNT only (no load of all notifications)
-    const [slackRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(notifications)
-      .where(and(eq(notifications.userId, userId), eq(notifications.type, 'slack_message_sent')));
-    const slackMessagesSent = slackRow?.count ?? 0;
+    // Single round-trip: all 5 stats via scalar subqueries (no full table loads, minimal latency)
+    const [row] = await db.execute<{
+      active_integrations: number;
+      total_repositories: number;
+      daily_pushes: number;
+      push_event_notifications: number;
+      slack_messages_sent: number;
+    }>(sql`
+      SELECT
+        (SELECT count(*)::int FROM integrations i WHERE i.user_id = ${userId} AND i.is_active = true) AS active_integrations,
+        (SELECT count(*)::int FROM repositories r WHERE r.user_id = ${userId}) AS total_repositories,
+        (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.pushed_at >= ${oneDayAgo}) AS daily_pushes,
+        (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.notification_sent = true) AS push_event_notifications,
+        (SELECT count(*)::int FROM notifications n WHERE n.user_id = ${userId} AND n.type = 'slack_message_sent') AS slack_messages_sent
+    `);
+    const activeIntegrations = row?.active_integrations ?? 0;
+    const totalRepositories = row?.total_repositories ?? 0;
+    const dailyPushes = row?.daily_pushes ?? 0;
+    const pushEventNotifications = row?.push_event_notifications ?? 0;
+    const slackMessagesSent = row?.slack_messages_sent ?? 0;
     const totalNotifications = slackMessagesSent + pushEventNotifications;
 
     // Persist snapshot to the database
