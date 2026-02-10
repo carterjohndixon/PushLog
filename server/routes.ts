@@ -2438,7 +2438,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         usage = await databaseStorage.getAiUsageWithPushDateByUserId(userId);
       } catch (joinErr) {
         console.warn("OpenRouter usage: join query failed, falling back to simple query:", joinErr);
-        usage = await databaseStorage.getAiUsageByUserId(userId);
+        usage = await databaseStorage.getAiUsageByUserId(userId, { limit: 500 });
       }
       const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
       const costFromRow = (u: any) => {

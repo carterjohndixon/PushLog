@@ -55,7 +55,7 @@ export interface IStorage {
   updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
 
   // OpenRouter methods
-  getAiUsageByUserId(userId: number): Promise<AiUsage[]>;
+  getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]>;
   getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number>;
   getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }>;
   getAiUsageCountForUser(userId: number): Promise<number>;
@@ -333,9 +333,13 @@ export class MemStorage implements IStorage {
   }
 
   // OpenRouter methods
-  /** Get the user's OpenRouter usage history. */
-  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
-    return Array.from(this.aiUsage.values()).filter(usage => usage.userId === userId) as AiUsage[];
+  /** Get the user's OpenRouter usage history (bounded by limit when provided). */
+  async getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]> {
+    const list = Array.from(this.aiUsage.values())
+      .filter(usage => usage.userId === userId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) as AiUsage[];
+    const limit = options?.limit ?? 1000;
+    return limit ? list.slice(0, limit) : list;
   }
 
   async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {

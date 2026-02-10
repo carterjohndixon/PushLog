@@ -666,8 +666,13 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
-    return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)).orderBy(desc(aiUsage.createdAt)) as any;
+  /** AI usage rows for user, bounded by default (last 1000) to avoid full-table scans. For export use a higher limit. */
+  async getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]> {
+    const limit = options?.limit ?? 1000;
+    return await db.select().from(aiUsage)
+      .where(eq(aiUsage.userId, userId))
+      .orderBy(desc(aiUsage.createdAt))
+      .limit(limit) as any;
   }
 
   /** Sum of AI cost for user since monthStart (for webhook budget check). Single query, no full table load. */
@@ -930,12 +935,9 @@ export class DatabaseStorage implements IStorage {
     };
 
     try {
-      // 1. Delete AI usage records
-      const userAiUsage = await this.getAiUsageByUserId(userId);
-      for (const usage of userAiUsage) {
-        await db.delete(aiUsage).where(eq(aiUsage.id, usage.id));
-        deletedData.aiUsage++;
-      }
+      // 1. Delete AI usage records (bulk delete, no full-table load)
+      const deletedUsage = await db.delete(aiUsage).where(eq(aiUsage.userId, userId)).returning({ id: aiUsage.id });
+      deletedData.aiUsage = deletedUsage.length;
 
       // 2. Delete payments (keep for legal/accounting - just anonymize)
       // We don't delete payments for legal reasons, but we'll count them
@@ -944,7 +946,7 @@ export class DatabaseStorage implements IStorage {
 
       // 3. Delete notifications
       await this.deleteAllNotifications(userId);
-      deletedData.notifications = (await this.getNotificationsByUserId(userId)).length === 0 ? deletedData.notifications : 0;
+      deletedData.notifications = (await this.getNotificationCountForUser(userId)) === 0 ? deletedData.notifications : 0;
 
       // 4. Get all user repositories
       const userRepos = await this.getRepositoriesByUserId(userId);
@@ -1002,7 +1004,7 @@ export class DatabaseStorage implements IStorage {
     const userIntegrations = await this.getIntegrationsByUserId(userId);
     const userWorkspaces = await this.getSlackWorkspacesByUserId(userId);
     const userNotifications = await this.getNotificationsByUserId(userId);
-    const userAiUsage = await this.getAiUsageByUserId(userId);
+    const userAiUsage = await this.getAiUsageByUserId(userId, { limit: 50000 });
     const userPayments = await this.getPaymentsByUserId(userId);
 
     // Get push events for user's repositories
