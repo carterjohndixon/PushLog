@@ -16,7 +16,7 @@ import {
   type FavoriteModel,
   analyticsStats
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -670,6 +670,82 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(aiUsage).where(eq(aiUsage.userId, userId)).orderBy(desc(aiUsage.createdAt)) as any;
   }
 
+  /** Sum of AI cost for user since monthStart (for webhook budget check). Single query, no full table load. */
+  async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {
+    const [row] = await db.execute<{ spend: number }>(sql`
+      SELECT COALESCE(SUM(cost), 0)::bigint AS spend FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStart}
+    `);
+    return Number(row?.spend ?? 0);
+  }
+
+  /** Monthly summary: total spend and call count since monthStart (for /api/openrouter/monthly-spend). */
+  async getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+    const [row] = await db.execute<{ total_spend: string; call_count: number }>(sql`
+      SELECT COALESCE(SUM(cost), 0)::bigint AS total_spend, COUNT(*)::int AS call_count
+      FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStart}
+    `);
+    return { totalSpend: Number(row?.total_spend ?? 0), callCount: row?.call_count ?? 0 };
+  }
+
+  /** Total AI usage row count for user (for dashboard data summary). Single COUNT query. */
+  async getAiUsageCountForUser(userId: number): Promise<number> {
+    const [row] = await db.execute<{ c: number }>(sql`
+      SELECT count(*)::int AS c FROM ai_usage WHERE user_id = ${userId}
+    `);
+    return row?.c ?? 0;
+  }
+
+  /** Daily AI usage aggregation (date, totalCost, callCount) for charts. One GROUP BY query. */
+  async getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
+    const startIso = startDate.toISOString().slice(0, 10);
+    const rows = await db.execute<{ day: string; total_cost: string; call_count: number }>(sql`
+      SELECT (date_trunc('day', created_at)::date)::text AS day,
+             COALESCE(SUM(cost), 0)::bigint AS total_cost,
+             count(*)::int AS call_count
+      FROM ai_usage
+      WHERE user_id = ${userId} AND created_at >= ${startIso}
+      GROUP BY date_trunc('day', created_at)::date
+      ORDER BY day
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({
+      date: r.day,
+      totalCost: Number(r.total_cost ?? 0),
+      callCount: r.call_count ?? 0,
+    }));
+  }
+
+  /** Cost by model (model, cost, calls, tokens) for analytics. One GROUP BY query. */
+  async getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
+    if (startDate) {
+      const startIso = startDate.toISOString().slice(0, 10);
+      const rows = await db.execute<{ model: string; cost: string; calls: number; tokens: string }>(sql`
+        SELECT model, COALESCE(SUM(cost), 0)::bigint AS cost, count(*)::int AS calls, COALESCE(SUM(tokens_used), 0)::bigint AS tokens
+        FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${startIso}
+        GROUP BY model ORDER BY cost DESC
+      `);
+      const list = Array.isArray(rows) ? rows : [rows];
+      return list.map((r) => ({
+        model: r.model ?? "unknown",
+        cost: Number(r.cost ?? 0),
+        calls: r.calls ?? 0,
+        tokens: Number(r.tokens ?? 0),
+      }));
+    }
+    const rows = await db.execute<{ model: string; cost: string; calls: number; tokens: string }>(sql`
+      SELECT model, COALESCE(SUM(cost), 0)::bigint AS cost, count(*)::int AS calls, COALESCE(SUM(tokens_used), 0)::bigint AS tokens
+      FROM ai_usage WHERE user_id = ${userId}
+      GROUP BY model ORDER BY cost DESC
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({
+      model: r.model ?? "unknown",
+      cost: Number(r.cost ?? 0),
+      calls: r.calls ?? 0,
+      tokens: Number(r.tokens ?? 0),
+    }));
+  }
+
   /** Get the single AI usage row for a push event (one usage record per push when AI summary is generated). */
   async getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined> {
     const rows = await db
@@ -704,8 +780,10 @@ export class DatabaseStorage implements IStorage {
     return deleted.length > 0;
   }
 
-  /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). */
-  async getAiUsageWithPushDateByUserId(userId: number): Promise<(AiUsage & { pushedAt: string | null })[]> {
+  /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). Bounded by default (limit 500). */
+  async getAiUsageWithPushDateByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<(AiUsage & { pushedAt: string | null })[]> {
+    const limit = options?.limit ?? 500;
+    const offset = options?.offset ?? 0;
     const rows = await db
       .select({
         id: aiUsage.id,
@@ -722,7 +800,9 @@ export class DatabaseStorage implements IStorage {
       .from(aiUsage)
       .leftJoin(pushEvents, eq(aiUsage.pushEventId, pushEvents.id))
       .where(eq(aiUsage.userId, userId))
-      .orderBy(desc(aiUsage.createdAt));
+      .orderBy(desc(aiUsage.createdAt))
+      .limit(limit)
+      .offset(offset);
     return rows as (AiUsage & { pushedAt: string | null })[];
   }
 

@@ -54,8 +54,13 @@ export interface IStorage {
   createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace>;
   updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
 
-  // OpenRouter methos
+  // OpenRouter methods
   getAiUsageByUserId(userId: number): Promise<AiUsage[]>;
+  getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number>;
+  getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }>;
+  getAiUsageCountForUser(userId: number): Promise<number>;
+  getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]>;
+  getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]>;
   getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined>;
   createAiUsage(aiUsage: InsertAiUsage): Promise<AiUsage>;
   updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined>;
@@ -331,6 +336,48 @@ export class MemStorage implements IStorage {
   /** Get the user's OpenRouter usage history. */
   async getAiUsageByUserId(userId: number): Promise<AiUsage[]> {
     return Array.from(this.aiUsage.values()).filter(usage => usage.userId === userId) as AiUsage[];
+  }
+
+  async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {
+    const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= monthStart);
+    return list.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
+  }
+
+  async getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+    const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= monthStart);
+    const totalSpend = list.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
+    return { totalSpend, callCount: list.length };
+  }
+
+  async getAiUsageCountForUser(userId: number): Promise<number> {
+    return Array.from(this.aiUsage.values()).filter(u => u.userId === userId).length;
+  }
+
+  async getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
+    const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= startDate);
+    const byDay: Record<string, { totalCost: number; callCount: number }> = {};
+    for (const u of list) {
+      const d = new Date(u.createdAt);
+      const key = d.toISOString().slice(0, 10);
+      if (!byDay[key]) byDay[key] = { totalCost: 0, callCount: 0 };
+      byDay[key].totalCost += typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
+      byDay[key].callCount += 1;
+    }
+    return Object.entries(byDay).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
+    let list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId);
+    if (startDate) list = list.filter(u => new Date(u.createdAt) >= startDate);
+    const byModel: Record<string, { cost: number; calls: number; tokens: number }> = {};
+    for (const u of list) {
+      const m = String(u.model ?? "unknown");
+      if (!byModel[m]) byModel[m] = { cost: 0, calls: 0, tokens: 0 };
+      byModel[m].cost += typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
+      byModel[m].calls += 1;
+      byModel[m].tokens += typeof u.tokensUsed === "number" ? u.tokensUsed : Number(u.tokensUsed) || 0;
+    }
+    return Object.entries(byModel).map(([model, v]) => ({ model, ...v })).sort((a, b) => b.cost - a.cost);
   }
 
   /** Get the OpenRouter usage for a specific push event. */

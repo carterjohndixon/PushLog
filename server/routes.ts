@@ -310,12 +310,9 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
       const userForBudget = await databaseStorage.getUserById(integration.userId);
       const monthlyBudget = (userForBudget as any)?.monthlyBudget;
       if (monthlyBudget != null && monthlyBudget > 0) {
-        const allUsage = await databaseStorage.getAiUsageByUserId(integration.userId);
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        const monthlySpend = allUsage
-          .filter(u => new Date(u.createdAt) >= monthStart)
-          .reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : 0), 0);
+        const monthlySpend = await databaseStorage.getMonthlyAiSpend(integration.userId, monthStart);
         if (monthlySpend >= monthlyBudget) {
           const overBudgetBehavior = (userForBudget as any)?.overBudgetBehavior === "skip_ai" ? "skip_ai" : "free_model";
           const urgentMetadata = JSON.stringify({ monthlySpend, monthlyBudget, urgent: true });
@@ -2440,29 +2437,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/openrouter/usage/daily", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByUserId(userId);
-      const openRouterRows = usage.filter((u: any) => u.model && String(u.model).includes("/"));
       const days = 30;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
       startDate.setHours(0, 0, 0, 0);
+      const dailyFromDb = await databaseStorage.getAiUsageDailyByUserId(userId, startDate);
       const dateKeys: string[] = [];
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         dateKeys.push(d.toISOString().slice(0, 10));
       }
-      const daily = dateKeys.map(date => ({ date, totalCost: 0, callCount: 0 }));
-      for (const u of openRouterRows) {
-        const d = new Date(u.createdAt);
-        if (Number.isNaN(d.getTime()) || d < startDate) continue;
-        const key = d.toISOString().slice(0, 10);
-        const entry = daily.find(dc => dc.date === key);
-        if (entry) {
-          entry.totalCost += typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
-          entry.callCount += 1;
-        }
-      }
+      const byDate = Object.fromEntries(dailyFromDb.map(row => [row.date, { date: row.date, totalCost: row.totalCost, callCount: row.callCount }]));
+      const daily = dateKeys.map(date => byDate[date] ?? { date, totalCost: 0, callCount: 0 });
       res.status(200).json(daily);
     } catch (err) {
       console.error("OpenRouter daily usage error:", err);
@@ -2488,15 +2475,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/openrouter/monthly-spend", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByUserId(userId);
       const now = new Date();
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthlyUsage = usage.filter(u => {
-        const d = new Date(u.createdAt);
-        return d >= monthStart;
-      });
-      const totalSpend = monthlyUsage.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
-      res.status(200).json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount: monthlyUsage.length });
+      const { totalSpend, callCount } = await databaseStorage.getMonthlyAiSummary(userId, monthStart);
+      res.status(200).json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount });
     } catch (err) {
       console.error("Monthly spend error:", err);
       res.status(500).json({ error: "Failed to load monthly spend" });
@@ -2752,50 +2734,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/analytics/cost", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const usage = await databaseStorage.getAiUsageByUserId(userId);
-      // Daily cost aggregation (last 30 days)
       const days = 30;
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - days);
       startDate.setHours(0, 0, 0, 0);
+      const [dailyFromDb, costByModelRows] = await Promise.all([
+        databaseStorage.getAiUsageDailyByUserId(userId, startDate),
+        databaseStorage.getAiUsageByModelForAnalytics(userId),
+      ]);
       const dateKeys: string[] = [];
       for (let i = days - 1; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         dateKeys.push(d.toISOString().slice(0, 10));
       }
-      const dailyCost: { date: string; totalCost: number; callCount: number }[] = dateKeys.map(date => ({ date, totalCost: 0, callCount: 0 }));
-      const costByModel: Record<string, { cost: number; calls: number; tokens: number }> = {};
-      let totalSpend = 0;
-      for (const u of usage) {
-        const c = typeof u.cost === "number" ? u.cost : Number(u.cost) || 0;
-        const t = typeof u.tokensUsed === "number" ? u.tokensUsed : Number(u.tokensUsed) || 0;
-        const m = String(u.model || "unknown");
-        totalSpend += c;
-        if (!costByModel[m]) costByModel[m] = { cost: 0, calls: 0, tokens: 0 };
-        costByModel[m].cost += c;
-        costByModel[m].calls += 1;
-        costByModel[m].tokens += t;
-        // Daily aggregation
-        const d = new Date(u.createdAt);
-        if (!Number.isNaN(d.getTime()) && d >= startDate) {
-          const key = d.toISOString().slice(0, 10);
-          const entry = dailyCost.find(dc => dc.date === key);
-          if (entry) {
-            entry.totalCost += c;
-            entry.callCount += 1;
-          }
-        }
-      }
-      const costByModelArr = Object.entries(costByModel)
-        .map(([model, v]) => ({ model, ...v }))
-        .sort((a, b) => b.cost - a.cost);
+      const byDate = Object.fromEntries(dailyFromDb.map(row => [row.date, { date: row.date, totalCost: row.totalCost, callCount: row.callCount }]));
+      const dailyCost = dateKeys.map(date => byDate[date] ?? { date, totalCost: 0, callCount: 0 });
+      const totalSpend = costByModelRows.reduce((sum, r) => sum + r.cost, 0);
+      const totalCalls = costByModelRows.reduce((sum, r) => sum + r.calls, 0);
       res.status(200).json({
         totalSpend,
         totalSpendFormatted: `$${(totalSpend / 10000).toFixed(4)}`,
-        totalCalls: usage.length,
+        totalCalls,
         dailyCost,
-        costByModel: costByModelArr,
+        costByModel: costByModelRows,
       });
     } catch (err) {
       console.error("Analytics cost error:", err);
@@ -3993,11 +3955,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const repos = await databaseStorage.getRepositoriesByUserId(userId);
       const integrations = await databaseStorage.getIntegrationsByUserId(userId);
       const workspaces = await databaseStorage.getSlackWorkspacesByUserId(userId);
-      const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
       const payments = await databaseStorage.getPaymentsByUserId(userId);
 
       const pushEventCount = await databaseStorage.getPushEventCountForUser(userId);
       const notificationCount = await databaseStorage.getNotificationCountForUser(userId);
+      const aiUsageCount = await databaseStorage.getAiUsageCountForUser(userId);
 
       res.status(200).json({
         accountCreated: user.createdAt,
@@ -4014,7 +3976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           slackWorkspaces: workspaces.length,
           pushEvents: pushEventCount,
           notifications: notificationCount,
-          aiUsageRecords: aiUsage.length,
+          aiUsageRecords: aiUsageCount,
           payments: payments.length
         },
         aiCredits: user.aiCredits

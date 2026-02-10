@@ -20,6 +20,7 @@
     "test:push-events": "node test/test-push-events-performance.js",
     "test:analytics": "node test/test-analytics-performance.js",
     "test:notifications": "node test/test-notifications-performance.js",
+    "test:ai-usage": "node test/test-ai-usage-performance.js",
     "seed:notifications": "node test/seed-notifications-for-user.js",
     "monitor:performance": "node monitor-performance.js",
     "db:add-indexes": "node add-indexes.js",
