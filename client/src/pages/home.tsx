@@ -537,51 +537,45 @@ export default function Home() {
               </Card>
             </div>
 
-            {/* Configuration Panel */}
+            {/* Configuration Panel - matches real app: Integrations → per-integration settings */}
             <Card className="bg-muted/50">
               <CardContent className="p-8">
                 <h3 className="text-2xl font-bold text-foreground mb-6 text-center">Configuration Options</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div>
                     <Label htmlFor="slack-channel" className="block text-sm font-medium text-foreground mb-2">
-                      Default Slack Channel
+                      Slack channel
                     </Label>
                     <Select>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select a channel" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="#dev-updates">#dev-updates</SelectItem>
-                        <SelectItem value="#general">#general</SelectItem>
-                        <SelectItem value="#notifications">#notifications</SelectItem>
+                        <SelectItem value="dev-updates">#dev-updates</SelectItem>
+                        <SelectItem value="general">#general</SelectItem>
+                        <SelectItem value="releases">#releases</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="notification-frequency" className="block text-sm font-medium text-foreground mb-2">
-                      Notification Frequency
+                    <Label htmlFor="notification-level" className="block text-sm font-medium text-foreground mb-2">
+                      Notification level
                     </Label>
                     <Select>
                       <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select frequency" />
+                        <SelectValue placeholder="Select notification level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="every_push">Every push</SelectItem>
-                        <SelectItem value="batched_hourly">Batched (hourly)</SelectItem>
-                        <SelectItem value="daily_summary">Daily summary</SelectItem>
+                        <SelectItem value="all">All pushes</SelectItem>
+                        <SelectItem value="main_only">Main branch only</SelectItem>
+                        <SelectItem value="tagged_only">Tagged releases only</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="include-summaries" />
+                  <div className="flex items-center space-x-2 md:col-span-2">
+                    <Checkbox id="include-summaries" defaultChecked />
                     <Label htmlFor="include-summaries" className="text-foreground">
-                      Include code summaries
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox id="mention-members" />
-                    <Label htmlFor="mention-members" className="text-foreground">
-                      Mention relevant team members
+                      Include commit summaries
                     </Label>
                   </div>
                 </div>
