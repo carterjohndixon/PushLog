@@ -163,18 +163,13 @@ export default function Models() {
       const res = await fetch("/api/openrouter/usage", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load usage");
       const data = await res.json();
-      const calls = Array.isArray(data.calls) ? data.calls : [];
-      if (calls.length > 0) {
-        const first = calls[0] as Record<string, unknown>;
-        console.log("[Models] usage response: first call keys", Object.keys(first), "createdAt", first?.createdAt, "created_at", first?.created_at);
-      }
       return {
         totalCalls: data.totalCalls ?? 0,
         totalTokens: data.totalTokens ?? 0,
         totalCostCents: data.totalCostCents ?? 0,
         totalCostFormatted: data.totalCostFormatted ?? null,
         costByModel: Array.isArray(data.costByModel) ? data.costByModel : undefined,
-        calls,
+        calls: Array.isArray(data.calls) ? data.calls : [],
         lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
       };
     },
@@ -1049,7 +1044,7 @@ export default function Models() {
                                       </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                      {paginatedCalls.map((c, rowIdx) => (
+                                      {paginatedCalls.map((c) => (
                                         <TableRow key={c.id} className="border-border">
                                           <TableCell className="font-medium text-foreground text-sm">
                                             {getAiModelDisplayName(c.model)}
@@ -1065,14 +1060,7 @@ export default function Models() {
                                                 : "—"}
                                           </TableCell>
                                           <TableCell className="text-muted-foreground text-sm">
-                                            {(() => {
-                                              const raw = (c as any).createdAt ?? (c as any).created_at;
-                                              const formatted = raw ? formatLocalDateTime(raw) : "—";
-                                              if (rowIdx === 0) {
-                                                console.log("[Models] Recent call date: raw", raw, "formatted", formatted, "new Date(raw) valid?", raw ? !Number.isNaN(new Date(raw).getTime()) : "n/a");
-                                              }
-                                              return formatted;
-                                            })()}
+                                            {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
                                           </TableCell>
                                           <TableCell>
                                             {c.generationId ? (

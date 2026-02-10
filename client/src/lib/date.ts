@@ -54,13 +54,20 @@ export function formatLocalShortDate(dateInput: string | Date): string {
  */
 export function formatLocalDateTime(dateInput: string | Date): string {
   try {
-    const d = new Date(dateInput as string);
+    const d = new Date(typeof dateInput === "string" ? dateInput.trim() : dateInput);
     if (Number.isNaN(d.getTime())) return "—";
-    return d.toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-      timeZoneName: "short",
-    });
+    try {
+      return d.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZoneName: "short",
+      });
+    } catch {
+      // Fallback if Intl options throw (e.g. some environments/CSP)
+      const datePart = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      const timePart = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+      return `${datePart}, ${timePart}`;
+    }
   } catch {
     return "—";
   }
