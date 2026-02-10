@@ -69,6 +69,7 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: ["'self'", "https://api.github.com", "https://slack.com", "https://api.stripe.com"],
       frameSrc: ["'self'", "https://js.stripe.com"],
+      frameAncestors: ["'self'"], // Clickjacking protection (reinforces X-Frame-Options)
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
