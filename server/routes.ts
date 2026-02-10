@@ -2427,10 +2427,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 10000).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
         costByModel,
         lastUsedByModel,
-        calls: openRouterRows.slice(0, 100).map((u: any) => {
+        calls: openRouterRows.slice(0, 100).map((u: any, idx: number) => {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
-          const createdAtStr = toIsoString(at) ?? (at != null ? (at instanceof Date ? at.toISOString() : String(at)) : null);
+          const isoFromHelper = toIsoString(at);
+          const createdAtStr = isoFromHelper ?? (at != null ? (at instanceof Date ? at.toISOString() : String(at)) : null);
+          if (idx < 3) {
+            console.log("[OpenRouter usage] call row", idx, {
+              rowKeys: Object.keys(u),
+              "u.createdAt": u.createdAt,
+              "u.created_at": (u as any).created_at,
+              "u.pushedAt": u.pushedAt,
+              "u.pushed_at": (u as any).pushed_at,
+              at,
+              atType: at == null ? "null" : typeof at,
+              isoFromHelper,
+              createdAtStr,
+            });
+          }
           return {
             id: u.id,
             model: u.model,
