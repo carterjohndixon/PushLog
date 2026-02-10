@@ -1128,7 +1128,7 @@ export default function Models() {
                 </>
               ) : null}
               {/* Budget: always show when user has key (set budget / monthly spend) */}
-              <div className="mb-6 rounded-lg border border-border bg-muted/30 p-4">
+              <div className="mb-6 mt-6 rounded-lg border border-border bg-muted/30 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
                   {monthlySpendData ? (
