@@ -196,7 +196,7 @@ Respond with only valid JSON:
       temperature: 0.3, // All supported models support temperature
     };
 
-    let completion: OpenAI.Chat.Completions.ChatCompletion;
+    let completion: OpenAI.Chat.Completions.ChatCompletion | undefined;
     let openRouterGenerationId: string | null = null;
 
     if (useOpenRouter && options?.openRouterApiKey) {
@@ -263,7 +263,25 @@ Respond with only valid JSON:
             }
             throw new Error(`OpenRouter ${res.status}: ${lastErrBody.slice(0, 200)}`);
           }
-          completionJson = await res.json();
+          const bodyText = await res.text();
+          try {
+            completionJson = bodyText ? JSON.parse(bodyText) : null;
+          } catch (parseErr: any) {
+            const retryable = attempt < openRouterMaxRetries;
+            if (retryable) {
+              console.warn(`⚠️ OpenRouter response invalid/truncated JSON (attempt ${attempt + 1}), will retry:`, parseErr?.message ?? parseErr);
+              continue;
+            }
+            throw new Error(`OpenRouter returned invalid or empty response: ${parseErr?.message ?? 'Unexpected end of JSON input'}`);
+          }
+          if (!completionJson || typeof completionJson !== 'object') {
+            const retryable = attempt < openRouterMaxRetries;
+            if (retryable) {
+              console.warn(`⚠️ OpenRouter response empty (attempt ${attempt + 1}), will retry`);
+              continue;
+            }
+            throw new Error('OpenRouter returned empty response');
+          }
           completion = completionJson as OpenAI.Chat.Completions.ChatCompletion;
           break;
         }
@@ -279,9 +297,10 @@ Respond with only valid JSON:
             console.log('📊 OpenRouter: generation id from response body:', openRouterGenerationId.slice(0, 28) + '...');
           } else {
             const topKeys = typeof completionJson === 'object' && completionJson !== null ? Object.keys(completionJson as object).join(', ') : '—';
-            console.warn('📊 OpenRouter: no gen id in header or body. Response keys:', topKeys, '| completion.id:', (completion as { id?: string }).id ?? '—');
+            console.warn('📊 OpenRouter: no gen id in header or body. Response keys:', topKeys, '| completion.id:', (completion as { id?: string })?.id ?? '—');
           }
         }
+        if (completion == null) throw new Error('OpenRouter failed to return a completion');
       } catch (apiError: any) {
         console.error('❌ OpenRouter request failed:', apiError?.message ?? apiError);
         throw apiError;
@@ -306,6 +325,7 @@ Respond with only valid JSON:
       }
     }
 
+    if (completion == null) throw new Error('No completion from API');
     // Log the actual model used by OpenAI (in case of model fallback)
     const actualModel = completion.model;
     const msg = completion.choices[0]?.message as unknown as Record<string, unknown> | undefined;

@@ -672,17 +672,19 @@ export class DatabaseStorage implements IStorage {
 
   /** Sum of AI cost for user since monthStart (for webhook budget check). Single query, no full table load. */
   async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {
+    const monthStartIso = monthStart.toISOString().slice(0, 10);
     const [row] = await db.execute<{ spend: number }>(sql`
-      SELECT COALESCE(SUM(cost), 0)::bigint AS spend FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStart}
+      SELECT COALESCE(SUM(cost), 0)::bigint AS spend FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStartIso}
     `);
     return Number(row?.spend ?? 0);
   }
 
   /** Monthly summary: total spend and call count since monthStart (for /api/openrouter/monthly-spend). */
   async getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+    const monthStartIso = monthStart.toISOString().slice(0, 10);
     const [row] = await db.execute<{ total_spend: string; call_count: number }>(sql`
       SELECT COALESCE(SUM(cost), 0)::bigint AS total_spend, COUNT(*)::int AS call_count
-      FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStart}
+      FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStartIso}
     `);
     return { totalSpend: Number(row?.total_spend ?? 0), callCount: row?.call_count ?? 0 };
   }
