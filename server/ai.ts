@@ -201,51 +201,76 @@ Respond with only valid JSON:
 
     if (useOpenRouter && options?.openRouterApiKey) {
       // Use fetch so we can read x-openrouter-generation-id header (needed for cost lookup)
+      const openRouterMaxRetries = 2; // 503/429: retry up to 2 times (3 attempts total)
+      const retryDelaysMs = [2000, 4000]; // backoff: 2s, then 4s
+      let lastRes: Response | null = null;
+      let lastErrBody = '';
+      let completionJson: unknown = null;
       try {
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${options.openRouterApiKey.trim()}`,
-          },
-          body: JSON.stringify(requestParams),
-        });
-        openRouterGenerationId = res.headers.get(OPENROUTER_GENERATION_ID_HEADER)?.trim() || null;
-        if (!openRouterGenerationId && typeof res.headers.get === 'function') {
-          const tryHeader = (name: string) => res.headers.get(name)?.trim() || null;
-          openRouterGenerationId = tryHeader('x-openrouter-generation-id')
-            || tryHeader('X-OpenRouter-Generation-Id')
-            || tryHeader('openrouter-generation-id');
-        }
-        if (!openRouterGenerationId) {
-          // x-openrouter-generation-id is often stripped by CDNs (e.g. Cloudflare). Cost will be 0 unless gen id is in response body.
-          const headerNames = typeof res.headers.entries === 'function'
-            ? Array.from(res.headers.entries()).map(([k]) => k)
-            : [];
-          console.warn('📊 OpenRouter: no generation id in response header (CDN may strip it). Headers:', headerNames.join(', ') || '(none)');
-        } else {
-          console.log('📊 OpenRouter: generation id from header:', openRouterGenerationId.slice(0, 28) + '...');
-        }
-        if (!res.ok) {
-          const errBody = await res.text();
-          console.error('❌ OpenRouter API Error:', res.status, res.statusText, errBody.slice(0, 300));
-          // User-friendly message for data policy / free model 404
-          if (res.status === 404 && /data policy|Free model publication|privacy/i.test(errBody)) {
-            throw new Error(
-              'OpenRouter rejected the request: your account\'s data policy does not allow this model (e.g. free models). ' +
-              'Configure it at https://openrouter.ai/settings/privacy and enable "Free model publication" or the option that matches your model.'
-            );
+        for (let attempt = 0; attempt <= openRouterMaxRetries; attempt++) {
+          if (attempt > 0) {
+            const delay = retryDelaysMs[attempt - 1] ?? 4000;
+            console.log(`🔄 OpenRouter retry ${attempt}/${openRouterMaxRetries} in ${delay}ms (503/429 server at capacity or rate limit)`);
+            await new Promise((r) => setTimeout(r, delay));
           }
-          // User-friendly message for 429 rate limit (free models are often rate-limited)
-          if (res.status === 429) {
-            throw new Error(
-              'OpenRouter rate limit: this model is temporarily rate-limited. Retry in a few minutes, or add your own provider key at https://openrouter.ai/settings/integrations to use your own rate limits.'
-            );
+          const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${options.openRouterApiKey.trim()}`,
+            },
+            body: JSON.stringify(requestParams),
+          });
+          lastRes = res;
+          openRouterGenerationId = res.headers.get(OPENROUTER_GENERATION_ID_HEADER)?.trim() || null;
+          if (!openRouterGenerationId && typeof res.headers.get === 'function') {
+            const tryHeader = (name: string) => res.headers.get(name)?.trim() || null;
+            openRouterGenerationId = tryHeader('x-openrouter-generation-id')
+              || tryHeader('X-OpenRouter-Generation-Id')
+              || tryHeader('openrouter-generation-id');
           }
-          throw new Error(`OpenRouter ${res.status}: ${errBody.slice(0, 200)}`);
+          if (!openRouterGenerationId && res.ok) {
+            const headerNames = typeof res.headers.entries === 'function'
+              ? Array.from(res.headers.entries()).map(([k]) => k)
+              : [];
+            console.warn('📊 OpenRouter: no generation id in response header (CDN may strip it). Headers:', headerNames.join(', ') || '(none)');
+          } else if (openRouterGenerationId && res.ok) {
+            console.log('📊 OpenRouter: generation id from header:', openRouterGenerationId.slice(0, 28) + '...');
+          }
+          if (!res.ok) {
+            lastErrBody = await res.text();
+            const retryable = (res.status === 503 || res.status === 429) && attempt < openRouterMaxRetries;
+            if (retryable) {
+              console.warn(`⚠️ OpenRouter ${res.status} (attempt ${attempt + 1}/${openRouterMaxRetries + 1}), will retry:`, lastErrBody.slice(0, 150));
+              continue;
+            }
+            console.error('❌ OpenRouter API Error:', res.status, res.statusText, lastErrBody.slice(0, 300));
+            if (res.status === 404 && /data policy|Free model publication|privacy/i.test(lastErrBody)) {
+              throw new Error(
+                'OpenRouter rejected the request: your account\'s data policy does not allow this model (e.g. free models). ' +
+                'Configure it at https://openrouter.ai/settings/privacy and enable "Free model publication" or the option that matches your model.'
+              );
+            }
+            if (res.status === 429) {
+              throw new Error(
+                'OpenRouter rate limit: this model is temporarily rate-limited. Retry in a few minutes, or add your own provider key at https://openrouter.ai/settings/integrations to use your own rate limits.'
+              );
+            }
+            if (res.status === 503) {
+              throw new Error(
+                'OpenRouter provider at capacity (503). The AI provider was temporarily overloaded. Your push was still sent to Slack; try again in a moment.'
+              );
+            }
+            throw new Error(`OpenRouter ${res.status}: ${lastErrBody.slice(0, 200)}`);
+          }
+          completionJson = await res.json();
+          completion = completionJson as OpenAI.Chat.Completions.ChatCompletion;
+          break;
         }
-        const completionJson = await res.json();
-        completion = completionJson as OpenAI.Chat.Completions.ChatCompletion;
+        if (!lastRes?.ok) {
+          console.error('❌ OpenRouter failed after retries:', lastRes?.status, lastErrBody.slice(0, 200));
+          throw new Error(`OpenRouter ${lastRes?.status ?? 'error'}: ${lastErrBody.slice(0, 200)}`);
+        }
         // OpenRouter may return generation id only in body when header is missing (header is often stripped by CDN e.g. Cloudflare)
         if (!openRouterGenerationId && completionJson) {
           const fromBody = findGenIdInObject(completionJson);
