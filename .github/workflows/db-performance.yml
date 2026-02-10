@@ -1,7 +1,7 @@
-# Run getStatsForUser performance test (OLD vs NEW query approach).
+# DB performance tests (getStatsForUser + push-events-for-user).
 # Requires DATABASE_URL secret in repo settings for full test.
-# If DATABASE_URL is not set, job is skipped (no failure).
-name: DB getStatsForUser performance
+# If DATABASE_URL is not set, jobs are skipped (no failure).
+name: DB performance tests
 
 on:
   push:
@@ -30,7 +30,31 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
-            echo "DATABASE_URL not set - skipping DB performance test (set secret in repo to enable)."
+            echo "DATABASE_URL not set - skipping (set secret in repo to enable)."
             exit 0
           fi
           npm run test:get-stats
+
+  test-push-events:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run push-events-for-user performance test
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL not set - skipping (set secret in repo to enable)."
+            exit 0
+          fi
+          npm run test:push-events

@@ -41,7 +41,9 @@ export interface IStorage {
 
   // Push event methods
   getPushEvent(id: number): Promise<PushEvent | undefined>;
-  getPushEventsByRepositoryId(repositoryId: number): Promise<PushEvent[]>;
+  getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
+  getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
+  getPushEventCountForUser(userId: number): Promise<number>;
   createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent>;
   updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined>;
 
@@ -233,10 +235,30 @@ export class MemStorage implements IStorage {
     return this.pushEvents.get(id);
   }
 
-  async getPushEventsByRepositoryId(repositoryId: number): Promise<PushEvent[]> {
-    return Array.from(this.pushEvents.values())
+  async getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+    const limit = options?.limit ?? 200;
+    const offset = options?.offset ?? 0;
+    const list = Array.from(this.pushEvents.values())
       .filter(event => event.repositoryId === repositoryId)
-      .sort((a, b) => b.pushedAt.getTime() - a.pushedAt.getTime());
+      .sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime())
+      .slice(offset, offset + limit);
+    return list;
+  }
+
+  async getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
+    const list = Array.from(this.pushEvents.values())
+      .filter(event => repoIds.has(event.repositoryId))
+      .sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime())
+      .slice(offset, offset + limit);
+    return list;
+  }
+
+  async getPushEventCountForUser(userId: number): Promise<number> {
+    const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
+    return Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId)).length;
   }
 
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {

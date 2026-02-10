@@ -12,11 +12,11 @@ import {
   type Notification, type InsertNotification,
   type AiUsage, type InsertAiUsage,
   type Payment, type InsertPayment,
-  type AnalyticsStats, type InsertAnalyticsStats,
+  type AnalyticsStats,
   type FavoriteModel,
   analyticsStats
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -86,15 +86,11 @@ export class DatabaseStorage implements IStorage {
   private users: Map<number, User>;
   private analyticsStats: Map<number, AnalyticsStats>;
   private oauthSessions: Map<string, OAuthSession>;
-  private nextId: number;
-  private analyticsStatsNextId: number;
 
   constructor() {
     this.users = new Map<number, User>();
     this.analyticsStats = new Map<number, AnalyticsStats>();
     this.oauthSessions = new Map<string, OAuthSession>();
-    this.nextId = 1;
-    this.analyticsStatsNextId = 1;
   }
 
   async init(): Promise<void> {
@@ -109,11 +105,6 @@ export class DatabaseStorage implements IStorage {
     for (const analyticsStat of analyticsStatsResult) {
       this.analyticsStats.set(analyticsStat.id as number, convertToAnalyticsStats(analyticsStat as any));
     }
-
-    const nextId = (await db.select({ max: max(users.id) }).from(users))[0].max as number;
-    this.nextId = nextId ? nextId + 1 : 1;
-    const analyticsStatsNextId = (await db.select({ max: max(analyticsStats.id) }).from(analyticsStats))[0].max as number;
-    this.analyticsStatsNextId = analyticsStatsNextId ? analyticsStatsNextId + 1 : 1;
   }
 
   // User methods
@@ -321,11 +312,41 @@ export class DatabaseStorage implements IStorage {
     return result[0] as PushEvent | undefined;
   }
 
-  async getPushEventsByRepositoryId(repositoryId: number): Promise<PushEvent[]> {
+  async getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+    const limit = options?.limit ?? 200;
+    const offset = options?.offset ?? 0;
     const result = await db.select().from(pushEvents)
       .where(eq(pushEvents.repositoryId, repositoryId))
-      .orderBy(pushEvents.pushedAt);
+      .orderBy(desc(pushEvents.pushedAt))
+      .limit(limit)
+      .offset(offset);
     return result as PushEvent[];
+  }
+
+  /** Push events for all of a user's repos, one query (after resolving repo IDs), bounded (default limit 100). */
+  async getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+    const limit = options?.limit ?? 100;
+    const offset = options?.offset ?? 0;
+    const repoRows = await db.select({ id: repositories.id }).from(repositories).where(eq(repositories.userId, userId));
+    const repoIds = repoRows.map((r) => r.id);
+    if (repoIds.length === 0) return [];
+    const result = await db.select().from(pushEvents)
+      .where(inArray(pushEvents.repositoryId, repoIds))
+      .orderBy(desc(pushEvents.pushedAt))
+      .limit(limit)
+      .offset(offset);
+    return result as PushEvent[];
+  }
+
+  /** Total count of push events for a user (all repos), one query. */
+  async getPushEventCountForUser(userId: number): Promise<number> {
+    const [row] = await db.execute<{ c: number }>(sql`
+      SELECT count(*)::int AS c
+      FROM push_events e
+      INNER JOIN repositories r ON e.repository_id = r.id
+      WHERE r.user_id = ${userId}
+    `);
+    return row?.c ?? 0;
   }
 
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {

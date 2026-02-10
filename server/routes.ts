@@ -1484,7 +1484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get push events for repositories
+  // Get push events for repositories (single query, limit 100)
   app.get("/api/push-events", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
@@ -1492,22 +1492,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      // Get user's repositories
-      const userRepositories = await storage.getRepositoriesByUserId(userId);
-      const repositoryIds = userRepositories.map(repo => repo.id);
+      const limit = Math.min(Number(req.query.limit) || 100, 500);
+      const offset = Number(req.query.offset) || 0;
+      const allPushEvents = await storage.getPushEventsForUser(userId, { limit, offset });
 
-      if (repositoryIds.length === 0) {
-        return res.json([]);
-      }
-
-      // Get push events for all user's repositories
-      const allPushEvents = [];
-      for (const repositoryId of repositoryIds) {
-        const repoEvents = await storage.getPushEventsByRepositoryId(repositoryId);
-        allPushEvents.push(...repoEvents);
-      }
-
-      // Format events for frontend
       const formattedEvents = allPushEvents.map((event: any) => ({
         id: event.id,
         repositoryId: event.repositoryId,
@@ -2874,7 +2862,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Access denied" });
       }
 
-      const pushEvents = await storage.getPushEventsByRepositoryId(parseInt(repositoryId));
+      const limit = Math.min(Number(req.query.limit) || 200, 500);
+      const offset = Number(req.query.offset) || 0;
+      const pushEvents = await storage.getPushEventsByRepositoryId(parseInt(repositoryId), { limit, offset });
       res.json(pushEvents);
     } catch (error) {
       console.error("Error fetching push events:", error);
@@ -4059,12 +4049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
       const payments = await databaseStorage.getPaymentsByUserId(userId);
 
-      // Count push events
-      let pushEventCount = 0;
-      for (const repo of repos) {
-        // This is a simplified count - in production you'd want a more efficient query
-        pushEventCount += (await databaseStorage.getPushEventsByRepositoryId(repo.id)).length;
-      }
+      const pushEventCount = await databaseStorage.getPushEventCountForUser(userId);
 
       res.json({
         accountCreated: user.createdAt,
