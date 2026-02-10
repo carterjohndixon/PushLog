@@ -16,6 +16,7 @@
     "deploy:check": "npm run check && npm run build && npm run health",
     "test:performance": "node performance-test.js",
     "test:database": "node database-performance.js",
+    "test:get-stats": "node test/test-get-stats-performance.js",
     "monitor:performance": "node monitor-performance.js",
     "db:add-indexes": "node add-indexes.js",
     "test:ai-performance": "node ai-performance-test.js",

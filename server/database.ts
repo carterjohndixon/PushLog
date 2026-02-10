@@ -16,7 +16,7 @@ import {
   type FavoriteModel,
   analyticsStats
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
 import type { IStorage } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -413,30 +413,34 @@ export class DatabaseStorage implements IStorage {
   async getStatsForUser(userId: number): Promise<AnalyticsStats> {
     const userIntegrations = await this.getIntegrationsByUserId(userId);
     const userRepositories = await this.getRepositoriesByUserId(userId);
-    
-    const activeIntegrations = userIntegrations.filter(integration => integration.isActive).length;
+
+    const activeIntegrations = userIntegrations.filter((integration) => integration.isActive).length;
     const totalRepositories = userRepositories.length;
-    
-    // Calculate daily pushes (last 24 hours)
+    const repoIds = userRepositories.map((r) => r.id);
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const allPushEvents = await db.select().from(pushEvents);
-    const dailyPushes = allPushEvents.filter(event => 
-      userRepositories.some(repo => repo.id === event.repositoryId) &&
-      event.pushedAt > oneDayAgo
-    ).length;
-    
-    // Count Slack messages sent (from notifications table)
-    const userNotifications = await this.getNotificationsByUserId(userId);
-    const slackMessagesSent = userNotifications.filter(notification => 
-      notification.type === 'slack_message_sent'
-    ).length;
-    
-    // Also count push events with notifications sent
-    const pushEventNotifications = allPushEvents.filter(event => 
-      userRepositories.some(repo => repo.id === event.repositoryId) &&
-      event.notificationSent
-    ).length;
-    
+
+    // Daily pushes: COUNT only (no full table load)
+    let dailyPushes = 0;
+    let pushEventNotifications = 0;
+    if (repoIds.length > 0) {
+      const [dailyRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(pushEvents)
+        .where(and(inArray(pushEvents.repositoryId, repoIds), gte(pushEvents.pushedAt, oneDayAgo)));
+      dailyPushes = dailyRow?.count ?? 0;
+      const [notifRow] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(pushEvents)
+        .where(and(inArray(pushEvents.repositoryId, repoIds), eq(pushEvents.notificationSent, true)));
+      pushEventNotifications = notifRow?.count ?? 0;
+    }
+
+    // Slack messages sent: COUNT only (no load of all notifications)
+    const [slackRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, 'slack_message_sent')));
+    const slackMessagesSent = slackRow?.count ?? 0;
     const totalNotifications = slackMessagesSent + pushEventNotifications;
 
     // Persist snapshot to the database
