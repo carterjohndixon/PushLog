@@ -1392,8 +1392,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // If no GitHub token, still return connected repos from DB so the dashboard list matches the stats
       if (!user.githubId || !user.githubToken) {
-        const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
-        const userIntegrations = await storage.getIntegrationsByUserId(userId);
+        const [connectedRepos, userIntegrations] = await Promise.all([
+          databaseStorage.getRepositoriesByUserId(userId),
+          storage.getIntegrationsByUserId(userId),
+        ]);
+        const integrationCountByRepoId = new Map<number, number>();
+        for (const i of userIntegrations) {
+          const rid = i.repositoryId;
+          if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
+        }
         const cardData = connectedRepos.map((repo) => ({
           id: repo.id,
           githubId: repo.githubId,
@@ -1404,8 +1411,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isActive: repo.isActive ?? true,
           isConnected: true,
           private: false,
-          integrationCount: userIntegrations.filter((i) => i.repositoryId === repo.id).length,
+          integrationCount: integrationCountByRepoId.get(repo.id) ?? 0,
         }));
+        res.setHeader("Cache-Control", "private, max-age=15");
         return res.status(200).json(cardData);
       }
 
@@ -1437,30 +1445,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       try {
-        // Fetch repositories from GitHub
-        const repositories = await getUserRepositories(user.githubToken);
-        
-        // Get already connected repositories and user integrations (for integration count per repo)
-        const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
-        const userIntegrations = await storage.getIntegrationsByUserId(userId);
+        // Fetch GitHub repos and DB data in parallel so we don't wait for GitHub before starting DB (or vice versa)
+        const [repositories, connectedRepos, userIntegrations] = await Promise.all([
+          getUserRepositories(user.githubToken),
+          databaseStorage.getRepositoriesByUserId(userId),
+          storage.getIntegrationsByUserId(userId),
+        ]);
 
-        // Mark repositories that are already connected and include internal database ID
+        // Precompute integration count per repo (O(n) instead of O(repos × integrations))
+        const integrationCountByRepoId = new Map<number, number>();
+        for (const i of userIntegrations) {
+          const rid = i.repositoryId;
+          if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
+        }
+        const connectedByGithubId = new Map(connectedRepos.map(r => [r.githubId, r]));
+
         const enrichedRepos = repositories.map(repo => {
-          const connectedRepo = connectedRepos.find(connectedRepo => connectedRepo.githubId === repo.id.toString());
-          const integrationCount = connectedRepo
-            ? userIntegrations.filter(i => i.repositoryId === connectedRepo.id).length
-            : 0;
+          const connectedRepo = connectedByGithubId.get(repo.id.toString());
+          const integrationCount = connectedRepo ? (integrationCountByRepoId.get(connectedRepo.id) ?? 0) : 0;
           return {
             ...repo,
-            githubId: repo.id.toString(), // Always include the GitHub ID
-            id: connectedRepo?.id, // Include the internal database ID if connected
+            githubId: repo.id.toString(),
+            id: connectedRepo?.id,
             isConnected: !!connectedRepo,
-            isActive: connectedRepo?.isActive ?? true, // Include the isActive field from database
-            monitorAllBranches: connectedRepo?.monitorAllBranches ?? false, // Include the monitorAllBranches field from database
+            isActive: connectedRepo?.isActive ?? true,
+            monitorAllBranches: connectedRepo?.monitorAllBranches ?? false,
             integrationCount,
           };
         });
 
+        res.setHeader("Cache-Control", "private, max-age=15");
         res.status(200).json(enrichedRepos);
       } catch (githubError: any) {
         console.error("Failed to fetch GitHub repositories:", githubError);
@@ -1993,7 +2007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user integrations
+  // Get user integrations (single round-trip: integrations + repos in parallel, enrich in memory — no N+1)
   app.get("/api/integrations", authenticateToken, async (req, res) => {
     try {
       const userId = Number(req.user!.userId);
@@ -2001,49 +2015,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid session" });
       }
 
-      const integrations = await storage.getIntegrationsByUserId(userId);
+      const [integrations, repos] = await Promise.all([
+        storage.getIntegrationsByUserId(userId),
+        storage.getRepositoriesByUserId(userId),
+      ]);
       if (!Array.isArray(integrations)) {
         console.error("getIntegrationsByUserId did not return an array:", typeof integrations);
         return res.status(200).json([]);
       }
 
-      // Enrich each integration; if one fails, still return it with fallback name so the list doesn't 500
-      const enrichedIntegrations = await Promise.all(
-        integrations.map(async (integration: any) => {
-          try {
-            const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
-            let repository = repoId != null ? await storage.getRepository(repoId) : null;
-            if (!repository && repoId != null) {
-              try {
-                repository = await storage.getRepositoryByGithubId(String(repoId));
-              } catch {
-                // ignore fallback lookup
-              }
-            }
-            const sanitized = sanitizeIntegrationForClient(integration);
-            return {
-              ...sanitized,
-              repositoryName: repository?.name ?? "Unknown Repository",
-              lastUsed: integration.createdAt ?? null,
-              status: integration.isActive ? "active" : "paused",
-              notificationLevel: integration.notificationLevel ?? "all",
-              includeCommitSummaries: integration.includeCommitSummaries ?? true,
-            };
-          } catch (err) {
-            console.error("Error enriching integration", integration?.id, err);
-            const sanitized = sanitizeIntegrationForClient(integration);
-            return {
-              ...sanitized,
-              repositoryName: "Unknown Repository",
-              lastUsed: integration?.createdAt ?? null,
-              status: integration?.isActive ? "active" : "paused",
-              notificationLevel: integration?.notificationLevel ?? "all",
-              includeCommitSummaries: integration?.includeCommitSummaries ?? true,
-            };
-          }
-        })
-      );
+      const repoById = new Map(repos.map((r) => [r.id, r]));
+      const enrichedIntegrations = integrations.map((integration: any) => {
+        const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+        const repository = repoId != null ? repoById.get(repoId) : null;
+        const sanitized = sanitizeIntegrationForClient(integration);
+        return {
+          ...sanitized,
+          repositoryName: repository?.name ?? "Unknown Repository",
+          lastUsed: integration.createdAt ?? null,
+          status: integration.isActive ? "active" : "paused",
+          notificationLevel: integration.notificationLevel ?? "all",
+          includeCommitSummaries: integration.includeCommitSummaries ?? true,
+        };
+      });
 
+      res.setHeader("Cache-Control", "private, max-age=15");
       res.status(200).json(enrichedIntegrations);
     } catch (error) {
       console.error("Error fetching integrations:", error);
@@ -2052,6 +2048,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: "Failed to fetch integrations",
         details: process.env.NODE_ENV === "development" ? message : undefined,
       });
+    }
+  });
+
+  // Combined repos + integrations (one round-trip for Repositories and Integrations pages)
+  app.get("/api/repositories-and-integrations", authenticateToken, requireEmailVerification, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (!user.githubId || !user.githubToken) {
+        const [connectedRepos, integrations] = await Promise.all([
+          databaseStorage.getRepositoriesByUserId(userId),
+          storage.getIntegrationsByUserId(userId),
+        ]);
+        const integrationCountByRepoId = new Map<number, number>();
+        for (const i of integrations) {
+          const rid = i.repositoryId;
+          if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
+        }
+        const repositories = connectedRepos.map((repo) => ({
+          id: repo.id,
+          githubId: repo.githubId,
+          name: repo.name,
+          fullName: repo.fullName,
+          owner: repo.owner,
+          branch: repo.branch ?? "main",
+          isActive: repo.isActive ?? true,
+          isConnected: true,
+          private: false,
+          integrationCount: integrationCountByRepoId.get(repo.id) ?? 0,
+        }));
+        const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
+        const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
+          const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+          const repository = repoId != null ? repoById.get(repoId) : null;
+          const sanitized = sanitizeIntegrationForClient(integration);
+          return {
+            ...sanitized,
+            repositoryName: repository?.name ?? "Unknown Repository",
+            lastUsed: integration.createdAt ?? null,
+            status: integration.isActive ? "active" : "paused",
+            notificationLevel: integration.notificationLevel ?? "all",
+            includeCommitSummaries: integration.includeCommitSummaries ?? true,
+          };
+        });
+        res.setHeader("Cache-Control", "private, max-age=15");
+        return res.status(200).json({ repositories, integrations: enrichedIntegrations });
+      }
+
+      try {
+        const isValid = await validateGitHubToken(user.githubToken);
+        if (!isValid) {
+          await databaseStorage.updateUser(userId, { githubId: null, githubToken: null });
+          return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account.", redirectTo: "/login" });
+        }
+      } catch {
+        await databaseStorage.updateUser(userId, { githubId: null, githubToken: null });
+        return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account.", redirectTo: "/login" });
+      }
+
+      const [repositoriesFromGitHub, connectedRepos, integrations] = await Promise.all([
+        getUserRepositories(user.githubToken),
+        databaseStorage.getRepositoriesByUserId(userId),
+        storage.getIntegrationsByUserId(userId),
+      ]);
+      const integrationCountByRepoId = new Map<number, number>();
+      for (const i of integrations) {
+        const rid = i.repositoryId;
+        if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
+      }
+      const connectedByGithubId = new Map(connectedRepos.map((r) => [r.githubId, r]));
+      const repositories = repositoriesFromGitHub.map((repo: any) => {
+        const connectedRepo = connectedByGithubId.get(repo.id.toString());
+        return {
+          ...repo,
+          githubId: repo.id.toString(),
+          id: connectedRepo?.id,
+          isConnected: !!connectedRepo,
+          isActive: connectedRepo?.isActive ?? true,
+          monitorAllBranches: connectedRepo?.monitorAllBranches ?? false,
+          integrationCount: connectedRepo ? (integrationCountByRepoId.get(connectedRepo.id) ?? 0) : 0,
+        };
+      });
+      const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
+      const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
+        const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+        const repository = repoId != null ? repoById.get(repoId) : null;
+        const sanitized = sanitizeIntegrationForClient(integration);
+        return {
+          ...sanitized,
+          repositoryName: repository?.name ?? "Unknown Repository",
+          lastUsed: integration.createdAt ?? null,
+          status: integration.isActive ? "active" : "paused",
+          notificationLevel: integration.notificationLevel ?? "all",
+          includeCommitSummaries: integration.includeCommitSummaries ?? true,
+        };
+      });
+      res.setHeader("Cache-Control", "private, max-age=15");
+      return res.status(200).json({ repositories, integrations: enrichedIntegrations });
+    } catch (error) {
+      console.error("Error fetching repositories and integrations:", error);
+      res.status(500).json({ error: "Failed to fetch data" });
     }
   });
 

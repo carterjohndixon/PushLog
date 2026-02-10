@@ -194,6 +194,7 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsRepoModalOpen(false);
@@ -223,9 +224,10 @@ export default function Dashboard() {
       onSuccess: (data) => {
         // Close modal and refetch data after successful mutation
         setIsRepoModalOpen(false);
+        queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
         queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
         queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-        
+
         // Show specific notification for the repository that was just connected
         if (data.warning) {
           toast({
@@ -280,46 +282,36 @@ export default function Dashboard() {
     }
   });
 
-  // Fetch user repositories
-  const { data: repositories, isLoading: repositoriesLoading, error: repositoriesError } = useQuery<RepositoryCardData[]>({
-    queryKey: ['/api/repositories'],
+  // Single request for repos + integrations (fast dashboard load)
+  const { data: reposAndIntegrations, isLoading: reposAndIntegrationsLoading, error: repositoriesError } = useQuery<{
+    repositories: RepositoryCardData[];
+    integrations: ActiveIntegration[];
+  }>({
+    queryKey: ['/api/repositories-and-integrations'],
     queryFn: async () => {
-      const response = await fetch('/api/repositories', {
+      const response = await fetch('/api/repositories-and-integrations', {
         credentials: 'include',
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || 'Failed to fetch repositories');
+        const error = new Error(errorData.error || 'Failed to fetch repositories and integrations');
         if (handleTokenExpiration(error, queryClient)) {
-          return [];
-        }
-        throw error;
-      }
-      return response.json();
-    }
-  });
-
-  // Fetch user integrations
-  const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
-    queryKey: ['/api/integrations'],
-    queryFn: async () => {
-      const response = await fetch('/api/integrations', {
-        credentials: 'include',
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || "Failed to fetch integrations");
-        if (handleTokenExpiration(error, queryClient)) {
-          return [];
+          return { repositories: [], integrations: [] };
         }
         throw error;
       }
       const data = await response.json();
-      return data;
-    }
+      const integrations = data.integrations ?? [];
+      queryClient.setQueryData(['/api/repositories'], data.repositories ?? []);
+      queryClient.setQueryData(['/api/integrations'], integrations);
+      return { repositories: data.repositories ?? [], integrations };
+    },
   });
+  const repositories = reposAndIntegrations?.repositories ?? [];
+  const integrations = reposAndIntegrations?.integrations ?? [];
+  const repositoriesLoading = reposAndIntegrationsLoading;
+  const integrationsLoading = reposAndIntegrationsLoading;
 
   // Slack workspaces (cookie-based auth)
   const { data: slackWorkspaces, isLoading: slackWorkspacesLoading } = useQuery({
@@ -402,6 +394,7 @@ export default function Dashboard() {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
@@ -432,6 +425,7 @@ export default function Dashboard() {
       setIsDeleteConfirmationOpen(false);
       setIntegrationToDelete(null);
       setSelectedIntegration(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
@@ -461,6 +455,7 @@ export default function Dashboard() {
     onSuccess: () => {
       setIsIntegrationSettingsOpen(false);
       setSelectedIntegration(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       toast({
         title: "Settings Updated",
@@ -487,13 +482,10 @@ export default function Dashboard() {
       setIsRepositorySettingsOpen(false);
       setSelectedRepository(null);
       // Force refetch of all related queries
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] }); // Also refresh integrations
-      // Force immediate refetch
-      queryClient.refetchQueries({ queryKey: ['/api/repositories'] });
-      queryClient.refetchQueries({ queryKey: ['/api/stats'] });
-      queryClient.refetchQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       toast({
         title: "Settings Updated",
         description: "Repository settings have been successfully updated.",
@@ -544,6 +536,7 @@ export default function Dashboard() {
     },
       onSuccess: () => {
         // Invalidate all related queries to ensure real-time updates
+        queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
         queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
         queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
         queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });

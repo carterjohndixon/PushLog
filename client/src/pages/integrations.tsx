@@ -151,51 +151,39 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   const userProfile = profileResponse?.user ?? userProfileProp;
   const { toast } = useToast();
 
-  // Fetch user repositories
-  const { data: repositories, isLoading: repositoriesLoading } = useQuery<RepositoryCardData[]>({
-    queryKey: ['/api/repositories'],
+  // Single request for repos + integrations (faster load); also populate separate caches for other components
+  const { data: reposAndIntegrations, isLoading: reposAndIntegrationsLoading } = useQuery<{
+    repositories: RepositoryCardData[];
+    integrations: ActiveIntegration[];
+  }>({
+    queryKey: ['/api/repositories-and-integrations'],
     queryFn: async () => {
-      const response = await fetch('/api/repositories', {
-        credentials: 'include',
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        const error = new Error(errorData.error || 'Failed to fetch repositories');
-        // Handle token expiration
-        if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
-        }
-        throw error;
-      }
-      return response.json();
-    }
-  });
-
-  // Fetch user integrations
-  const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
-    queryKey: ['/api/integrations'],
-    queryFn: async () => {
-      const response = await fetch('/api/integrations', {
+      const response = await fetch('/api/repositories-and-integrations', {
         credentials: 'include',
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || "Failed to fetch integrations");
-        // Handle token expiration
+        const error = new Error(errorData.error || 'Failed to fetch repositories and integrations');
         if (handleTokenExpiration(error, queryClient)) {
-          return []; // Return empty array to prevent further errors
+          return { repositories: [], integrations: [] };
         }
         throw error;
       }
       const data = await response.json();
-      return data.map((integration: any) => ({
-        ...integration,
-        status: integration.isActive ? 'active' : 'paused',
+      const integrations = (data.integrations ?? []).map((i: any) => ({
+        ...i,
+        status: i.isActive ? 'active' : 'paused',
       }));
-    }
+      queryClient.setQueryData(['/api/repositories'], data.repositories ?? []);
+      queryClient.setQueryData(['/api/integrations'], integrations);
+      return { repositories: data.repositories ?? [], integrations };
+    },
   });
+  const repositories = reposAndIntegrations?.repositories ?? [];
+  const integrations = reposAndIntegrations?.integrations ?? [];
+  const repositoriesLoading = reposAndIntegrationsLoading;
+  const integrationsLoading = reposAndIntegrationsLoading;
 
   // Toggle integration status mutation
   const toggleIntegrationMutation = useMutation({
@@ -210,6 +198,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
@@ -238,6 +227,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
@@ -264,7 +254,9 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsDeleteConfirmationOpen(false);
       setIntegrationToDelete(null);

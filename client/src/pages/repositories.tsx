@@ -82,49 +82,39 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Fetch user repositories
-  const { data: repositories, isLoading: repositoriesLoading } = useQuery<RepositoryCardData[]>({
-    queryKey: ['/api/repositories'],
+  // Single request for repos + integrations (faster load); also populate separate caches for modals
+  const { data: reposAndIntegrations, isLoading: reposAndIntegrationsLoading } = useQuery<{
+    repositories: RepositoryCardData[];
+    integrations: ActiveIntegration[];
+  }>({
+    queryKey: ['/api/repositories-and-integrations'],
     queryFn: async () => {
-      const response = await fetch('/api/repositories', {
+      const response = await fetch('/api/repositories-and-integrations', {
         credentials: 'include',
         headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || 'Failed to fetch repositories');
+        const error = new Error(errorData.error || 'Failed to fetch repositories and integrations');
         if (handleTokenExpiration(error, queryClient)) {
-          return [];
-        }
-        throw error;
-      }
-      return response.json();
-    }
-  });
-
-  // Fetch user integrations
-  const { data: integrations, isLoading: integrationsLoading } = useQuery<ActiveIntegration[]>({
-    queryKey: ['/api/integrations'],
-    queryFn: async () => {
-      const response = await fetch('/api/integrations', {
-        credentials: 'include',
-        headers: { 'Accept': 'application/json' },
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const error = new Error(errorData.error || "Failed to fetch integrations");
-        if (handleTokenExpiration(error, queryClient)) {
-          return [];
+          return { repositories: [], integrations: [] };
         }
         throw error;
       }
       const data = await response.json();
-      return data.map((integration: any) => ({
-        ...integration,
-        status: integration.isActive ? 'active' : 'paused',
+      const integrations = (data.integrations ?? []).map((i: any) => ({
+        ...i,
+        status: i.isActive ? 'active' : 'paused',
       }));
-    }
+      queryClient.setQueryData(['/api/repositories'], data.repositories ?? []);
+      queryClient.setQueryData(['/api/integrations'], integrations);
+      return { repositories: data.repositories ?? [], integrations };
+    },
   });
+  const repositories = reposAndIntegrations?.repositories ?? [];
+  const integrations = reposAndIntegrations?.integrations ?? [];
+  const repositoriesLoading = reposAndIntegrationsLoading;
+  const integrationsLoading = reposAndIntegrationsLoading;
 
   // Fetch push events for repositories
   const { data: pushEvents, isLoading: pushEventsLoading } = useQuery({
@@ -163,6 +153,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       return response.json();
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
@@ -193,9 +184,10 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     onSuccess: () => {
       setIsDeleteRepoConfirmationOpen(false);
       setRepositoryToDelete(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
         title: "Repository Deleted",
         description: "Repository has been successfully removed.",
@@ -228,9 +220,10 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     onSuccess: () => {
       setIsRepositorySettingsOpen(false);
       setSelectedRepository(null);
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
         title: "Settings Updated",
         description: "Repository settings have been successfully updated.",
