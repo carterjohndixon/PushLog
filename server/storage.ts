@@ -63,6 +63,10 @@ export interface IStorage {
 
   // Analytics methods
   getStatsForUser(userId: number): Promise<AnalyticsStats>;
+  getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]>;
+  getAnalyticsTopRepos(userId: number, limit?: number): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]>;
+  getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]>;
+  getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]>;
 
   // Notification methods
   getNotificationsByUserId(userId: number): Promise<Notification[]>;
@@ -392,6 +396,60 @@ export class MemStorage implements IStorage {
     };
     this.analyticsStats.set(newAnalyticsStats.id, newAnalyticsStats);
     return newAnalyticsStats;
+  }
+
+  async getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+    const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
+    const events = Array.from(this.pushEvents.values()).filter(e => repoIds.has(e.repositoryId) && new Date(e.pushedAt) >= startDate);
+    const byDay: Record<string, number> = {};
+    for (const e of events) {
+      const key = new Date(e.pushedAt).toISOString().slice(0, 10);
+      byDay[key] = (byDay[key] ?? 0) + 1;
+    }
+    return Object.entries(byDay).map(([date, count]) => ({ date, count }));
+  }
+
+  async getAnalyticsTopRepos(userId: number, limit: number = 10): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
+    const userRepos = Array.from(this.repositories.values()).filter(r => r.userId === userId);
+    const events = Array.from(this.pushEvents.values());
+    const result = userRepos.map(repo => {
+      const repoEvents = events.filter(e => e.repositoryId === repo.id);
+      const totalAdditions = repoEvents.reduce((s, e) => s + ((e as any).additions ?? 0), 0);
+      const totalDeletions = repoEvents.reduce((s, e) => s + ((e as any).deletions ?? 0), 0);
+      return {
+        repositoryId: repo.id,
+        name: repo.name,
+        fullName: repo.fullName,
+        pushCount: repoEvents.length,
+        totalAdditions,
+        totalDeletions,
+      };
+    });
+    result.sort((a, b) => (b.totalAdditions + b.totalDeletions) - (a.totalAdditions + a.totalDeletions));
+    return result.slice(0, limit);
+  }
+
+  async getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+    const notifs = Array.from(this.notifications.values())
+      .filter(n => n.userId === userId && n.type === "slack_message_sent" && new Date(n.createdAt) >= startDate);
+    const byDay: Record<string, number> = {};
+    for (const n of notifs) {
+      const key = new Date(n.createdAt).toISOString().slice(0, 10);
+      byDay[key] = (byDay[key] ?? 0) + 1;
+    }
+    return Object.entries(byDay).map(([date, count]) => ({ date, count }));
+  }
+
+  async getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]> {
+    const usage = Array.from(this.aiUsage.values()).filter(u => u.userId === userId);
+    const byModel: Record<string, number> = {};
+    for (const u of usage) {
+      const model = (u as any).model ?? "unknown";
+      byModel[model] = (byModel[model] ?? 0) + 1;
+    }
+    return Object.entries(byModel)
+      .map(([model, count]) => ({ model, count }))
+      .sort((a, b) => b.count - a.count);
   }
 
   // Notification methods

@@ -2646,7 +2646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get analytics data (pushes by day, Slack messages by day, AI model usage)
+  // Get analytics data (pushes by day, Slack messages by day, AI model usage) — one query per metric
   app.get("/api/analytics", authenticateToken, async (req, res) => {
     const userId = req.user!.userId;
     const days = 30;
@@ -2654,84 +2654,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     startDate.setDate(startDate.getDate() - days);
     startDate.setHours(0, 0, 0, 0);
 
-    // Build empty series for last N days
     const dateKeys: string[] = [];
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       dateKeys.push(d.toISOString().slice(0, 10));
     }
-    const pushesByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
-    const slackByDay: { date: string; count: number }[] = dateKeys.map(date => ({ date, count: 0 }));
-    let aiModelUsage: { model: string; count: number }[] = [];
-    let topRepos: { repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[] = [];
+    const pushesByDay: { date: string; count: number }[] = dateKeys.map((date) => ({ date, count: 0 }));
+    const slackByDay: { date: string; count: number }[] = dateKeys.map((date) => ({ date, count: 0 }));
 
     try {
-      // Pushes and top repos: get user repos, then push events per repo
-      const userRepos = await storage.getRepositoriesByUserId(userId);
-      const allPushEvents: { pushedAt: Date | string }[] = [];
-      for (const repo of userRepos) {
-        const events = await storage.getPushEventsByRepositoryId(repo.id);
-        allPushEvents.push(...events.map(e => ({ pushedAt: e.pushedAt })));
-        const add = events.reduce((sum, e) => sum + ((e as any).additions ?? 0), 0);
-        const del = events.reduce((sum, e) => sum + ((e as any).deletions ?? 0), 0);
-        topRepos.push({
-          repositoryId: repo.id,
-          name: repo.name,
-          fullName: repo.fullName,
-          pushCount: events.length,
-          totalAdditions: add,
-          totalDeletions: del,
-        });
+      const [pushesRows, topRepos, slackRows, aiModelUsage] = await Promise.all([
+        storage.getAnalyticsPushesByDay(userId, startDate),
+        storage.getAnalyticsTopRepos(userId, 10),
+        storage.getAnalyticsSlackByDay(userId, startDate),
+        storage.getAnalyticsAiModelUsage(userId),
+      ]);
+      for (const row of pushesRows) {
+        const entry = pushesByDay.find((p) => p.date === row.date);
+        if (entry) entry.count = row.count;
       }
-      topRepos.sort((a, b) => (b.totalAdditions + b.totalDeletions) - (a.totalAdditions + a.totalDeletions));
-      for (const event of allPushEvents) {
-        const d = new Date(event.pushedAt);
-        if (Number.isNaN(d.getTime()) || d < startDate) continue;
-        const key = d.toISOString().slice(0, 10);
-        const entry = pushesByDay.find(p => p.date === key);
-        if (entry) entry.count++;
+      for (const row of slackRows) {
+        const entry = slackByDay.find((p) => p.date === row.date);
+        if (entry) entry.count = row.count;
       }
+      res.json({
+        pushesByDay,
+        slackMessagesByDay: slackByDay,
+        aiModelUsage,
+        topRepos,
+      });
     } catch (err) {
-      console.error("Analytics: error fetching pushes:", err);
+      console.error("Analytics: error:", err);
+      res.status(500).json({ error: "Failed to load analytics" });
     }
-
-    try {
-      // Slack messages: notifications with type slack_message_sent, group by day
-      const notifications = await storage.getNotificationsByUserId(userId);
-      const slackNotifications = notifications.filter(n => n.type === "slack_message_sent");
-      for (const n of slackNotifications) {
-        const d = new Date(n.createdAt);
-        if (Number.isNaN(d.getTime()) || d < startDate) continue;
-        const key = d.toISOString().slice(0, 10);
-        const entry = slackByDay.find(p => p.date === key);
-        if (entry) entry.count++;
-      }
-    } catch (err) {
-      console.error("Analytics: error fetching Slack notifications:", err);
-    }
-
-    try {
-      // AI model usage
-      const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
-      const modelCounts: Record<string, number> = {};
-      for (const u of aiUsage) {
-        const model = (u as any).model || "unknown";
-        modelCounts[model] = (modelCounts[model] || 0) + 1;
-      }
-      aiModelUsage = Object.entries(modelCounts)
-        .map(([model, count]) => ({ model, count }))
-        .sort((a, b) => b.count - a.count);
-    } catch (err) {
-      console.error("Analytics: error fetching AI usage:", err);
-    }
-
-    res.json({
-      pushesByDay,
-      slackMessagesByDay: slackByDay,
-      aiModelUsage,
-      topRepos,
-    });
   });
 
   // Repo-level analytics: file and folder breakdown (lines changed)

@@ -349,6 +349,71 @@ export class DatabaseStorage implements IStorage {
     return row?.c ?? 0;
   }
 
+  /** Analytics: push counts by day for user's repos (one query, GROUP BY date). */
+  async getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+    const startIso = startDate.toISOString().slice(0, 10);
+    const rows = await db.execute<{ day: string; count: number }>(sql`
+      SELECT (date_trunc('day', e.pushed_at)::date)::text AS day, count(*)::int AS count
+      FROM push_events e
+      INNER JOIN repositories r ON e.repository_id = r.id
+      WHERE r.user_id = ${userId} AND e.pushed_at >= ${startIso}
+      GROUP BY date_trunc('day', e.pushed_at)::date
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({ date: (r?.day ?? "").slice(0, 10), count: r?.count ?? 0 }));
+  }
+
+  /** Analytics: top repos by churn (one query, GROUP BY repository_id with repo names). */
+  async getAnalyticsTopRepos(userId: number, limit: number = 10): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
+    const rows = await db.execute<{ repository_id: number; name: string; full_name: string; push_count: number; total_additions: number; total_deletions: number }>(sql`
+      SELECT r.id AS repository_id, r.name, r.full_name,
+             count(e.id)::int AS push_count,
+             coalesce(sum(e.additions), 0)::int AS total_additions,
+             coalesce(sum(e.deletions), 0)::int AS total_deletions
+      FROM repositories r
+      LEFT JOIN push_events e ON e.repository_id = r.id
+      WHERE r.user_id = ${userId}
+      GROUP BY r.id, r.name, r.full_name
+      ORDER BY (coalesce(sum(e.additions), 0) + coalesce(sum(e.deletions), 0)) DESC
+      LIMIT ${limit}
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({
+      repositoryId: r?.repository_id ?? 0,
+      name: r?.name ?? "",
+      fullName: r?.full_name ?? "",
+      pushCount: r?.push_count ?? 0,
+      totalAdditions: r?.total_additions ?? 0,
+      totalDeletions: r?.total_deletions ?? 0,
+    }));
+  }
+
+  /** Analytics: Slack notifications by day (one query, GROUP BY date). */
+  async getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+    const startIso = startDate.toISOString().slice(0, 10);
+    const rows = await db.execute<{ day: string; count: number }>(sql`
+      SELECT (created_at::date)::text AS day, count(*)::int AS count
+      FROM notifications
+      WHERE user_id = ${userId} AND type = 'slack_message_sent' AND created_at >= ${startIso}
+      GROUP BY created_at::date
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({ date: (r?.day ?? "").slice(0, 10), count: r?.count ?? 0 }));
+  }
+
+  /** Analytics: AI usage counts by model (one query, GROUP BY model). */
+  async getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]> {
+    const rows = await db.execute<{ model: string; count: number }>(sql`
+      SELECT model, count(*)::int AS count
+      FROM ai_usage
+      WHERE user_id = ${userId}
+      GROUP BY model
+      ORDER BY count(*) DESC
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({ model: r?.model ?? "unknown", count: r?.count ?? 0 }));
+  }
+
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {
     const result = await db.insert(pushEvents).values(pushEvent).returning();
     return result[0] as PushEvent;
