@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink, ChevronDown, ChevronUp, RefreshCw, Star } from "lucide-react";
+import { Key, Sparkles, CheckCircle2, Loader2, Trash2, Search, DollarSign, Zap, ExternalLink, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, RefreshCw, Star } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
@@ -122,6 +122,8 @@ export default function Models() {
   const [recentCallsOpen, setRecentCallsOpen] = useState(false);
   const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
   const [recentCallsSearch, setRecentCallsSearch] = useState("");
+  const [recentCallsPage, setRecentCallsPage] = useState(0);
+  const RECENT_CALLS_PAGE_SIZE = 15;
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [compareOpen, setCompareOpen] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
@@ -140,6 +142,10 @@ export default function Models() {
   useEffect(() => {
     if (savedPreferredModel) setDefaultModelId((prev) => prev || savedPreferredModel);
   }, [savedPreferredModel]);
+
+  useEffect(() => {
+    setRecentCallsPage(0);
+  }, [recentCallsModelFilter, recentCallsSearch]);
 
   const { data: modelsData, isLoading: modelsLoading } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
@@ -1005,82 +1011,114 @@ export default function Models() {
                           </div>
                         </div>
                         <CollapsibleContent>
-                          <div className="rounded-md border border-border overflow-hidden">
-                            <Table>
-                              <TableHeader>
-                                <TableRow className="bg-muted/50 border-border">
-                                  <TableHead className="text-foreground">Model</TableHead>
-                                  <TableHead className="text-foreground">Tokens</TableHead>
-                                  <TableHead className="text-foreground">Cost</TableHead>
-                                  <TableHead className="text-foreground">Date</TableHead>
-                                  <TableHead className="text-foreground w-[80px]">View</TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {usageData.calls
-                                  .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
-                                  .filter((c) => {
-                                    if (!recentCallsSearch.trim()) return true;
-                                    const q = recentCallsSearch.toLowerCase();
-                                    return (
-                                      c.model.toLowerCase().includes(q) ||
-                                      getAiModelDisplayName(c.model).toLowerCase().includes(q) ||
-                                      (c.costFormatted ?? '').toLowerCase().includes(q) ||
-                                      String(c.tokensUsed ?? '').includes(q)
-                                    );
-                                  })
-                                .map((c) => (
-                                  <TableRow key={c.id} className="border-border">
-                                    <TableCell className="font-medium text-foreground text-sm">
-                                      {getAiModelDisplayName(c.model)}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">
-                                      {c.costFormatted != null && c.costFormatted !== ""
-                                        ? c.costFormatted
-                                        : typeof c.cost === "number"
-                                          ? c.cost === 0
-                                            ? "$0.00"
-                                            : `$${(c.cost / 10000).toFixed(4)}`
-                                          : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground text-sm">
-                                      {(c.createdAt ?? (c as any).created_at) ? formatRelativeOrLocal((c.createdAt ?? (c as any).created_at) as string) : "—"}
-                                    </TableCell>
-                                    <TableCell>
-                                      {c.generationId ? (
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-7 text-xs text-log-green hover:text-log-green/90"
-                                          onClick={() => handleViewUsagePerGen(c.generationId!)}
-                                          disabled={fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId}
-                                        >
-                                          {fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId ? (
-                                            <Loader2 className="w-3 h-3 animate-spin" />
-                                          ) : (
-                                            <>View</>
-                                          )}
-                                        </Button>
-                                      ) : (
-                                        <span className="text-xs text-muted-foreground">—</span>
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                          {(recentCallsModelFilter || recentCallsSearch.trim()) &&
-                            usageData.calls
+                          {(() => {
+                            const filteredRecentCalls = usageData.calls
                               .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
                               .filter((c) => {
                                 if (!recentCallsSearch.trim()) return true;
                                 const q = recentCallsSearch.toLowerCase();
-                                return c.model.toLowerCase().includes(q) || getAiModelDisplayName(c.model).toLowerCase().includes(q) || (c.costFormatted ?? '').toLowerCase().includes(q) || String(c.tokensUsed ?? '').includes(q);
-                              }).length === 0 && (
-                            <p className="text-sm text-muted-foreground py-3">No calls match your filters.</p>
-                          )}
+                                return (
+                                  c.model.toLowerCase().includes(q) ||
+                                  getAiModelDisplayName(c.model).toLowerCase().includes(q) ||
+                                  (c.costFormatted ?? '').toLowerCase().includes(q) ||
+                                  String(c.tokensUsed ?? '').includes(q)
+                                );
+                              });
+                            const totalPages = Math.max(1, Math.ceil(filteredRecentCalls.length / RECENT_CALLS_PAGE_SIZE));
+                            const pageIndex = Math.min(recentCallsPage, totalPages - 1);
+                            const paginatedCalls = filteredRecentCalls.slice(
+                              pageIndex * RECENT_CALLS_PAGE_SIZE,
+                              (pageIndex + 1) * RECENT_CALLS_PAGE_SIZE
+                            );
+                            return (
+                              <>
+                                <div className="rounded-md border border-border overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow className="bg-muted/50 border-border">
+                                        <TableHead className="text-foreground">Model</TableHead>
+                                        <TableHead className="text-foreground">Tokens</TableHead>
+                                        <TableHead className="text-foreground">Cost</TableHead>
+                                        <TableHead className="text-foreground">Date</TableHead>
+                                        <TableHead className="text-foreground w-[80px]">View</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {paginatedCalls.map((c) => (
+                                        <TableRow key={c.id} className="border-border">
+                                          <TableCell className="font-medium text-foreground text-sm">
+                                            {getAiModelDisplayName(c.model)}
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground text-sm">{(c.tokensUsed ?? 0).toLocaleString()}</TableCell>
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {c.costFormatted != null && c.costFormatted !== ""
+                                              ? c.costFormatted
+                                              : typeof c.cost === "number"
+                                                ? c.cost === 0
+                                                  ? "$0.00"
+                                                  : `$${(c.cost / 10000).toFixed(4)}`
+                                                : "—"}
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground text-sm">
+                                            {(c.createdAt ?? (c as any).created_at) ? formatRelativeOrLocal((c.createdAt ?? (c as any).created_at) as string) : "—"}
+                                          </TableCell>
+                                          <TableCell>
+                                            {c.generationId ? (
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs text-log-green hover:text-log-green/90"
+                                                onClick={() => handleViewUsagePerGen(c.generationId!)}
+                                                disabled={fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId}
+                                              >
+                                                {fetchUsagePerGenMutation.isPending && viewingGenerationId === c.generationId ? (
+                                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                                ) : (
+                                                  <>View</>
+                                                )}
+                                              </Button>
+                                            ) : (
+                                              <span className="text-xs text-muted-foreground">—</span>
+                                            )}
+                                          </TableCell>
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </Table>
+                                </div>
+                                {filteredRecentCalls.length === 0 && (
+                                  <p className="text-sm text-muted-foreground py-3">No calls match your filters.</p>
+                                )}
+                                {filteredRecentCalls.length > 0 && totalPages > 1 && (
+                                  <div className="flex items-center justify-between gap-2 mt-2 px-1">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-1 border-border"
+                                      disabled={pageIndex <= 0}
+                                      onClick={() => setRecentCallsPage((p) => Math.max(0, p - 1))}
+                                    >
+                                      <ChevronLeft className="w-3.5 h-3.5" />
+                                      Previous
+                                    </Button>
+                                    <span className="text-sm text-muted-foreground">
+                                      Page {pageIndex + 1} of {totalPages}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8 gap-1 border-border"
+                                      disabled={pageIndex >= totalPages - 1}
+                                      onClick={() => setRecentCallsPage((p) => Math.min(totalPages - 1, p + 1))}
+                                    >
+                                      Next
+                                      <ChevronRight className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </CollapsibleContent>
                       </Collapsible>
                     </>
