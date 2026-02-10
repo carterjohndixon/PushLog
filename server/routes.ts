@@ -2430,7 +2430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         calls: openRouterRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);
           const at = createdAtFromRow(u);
-          const createdAtStr = toIsoString(at);
+          const createdAtStr = toIsoString(at) ?? (at != null ? (at instanceof Date ? at.toISOString() : String(at)) : null);
           return {
             id: u.id,
             model: u.model,
