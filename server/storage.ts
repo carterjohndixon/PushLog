@@ -69,7 +69,10 @@ export interface IStorage {
   getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]>;
 
   // Notification methods
-  getNotificationsByUserId(userId: number): Promise<Notification[]>;
+  getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]>;
+  getNotificationCountForUser(userId: number): Promise<number>;
+  getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined>;
+  hasNotificationOfType(userId: number, type: string): Promise<boolean>;
   getUnreadNotificationsByUserId(userId: number): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: number): Promise<Notification | undefined>;
@@ -453,10 +456,27 @@ export class MemStorage implements IStorage {
   }
 
   // Notification methods
-  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
-    return Array.from(this.notifications.values())
+  async getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
+    let list = Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const offset = options?.offset ?? 0;
+    if (options?.limit != null) list = list.slice(offset, offset + options.limit);
+    else if (offset > 0) list = list.slice(offset);
+    return list;
+  }
+
+  async getNotificationCountForUser(userId: number): Promise<number> {
+    return Array.from(this.notifications.values()).filter(n => n.userId === userId).length;
+  }
+
+  async getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined> {
+    const n = this.notifications.get(id);
+    return n && n.userId === userId ? n : undefined;
+  }
+
+  async hasNotificationOfType(userId: number, type: string): Promise<boolean> {
+    return Array.from(this.notifications.values()).some(n => n.userId === userId && n.type === type);
   }
 
   async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {

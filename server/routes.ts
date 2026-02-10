@@ -822,7 +822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
       
       // Instead of redirecting, send the URL and state back to the client
-      res.json({ url, state });
+      res.status(200).json({ url, state });
     } catch (error) {
       console.error('GitHub connection initiation failed:', error);
       res.status(500).json({ error: 'Failed to initiate GitHub connection' });
@@ -845,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`GitHub disconnected for user ${userId}`);
-      res.json({ success: true, message: "GitHub account disconnected successfully" });
+      res.status(200).json({ success: true, message: "GitHub account disconnected successfully" });
     } catch (error) {
       console.error('Failed to disconnect GitHub:', error);
       res.status(500).json({ error: 'Failed to disconnect GitHub account' });
@@ -1018,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
-      return res.json({
+      return res.status(200).json({
         success: true,
         user: {
           id: user.id,
@@ -1246,7 +1246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Remove any existing email verification notifications
       try {
-        const existingNotifications = await storage.getNotificationsByUserId(user.id);
+        const existingNotifications = await storage.getNotificationsByUserId(user.id, { limit: 500 });
         const emailVerificationNotifications = existingNotifications.filter(n => n.type === 'email_verification');
         
         for (const notification of emailVerificationNotifications) {
@@ -1344,7 +1344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const doLogout = () => {
       clearLogoutCookie(res);
-      res.json({ success: true, message: "Logged out successfully" });
+      res.status(200).json({ success: true, message: "Logged out successfully" });
     };
 
     // AUTH-VULN-03: Delete the session row FIRST so it's gone before we respond.
@@ -1409,7 +1409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           private: false,
           integrationCount: userIntegrations.filter((i) => i.repositoryId === repo.id).length,
         }));
-        return res.json(cardData);
+        return res.status(200).json(cardData);
       }
 
       // Validate GitHub token before fetching repositories
@@ -1464,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         });
 
-        res.json(enrichedRepos);
+        res.status(200).json(enrichedRepos);
       } catch (githubError: any) {
         console.error("Failed to fetch GitHub repositories:", githubError);
         
@@ -1507,7 +1507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventType: 'push'
       }));
 
-      res.json(formattedEvents);
+      res.status(200).json(formattedEvents);
     } catch (error) {
       console.error("Failed to fetch push events:", error);
       res.status(500).json({ error: "Failed to fetch push events" });
@@ -1593,7 +1593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           webhookId: webhook.id.toString(),
         });
 
-        res.json(repository);
+        res.status(200).json(repository);
       } catch (webhookError) {
         console.error("Webhook creation failed:", webhookError);
         
@@ -1605,7 +1605,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...validatedData,
           userId: req.user!.userId,
         });
-        res.json({
+        res.status(200).json({
           ...repository,
           warning: `Repository connected but webhook creation failed: ${errorMessage}. Push notifications will not work until webhooks are configured. You may need to reconnect your GitHub account to get updated permissions.`
         });
@@ -1671,7 +1671,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json(repository);
+      res.status(200).json(repository);
     } catch (error) {
       console.error("Error updating repository:", error);
       res.status(500).json({ error: "Failed to update repository" });
@@ -1715,7 +1715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.deleteRepository(repositoryId);
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error disconnecting repository:", error);
       res.status(500).json({ error: "Failed to disconnect repository" });
@@ -1727,7 +1727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Check if Slack OAuth credentials are configured
       const isConfigured = !!(process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET);
-      res.json({ connected: isConfigured });
+      res.status(200).json({ connected: isConfigured });
     } catch (error) {
       console.error("Error testing Slack connection:", error);
       res.status(500).json({ connected: false, error: "Connection test failed" });
@@ -1778,7 +1778,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const url = generateSlackOAuthUrl(state, isPopup);
       
       // Send the URL back to the client
-      res.json({ url, state });
+      res.status(200).json({ url, state });
     } catch (error) {
       console.error('Slack connection initiation failed:', error);
       res.status(500).json({ error: 'Failed to initiate Slack connection' });
@@ -1858,7 +1858,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const workspaces = await databaseStorage.getSlackWorkspacesByUserId(userId);
-      res.json(workspaces);
+      res.status(200).json(workspaces);
     } catch (error) {
       console.error('Error fetching Slack workspaces:', error);
       res.status(500).json({ error: 'Failed to fetch Slack workspaces' });
@@ -1882,7 +1882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const channels = await getSlackChannelsForWorkspace(workspace.accessToken);
-      res.json(channels);
+      res.status(200).json(channels);
     } catch (error) {
       console.error('Error fetching Slack channels:', error);
       res.status(500).json({ error: 'Failed to fetch Slack channels' });
@@ -1970,7 +1970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      res.json(integration);
+      res.status(200).json(integration);
     } catch (error) {
       console.error("Error creating integration:", error);
       if (error instanceof z.ZodError) {
@@ -1989,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.userId;
       const stats = await storage.getStatsForUser(userId);
-      res.json(stats);
+      res.status(200).json(stats);
     } catch (error) {
       console.error("Error fetching stats:", error);
       res.status(500).json({ error: "Failed to fetch stats" });
@@ -2007,7 +2007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integrations = await storage.getIntegrationsByUserId(userId);
       if (!Array.isArray(integrations)) {
         console.error("getIntegrationsByUserId did not return an array:", typeof integrations);
-        return res.json([]);
+        return res.status(200).json([]);
       }
 
       // Enrich each integration; if one fails, still return it with fallback name so the list doesn't 500
@@ -2047,7 +2047,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      res.json(enrichedIntegrations);
+      res.status(200).json(enrichedIntegrations);
     } catch (error) {
       console.error("Error fetching integrations:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -2114,7 +2114,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json(sanitizeIntegrationForClient(integration));
+      res.status(200).json(sanitizeIntegrationForClient(integration));
     } catch (error) {
       console.error("Error updating integration:", error);
       res.status(500).json({ error: "Failed to update integration" });
@@ -2135,15 +2135,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       if (response.status === 401) {
-        return res.json({ valid: false, error: "Invalid API key. Check your key at openrouter.ai/keys." });
+        return res.status(401).json({ valid: false, error: "Invalid API key. Check your key at openrouter.ai/keys." });
       }
       if (response.status === 402) {
-        return res.json({ valid: false, error: "Insufficient credits on your OpenRouter account." });
+        return res.status(402).json({ valid: false, error: "Insufficient credits on your OpenRouter account." });
       }
       if (!response.ok) {
         return res.status(response.status).json({ valid: false, error: "Could not verify key. Try again." });
       }
-      res.json({ valid: true });
+      res.status(200).json({ valid: true });
     } catch (err) {
       console.error("OpenRouter verify error:", err);
       res.status(500).json({ valid: false, error: "Verification failed. Try again." });
@@ -2172,7 +2172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`OpenRouter API key saved for user ${userId} (encrypted length ${stored.length})`);
       // #region agent log
       // #endregion
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("OpenRouter save key error:", err);
       const msg = err?.message ?? String(err);
@@ -2205,7 +2205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/openrouter/key", authenticateToken, async (req, res) => {
     try {
       await databaseStorage.updateUser(req.user!.userId, { openRouterApiKey: null } as any);
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error("OpenRouter remove key error:", err);
       res.status(500).json({ error: "Failed to remove API key" });
@@ -2245,7 +2245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const totalCredits = data?.data?.total_credits ?? 0;
       const totalUsage = data?.data?.total_usage ?? 0;
       const remaining = Math.max(0, Number(totalCredits) - Number(totalUsage));
-      res.json({
+      res.status(200).json({
         totalCredits: Number(totalCredits),
         totalUsage: Number(totalUsage),
         remainingCredits: remaining,
@@ -2408,7 +2408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch (_) {
         // costByModelMap already covers this
       }
-      res.json({
+      res.status(200).json({
         totalCalls,
         totalTokens,
         totalCostCents,
@@ -2463,7 +2463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entry.callCount += 1;
         }
       }
-      res.json(daily);
+      res.status(200).json(daily);
     } catch (err) {
       console.error("OpenRouter daily usage error:", err);
       res.status(500).json({ error: "Failed to load daily usage" });
@@ -2477,7 +2477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.userId;
       const budgetUnits = budget != null && Number(budget) > 0 ? Math.round(Number(budget) * 10000) : null;
       await databaseStorage.updateUser(userId, { monthlyBudget: budgetUnits } as any);
-      res.json({ success: true, monthlyBudget: budgetUnits });
+      res.status(200).json({ success: true, monthlyBudget: budgetUnits });
     } catch (err) {
       console.error("Budget update error:", err);
       res.status(500).json({ error: "Failed to update budget" });
@@ -2496,7 +2496,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return d >= monthStart;
       });
       const totalSpend = monthlyUsage.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
-      res.json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount: monthlyUsage.length });
+      res.status(200).json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount: monthlyUsage.length });
     } catch (err) {
       console.error("Monthly spend error:", err);
       res.status(500).json({ error: "Failed to load monthly spend" });
@@ -2507,7 +2507,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/openrouter/favorites", authenticateToken, async (req, res) => {
     try {
       const favorites = await databaseStorage.getFavoriteModelsByUserId(req.user!.userId);
-      res.json(favorites);
+      res.status(200).json(favorites);
     } catch (err) {
       console.error("Favorites list error:", err);
       res.status(500).json({ error: "Failed to load favorites" });
@@ -2531,7 +2531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const modelId = decodeURIComponent(req.params.modelId);
       const removed = await databaseStorage.removeFavoriteModel(req.user!.userId, modelId);
-      res.json({ success: removed });
+      res.status(200).json({ success: removed });
     } catch (err) {
       console.error("Favorite remove error:", err);
       res.status(500).json({ error: "Failed to remove favorite" });
@@ -2560,7 +2560,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
         top_provider: m.top_provider ? { context_length: m.top_provider.context_length, max_completion_tokens: m.top_provider.max_completion_tokens } : null,
       }));
-      res.json({ models });
+      res.status(200).json({ models });
     } catch (err) {
       console.error("OpenRouter models fetch error:", err);
       res.status(500).json({ error: "Failed to fetch OpenRouter models" });
@@ -2589,7 +2589,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         text: testMessage,
         unfurl_links: false,
       });
-      res.json({ success: true, message: "Test message sent to Slack." });
+      res.status(200).json({ success: true, message: "Test message sent to Slack." });
     } catch (err: any) {
       const code = err?.data?.error ?? err?.code;
       const msg = err?.message ?? String(err);
@@ -2627,7 +2627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Integration not found" });
       }
 
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error deleting integration:", error);
       res.status(500).json({ error: "Failed to delete integration" });
@@ -2639,7 +2639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.userId;
       const stats = await storage.getStatsForUser(userId);
-      res.json(stats);
+      res.status(200).json(stats);
     } catch (error) {
       console.error("Error fetching stats:", error);
       res.status(500).json({ error: "Failed to fetch stats" });
@@ -2678,7 +2678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const entry = slackByDay.find((p) => p.date === row.date);
         if (entry) entry.count = row.count;
       }
-      res.json({
+      res.status(200).json({
         pushesByDay,
         slackMessagesByDay: slackByDay,
         aiModelUsage,
@@ -2714,7 +2714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         additions: stats.additions,
         deletions: stats.deletions,
       })).sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions));
-      res.json({
+      res.status(200).json({
         repository: { id: repo.id, name: repo.name, fullName: repo.fullName },
         fileStats: fileStats.sort((a, b) => (b.additions + b.deletions) - (a.additions + a.deletions)),
         folderStats,
@@ -2741,7 +2741,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeIntegrations: latest.activeIntegrations - prev.activeIntegrations,
         totalRepositories: latest.totalRepositories - prev.totalRepositories,
       } : null;
-      res.json({ latest, trend, history });
+      res.status(200).json({ latest, trend, history });
     } catch (err) {
       console.error("Analytics stats error:", err);
       res.status(500).json({ error: "Failed to load analytics stats" });
@@ -2790,7 +2790,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const costByModelArr = Object.entries(costByModel)
         .map(([model, v]) => ({ model, ...v }))
         .sort((a, b) => b.cost - a.cost);
-      res.json({
+      res.status(200).json({
         totalSpend,
         totalSpendFormatted: `$${(totalSpend / 10000).toFixed(4)}`,
         totalCalls: usage.length,
@@ -2821,7 +2821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = Math.min(Number(req.query.limit) || 200, 500);
       const offset = Number(req.query.offset) || 0;
       const pushEvents = await storage.getPushEventsByRepositoryId(parseInt(repositoryId), { limit, offset });
-      res.json(pushEvents);
+      res.status(200).json(pushEvents);
     } catch (error) {
       console.error("Error fetching push events:", error);
       res.status(500).json({ error: "Failed to fetch push events" });
@@ -2940,7 +2940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const slackMessagePreview = await generateSlackMessage(testPushData, summary.summary);
       
-      res.json({
+      res.status(200).json({
         success: true,
         pushEventId,
         model: aiModel,
@@ -3112,7 +3112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.warn("🧪 [TEST] Failed to record push event/usage (non-fatal):", recordErr);
       }
 
-      res.json({
+      res.status(200).json({
         ok: true,
         message: "Slack message sent",
         integrationId: integration.id,
@@ -3133,7 +3133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!req.user) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-    res.json({
+    res.status(200).json({
       success: true,
       user: {
         id: req.user.userId,
@@ -3228,7 +3228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
         }
       };
-      res.json(payload);
+      res.status(200).json(payload);
     } catch (error: any) {
       console.error("Profile error:", error?.message ?? error);
       if (error?.message?.includes("open_router_api_key") || error?.code === "42703") {
@@ -3258,7 +3258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string } = { success: true };
       if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
       if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
-      res.json(resBody);
+      res.status(200).json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);
       res.status(500).json({ error: "Failed to update user" });
@@ -3279,7 +3279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateIntegration(integration.id, { aiModel: modelId });
       }
       await databaseStorage.updateUser(userId, { preferredAiModel: modelId } as any);
-      res.json({
+      res.status(200).json({
         success: true,
         updatedCount: active.length,
         preferredAiModel: modelId,
@@ -3356,7 +3356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json({
+      res.status(200).json({
         count: notifications.length,
         notifications
       });
@@ -3370,9 +3370,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/notifications/all", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      
-      // Get all notifications from database
-      const allNotifications = await storage.getNotificationsByUserId(userId);
+      const limit = Math.min(Math.max(1, parseInt(req.query.limit as string) || 50), 200);
+      const offset = Math.max(0, parseInt(req.query.offset as string) || 0);
+
+      // Get notifications page from database
+      const allNotifications = await storage.getNotificationsByUserId(userId, { limit, offset });
       
       // Get user's email verification status from JWT token first, fallback to database
       const jwtEmailVerified = req.user!.emailVerified;
@@ -3406,7 +3408,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       } else if (!user.githubId && !user.googleId) {
         // User is not verified and signed up via regular signup
-        const emailNotificationExists = allNotifications.some(n => n.type === 'email_verification');
+        const emailNotificationExists = await storage.hasNotificationOfType(userId, 'email_verification');
         if (!emailNotificationExists) {
           const emailNotification = await storage.createNotification({
             userId,
@@ -3448,7 +3450,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Count only unread notifications (not total)
       const unreadCount = notificationsWithParsedMetadata.filter(n => !n.isRead).length;
 
-      res.json({
+      res.status(200).json({
         count: unreadCount,
         notifications: notificationsWithParsedMetadata
       });
@@ -3463,7 +3465,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.userId;
       await storage.markAllNotificationsAsRead(userId);
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error marking notifications as read:", error);
       res.status(500).json({ error: "Failed to mark notifications as read" });
@@ -3478,9 +3480,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`📖 Marking notification ${notificationId} as read for user ${userId}`);
       
-      // Verify the notification belongs to the user
-      const userNotifications = await storage.getNotificationsByUserId(userId);
-      const notification = userNotifications.find(n => n.id === notificationId);
+      // Verify the notification belongs to the user (single row lookup)
+      const notification = await storage.getNotificationByIdAndUserId(notificationId, userId);
       
       if (!notification) {
         console.error(`❌ Notification ${notificationId} not found for user ${userId}`);
@@ -3499,7 +3500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`✅ Notification ${notificationId} marked as read. Updated isRead: ${updated.isRead}`);
       
-      res.json({ success: true });
+      res.status(200).json({ success: true });
     } catch (error) {
       console.error("❌ Error marking notification as read:", error);
       res.status(500).json({ error: "Failed to mark notification as read" });
@@ -3511,14 +3512,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const notificationId = parseInt(req.params.id);
       const userId = req.user!.userId;
-      const userNotifications = await storage.getNotificationsByUserId(userId);
-      const notification: any | undefined = userNotifications.find(notification => notification.id === notificationId);
+      const notification = await storage.getNotificationByIdAndUserId(notificationId, userId);
       if (!notification) {
         return res.status(404).json({ error: "Notification not found" });
       }
       const success = await storage.deleteNotification(notificationId);
       if (success) {
-        res.json({ success: true });
+        res.status(200).json({ success: true });
       } else {
         res.status(404).json({ error: "Notification not found" });  
       }
@@ -3532,17 +3532,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      
-      // Get current notification count before deletion
-      const currentNotifications = await storage.getNotificationsByUserId(userId);
-      
-      // Delete all notifications
-      const result = await storage.deleteAllNotifications(userId);
-      
-      // Verify deletion by checking count again
-      const remainingNotifications = await storage.getNotificationsByUserId(userId);
-      
-      res.json({ success: true, deletedCount: currentNotifications.length });
+      const deletedCount = await storage.getNotificationCountForUser(userId);
+      await storage.deleteAllNotifications(userId);
+      res.status(200).json({ success: true, deletedCount });
     } catch (error) {
       console.error("❌ [SERVER] Error clearing notifications:", error);
       res.status(500).json({ error: "Failed to clear notifications" });
@@ -3801,7 +3793,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create payment intent
       const paymentIntent = await createPaymentIntent(customerId as string, packageId);
 
-      res.json({
+      res.status(200).json({
         clientSecret: paymentIntent.client_secret,
         url: (paymentIntent as any).url
       });
@@ -3853,7 +3845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'succeeded'
       });
 
-      res.json({
+      res.status(200).json({
         success: true,
         creditsAdded: creditPackage.credits,
         newBalance: newCredits
@@ -3918,7 +3910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    res.json({ received: true });
+    res.status(200).json({ received: true });
   });
 
   // =====================================
@@ -3944,7 +3936,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="pushlog-data-export-${userId}-${Date.now()}.json"`);
-      res.json(exportData);
+      res.status(200).json(exportData);
     } catch (error) {
       console.error("Error exporting user data:", error);
       res.status(500).json({ error: "Failed to export user data" });
@@ -3970,7 +3962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (result.success) {
         console.log(`✅ [GDPR] Account deleted for user ${userId}:`, result.deletedData);
-        res.json({ 
+        res.status(200).json({ 
           success: true, 
           message: "Your account and all associated data have been deleted.",
           deletedData: result.deletedData
@@ -4001,13 +3993,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const repos = await databaseStorage.getRepositoriesByUserId(userId);
       const integrations = await databaseStorage.getIntegrationsByUserId(userId);
       const workspaces = await databaseStorage.getSlackWorkspacesByUserId(userId);
-      const notifications = await databaseStorage.getNotificationsByUserId(userId);
       const aiUsage = await databaseStorage.getAiUsageByUserId(userId);
       const payments = await databaseStorage.getPaymentsByUserId(userId);
 
       const pushEventCount = await databaseStorage.getPushEventCountForUser(userId);
+      const notificationCount = await databaseStorage.getNotificationCountForUser(userId);
 
-      res.json({
+      res.status(200).json({
         accountCreated: user.createdAt,
         email: user.email,
         emailVerified: user.emailVerified,
@@ -4021,7 +4013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           integrations: integrations.length,
           slackWorkspaces: workspaces.length,
           pushEvents: pushEventCount,
-          notifications: notifications.length,
+          notifications: notificationCount,
           aiUsageRecords: aiUsage.length,
           payments: payments.length
         },

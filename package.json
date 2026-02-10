@@ -19,6 +19,8 @@
     "test:get-stats": "node test/test-get-stats-performance.js",
     "test:push-events": "node test/test-push-events-performance.js",
     "test:analytics": "node test/test-analytics-performance.js",
+    "test:notifications": "node test/test-notifications-performance.js",
+    "seed:notifications": "node test/seed-notifications-for-user.js",
     "monitor:performance": "node monitor-performance.js",
     "db:add-indexes": "node add-indexes.js",
     "test:ai-performance": "node ai-performance-test.js",

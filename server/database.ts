@@ -566,10 +566,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Notification methods
-  async getNotificationsByUserId(userId: number): Promise<Notification[]> {
+  async getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
+    const limit = options?.limit;
+    const offset = options?.offset ?? 0;
+    if (limit != null) {
+      return await db.select().from(notifications)
+        .where(eq(notifications.userId, userId))
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit)
+        .offset(offset) as any;
+    }
     return await db.select().from(notifications)
       .where(eq(notifications.userId, userId))
-      .orderBy(notifications.createdAt) as any;
+      .orderBy(desc(notifications.createdAt)) as any;
+  }
+
+  /** Single-query count for dashboard/summary (no load of all rows). */
+  async getNotificationCountForUser(userId: number): Promise<number> {
+    const [row] = await db.execute<{ c: number }>(sql`
+      SELECT count(*)::int AS c FROM notifications WHERE user_id = ${userId}
+    `);
+    return row?.c ?? 0;
+  }
+
+  /** Get one notification by id and userId (for mark-read/delete without loading all). */
+  async getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined> {
+    const result = await db.select().from(notifications)
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
+      .limit(1);
+    return result[0] as Notification | undefined;
+  }
+
+  /** Check if user has any notification of given type (e.g. for email_verification inject). */
+  async hasNotificationOfType(userId: number, type: string): Promise<boolean> {
+    const result = await db.select().from(notifications)
+      .where(and(eq(notifications.userId, userId), eq(notifications.type, type)))
+      .limit(1);
+    return result.length > 0;
   }
 
   async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
