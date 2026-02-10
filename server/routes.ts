@@ -2365,7 +2365,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const toIsoString = (v: unknown): string | null => {
         if (v == null) return null;
-        if (typeof v === "string") return v;
+        if (typeof v === "string") {
+          const d = new Date(v);
+          return Number.isNaN(d.getTime()) ? null : d.toISOString();
+        }
         if (typeof v === "number" && !Number.isNaN(v)) return new Date(v).toISOString();
         if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
         return null;

@@ -1060,7 +1060,7 @@ export default function Models() {
                                                 : "—"}
                                           </TableCell>
                                           <TableCell className="text-muted-foreground text-sm">
-                                            {(c.createdAt ?? (c as any).created_at) ? formatRelativeOrLocal((c.createdAt ?? (c as any).created_at) as string) : "—"}
+                                            {(c.createdAt ?? (c as any).created_at) ? formatLocalDateTime((c.createdAt ?? (c as any).created_at) as string) : "—"}
                                           </TableCell>
                                           <TableCell>
                                             {c.generationId ? (
