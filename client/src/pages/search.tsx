@@ -414,106 +414,156 @@ export default function Search() {
         )}
 
         <Dialog open={selectedEventId != null} onOpenChange={(open) => !open && setSelectedEventId(null)}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0">
             {detailLoading ? (
-              <div className="py-8 flex items-center justify-center">
-                <div className="w-8 h-8 border-2 border-log-green border-t-transparent rounded-full animate-spin" />
+              <div className="py-16 flex items-center justify-center">
+                <div className="w-10 h-10 border-2 border-log-green border-t-transparent rounded-full animate-spin" />
               </div>
             ) : pushEventDetail ? (
               <>
-                <DialogHeader>
-                  <DialogTitle className="pr-8">Push event details</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-foreground">{pushEventDetail.repositoryFullName}</span>
-                    <Badge variant="outline">
-                      <GitBranch className="h-3 w-3 mr-1" />
+                <div className="px-6 pt-6 pb-4 border-b border-border">
+                  <DialogHeader>
+                    <DialogTitle className="text-lg font-semibold pr-8">
+                      Push event details
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <span className="text-base font-medium text-foreground">{pushEventDetail.repositoryFullName}</span>
+                    <Badge variant="outline" className="font-normal">
+                      <GitBranch className="h-3 w-3 mr-1.5" />
                       {pushEventDetail.branch}
                     </Badge>
                     {pushEventDetail.impactScore != null && (
-                      <Badge variant="secondary">Impact {pushEventDetail.impactScore}</Badge>
+                      <Badge variant="secondary" className="font-normal bg-muted/80">
+                        Impact {pushEventDetail.impactScore}
+                      </Badge>
+                    )}
+                    {(pushEventDetail.aiImpact || pushEventDetail.aiCategory) && (
+                      <span className="text-xs text-muted-foreground ml-1">
+                        {[pushEventDetail.aiImpact, pushEventDetail.aiCategory].filter(Boolean).join(" · ")}
+                      </span>
                     )}
                   </div>
+                </div>
+
+                <div className="px-6 py-5 space-y-5 overflow-y-auto">
                   {pushEventDetail.commitMessage && (
-                    <p className="text-foreground">"{pushEventDetail.commitMessage}"</p>
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-2">
+                        Commit message
+                      </p>
+                      <blockquote className="border-l-2 border-log-green/60 bg-muted/30 rounded-r-md px-4 py-3 text-foreground italic">
+                        "{pushEventDetail.commitMessage}"
+                      </blockquote>
+                    </div>
                   )}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <User className="h-3.5 w-3" />
-                      {pushEventDetail.author}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-3.5 w-3" />
-                      {formatLocalDateTime(pushEventDetail.timestamp)}
-                    </span>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                      <p className="text-xs text-muted-foreground mb-0.5">Author</p>
+                      <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <User className="h-3.5 w-3 text-muted-foreground" />
+                        {pushEventDetail.author}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                      <p className="text-xs text-muted-foreground mb-0.5">Date</p>
+                      <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3 text-muted-foreground" />
+                        {formatLocalDateTime(pushEventDetail.timestamp)}
+                      </p>
+                    </div>
+                    {(pushEventDetail.additions != null || pushEventDetail.deletions != null) && (
+                      <div className="rounded-lg border border-border bg-muted/20 px-3 py-2">
+                        <p className="text-xs text-muted-foreground mb-0.5">Changes</p>
+                        <p className="text-sm font-medium">
+                          <span className="text-emerald-600 dark:text-emerald-400">+{pushEventDetail.additions ?? 0}</span>
+                          <span className="text-muted-foreground mx-1">/</span>
+                          <span className="text-red-600 dark:text-red-400">-{pushEventDetail.deletions ?? 0}</span>
+                          <span className="text-muted-foreground text-xs ml-1">lines</span>
+                        </p>
+                      </div>
+                    )}
                     {pushEventDetail.commitHash && (
-                      <span className="font-mono">{pushEventDetail.commitHash}</span>
+                      <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 col-span-2 sm:col-span-1">
+                        <p className="text-xs text-muted-foreground mb-0.5">Commit</p>
+                        <p className="text-xs font-mono text-foreground truncate" title={pushEventDetail.commitHash}>
+                          {pushEventDetail.commitHash.slice(0, 12)}…
+                        </p>
+                      </div>
                     )}
                   </div>
-                  {(pushEventDetail.additions != null || pushEventDetail.deletions != null) && (
-                    <p className="text-muted-foreground">
-                      +{pushEventDetail.additions ?? 0} / -{pushEventDetail.deletions ?? 0} lines
-                    </p>
-                  )}
+
                   {pushEventDetail.aiSummary && (
-                    <div>
-                      <h4 className="font-medium text-foreground mb-1">AI summary</h4>
-                      <p className="text-muted-foreground">{pushEventDetail.aiSummary}</p>
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        AI summary
+                      </h4>
+                      <p className="text-sm text-foreground leading-relaxed">{pushEventDetail.aiSummary}</p>
                     </div>
                   )}
-                  {(pushEventDetail.aiImpact || pushEventDetail.aiCategory) && (
-                    <p className="text-muted-foreground">
-                      {[pushEventDetail.aiImpact, pushEventDetail.aiCategory].filter(Boolean).join(" · ")}
-                    </p>
-                  )}
+
                   {pushEventDetail.aiDetails && (
-                    <div>
-                      <h4 className="font-medium text-foreground mb-1">Details</h4>
-                      <p className="text-muted-foreground whitespace-pre-wrap">{pushEventDetail.aiDetails}</p>
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Details
+                      </h4>
+                      <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                        {pushEventDetail.aiDetails}
+                      </p>
                     </div>
                   )}
-                  {pushEventDetail.riskFlags && pushEventDetail.riskFlags.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-foreground mb-1">Risk flags</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {pushEventDetail.riskFlags.map((f) => (
-                          <Badge key={f} variant="outline">
+
+                  {(pushEventDetail.riskFlags?.length ?? 0) > 0 && (
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Risk flags
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {pushEventDetail.riskFlags!.map((f) => (
+                          <Badge key={f} variant="outline" className="font-medium">
                             {f}
                           </Badge>
                         ))}
                       </div>
                     </div>
                   )}
+
                   {pushEventDetail.riskMetadata?.explanations && pushEventDetail.riskMetadata.explanations.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-foreground mb-1">Risk notes</h4>
-                      <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+                    <div className="rounded-lg border border-border bg-card p-4">
+                      <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                        Risk notes
+                      </h4>
+                      <ul className="text-sm text-muted-foreground space-y-1.5 list-none">
                         {pushEventDetail.riskMetadata.explanations.map((e, i) => (
-                          <li key={i}>{e}</li>
+                          <li key={i} className="flex gap-2">
+                            <span className="text-log-green">•</span>
+                            <span>{e}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
                   )}
-                  <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
-                    {githubCommitUrl && (
-                      <a
-                        href={githubCommitUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-log-green hover:underline font-medium"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        View on GitHub
-                      </a>
-                    )}
-                    {pushEventDetail.notificationSent && pushEventDetail.slackChannelName && (
-                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <MessageCircle className="h-4 w-4" />
-                        Notification sent to #{pushEventDetail.slackChannelName}
-                      </span>
-                    )}
-                  </div>
+                </div>
+
+                <div className="px-6 py-4 border-t border-border bg-muted/10 flex flex-wrap gap-3">
+                  {githubCommitUrl && (
+                    <a
+                      href={githubCommitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-md bg-log-green px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition-opacity"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      View on GitHub
+                    </a>
+                  )}
+                  {pushEventDetail.notificationSent && pushEventDetail.slackChannelName && (
+                    <span className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2 text-sm text-muted-foreground">
+                      <MessageCircle className="h-4 w-4" />
+                      Sent to #{pushEventDetail.slackChannelName}
+                    </span>
+                  )}
                 </div>
               </>
             ) : null}
