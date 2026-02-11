@@ -16,6 +16,8 @@ yarn-error.log*
 dist
 build
 server/public
+server/risk-engine/target
+target
 
 # Runtime data
 pids
@@ -83,6 +85,7 @@ migrations/*.sql
 
 # claude-mem
 .cursor
+.vscode/
 
 /launch
 

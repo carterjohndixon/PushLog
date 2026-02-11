@@ -1,0 +1,22 @@
+# PushLog Diff / Risk Scoring Engine (V1)
+#
+# This crate will:
+# - Be invoked by the Node server as a subprocess (stdin JSON in, stdout JSON out).
+# - Accept: commit_message, files_changed (paths), additions, deletions, optional diff_text.
+# - Emit: impact_score (0-100), risk_flags (e.g. auth, deps, migration, config, secrets),
+#   change_type_tags (feature, bugfix, refactor, docs, tests, chore), hotspot_files, explanations.
+# - Use rule-based heuristics only in V1 (no AI): path patterns for risk, commit message
+#   keywords for change type, deterministic impact formula from file count + churn + risky multipliers.
+#
+# Dependencies (to add when implementing):
+# - serde, serde_json for JSON I/O
+# - No DB, no network, no secrets; pure computation.
+
+[package]
+name = "risk-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
