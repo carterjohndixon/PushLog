@@ -17,7 +17,7 @@ import {
   analyticsStats
 } from "@shared/schema";
 import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
-import type { IStorage } from "./storage";
+import type { IStorage, SearchPushEventsOptions } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
@@ -27,6 +27,32 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 // Load .env file from the project root (one level up from server directory)
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+/** Map raw push_events row (snake_case) to PushEvent (camelCase) for search results. */
+function mapRowToPushEvent(row: Record<string, unknown>): PushEvent {
+  return {
+    id: row.id as number,
+    repositoryId: row.repository_id as number,
+    integrationId: row.integration_id as number,
+    commitSha: row.commit_sha as string,
+    commitMessage: row.commit_message as string,
+    author: row.author as string,
+    branch: row.branch as string,
+    pushedAt: row.pushed_at != null ? new Date(row.pushed_at as string) : (undefined as unknown as Date),
+    notificationSent: row.notification_sent as boolean | null,
+    additions: row.additions as number | null,
+    deletions: row.deletions as number | null,
+    createdAt: row.created_at != null ? String(row.created_at) : "",
+    aiSummary: row.ai_summary as string | null,
+    aiImpact: row.ai_impact as string | null,
+    aiCategory: row.ai_category as string | null,
+    aiDetails: row.ai_details as string | null,
+    aiGenerated: (row.ai_generated as boolean) ?? false,
+    impactScore: row.impact_score as number | null,
+    riskFlags: row.risk_flags as string[] | null,
+    riskMetadata: row.risk_metadata as { change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] } | null,
+  };
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -347,6 +373,34 @@ export class DatabaseStorage implements IStorage {
       WHERE r.user_id = ${userId}
     `);
     return row?.c ?? 0;
+  }
+
+  /** Full-text search over push events (Part 2.2). User-scoped; optional filters by repo, date, minImpact. */
+  async searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]> {
+    const { q, repositoryId, from, to, minImpact, limit = 50, offset = 0 } = options;
+    const query = (q ?? "").trim();
+    if (!query) return [];
+    const repoRows = await db.select({ id: repositories.id }).from(repositories).where(eq(repositories.userId, userId));
+    const repoIds = repoRows.map((r) => r.id);
+    if (repoIds.length === 0) return [];
+    const rows = await db.execute<Record<string, unknown>>(sql`
+      SELECT e.id, e.repository_id, e.integration_id, e.commit_sha, e.commit_message, e.author, e.branch,
+             e.pushed_at, e.notification_sent, e.additions, e.deletions, e.created_at,
+             e.ai_summary, e.ai_impact, e.ai_category, e.ai_details, e.ai_generated,
+             e.impact_score, e.risk_flags, e.risk_metadata
+      FROM push_events e
+      INNER JOIN repositories r ON e.repository_id = r.id
+      WHERE r.user_id = ${userId}
+        AND e.search_vector @@ plainto_tsquery('english', ${query})
+        AND (${repositoryId ?? null}::int IS NULL OR e.repository_id = ${repositoryId ?? null})
+        AND (${from ?? null}::timestamptz IS NULL OR e.pushed_at >= (${from ?? null}::timestamptz))
+        AND (${to ?? null}::timestamptz IS NULL OR e.pushed_at <= (${to ?? null}::timestamptz))
+        AND (${minImpact ?? null}::int IS NULL OR e.impact_score >= ${minImpact ?? null})
+      ORDER BY e.pushed_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((row) => mapRowToPushEvent(row)) as PushEvent[];
   }
 
   /** Analytics: push counts by day for user's repos (one query, GROUP BY date). */

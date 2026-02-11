@@ -11,6 +11,17 @@ import {
 } from "@shared/schema";
 import { DatabaseStorage } from './database';
 
+/** Options for full-text search over push events (Part 2.2). */
+export interface SearchPushEventsOptions {
+  q: string;
+  repositoryId?: number;
+  from?: string;   // ISO date string
+  to?: string;     // ISO date string
+  minImpact?: number;
+  limit?: number;
+  offset?: number;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
@@ -44,6 +55,8 @@ export interface IStorage {
   getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
   getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
   getPushEventCountForUser(userId: number): Promise<number>;
+  /** Full-text search over push events (summary, message, author, impact, category). User-scoped to their repos. */
+  searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]>;
   createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent>;
   updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined>;
 
@@ -271,6 +284,31 @@ export class MemStorage implements IStorage {
   async getPushEventCountForUser(userId: number): Promise<number> {
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
     return Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId)).length;
+  }
+
+  async searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]> {
+    const { q, repositoryId, from, to, minImpact, limit = 50, offset = 0 } = options;
+    const query = (q ?? '').trim().toLowerCase();
+    if (!query) return [];
+    const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
+    if (repoIds.size === 0) return [];
+    let list = Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId));
+    const match = (s: string | null | undefined) => (s ?? '').toLowerCase().includes(query);
+    list = list.filter(event =>
+      match(event.aiSummary) || match(event.commitMessage) || match(event.author) || match(event.aiImpact) || match(event.aiCategory)
+    );
+    if (repositoryId != null) list = list.filter(e => e.repositoryId === repositoryId);
+    if (from) {
+      const t = new Date(from).getTime();
+      list = list.filter(e => new Date(e.pushedAt).getTime() >= t);
+    }
+    if (to) {
+      const t = new Date(to).getTime();
+      list = list.filter(e => new Date(e.pushedAt).getTime() <= t);
+    }
+    if (minImpact != null) list = list.filter(e => (e.impactScore ?? 0) >= minImpact);
+    list.sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime());
+    return list.slice(offset, offset + limit);
   }
 
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {

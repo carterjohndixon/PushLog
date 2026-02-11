@@ -21,6 +21,7 @@
     "test:analytics": "node test/test-analytics-performance.js",
     "test:notifications": "node test/test-notifications-performance.js",
     "test:ai-usage": "node test/test-ai-usage-performance.js",
+    "test:search": "tsx test/test-search.ts",
     "seed:notifications": "node test/seed-notifications-for-user.js",
     "monitor:performance": "node monitor-performance.js",
     "db:add-indexes": "node add-indexes.js",

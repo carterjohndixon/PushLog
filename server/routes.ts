@@ -1143,6 +1143,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Full-text search over push events (Part 2.2): ?q=...&repositoryId=...&from=...&to=...&minImpact=...&limit=...&offset=...
+  app.get("/api/search", authenticateToken, requireEmailVerification, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+      const q = (req.query.q as string)?.trim() ?? "";
+      if (!q) {
+        return res.status(200).json([]);
+      }
+      const repositoryId = req.query.repositoryId !== undefined && req.query.repositoryId !== "" ? Number(req.query.repositoryId) : undefined;
+      const from = (req.query.from as string) || undefined;
+      const to = (req.query.to as string) || undefined;
+      const minImpact = req.query.minImpact !== undefined && req.query.minImpact !== "" ? Number(req.query.minImpact) : undefined;
+      const limit = Math.min(Number(req.query.limit) || 50, 100);
+      const offset = Number(req.query.offset) || 0;
+      const events = await storage.searchPushEvents(userId, { q, repositoryId, from, to, minImpact, limit, offset });
+      const formatted = events.map((event: any) => ({
+        id: event.id,
+        repositoryId: event.repositoryId,
+        branch: event.branch,
+        commitHash: event.commitSha,
+        commitMessage: event.commitMessage,
+        author: event.author,
+        timestamp: event.pushedAt,
+        eventType: "push",
+        aiSummary: event.aiSummary,
+        impactScore: event.impactScore,
+        riskFlags: event.riskFlags,
+      }));
+      res.status(200).json(formatted);
+    } catch (error) {
+      console.error("Search failed:", error);
+      res.status(500).json({ error: "Search failed" });
+    }
+  });
+
   // Connect a repository
   app.post("/api/repositories", [
     body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Repository name is required and must be 1-100 characters'),
