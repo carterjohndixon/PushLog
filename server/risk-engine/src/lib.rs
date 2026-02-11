@@ -25,3 +25,28 @@ pub fn run(input: &Input) -> Output {
     explanations,
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn run_returns_valid_output_shape() {
+    let input = Input {
+      commit_message: "feat: add auth".to_string(),
+      files_changed: vec![
+        "src/auth/jwt.go".to_string(),
+        "package-lock.json".to_string(),
+      ],
+      additions: 50,
+      deletions: 10,
+      diff_text: None,
+    };
+    let out = run(&input);
+    assert!(out.impact_score <= 100);
+    assert!(out.risk_flags.iter().any(|f| f == "auth"));
+    assert!(out.risk_flags.iter().any(|f| f == "deps"));
+    assert!(!out.change_type_tags.is_empty());
+    assert!(out.hotspot_files.len() <= 10);
+  }
+}

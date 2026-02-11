@@ -47,3 +47,47 @@ pub fn compute_explanations(risk_flags: &[String], change_type_tags: &[String]) 
   }
   out
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::types::Input;
+
+  fn make_input(files_len: usize, additions: u32, deletions: u32) -> Input {
+    Input {
+      commit_message: "test".to_string(),
+      files_changed: (0..files_len).map(|i| format!("file{}.ts", i)).collect(),
+      additions,
+      deletions,
+      diff_text: None,
+    }
+  }
+
+  #[test]
+  fn impact_score_bounds_0_100() {
+    let input = make_input(0, 0, 0);
+    let score = compute_impact_score(&input, &[]);
+    assert!(score <= 100);
+    let input = make_input(50, 5000, 5000);
+    let score = compute_impact_score(&input, &["auth".to_string(), "secrets".to_string()]);
+    assert!(score <= 100);
+  }
+
+  #[test]
+  fn impact_score_increases_with_risk_flags() {
+    let input = make_input(2, 10, 10);
+    let base = compute_impact_score(&input, &[]);
+    let with_deps = compute_impact_score(&input, &["deps".to_string()]);
+    let with_auth = compute_impact_score(&input, &["auth".to_string()]);
+    assert!(with_deps >= base);
+    assert!(with_auth >= base);
+  }
+
+  #[test]
+  fn hotspot_files_caps_at_n() {
+    let files: Vec<String> = (0..20).map(|i| format!("f{}.ts", i)).collect();
+    let out = compute_hotspot_files(&files, 5);
+    assert_eq!(out.len(), 5);
+    assert_eq!(out[0], "f0.ts");
+  }
+}

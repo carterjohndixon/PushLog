@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -77,6 +77,10 @@ export const pushEvents = pgTable("push_events", {
   aiCategory: text("ai_category"),
   aiDetails: text("ai_details"),
   aiGenerated: boolean("ai_generated").notNull().default(false),
+  // Risk engine (Part 2.1)
+  impactScore: integer("impact_score"),
+  riskFlags: jsonb("risk_flags").$type<string[]>(),
+  riskMetadata: jsonb("risk_metadata").$type<{ change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] }>(),
 });
 
 export const pushEventFiles = pgTable("push_event_files", {

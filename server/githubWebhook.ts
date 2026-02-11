@@ -309,7 +309,7 @@ export async function persistPushAndNotifications(
   pushData: any,
   authorName: string,
   commit: any,
-  aiResult: { summary: any; aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; effectiveAiModel: string; useOpenRouter: boolean; openRouterKeyRaw: string | null }
+  aiResult: { summary: any; aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null; effectiveAiModel: string; useOpenRouter: boolean; openRouterKeyRaw: string | null }
 ): Promise<void> {
   const pushedAt = commit?.timestamp ? new Date(commit.timestamp) : new Date();
   const riskResult = await scorePush({
@@ -335,8 +335,15 @@ export async function persistPushAndNotifications(
     aiSummary: aiResult.aiSummary ?? null,
     aiImpact: aiResult.aiImpact ?? null,
     aiCategory: aiResult.aiCategory ?? null,
-    aiDetails: aiResult.summary?.details ?? null,
+    aiDetails: aiResult.aiDetails ?? null,
     aiGenerated: !!aiResult.aiGenerated,
+    impactScore: riskResult.impact_score,
+    riskFlags: riskResult.risk_flags,
+    riskMetadata: {
+      change_type_tags: riskResult.change_type_tags,
+      hotspot_files: riskResult.hotspot_files,
+      explanations: riskResult.explanations,
+    },
   });
   if (aiResult.aiGenerated && aiResult.summary && ((aiResult.summary.tokensUsed > 0) || ((aiResult.summary.cost ?? 0) > 0))) {
     await databaseStorage.createAiUsage({

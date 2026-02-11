@@ -59,3 +59,36 @@ pub fn compute_risk_flags(files: &[String]) -> Vec<String> {
   v.sort();
   v
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn risk_flags_deps_from_lockfiles() {
+    let files = vec!["package-lock.json".to_string(), "src/foo.ts".to_string()];
+    let flags = compute_risk_flags(&files);
+    assert!(flags.contains(&"deps".to_string()));
+  }
+
+  #[test]
+  fn risk_flags_auth_from_path() {
+    let files = vec!["src/auth/jwt.go".to_string()];
+    let flags = compute_risk_flags(&files);
+    assert!(flags.contains(&"auth".to_string()));
+  }
+
+  #[test]
+  fn risk_flags_migration_from_prisma() {
+    let files = vec!["prisma/schema.prisma".to_string()];
+    let flags = compute_risk_flags(&files);
+    assert!(flags.contains(&"migration".to_string()));
+  }
+
+  #[test]
+  fn risk_flags_empty_for_plain_paths() {
+    let files = vec!["README.md".to_string(), "src/utils.ts".to_string()];
+    let flags = compute_risk_flags(&files);
+    assert!(flags.is_empty());
+  }
+}

@@ -284,6 +284,9 @@ export class MemStorage implements IStorage {
       aiCategory: pushEvent.aiCategory ?? null,
       aiDetails: pushEvent.aiDetails ?? null,
       aiGenerated: pushEvent.aiGenerated ?? false,
+      impactScore: pushEvent.impactScore ?? null,
+      riskFlags: pushEvent.riskFlags ?? null,
+      riskMetadata: pushEvent.riskMetadata ?? null,
       createdAt: new Date().toISOString(),
       additions: pushEvent.additions ?? null,
       deletions: pushEvent.deletions ?? null
