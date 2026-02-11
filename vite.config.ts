@@ -23,6 +23,7 @@ export default defineConfig({
       emptyOutDir: true,
       target: "es2020",
       chunkSizeWarningLimit: 800,
+      reportCompressedSize: false,
       rollupOptions: {
         output: {
           manualChunks(id) {
