@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatLocalDateTime } from "@/lib/date";
 import { handleTokenExpiration } from "@/lib/utils";
-import { Search as SearchIcon, GitBranch, User, Calendar, Filter, ChevronDown } from "lucide-react";
+import { Search as SearchIcon, GitBranch, User, Calendar, Filter, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, MessageCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const SEARCH_DEBOUNCE_MS = 280;
+const RECENT_PAGE_SIZE = 20;
 
 interface SearchResult {
   id: number;
@@ -33,6 +35,28 @@ interface RepoOption {
   owner: string | { login: string };
 }
 
+interface PushEventDetail {
+  id: number;
+  repositoryId: number;
+  branch: string;
+  commitHash: string;
+  commitMessage: string;
+  author: string;
+  timestamp: string;
+  aiSummary: string | null;
+  aiImpact: string | null;
+  aiCategory: string | null;
+  aiDetails: string | null;
+  impactScore: number | null;
+  riskFlags: string[] | null;
+  riskMetadata: { change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] } | null;
+  notificationSent: boolean;
+  additions: number | null;
+  deletions: number | null;
+  repositoryFullName: string;
+  slackChannelName: string | null;
+}
+
 export default function Search() {
   const queryClient = useQueryClient();
   const [q, setQ] = useState("");
@@ -42,6 +66,8 @@ export default function Search() {
   const [to, setTo] = useState("");
   const [minImpact, setMinImpact] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [recentPage, setRecentPage] = useState(0);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
 
   // Search-as-you-type: debounce submitted query when input changes
   useEffect(() => {
@@ -50,6 +76,15 @@ export default function Search() {
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [q]);
+
+  // When switching back to recent view from search, reset to first page
+  const prevSubmittedQ = useRef(submittedQ);
+  useEffect(() => {
+    if (prevSubmittedQ.current.trim().length > 0 && submittedQ.trim().length === 0) {
+      setRecentPage(0);
+    }
+    prevSubmittedQ.current = submittedQ;
+  }, [submittedQ]);
 
   // Repos for filter dropdown and name lookup
   const { data: reposData } = useQuery<{ repositories: RepoOption[] }>({
@@ -66,14 +101,17 @@ export default function Search() {
   const repositories = reposData?.repositories ?? [];
   const repoById = Object.fromEntries(repositories.map((r) => [r.id, r]));
 
-  // Recent pushes (when no search query) – show on initial load
+  // Recent pushes (when no search query) – one page at a time
   const { data: recentData, isLoading: recentLoading, error: recentError } = useQuery<SearchResult[]>({
-    queryKey: ["/api/push-events", "search-page"],
+    queryKey: ["/api/push-events", "search-page", recentPage],
     queryFn: async () => {
-      const res = await fetch("/api/push-events?limit=100", {
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      });
+      const res = await fetch(
+        `/api/push-events?limit=${RECENT_PAGE_SIZE}&offset=${recentPage * RECENT_PAGE_SIZE}`,
+        {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        }
+      );
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const err = new Error(errData.error || "Failed to fetch push events");
@@ -131,6 +169,25 @@ export default function Search() {
   const list = isSearchMode ? (results ?? []) : (recentData ?? []);
 
   const handleSearch = () => setSubmittedQ(q.trim());
+
+  // Fetch full push event details when a card is clicked (for modal)
+  const { data: pushEventDetail, isLoading: detailLoading } = useQuery<PushEventDetail>({
+    queryKey: ["/api/push-events", selectedEventId],
+    queryFn: async () => {
+      const res = await fetch(`/api/push-events/${selectedEventId}`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to load push event");
+      return res.json();
+    },
+    enabled: selectedEventId != null,
+  });
+
+  const githubCommitUrl =
+    pushEventDetail?.repositoryFullName && pushEventDetail?.commitHash
+      ? `https://github.com/${pushEventDetail.repositoryFullName}/commit/${pushEventDetail.commitHash}`
+      : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -247,7 +304,7 @@ export default function Search() {
                 {isSearchMode ? (
                   <>"{submittedQ}" — {list.length} result{list.length !== 1 ? "s" : ""}{searchFetching ? " (updating…)" : ""}</>
                 ) : (
-                  <>Recent pushes — {list.length} event{list.length !== 1 ? "s" : ""}</>
+                  <>Recent pushes — page {recentPage + 1} ({list.length} event{list.length !== 1 ? "s" : ""})</>
                 )}
               </p>
             </div>
@@ -266,7 +323,11 @@ export default function Search() {
             ) : (
               <div className="space-y-3">
                 {list.map((event) => (
-                  <Card key={event.id} className="overflow-hidden">
+                  <Card
+                    key={event.id}
+                    className="overflow-hidden cursor-pointer transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    onClick={() => setSelectedEventId(event.id)}
+                  >
                     <CardContent className="p-4">
                       <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -321,8 +382,143 @@ export default function Search() {
                 ))}
               </div>
             )}
+
+            {!isSearchMode && list.length > 0 && (
+              <div className="flex items-center justify-center gap-4 mt-6 pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRecentPage((p) => Math.max(0, p - 1))}
+                  disabled={recentPage === 0}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  Page {recentPage + 1}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setRecentPage((p) => p + 1)}
+                  disabled={(recentData?.length ?? 0) < RECENT_PAGE_SIZE}
+                  className="gap-1"
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </>
         )}
+
+        <Dialog open={selectedEventId != null} onOpenChange={(open) => !open && setSelectedEventId(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            {detailLoading ? (
+              <div className="py-8 flex items-center justify-center">
+                <div className="w-8 h-8 border-2 border-log-green border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : pushEventDetail ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="pr-8">Push event details</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-foreground">{pushEventDetail.repositoryFullName}</span>
+                    <Badge variant="outline">
+                      <GitBranch className="h-3 w-3 mr-1" />
+                      {pushEventDetail.branch}
+                    </Badge>
+                    {pushEventDetail.impactScore != null && (
+                      <Badge variant="secondary">Impact {pushEventDetail.impactScore}</Badge>
+                    )}
+                  </div>
+                  {pushEventDetail.commitMessage && (
+                    <p className="text-foreground">"{pushEventDetail.commitMessage}"</p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <User className="h-3.5 w-3" />
+                      {pushEventDetail.author}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3" />
+                      {formatLocalDateTime(pushEventDetail.timestamp)}
+                    </span>
+                    {pushEventDetail.commitHash && (
+                      <span className="font-mono">{pushEventDetail.commitHash}</span>
+                    )}
+                  </div>
+                  {(pushEventDetail.additions != null || pushEventDetail.deletions != null) && (
+                    <p className="text-muted-foreground">
+                      +{pushEventDetail.additions ?? 0} / -{pushEventDetail.deletions ?? 0} lines
+                    </p>
+                  )}
+                  {pushEventDetail.aiSummary && (
+                    <div>
+                      <h4 className="font-medium text-foreground mb-1">AI summary</h4>
+                      <p className="text-muted-foreground">{pushEventDetail.aiSummary}</p>
+                    </div>
+                  )}
+                  {(pushEventDetail.aiImpact || pushEventDetail.aiCategory) && (
+                    <p className="text-muted-foreground">
+                      {[pushEventDetail.aiImpact, pushEventDetail.aiCategory].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
+                  {pushEventDetail.aiDetails && (
+                    <div>
+                      <h4 className="font-medium text-foreground mb-1">Details</h4>
+                      <p className="text-muted-foreground whitespace-pre-wrap">{pushEventDetail.aiDetails}</p>
+                    </div>
+                  )}
+                  {pushEventDetail.riskFlags && pushEventDetail.riskFlags.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-foreground mb-1">Risk flags</h4>
+                      <div className="flex flex-wrap gap-1">
+                        {pushEventDetail.riskFlags.map((f) => (
+                          <Badge key={f} variant="outline">
+                            {f}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {pushEventDetail.riskMetadata?.explanations && pushEventDetail.riskMetadata.explanations.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-foreground mb-1">Risk notes</h4>
+                      <ul className="list-disc list-inside text-muted-foreground space-y-0.5">
+                        {pushEventDetail.riskMetadata.explanations.map((e, i) => (
+                          <li key={i}>{e}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-3 pt-2 border-t border-border">
+                    {githubCommitUrl && (
+                      <a
+                        href={githubCommitUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-log-green hover:underline font-medium"
+                      >
+                        <ExternalLink className="h-4 w-4" />
+                        View on GitHub
+                      </a>
+                    )}
+                    {pushEventDetail.notificationSent && pushEventDetail.slackChannelName && (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <MessageCircle className="h-4 w-4" />
+                        Notification sent to #{pushEventDetail.slackChannelName}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

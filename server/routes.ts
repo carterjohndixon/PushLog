@@ -1143,6 +1143,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single push event with repo + Slack channel (for modal / deep dive)
+  app.get("/api/push-events/:id", authenticateToken, requireEmailVerification, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const id = parseInt(req.params.id, 10);
+      if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid push event id" });
+      const event = await storage.getPushEvent(id);
+      if (!event) return res.status(404).json({ error: "Push event not found" });
+      const repo = await storage.getRepository(event.repositoryId);
+      if (!repo || repo.userId !== userId) return res.status(404).json({ error: "Push event not found" });
+      const integration = await storage.getIntegration(event.integrationId);
+      const repositoryFullName = repo.fullName || `${repo.owner}/${repo.name}`;
+      res.status(200).json({
+        id: event.id,
+        repositoryId: event.repositoryId,
+        integrationId: event.integrationId,
+        branch: event.branch,
+        commitHash: event.commitSha,
+        commitMessage: event.commitMessage,
+        author: event.author,
+        timestamp: event.pushedAt,
+        aiSummary: event.aiSummary,
+        aiImpact: event.aiImpact,
+        aiCategory: event.aiCategory,
+        aiDetails: event.aiDetails,
+        impactScore: event.impactScore,
+        riskFlags: event.riskFlags,
+        riskMetadata: event.riskMetadata,
+        notificationSent: event.notificationSent ?? false,
+        additions: event.additions,
+        deletions: event.deletions,
+        repositoryFullName,
+        slackChannelName: integration?.slackChannelName ?? null,
+      });
+    } catch (err) {
+      console.error("Get push event failed:", err);
+      res.status(500).json({ error: "Failed to load push event" });
+    }
+  });
+
   // Full-text search over push events (Part 2.2): ?q=...&repositoryId=...&from=...&to=...&minImpact=...&limit=...&offset=...
   app.get("/api/search", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
