@@ -27,20 +27,7 @@ export default defineConfig({
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes("node_modules")) {
-              if (id.includes("react") || id.includes("react-dom") || id.includes("wouter")) {
-                return "vendor-core";
-              }
-              if (id.includes("@tanstack/react-query")) {
-                return "vendor-query";
-              }
-              if (id.includes("@radix-ui")) {
-                return "vendor-ui";
-              }
-              if (id.includes("recharts") || id.includes("date-fns") || id.includes("framer-motion")) {
-                return "vendor-misc";
-              }
-            }
+            if (id.includes("node_modules")) return "vendor";
           },
           chunkFileNames: "js/[name]-[hash].js",
           entryFileNames: "js/[name]-[hash].js",
