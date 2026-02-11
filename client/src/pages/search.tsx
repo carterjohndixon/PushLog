@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { formatLocalDateTime } from "@/lib/date";
 import { handleTokenExpiration } from "@/lib/utils";
 import { Search as SearchIcon, GitBranch, User, Calendar, Filter, ChevronDown } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+
+const SEARCH_DEBOUNCE_MS = 280;
 
 interface SearchResult {
   id: number;
@@ -41,6 +43,14 @@ export default function Search() {
   const [minImpact, setMinImpact] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
+  // Search-as-you-type: debounce submitted query when input changes
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSubmittedQ(q.trim());
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [q]);
+
   // Repos for filter dropdown and name lookup
   const { data: reposData } = useQuery<{ repositories: RepoOption[] }>({
     queryKey: ["/api/repositories-and-integrations"],
@@ -56,7 +66,39 @@ export default function Search() {
   const repositories = reposData?.repositories ?? [];
   const repoById = Object.fromEntries(repositories.map((r) => [r.id, r]));
 
-  // Search results
+  // Recent pushes (when no search query) – show on initial load
+  const { data: recentData, isLoading: recentLoading, error: recentError } = useQuery<SearchResult[]>({
+    queryKey: ["/api/push-events", "search-page"],
+    queryFn: async () => {
+      const res = await fetch("/api/push-events?limit=100", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const err = new Error(errData.error || "Failed to fetch push events");
+        if (handleTokenExpiration(err, queryClient)) return [];
+        throw err;
+      }
+      const raw = await res.json();
+      return raw.map((e: any) => ({
+        id: e.id,
+        repositoryId: e.repositoryId,
+        branch: e.branch,
+        commitHash: e.commitHash,
+        commitMessage: e.commitMessage,
+        author: e.author,
+        timestamp: e.timestamp,
+        eventType: e.eventType ?? "push",
+        aiSummary: e.aiSummary ?? null,
+        impactScore: e.impactScore ?? null,
+        riskFlags: e.riskFlags ?? null,
+      }));
+    },
+    enabled: submittedQ.trim().length === 0,
+  });
+
+  // Search results (when user has typed a query)
   const searchParams = new URLSearchParams();
   if (submittedQ.trim()) searchParams.set("q", submittedQ.trim());
   if (repositoryId) searchParams.set("repositoryId", repositoryId);
@@ -65,7 +107,7 @@ export default function Search() {
   if (minImpact !== "") searchParams.set("minImpact", minImpact);
   searchParams.set("limit", "50");
 
-  const { data: results, isLoading, isFetching, error } = useQuery<SearchResult[]>({
+  const { data: results, isLoading: searchLoading, isFetching: searchFetching, error: searchError } = useQuery<SearchResult[]>({
     queryKey: ["/api/search", submittedQ, repositoryId, from, to, minImpact],
     queryFn: async () => {
       const res = await fetch(`/api/search?${searchParams.toString()}`, {
@@ -83,13 +125,12 @@ export default function Search() {
     enabled: submittedQ.trim().length > 0,
   });
 
-  const handleSearch = () => {
-    setSubmittedQ(q.trim());
-  };
-  // If user submitted empty, don't treat as "searched" so we show the prompt
-  const hasSearched = submittedQ.trim().length > 0;
+  const isSearchMode = submittedQ.trim().length > 0;
+  const isLoading = isSearchMode ? searchLoading : recentLoading;
+  const error = isSearchMode ? searchError : recentError;
+  const list = isSearchMode ? (results ?? []) : (recentData ?? []);
 
-  const list = results ?? [];
+  const handleSearch = () => setSubmittedQ(q.trim());
 
   return (
     <div className="min-h-screen bg-background">
@@ -97,7 +138,7 @@ export default function Search() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-foreground">Search push events</h1>
           <p className="text-muted-foreground mt-1">
-            Find pushes by summary, commit message, author, or category.
+            Recent pushes below; type to search by summary, commit message, author, or category.
           </p>
         </div>
 
@@ -107,7 +148,7 @@ export default function Search() {
               <div className="relative flex-1">
                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="e.g. login, auth, fix bug..."
+                  placeholder="Type to search (e.g. login, auth, fix)..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -183,14 +224,7 @@ export default function Search() {
           </CardContent>
         </Card>
 
-        {!hasSearched && (
-          <div className="text-center py-12 text-muted-foreground">
-            <SearchIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>Enter a search term and click Search to find push events.</p>
-          </div>
-        )}
-
-        {hasSearched && isLoading && (
+        {isLoading && (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <Skeleton key={i} className="h-32 w-full rounded-lg" />
@@ -198,7 +232,7 @@ export default function Search() {
           </div>
         )}
 
-        {hasSearched && error && (
+        {error && !isLoading && (
           <Card className="border-destructive">
             <CardContent className="pt-6">
               <p className="text-destructive">{(error as Error).message}</p>
@@ -206,12 +240,15 @@ export default function Search() {
           </Card>
         )}
 
-        {hasSearched && !isLoading && !error && (
+        {!isLoading && !error && (
           <>
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-muted-foreground">
-                {list.length} result{list.length !== 1 ? "s" : ""}
-                {isFetching && " (updating…)"}
+                {isSearchMode ? (
+                  <>"{submittedQ}" — {list.length} result{list.length !== 1 ? "s" : ""}{searchFetching ? " (updating…)" : ""}</>
+                ) : (
+                  <>Recent pushes — {list.length} event{list.length !== 1 ? "s" : ""}</>
+                )}
               </p>
             </div>
 
@@ -219,7 +256,11 @@ export default function Search() {
               <Card>
                 <CardContent className="py-12 text-center text-muted-foreground">
                   <SearchIcon className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>No push events match your search. Try different words or filters.</p>
+                  <p>
+                    {isSearchMode
+                      ? "No push events match your search. Try different words or filters."
+                      : "No push events yet. Connect a repository and push to see activity here."}
+                  </p>
                 </CardContent>
               </Card>
             ) : (
