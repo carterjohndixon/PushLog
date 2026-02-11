@@ -48,6 +48,7 @@ export function Header() {
     { href: "/dashboard", label: "Dashboard" },
     { href: "/integrations", label: "Integrations" },
     { href: "/repositories", label: "Repositories" },
+    { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "Models" },
   ] as const;
