@@ -45,9 +45,9 @@ export interface GenerateCodeSummaryOptions {
   openRouterApiKey?: string;
   /** When set, OpenRouter errors will create an in-app notification for this user and broadcast it. */
   notificationContext?: {
-    userId: number;
+    userId: string;
     repositoryName: string;
-    integrationId: number;
+    integrationId: string;
     slackChannelName: string;
   };
 }

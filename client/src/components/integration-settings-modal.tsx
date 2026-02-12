@@ -74,7 +74,7 @@ interface OpenRouterModel {
 }
 
 interface Integration {
-  id: number;
+  id: string;
   repositoryName: string;
   slackChannelName: string;
   notificationLevel: string;
@@ -89,7 +89,7 @@ interface IntegrationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integration: Integration | null;
-  updateIntegrationMutation: UseMutationResult<any, Error, { id: number; updates: any }, unknown>;
+  updateIntegrationMutation: UseMutationResult<any, Error, { id: string; updates: any }, unknown>;
 }
 
 export function IntegrationSettingsModal({
@@ -109,7 +109,7 @@ export function IntegrationSettingsModal({
   const queryClient = useQueryClient();
 
   const testSlackMutation = useMutation({
-    mutationFn: async (integrationId: number) => {
+    mutationFn: async (integrationId: string) => {
       const res = await apiRequest("POST", `/api/integrations/${integrationId}/test-slack`);
       return res.json();
     },

@@ -31,7 +31,7 @@ import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deleti
 
 
 interface RepositoryCardData {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   full_name: string;
@@ -48,8 +48,8 @@ interface RepositoryCardData {
 }
 
 interface ActiveIntegration {
-  id: number;
-  repositoryId: number;
+  id: string;
+  repositoryId: string;
   type: string;
   name: string;
   isActive: boolean;
@@ -139,7 +139,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
   // Toggle repository status mutation
   const toggleRepositoryMutation = useMutation({
-    mutationFn: async ({ repositoryId, isActive }: { repositoryId: number; isActive: boolean }) => {
+    mutationFn: async ({ repositoryId, isActive }: { repositoryId: string; isActive: boolean }) => {
       const response = await fetch(`/api/repositories/${repositoryId}`, {
         method: 'PATCH',
         credentials: 'include',
@@ -172,7 +172,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
   // Delete repository mutation
   const deleteRepositoryMutation = useMutation({
-    mutationFn: async (repoId: number) => {
+    mutationFn: async (repoId: string) => {
       const response = await fetch(`/api/repositories/${repoId}`, {
         method: 'DELETE',
         credentials: 'include',
@@ -204,7 +204,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
   // Update repository mutation
   const updateRepositoryMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       const response = await fetch(`/api/repositories/${id}`, {
         method: 'PATCH',
         credentials: 'include',

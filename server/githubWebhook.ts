@@ -24,8 +24,8 @@ function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
 export function scheduleDelayedCostUpdate(opts: {
   generationId: string;
   apiKey: string;
-  pushEventId: number;
-  userId: number;
+  pushEventId: string;
+  userId: string;
   delayMs?: number;
   retries?: number;
 }) {

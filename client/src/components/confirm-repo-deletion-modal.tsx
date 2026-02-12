@@ -10,7 +10,7 @@ import { AlertTriangle, Github } from "lucide-react";
 import { UseMutationResult } from "@tanstack/react-query";
 
 interface Repository {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   full_name: string; // GitHub API format
@@ -29,7 +29,7 @@ interface ConfirmRepositoryDeletionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repositoryToDelete: Repository | null;
-  deleteRepositoryMutation: UseMutationResult<any, Error, number, unknown>;
+  deleteRepositoryMutation: UseMutationResult<any, Error, string, unknown>;
   integrationCount?: number;
 }
 

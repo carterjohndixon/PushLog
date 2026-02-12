@@ -1,9 +1,17 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { sql, type SQL } from "drizzle-orm";
+
+// For full-text search generated column (push_events.search_vector)
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   username: text("username").unique(),
   email: text("email").unique(),
   password: text("password"),
@@ -28,8 +36,8 @@ export const users = pgTable("users", {
 });
 
 export const repositories = pgTable("repositories", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   githubId: text("github_id").notNull(),
   name: text("name").notNull(),
   fullName: text("full_name").notNull(),
@@ -42,10 +50,10 @@ export const repositories = pgTable("repositories", {
 });
 
 export const integrations = pgTable("integrations", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  repositoryId: integer("repository_id").notNull(),
-  slackWorkspaceId: integer("slack_workspace_id"), // Links to slack_workspaces table
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  repositoryId: uuid("repository_id").notNull(),
+  slackWorkspaceId: uuid("slack_workspace_id"), // Links to slack_workspaces table
   slackChannelId: text("slack_channel_id").notNull(),
   slackChannelName: text("slack_channel_name").notNull(),
   notificationLevel: text("notification_level").default("all"), // all, main_only, tagged_only
@@ -59,9 +67,9 @@ export const integrations = pgTable("integrations", {
 });
 
 export const pushEvents = pgTable("push_events", {
-  id: serial("id").primaryKey(),
-  repositoryId: integer("repository_id").notNull(),
-  integrationId: integer("integration_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  repositoryId: uuid("repository_id").notNull(),
+  integrationId: uuid("integration_id").notNull(),
   commitSha: text("commit_sha").notNull(),
   commitMessage: text("commit_message").notNull(),
   author: text("author").notNull(),
@@ -81,19 +89,23 @@ export const pushEvents = pgTable("push_events", {
   impactScore: integer("impact_score"),
   riskFlags: jsonb("risk_flags").$type<string[]>(),
   riskMetadata: jsonb("risk_metadata").$type<{ change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] }>(),
+  // Full-text search (Part 2.2) – generated column, kept in schema so db:push does not drop it
+  searchVector: tsvector("search_vector").generatedAlwaysAs(
+    (): SQL => sql`to_tsvector('english', coalesce(ai_summary, '') || ' ' || coalesce(commit_message, '') || ' ' || coalesce(author, '') || ' ' || coalesce(ai_impact, '') || ' ' || coalesce(ai_category, ''))`
+  ),
 });
 
 export const pushEventFiles = pgTable("push_event_files", {
-  id: serial("id").primaryKey(),
-  pushEventId: integer("push_event_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  pushEventId: uuid("push_event_id").notNull(),
   filePath: text("file_path").notNull(),
   additions: integer("additions").notNull().default(0),
   deletions: integer("deletions").notNull().default(0),
 });
 
 export const slackWorkspaces = pgTable("slack_workspaces", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   teamId: text("team_id").notNull(),
   teamName: text("team_name").notNull(),
   accessToken: text("access_token").notNull(),
@@ -101,8 +113,8 @@ export const slackWorkspaces = pgTable("slack_workspaces", {
 });
 
 export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   type: text("type").notNull(), // 'push_event', 'slack_message_sent', 'email_verification'
   title: text("title"),
   message: text("message").notNull(),
@@ -112,10 +124,10 @@ export const notifications = pgTable("notifications", {
 });
 
 export const aiUsage = pgTable("ai_usage", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
-  integrationId: integer("integration_id").notNull(),
-  pushEventId: integer("push_event_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
+  integrationId: uuid("integration_id").notNull(),
+  pushEventId: uuid("push_event_id").notNull(),
   model: text("model").notNull(), // gpt-5.2, gpt-5.1, gpt-4o, openrouter: e.g. moonshotai/kimi-k2.5
   tokensUsed: integer("tokens_used").notNull(),
   cost: integer("cost").notNull(), // Cost in units of $0.0001 (ten-thousandths of a dollar) for sub-cent precision
@@ -124,8 +136,8 @@ export const aiUsage = pgTable("ai_usage", {
 });
 
 export const analyticsStats = pgTable("analytics_stats", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   activeIntegrations: integer("active_integrations").notNull(),
   totalRepositories: integer("total_repositories").notNull(),
   dailyPushes: integer("daily_pushes").notNull(),
@@ -134,8 +146,8 @@ export const analyticsStats = pgTable("analytics_stats", {
 });
 
 export const payments = pgTable("payments", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
   amount: integer("amount").notNull(), // Amount in cents
   credits: integer("credits").notNull(), // Credits purchased
@@ -144,8 +156,8 @@ export const payments = pgTable("payments", {
 });
 
 export const favoriteModels = pgTable("favorite_models", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull(),
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull(),
   modelId: text("model_id").notNull(), // OpenRouter model id e.g. "anthropic/claude-opus-4.6"
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
@@ -156,6 +168,13 @@ export const loginLockout = pgTable("login_lockout", {
   failedCount: integer("failed_count").notNull().default(0),
   lockoutUntil: timestamp("lockout_until", { withTimezone: true, mode: "date" }), // null or past = not locked
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+});
+
+/** Session store used by connect-pg-simple (express-session). Declared so db:push does not drop it. */
+export const userSessions = pgTable("user_sessions", {
+  sid: text("sid").primaryKey(),
+  sess: jsonb("sess").notNull(),
+  expire: timestamp("expire", { withTimezone: true, mode: "date" }).notNull(),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
@@ -218,7 +237,7 @@ export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit
 });
 
 export type User = {
-  id: number;
+  id: string;
   username: string | null;
   email: string | null;
   password: string | null;

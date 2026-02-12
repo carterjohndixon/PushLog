@@ -60,7 +60,7 @@ function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
 }
 
 // Helper function to get user ID from OAuth state
-async function getUserIdFromOAuthState(state: string): Promise<number | null> {
+async function getUserIdFromOAuthState(state: string): Promise<string | null> {
   try {
     const session = await databaseStorage.getOAuthSession(state);
     return session ? session.userId : null;
@@ -1014,7 +1014,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           databaseStorage.getRepositoriesByUserId(userId),
           storage.getIntegrationsByUserId(userId),
         ]);
-        const integrationCountByRepoId = new Map<number, number>();
+        const integrationCountByRepoId = new Map<string, number>();
         for (const i of userIntegrations) {
           const rid = i.repositoryId;
           if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
@@ -1071,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ]);
 
         // Precompute integration count per repo (O(n) instead of O(repos × integrations))
-        const integrationCountByRepoId = new Map<number, number>();
+        const integrationCountByRepoId = new Map<string, number>();
         for (const i of userIntegrations) {
           const rid = i.repositoryId;
           if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
@@ -1148,8 +1148,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user?.userId;
       if (!userId) return res.status(401).json({ error: "Authentication required" });
-      const id = parseInt(req.params.id, 10);
-      if (Number.isNaN(id)) return res.status(400).json({ error: "Invalid push event id" });
+      const id = req.params.id;
+      if (!id) return res.status(400).json({ error: "Invalid push event id" });
       const event = await storage.getPushEvent(id);
       if (!event) return res.status(404).json({ error: "Push event not found" });
       const repo = await storage.getRepository(event.repositoryId);
@@ -1195,7 +1195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!q) {
         return res.status(200).json([]);
       }
-      const repositoryId = req.query.repositoryId !== undefined && req.query.repositoryId !== "" ? Number(req.query.repositoryId) : undefined;
+      const repositoryId = req.query.repositoryId !== undefined && req.query.repositoryId !== "" ? String(req.query.repositoryId) : undefined;
       const from = (req.query.from as string) || undefined;
       const to = (req.query.to as string) || undefined;
       const minImpact = req.query.minImpact !== undefined && req.query.minImpact !== "" ? Number(req.query.minImpact) : undefined;
@@ -1339,8 +1339,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const repositoryId = parseInt(req.params.id);
-      if (isNaN(repositoryId) || repositoryId <= 0) {
+      const repositoryId = req.params.id;
+      if (!repositoryId) {
         return res.status(400).json({ error: "Invalid repository ID" });
       }
       
@@ -1389,7 +1389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Disconnect a repository
   app.delete("/api/repositories/:id", authenticateToken, async (req, res) => {
     try {
-      const repositoryId = parseInt(req.params.id);
+      const repositoryId = req.params.id;
       const repository = await storage.getRepository(repositoryId);
       
       if (!repository) {
@@ -1577,7 +1577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/slack/workspaces/:workspaceId/channels", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
-      const workspaceId = parseInt(req.params.workspaceId);
+      const workspaceId = req.params.workspaceId;
       
       if (!userId) {
         return res.status(401).json({ error: "Authentication required" });
@@ -1605,9 +1605,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const body = req.body as Record<string, unknown>;
       const coercedBody = {
         ...body,
-        userId: body.userId != null ? Number(body.userId) : userId,
-        repositoryId: body.repositoryId != null ? Number(body.repositoryId) : body.repositoryId,
-        slackWorkspaceId: body.slackWorkspaceId != null && body.slackWorkspaceId !== "" ? Number(body.slackWorkspaceId) : body.slackWorkspaceId,
+        userId: body.userId != null ? String(body.userId) : userId,
+        repositoryId: body.repositoryId != null ? String(body.repositoryId) : body.repositoryId,
+        slackWorkspaceId: body.slackWorkspaceId != null && body.slackWorkspaceId !== "" ? String(body.slackWorkspaceId) : body.slackWorkspaceId,
       };
       const validatedData = insertIntegrationSchema.parse(coercedBody);
       
@@ -1707,8 +1707,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user integrations (single round-trip: integrations + repos in parallel, enrich in memory — no N+1)
   app.get("/api/integrations", authenticateToken, async (req, res) => {
     try {
-      const userId = Number(req.user!.userId);
-      if (Number.isNaN(userId) || userId < 1) {
+      const userId = req.user!.userId;
+      if (!userId) {
         return res.status(400).json({ error: "Invalid session" });
       }
 
@@ -1723,7 +1723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const repoById = new Map(repos.map((r) => [r.id, r]));
       const enrichedIntegrations = integrations.map((integration: any) => {
-        const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+        const repoId = integration.repositoryId ?? null;
         const repository = repoId != null ? repoById.get(repoId) : null;
         const sanitized = sanitizeIntegrationForClient(integration);
         return {
@@ -1765,7 +1765,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           databaseStorage.getRepositoriesByUserId(userId),
           storage.getIntegrationsByUserId(userId),
         ]);
-        const integrationCountByRepoId = new Map<number, number>();
+        const integrationCountByRepoId = new Map<string, number>();
         for (const i of integrations) {
           const rid = i.repositoryId;
           if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
@@ -1784,7 +1784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }));
         const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
         const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
-          const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+          const repoId = integration.repositoryId ?? null;
           const repository = repoId != null ? repoById.get(repoId) : null;
           const sanitized = sanitizeIntegrationForClient(integration);
           return {
@@ -1816,7 +1816,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         databaseStorage.getRepositoriesByUserId(userId),
         storage.getIntegrationsByUserId(userId),
       ]);
-      const integrationCountByRepoId = new Map<number, number>();
+      const integrationCountByRepoId = new Map<string, number>();
       for (const i of integrations) {
         const rid = i.repositoryId;
         if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
@@ -1836,7 +1836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
       const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
-        const repoId = integration.repositoryId != null ? Number(integration.repositoryId) : null;
+        const repoId = integration.repositoryId ?? null;
         const repository = repoId != null ? repoById.get(repoId) : null;
         const sanitized = sanitizeIntegrationForClient(integration);
         return {
@@ -1863,7 +1863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update integration
   app.patch("/api/integrations/:id", authenticateToken, async (req, res) => {
     try {
-      const integrationId = parseInt(req.params.id);
+      const integrationId = req.params.id;
       const updates = { ...req.body };
       
       // OpenRouter API key: encrypt before storing; never send raw key to DB
@@ -1991,7 +1991,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const generationId = req.params.id;
       const userId = req.user!.userId;
-      const usage = await databaseStorage.updateAiUsage(Number(generationId), userId, req.body);
+      const usage = await databaseStorage.updateAiUsage(generationId, userId, req.body);
       res.status(200).json(usage);
     } catch (error) {
       console.error('❌ OpenRouter update usage error:', error);
@@ -2063,10 +2063,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const userId = req.user!.userId;
 
-      // Numeric id = push event id: look up our ai_usage row (has openrouter_generation_id + cost stored with push)
-      const pushId = /^\d+$/.test(idParam) ? parseInt(idParam, 10) : NaN;
-      if (!Number.isNaN(pushId)) {
-        const usage = await databaseStorage.getAiUsageByPushEventId(pushId, userId);
+      // Push event id (UUID) or legacy numeric: look up our ai_usage row (has openrouter_generation_id + cost stored with push)
+      const isPushEventId = /^\d+$/.test(idParam) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+      if (isPushEventId) {
+        const usage = await databaseStorage.getAiUsageByPushEventId(idParam, userId);
         if (!usage) {
           return res.status(404).json({ error: "Usage not found for this push." });
         }
@@ -2354,7 +2354,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/integrations/:id/test-slack", authenticateToken, async (req, res) => {
     let integration: Awaited<ReturnType<typeof storage.getIntegration>> | undefined = undefined;
     try {
-      const integrationId = parseInt(req.params.id);
+      const integrationId = req.params.id;
       integration = await storage.getIntegration(integrationId);
       if (!integration || integration.userId !== req.user!.userId) {
         return res.status(404).json({ error: "Integration not found" });
@@ -2391,7 +2391,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete integration
   app.delete("/api/integrations/:id", authenticateToken, async (req, res) => {
     try {
-      const integrationId = parseInt(req.params.id);
+      const integrationId = req.params.id;
       
       // First get the integration to verify ownership
       const integration = await storage.getIntegration(integrationId);
@@ -2476,7 +2476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Repo-level analytics: file and folder breakdown (lines changed)
   app.get("/api/analytics/repos/:repositoryId", authenticateToken, async (req, res) => {
     try {
-      const repositoryId = parseInt(req.params.repositoryId);
+      const repositoryId = req.params.repositoryId;
       if (Number.isNaN(repositoryId)) {
         return res.status(400).json({ error: "Invalid repository ID" });
       }
@@ -2576,14 +2576,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify user owns this repository
-      const repository = await storage.getRepository(parseInt(repositoryId));
+      const repository = await storage.getRepository(repositoryId);
       if (!repository || repository.userId !== req.user!.userId) {
         return res.status(403).json({ error: "Access denied" });
       }
 
       const limit = Math.min(Number(req.query.limit) || 200, 500);
       const offset = Number(req.query.offset) || 0;
-      const pushEvents = await storage.getPushEventsByRepositoryId(parseInt(repositoryId), { limit, offset });
+      const pushEvents = await storage.getPushEventsByRepositoryId(repositoryId, { limit, offset });
       res.status(200).json(pushEvents);
     } catch (error) {
       console.error("Error fetching push events:", error);
@@ -2594,7 +2594,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint to re-process a specific push event with AI
   app.post("/api/test-ai-summary/:pushEventId", authenticateToken, async (req, res) => {
     try {
-      const pushEventId = parseInt(req.params.pushEventId);
+      const pushEventId = req.params.pushEventId;
       const userId = req.user!.userId;
       
       // Allow testing with model parameter directly (for performance tests)
@@ -2738,7 +2738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     try {
       const userId = req.user!.userId;
-      const integrationId = typeof req.body?.integrationId === "number" ? req.body.integrationId : null;
+      const integrationId = typeof req.body?.integrationId === "string" ? req.body.integrationId : null;
       const integrations = await storage.getIntegrationsByUserId(userId);
       const integration = integrationId
         ? integrations.find((i) => i.id === integrationId)
@@ -3238,7 +3238,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mark a specific notification as read
   app.post("/api/notifications/mark-read/:id", authenticateToken, async (req, res) => {
     try {
-      const notificationId = parseInt(req.params.id);
+      const notificationId = req.params.id;
       const userId = req.user!.userId;
       
       console.log(`📖 Marking notification ${notificationId} as read for user ${userId}`);
@@ -3273,7 +3273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete a specific notification
   app.delete("/api/notifications/delete/:id", authenticateToken, async (req, res) => {
     try {
-      const notificationId = parseInt(req.params.id);
+      const notificationId = req.params.id;
       const userId = req.user!.userId;
       const notification = await storage.getNotificationByIdAndUserId(notificationId, userId);
       if (!notification) {

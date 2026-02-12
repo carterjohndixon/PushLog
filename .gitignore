@@ -68,6 +68,7 @@ server/package-lock.json
 test/
 
 # Database backup files (keep scripts, ignore actual backups)
+backups/
 launch/database-backups/backups/
 launch/database-backups/*.sql
 launch/database-backups/*.dump

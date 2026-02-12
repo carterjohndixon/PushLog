@@ -2,9 +2,9 @@ import 'express-session';
 
 declare module 'express-session' {
   interface SessionData {
-    userId?: number;  // Quick access to user ID
+    userId?: string;  // Quick access to user ID (UUID)
     user?: {
-      userId: number;
+      userId: string;
       username: string;
       email: string | null;
       githubConnected: boolean;

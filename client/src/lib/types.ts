@@ -6,7 +6,7 @@ export interface DashboardStats {
 }
 
 export interface RecentPushEvent {
-  id: number;
+  id: string;
   repositoryName: string;
   branch: string;
   commitMessage: string;
@@ -16,8 +16,8 @@ export interface RecentPushEvent {
 }
 
 export interface ActiveIntegration {
-  id: number;
-  repositoryId: number;
+  id: string;
+  repositoryId: string;
   repositoryName: string;
   slackChannelName: string;
   status: 'active' | 'paused' | 'error';
@@ -28,7 +28,7 @@ export interface ActiveIntegration {
 }
 
 export interface RepositoryCardData {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   fullName: string;
@@ -50,7 +50,7 @@ export interface SlackChannel {
 }
 
 export interface IntegrationFormData {
-  repositoryId: number;
+  repositoryId: string;
   slackChannelId: string;
   slackChannelName: string;
   notificationLevel: 'all' | 'main_only' | 'tagged_only';

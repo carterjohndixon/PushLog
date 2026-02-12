@@ -47,6 +47,9 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_id_type ON notifications(user_
 -- Index for AI usage user lookups
 CREATE INDEX IF NOT EXISTS idx_ai_usage_user_id ON ai_usage(user_id);
 
+-- Composite for AI usage by user + time (monthly/daily spend, analytics)
+CREATE INDEX IF NOT EXISTS idx_ai_usage_user_id_created_at ON ai_usage(user_id, created_at);
+
 -- Index for AI usage integration lookups
 CREATE INDEX IF NOT EXISTS idx_ai_usage_integration_id ON ai_usage(integration_id);
 

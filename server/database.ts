@@ -31,9 +31,9 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 /** Map raw push_events row (snake_case) to PushEvent (camelCase) for search results. */
 function mapRowToPushEvent(row: Record<string, unknown>): PushEvent {
   return {
-    id: row.id as number,
-    repositoryId: row.repository_id as number,
-    integrationId: row.integration_id as number,
+    id: row.id as string,
+    repositoryId: row.repository_id as string,
+    integrationId: row.integration_id as string,
     commitSha: row.commit_sha as string,
     commitMessage: row.commit_message as string,
     author: row.author as string,
@@ -51,6 +51,7 @@ function mapRowToPushEvent(row: Record<string, unknown>): PushEvent {
     impactScore: row.impact_score as number | null,
     riskFlags: row.risk_flags as string[] | null,
     riskMetadata: row.risk_metadata as { change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] } | null,
+    searchVector: (row.search_vector as string) ?? null,
   };
 }
 
@@ -91,8 +92,8 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
 
 function convertToAnalyticsStats(dbAnalyticsStats: typeof analyticsStats.$inferSelect): AnalyticsStats {
   return {
-    id: dbAnalyticsStats.id as number,
-    userId: dbAnalyticsStats.userId as number,
+    id: dbAnalyticsStats.id as string,
+    userId: dbAnalyticsStats.userId as string,
     activeIntegrations: dbAnalyticsStats.activeIntegrations as number,
     totalRepositories: dbAnalyticsStats.totalRepositories,
     dailyPushes: dbAnalyticsStats.dailyPushes as number,
@@ -104,18 +105,18 @@ function convertToAnalyticsStats(dbAnalyticsStats: typeof analyticsStats.$inferS
 interface OAuthSession {
   token: string;
   state: string;
-  userId: number;
+  userId: string;
   expiresAt: Date;
 }
 
 export class DatabaseStorage implements IStorage {
-  private users: Map<number, User>;
-  private analyticsStats: Map<number, AnalyticsStats>;
+  private users: Map<string, User>;
+  private analyticsStats: Map<string, AnalyticsStats>;
   private oauthSessions: Map<string, OAuthSession>;
 
   constructor() {
-    this.users = new Map<number, User>();
-    this.analyticsStats = new Map<number, AnalyticsStats>();
+    this.users = new Map<string, User>();
+    this.analyticsStats = new Map<string, AnalyticsStats>();
     this.oauthSessions = new Map<string, OAuthSession>();
   }
 
@@ -123,18 +124,18 @@ export class DatabaseStorage implements IStorage {
     // Initialize users
     const result = await db.select().from(users).orderBy(desc(users.id));
     for (const user of result) {
-      this.users.set(user.id as number, convertToUser(user as any));
+      this.users.set(user.id as string, convertToUser(user as any));
     }
 
     // Initialize analytics stats
     const analyticsStatsResult = await db.select().from(analyticsStats).orderBy(desc(analyticsStats.id));
     for (const analyticsStat of analyticsStatsResult) {
-      this.analyticsStats.set(analyticsStat.id as number, convertToAnalyticsStats(analyticsStat as any));
+      this.analyticsStats.set(analyticsStat.id as string, convertToAnalyticsStats(analyticsStat as any));
     }
   }
 
   // User methods
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     return result[0] ? convertToUser(result[0] as any) : undefined;
   }
@@ -163,7 +164,7 @@ export class DatabaseStorage implements IStorage {
     return convertToUser(result[0]);
   }
 
-  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
     const dbUpdates = {
       ...updates,
       verificationTokenExpiry: updates.verificationTokenExpiry ? new Date(updates.verificationTokenExpiry) : null,
@@ -173,7 +174,7 @@ export class DatabaseStorage implements IStorage {
     return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
-  async getUserById(id: number): Promise<User | undefined> {
+  async getUserById(id: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
     const row = result[0];
     return row ? convertToUser(row as any) : undefined;
@@ -240,12 +241,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Repository methods
-  async getRepository(id: number): Promise<Repository | undefined> {
+  async getRepository(id: string): Promise<Repository | undefined> {
     const result = await db.select().from(repositories).where(eq(repositories.id, id)).limit(1);
     return result[0] as any;
   }
 
-  async getRepositoriesByUserId(userId: number): Promise<Repository[]> {
+  async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
     return await db.select().from(repositories).where(eq(repositories.userId, userId)) as any;
   }
 
@@ -259,36 +260,36 @@ export class DatabaseStorage implements IStorage {
     return result[0] as any;
   }
 
-  async updateRepository(id: number, updates: Partial<Repository>): Promise<Repository | undefined> {
+  async updateRepository(id: string, updates: Partial<Repository>): Promise<Repository | undefined> {
     const result = await db.update(repositories).set(updates).where(eq(repositories.id, id)).returning();
     return result[0] as any;
   }
 
-  async deleteRepository(id: number): Promise<boolean> {
+  async deleteRepository(id: string): Promise<boolean> {
     await db.delete(repositories).where(eq(repositories.id, id));
     return true;
   }
 
   // Integration methods
-  async getIntegration(id: number): Promise<Integration | undefined> {
+  async getIntegration(id: string): Promise<Integration | undefined> {
     const result = await db.select().from(integrations).where(eq(integrations.id, id)).limit(1);
     return result[0] as any;
   }
 
-  async getIntegrationsByUserId(userId: number): Promise<Integration[]> {
+  async getIntegrationsByUserId(userId: string): Promise<Integration[]> {
     return await db.select().from(integrations).where(eq(integrations.userId, userId)) as any;
   }
 
-  async getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]> {
+  async getIntegrationsByRepositoryId(repositoryId: string): Promise<Integration[]> {
     return await db.select().from(integrations).where(eq(integrations.repositoryId, repositoryId)) as any;
   }
 
-  async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
+  async getIntegrationByRepositoryId(repositoryId: string): Promise<Integration | undefined> {
     const result = await db.select().from(integrations).where(eq(integrations.repositoryId, repositoryId)).limit(1);
     return result[0] as any;
   }
 
-  async getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]> {
+  async getIntegrationsBySlackChannel(workspaceId: string, channelId: string): Promise<Integration[]> {
     return await db.select().from(integrations).where(
       and(eq(integrations.slackWorkspaceId, workspaceId), eq(integrations.slackChannelId, channelId))
     ) as any;
@@ -297,7 +298,7 @@ export class DatabaseStorage implements IStorage {
   /** Get all integrations for a Slack team + channel. Use for slash commands so we see integrations from any user who connected this team. */
   async getIntegrationsBySlackTeamAndChannel(teamId: string, channelId: string): Promise<Integration[]> {
     const workspaces = await db.select({ id: slackWorkspaces.id }).from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId));
-    const workspaceIds = workspaces.map((w) => w.id).filter((id): id is number => id != null);
+    const workspaceIds = workspaces.map((w) => w.id).filter((id): id is string => id != null);
     if (workspaceIds.length === 0) {
       console.log("[Slack] No workspace found for team_id=%s (channel_id=%s). Check that this Slack workspace is connected in PushLog.", teamId, channelId);
       return [];
@@ -317,7 +318,7 @@ export class DatabaseStorage implements IStorage {
     return result[0] as any;
   }
 
-  async updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined> {
+  async updateIntegration(id: string, updates: Partial<Integration>): Promise<Integration | undefined> {
     console.log(`💾 Database: Updating integration ${id} with:`, JSON.stringify(updates, null, 2));
     const result = await db.update(integrations).set(updates).where(eq(integrations.id, id)).returning();
     const updated = result[0] as any;
@@ -327,18 +328,18 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async deleteIntegration(id: number): Promise<boolean> {
+  async deleteIntegration(id: string): Promise<boolean> {
     const result = await db.delete(integrations).where(eq(integrations.id, id)).returning();
     return result[0] !== undefined;
   }
 
   // Push event methods
-  async getPushEvent(id: number): Promise<PushEvent | undefined> {
+  async getPushEvent(id: string): Promise<PushEvent | undefined> {
     const result = await db.select().from(pushEvents).where(eq(pushEvents.id, id)).limit(1);
     return result[0] as PushEvent | undefined;
   }
 
-  async getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  async getPushEventsByRepositoryId(repositoryId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
     const limit = options?.limit ?? 200;
     const offset = options?.offset ?? 0;
     const result = await db.select().from(pushEvents)
@@ -350,7 +351,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Push events for all of a user's repos, one query (after resolving repo IDs), bounded (default limit 100). */
-  async getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
     const limit = options?.limit ?? 100;
     const offset = options?.offset ?? 0;
     const repoRows = await db.select({ id: repositories.id }).from(repositories).where(eq(repositories.userId, userId));
@@ -365,7 +366,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Total count of push events for a user (all repos), one query. */
-  async getPushEventCountForUser(userId: number): Promise<number> {
+  async getPushEventCountForUser(userId: string): Promise<number> {
     const [row] = await db.execute<{ c: number }>(sql`
       SELECT count(*)::int AS c
       FROM push_events e
@@ -376,7 +377,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Full-text search over push events (Part 2.2). User-scoped; optional filters by repo, date, minImpact. */
-  async searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]> {
+  async searchPushEvents(userId: string, options: SearchPushEventsOptions): Promise<PushEvent[]> {
     const { q, repositoryId, from, to, minImpact, limit = 50, offset = 0 } = options;
     const query = (q ?? "").trim();
     if (!query) return [];
@@ -392,7 +393,7 @@ export class DatabaseStorage implements IStorage {
       INNER JOIN repositories r ON e.repository_id = r.id
       WHERE r.user_id = ${userId}
         AND e.search_vector @@ plainto_tsquery('english', ${query})
-        AND (${repositoryId ?? null}::int IS NULL OR e.repository_id = ${repositoryId ?? null})
+        AND (${repositoryId ?? null}::uuid IS NULL OR e.repository_id = ${repositoryId ?? null})
         AND (${from ?? null}::timestamptz IS NULL OR e.pushed_at >= (${from ?? null}::timestamptz))
         AND (${to ?? null}::timestamptz IS NULL OR e.pushed_at <= (${to ?? null}::timestamptz))
         AND (${minImpact ?? null}::int IS NULL OR e.impact_score >= ${minImpact ?? null})
@@ -404,7 +405,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Analytics: push counts by day for user's repos (one query, GROUP BY date). */
-  async getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+  async getAnalyticsPushesByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]> {
     const startIso = startDate.toISOString().slice(0, 10);
     const rows = await db.execute<{ day: string; count: number }>(sql`
       SELECT (date_trunc('day', e.pushed_at)::date)::text AS day, count(*)::int AS count
@@ -418,8 +419,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Analytics: top repos by churn (one query, GROUP BY repository_id with repo names). */
-  async getAnalyticsTopRepos(userId: number, limit: number = 10): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
-    const rows = await db.execute<{ repository_id: number; name: string; full_name: string; push_count: number; total_additions: number; total_deletions: number }>(sql`
+  async getAnalyticsTopRepos(userId: string, limit: number = 10): Promise<{ repositoryId: string; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
+    const rows = await db.execute<{ repository_id: string; name: string; full_name: string; push_count: number; total_additions: number; total_deletions: number }>(sql`
       SELECT r.id AS repository_id, r.name, r.full_name,
              count(e.id)::int AS push_count,
              coalesce(sum(e.additions), 0)::int AS total_additions,
@@ -433,7 +434,7 @@ export class DatabaseStorage implements IStorage {
     `);
     const list = Array.isArray(rows) ? rows : [rows];
     return list.map((r) => ({
-      repositoryId: r?.repository_id ?? 0,
+      repositoryId: r?.repository_id ?? "",
       name: r?.name ?? "",
       fullName: r?.full_name ?? "",
       pushCount: r?.push_count ?? 0,
@@ -443,7 +444,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Analytics: Slack notifications by day (one query, GROUP BY date). */
-  async getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+  async getAnalyticsSlackByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]> {
     const startIso = startDate.toISOString().slice(0, 10);
     const rows = await db.execute<{ day: string; count: number }>(sql`
       SELECT (created_at::date)::text AS day, count(*)::int AS count
@@ -456,7 +457,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Analytics: AI usage counts by model (one query, GROUP BY model). */
-  async getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]> {
+  async getAnalyticsAiModelUsage(userId: string): Promise<{ model: string; count: number }[]> {
     const rows = await db.execute<{ model: string; count: number }>(sql`
       SELECT model, count(*)::int AS count
       FROM ai_usage
@@ -473,13 +474,13 @@ export class DatabaseStorage implements IStorage {
     return result[0] as PushEvent;
   }
 
-  async updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
+  async updatePushEvent(id: string, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
     const result = await db.update(pushEvents).set(updates).where(eq(pushEvents.id, id)).returning();
     return result[0] as PushEvent | undefined;
   }
 
   // Slack workspace methods
-  async getSlackWorkspace(id: number): Promise<SlackWorkspace | undefined> {
+  async getSlackWorkspace(id: string): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
     if (!result[0]) return undefined;
     const ws = result[0] as any;
@@ -490,7 +491,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getSlackWorkspacesByUserId(userId: number): Promise<SlackWorkspace[]> {
+  async getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]> {
     const results = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.userId, userId));
     // Decrypt access tokens (but don't expose them in list responses)
     return results.map((ws: any) => ({
@@ -524,7 +525,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
+  async updateSlackWorkspace(id: string, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
     // Encrypt access token if being updated
     const encryptedUpdates = updates.accessToken 
       ? { ...updates, accessToken: encrypt(updates.accessToken) }
@@ -539,7 +540,7 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  async getSlackWorkspaceDecrypted(id: number): Promise<SlackWorkspace | undefined> {
+  async getSlackWorkspaceDecrypted(id: string): Promise<SlackWorkspace | undefined> {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
     if (!result[0]) return undefined;
     const ws = result[0] as any;
@@ -550,7 +551,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Analytics methods
-  async getStatsForUser(userId: number): Promise<AnalyticsStats> {
+  async getStatsForUser(userId: string): Promise<AnalyticsStats> {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     // Single round-trip: all 5 stats via scalar subqueries (no full table loads, minimal latency)
     const [row] = await db.execute<{
@@ -588,7 +589,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Get the last N analytics_stats snapshots for a user (most recent first). */
-  async getAnalyticsStatsHistory(userId: number, limit: number = 30): Promise<AnalyticsStats[]> {
+  async getAnalyticsStatsHistory(userId: string, limit: number = 30): Promise<AnalyticsStats[]> {
     const rows = await db
       .select()
       .from(analyticsStats)
@@ -620,7 +621,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Notification methods
-  async getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
+  async getNotificationsByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
     const limit = options?.limit;
     const offset = options?.offset ?? 0;
     if (limit != null) {
@@ -636,7 +637,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Single-query count for dashboard/summary (no load of all rows). */
-  async getNotificationCountForUser(userId: number): Promise<number> {
+  async getNotificationCountForUser(userId: string): Promise<number> {
     const [row] = await db.execute<{ c: number }>(sql`
       SELECT count(*)::int AS c FROM notifications WHERE user_id = ${userId}
     `);
@@ -644,7 +645,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Get one notification by id and userId (for mark-read/delete without loading all). */
-  async getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined> {
+  async getNotificationByIdAndUserId(id: string, userId: string): Promise<Notification | undefined> {
     const result = await db.select().from(notifications)
       .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
       .limit(1);
@@ -652,14 +653,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Check if user has any notification of given type (e.g. for email_verification inject). */
-  async hasNotificationOfType(userId: number, type: string): Promise<boolean> {
+  async hasNotificationOfType(userId: string, type: string): Promise<boolean> {
     const result = await db.select().from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.type, type)))
       .limit(1);
     return result.length > 0;
   }
 
-  async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
+  async getUnreadNotificationsByUserId(userId: string): Promise<Notification[]> {
     return await db.select().from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
       .orderBy(notifications.createdAt) as any;
@@ -670,7 +671,7 @@ export class DatabaseStorage implements IStorage {
     return result[0] as any;
   }
 
-  async markNotificationAsRead(id: number): Promise<Notification | undefined> {
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
     try {
       console.log(`📝 Database: Marking notification ${id} as read`);
       const result = await db.update(notifications)
@@ -691,37 +692,29 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async markAllNotificationsAsRead(userId: number): Promise<void> {
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
     await db.update(notifications)
       .set({ isRead: true })
       .where(eq(notifications.userId, userId));
   }
 
-  async deleteNotification(id: number): Promise<boolean> {
+  async deleteNotification(id: string): Promise<boolean> {
     await db.delete(notifications).where(eq(notifications.id, id));
     return true;
   }
 
-  async deleteAllNotifications(userId: number): Promise<boolean> {
+  async deleteAllNotifications(userId: string): Promise<boolean> {
     console.log(`🗄️ [DATABASE] Deleting all notifications for user ${userId}`);
-    
-    // Get count before deletion
-    const beforeCount = await db.select().from(notifications).where(eq(notifications.userId, userId));
-    console.log(`📊 [DATABASE] Notifications before deletion:`, beforeCount.length);
-    
-    // Perform deletion
-    const result = await db.delete(notifications).where(eq(notifications.userId, userId));
-    console.log(`✅ [DATABASE] Delete operation result:`, result);
-    
-    // Verify deletion
-    const afterCount = await db.select().from(notifications).where(eq(notifications.userId, userId));
-    console.log(`🔍 [DATABASE] Notifications after deletion:`, afterCount.length);
-    
+    const beforeCount = await this.getNotificationCountForUser(userId);
+    console.log(`📊 [DATABASE] Notifications before deletion:`, beforeCount);
+    await db.delete(notifications).where(eq(notifications.userId, userId));
+    const afterCount = await this.getNotificationCountForUser(userId);
+    console.log(`🔍 [DATABASE] Notifications after deletion:`, afterCount);
     return true;
   }
 
   /** AI usage rows for user, bounded by default (last 1000) to avoid full-table scans. For export use a higher limit. */
-  async getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]> {
+  async getAiUsageByUserId(userId: string, options?: { limit?: number }): Promise<AiUsage[]> {
     const limit = options?.limit ?? 1000;
     return await db.select().from(aiUsage)
       .where(eq(aiUsage.userId, userId))
@@ -730,7 +723,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Sum of AI cost for user since monthStart (for webhook budget check). Single query, no full table load. */
-  async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {
+  async getMonthlyAiSpend(userId: string, monthStart: Date): Promise<number> {
     const monthStartIso = monthStart.toISOString().slice(0, 10);
     const [row] = await db.execute<{ spend: number }>(sql`
       SELECT COALESCE(SUM(cost), 0)::bigint AS spend FROM ai_usage WHERE user_id = ${userId} AND created_at >= ${monthStartIso}
@@ -739,7 +732,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Monthly summary: total spend and call count since monthStart (for /api/openrouter/monthly-spend). */
-  async getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+  async getMonthlyAiSummary(userId: string, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
     const monthStartIso = monthStart.toISOString().slice(0, 10);
     const [row] = await db.execute<{ total_spend: string; call_count: number }>(sql`
       SELECT COALESCE(SUM(cost), 0)::bigint AS total_spend, COUNT(*)::int AS call_count
@@ -749,7 +742,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Total AI usage row count for user (for dashboard data summary). Single COUNT query. */
-  async getAiUsageCountForUser(userId: number): Promise<number> {
+  async getAiUsageCountForUser(userId: string): Promise<number> {
     const [row] = await db.execute<{ c: number }>(sql`
       SELECT count(*)::int AS c FROM ai_usage WHERE user_id = ${userId}
     `);
@@ -757,7 +750,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Daily AI usage aggregation (date, totalCost, callCount) for charts. One GROUP BY query. */
-  async getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
+  async getAiUsageDailyByUserId(userId: string, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
     const startIso = startDate.toISOString().slice(0, 10);
     const rows = await db.execute<{ day: string; total_cost: string; call_count: number }>(sql`
       SELECT (date_trunc('day', created_at)::date)::text AS day,
@@ -777,7 +770,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Cost by model (model, cost, calls, tokens) for analytics. One GROUP BY query. */
-  async getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
+  async getAiUsageByModelForAnalytics(userId: string, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
     if (startDate) {
       const startIso = startDate.toISOString().slice(0, 10);
       const rows = await db.execute<{ model: string; cost: string; calls: number; tokens: string }>(sql`
@@ -808,7 +801,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Get the single AI usage row for a push event (one usage record per push when AI summary is generated). */
-  async getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined> {
+  async getAiUsageByPushEventId(pushEventId: string, userId: string): Promise<AiUsage | undefined> {
     const rows = await db
       .select()
       .from(aiUsage)
@@ -822,7 +815,7 @@ export class DatabaseStorage implements IStorage {
     return result as any;
   }
 
-  async updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
+  async updateAiUsage(pushEventId: string, userId: string, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
     const allowed = ['model', 'tokensUsed', 'cost', 'openrouterGenerationId'] as const;
     const set: Record<string, unknown> = {};
     for (const key of allowed) {
@@ -836,13 +829,13 @@ export class DatabaseStorage implements IStorage {
     return result as AiUsage | undefined;
   }
 
-  async deleteAiUsage(pushEventId: number, userId: number): Promise<boolean> {
+  async deleteAiUsage(pushEventId: string, userId: string): Promise<boolean> {
     const deleted = await db.delete(aiUsage).where(and(eq(aiUsage.pushEventId, pushEventId), eq(aiUsage.userId, userId))).returning({ id: aiUsage.id });
     return deleted.length > 0;
   }
 
   /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). Bounded by default (limit 500). */
-  async getAiUsageWithPushDateByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<(AiUsage & { pushedAt: string | null })[]> {
+  async getAiUsageWithPushDateByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<(AiUsage & { pushedAt: string | null })[]> {
     const limit = options?.limit ?? 500;
     const offset = options?.offset ?? 0;
     const rows = await db
@@ -868,7 +861,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Last-used timestamp per model (max created_at) for the user. Used for "Last used" on /models in user's timezone. */
-  async getLastUsedByModelByUserId(userId: number): Promise<{ model: string; lastUsedAt: string }[]> {
+  async getLastUsedByModelByUserId(userId: string): Promise<{ model: string; lastUsedAt: string }[]> {
     const rows = await db
       .select({
         model: aiUsage.model,
@@ -889,7 +882,7 @@ export class DatabaseStorage implements IStorage {
     return result as any;
   }
 
-  async getFileStatsByRepositoryId(repositoryId: number): Promise<{ filePath: string; additions: number; deletions: number }[]> {
+  async getFileStatsByRepositoryId(repositoryId: string): Promise<{ filePath: string; additions: number; deletions: number }[]> {
     const rows = await db
       .select({
         filePath: pushEventFiles.filePath,
@@ -909,7 +902,7 @@ export class DatabaseStorage implements IStorage {
     return result as any;
   }
 
-  async getPaymentsByUserId(userId: number): Promise<Payment[]> {
+  async getPaymentsByUserId(userId: string): Promise<Payment[]> {
     return await db.select().from(payments).where(eq(payments.userId, userId)) as any;
   }
 
@@ -919,16 +912,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Favorite models methods
-  async getFavoriteModelsByUserId(userId: number): Promise<FavoriteModel[]> {
+  async getFavoriteModelsByUserId(userId: string): Promise<FavoriteModel[]> {
     return await db.select().from(favoriteModels).where(eq(favoriteModels.userId, userId)).orderBy(desc(favoriteModels.createdAt)) as any;
   }
 
-  async addFavoriteModel(userId: number, modelId: string): Promise<FavoriteModel> {
+  async addFavoriteModel(userId: string, modelId: string): Promise<FavoriteModel> {
     const [result] = await db.insert(favoriteModels).values({ userId, modelId }).returning();
     return result as any;
   }
 
-  async removeFavoriteModel(userId: number, modelId: string): Promise<boolean> {
+  async removeFavoriteModel(userId: string, modelId: string): Promise<boolean> {
     const deleted = await db.delete(favoriteModels)
       .where(and(eq(favoriteModels.userId, userId), eq(favoriteModels.modelId, modelId)))
       .returning({ id: favoriteModels.id });
@@ -959,22 +952,22 @@ export class DatabaseStorage implements IStorage {
    * Delete all sessions for a user (sess JSON contains userId).
    * Used on password reset (AUTH-VULN-02) so stolen sessions are invalidated.
    */
-  async deleteSessionsForUser(userId: number): Promise<void> {
-    await db.execute(sql`DELETE FROM user_sessions WHERE (sess->>'userId')::int = ${userId}`);
+  async deleteSessionsForUser(userId: string): Promise<void> {
+    await db.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${userId}`);
   }
 
   /**
    * Delete all sessions for a user except the given sid (e.g. current session).
    * Used on change-password so other devices are logged out but user stays logged in.
    */
-  async deleteSessionsForUserExcept(userId: number, exceptSid: string): Promise<void> {
-    await db.execute(sql`DELETE FROM user_sessions WHERE (sess->>'userId')::int = ${userId} AND sid != ${exceptSid}`);
+  async deleteSessionsForUserExcept(userId: string, exceptSid: string): Promise<void> {
+    await db.execute(sql`DELETE FROM user_sessions WHERE sess->>'userId' = ${userId} AND sid != ${exceptSid}`);
   }
 
   /**
    * Delete a user account and all associated data (GDPR compliance)
    */
-  async deleteUserAccount(userId: number): Promise<{ success: boolean; deletedData: any }> {
+  async deleteUserAccount(userId: string): Promise<{ success: boolean; deletedData: any }> {
     const deletedData: any = {
       userId,
       deletedAt: new Date().toISOString(),
@@ -993,25 +986,22 @@ export class DatabaseStorage implements IStorage {
       const deletedUsage = await db.delete(aiUsage).where(eq(aiUsage.userId, userId)).returning({ id: aiUsage.id });
       deletedData.aiUsage = deletedUsage.length;
 
-      // 2. Delete payments (keep for legal/accounting - just anonymize)
-      // We don't delete payments for legal reasons, but we'll count them
-      const userPayments = await this.getPaymentsByUserId(userId);
-      deletedData.payments = userPayments.length;
+      // 2. Count payments (we don't delete for legal reasons)
+      const [paymentsRow] = await db.execute<{ c: number }>(sql`SELECT count(*)::int AS c FROM payments WHERE user_id = ${userId}`);
+      deletedData.payments = paymentsRow?.c ?? 0;
 
       // 3. Delete notifications
       await this.deleteAllNotifications(userId);
       deletedData.notifications = (await this.getNotificationCountForUser(userId)) === 0 ? deletedData.notifications : 0;
 
-      // 4. Get all user repositories
+      // 4. Get user repository IDs (needed for push_events delete and later repo delete)
       const userRepos = await this.getRepositoriesByUserId(userId);
+      const repoIds = userRepos.map((r) => r.id);
 
-      // 5. Delete push events for each repository
-      for (const repo of userRepos) {
-        const repoPushEvents = await db.select().from(pushEvents).where(eq(pushEvents.repositoryId, repo.id));
-        for (const event of repoPushEvents) {
-          await db.delete(pushEvents).where(eq(pushEvents.id, event.id));
-          deletedData.pushEvents++;
-        }
+      // 5. Delete all push events for user's repos in one query (no load-then-delete loop)
+      if (repoIds.length > 0) {
+        const deleted = await db.delete(pushEvents).where(inArray(pushEvents.repositoryId, repoIds)).returning({ id: pushEvents.id });
+        deletedData.pushEvents = deleted.length;
       }
 
       // 6. Delete integrations
@@ -1048,7 +1038,7 @@ export class DatabaseStorage implements IStorage {
   /**
    * Export all user data (GDPR compliance)
    */
-  async exportUserData(userId: number): Promise<any> {
+  async exportUserData(userId: string): Promise<any> {
     const user = await this.getUser(userId);
     if (!user) {
       throw new Error("User not found");
@@ -1061,12 +1051,10 @@ export class DatabaseStorage implements IStorage {
     const userAiUsage = await this.getAiUsageByUserId(userId, { limit: 50000 });
     const userPayments = await this.getPaymentsByUserId(userId);
 
-    // Get push events for user's repositories
-    const allPushEvents: any[] = [];
-    for (const repo of userRepos) {
-      const repoPushEvents = await db.select().from(pushEvents).where(eq(pushEvents.repositoryId, repo.id));
-      allPushEvents.push(...repoPushEvents);
-    }
+    const repoIds = userRepos.map((r) => r.id);
+    const allPushEvents: any[] = repoIds.length > 0
+      ? await db.select().from(pushEvents).where(inArray(pushEvents.repositoryId, repoIds))
+      : [];
 
     return {
       exportDate: new Date().toISOString(),

@@ -40,7 +40,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DashboardStats, RepositoryCardData, ActiveIntegration } from "@/lib/types";
 
 interface ConnectRepositoryData {
-  userId: number;
+  userId: string;
   githubId: string;
   name: string;
   fullName: string;
@@ -211,7 +211,7 @@ export default function Dashboard() {
   const handleRepositorySelect = (repository: any) => {
     // Convert from GitHub API format to our internal format
     const connectData: ConnectRepositoryData = {
-      userId: 0, // Will be set by server from authenticated user
+      userId: "", // Will be set by server from authenticated user
       githubId: repository.githubId,
       name: repository.name,
       fullName: repository.full_name,
@@ -383,7 +383,7 @@ export default function Dashboard() {
 
   // Toggle integration status mutation
   const toggleIntegrationMutation = useMutation({
-    mutationFn: async ({ integrationId, isActive }: { integrationId: number; isActive: boolean }) => {
+    mutationFn: async ({ integrationId, isActive }: { integrationId: string; isActive: boolean }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${integrationId}`, {
         isActive,
       });
@@ -413,7 +413,7 @@ export default function Dashboard() {
 
   // Delete integration mutation
   const deleteIntegrationMutation = useMutation({
-    mutationFn: async (integrationId: number) => {
+    mutationFn: async (integrationId: string) => {
       const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
@@ -444,7 +444,7 @@ export default function Dashboard() {
 
   // Update integration mutation
   const updateIntegrationMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
@@ -473,7 +473,7 @@ export default function Dashboard() {
 
   // Update repository mutation
   const updateRepositoryMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       const response = await apiRequest("PATCH", `/api/repositories/${id}`, updates);
       const result = await response.json();
       return result;
@@ -502,7 +502,7 @@ export default function Dashboard() {
   
   // Delete repository mutation
   const deleteRepositoryMutation = useMutation({
-    mutationFn: async (repoId: number) => {
+    mutationFn: async (repoId: string) => {
       try {
         const response = await apiRequest("DELETE", `/api/repositories/${repoId}`);
         // /api/repositories/:id

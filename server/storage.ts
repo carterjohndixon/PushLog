@@ -14,7 +14,7 @@ import { DatabaseStorage } from './database';
 /** Options for full-text search over push events (Part 2.2). */
 export interface SearchPushEventsOptions {
   q: string;
-  repositoryId?: number;
+  repositoryId?: string;
   from?: string;   // ISO date string
   to?: string;     // ISO date string
   minImpact?: number;
@@ -24,101 +24,97 @@ export interface SearchPushEventsOptions {
 
 export interface IStorage {
   // User methods
-  getUser(id: number): Promise<User | undefined>;
+  getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
+  updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
 
   // Repository methods
-  getRepository(id: number): Promise<Repository | undefined>;
-  getRepositoriesByUserId(userId: number): Promise<Repository[]>;
+  getRepository(id: string): Promise<Repository | undefined>;
+  getRepositoriesByUserId(userId: string): Promise<Repository[]>;
   getRepositoryByGithubId(githubId: string): Promise<Repository | undefined>;
   createRepository(repository: InsertRepository): Promise<Repository>;
-  updateRepository(id: number, updates: Partial<Repository>): Promise<Repository | undefined>;
-  deleteRepository(id: number): Promise<boolean>;
+  updateRepository(id: string, updates: Partial<Repository>): Promise<Repository | undefined>;
+  deleteRepository(id: string): Promise<boolean>;
 
   // Integration methods
-  getIntegration(id: number): Promise<Integration | undefined>;
-  getIntegrationsByUserId(userId: number): Promise<Integration[]>;
-  getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]>;
-  getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined>;
-  getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]>;
+  getIntegration(id: string): Promise<Integration | undefined>;
+  getIntegrationsByUserId(userId: string): Promise<Integration[]>;
+  getIntegrationsByRepositoryId(repositoryId: string): Promise<Integration[]>;
+  getIntegrationByRepositoryId(repositoryId: string): Promise<Integration | undefined>;
+  getIntegrationsBySlackChannel(workspaceId: string, channelId: string): Promise<Integration[]>;
   createIntegration(integration: InsertIntegration): Promise<Integration>;
-  updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined>;
-  deleteIntegration(id: number): Promise<boolean>;
+  updateIntegration(id: string, updates: Partial<Integration>): Promise<Integration | undefined>;
+  deleteIntegration(id: string): Promise<boolean>;
 
   // Push event methods
-  getPushEvent(id: number): Promise<PushEvent | undefined>;
-  getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
-  getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
-  getPushEventCountForUser(userId: number): Promise<number>;
+  getPushEvent(id: string): Promise<PushEvent | undefined>;
+  getPushEventsByRepositoryId(repositoryId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
+  getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
+  getPushEventCountForUser(userId: string): Promise<number>;
   /** Full-text search over push events (summary, message, author, impact, category). User-scoped to their repos. */
-  searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]>;
+  searchPushEvents(userId: string, options: SearchPushEventsOptions): Promise<PushEvent[]>;
   createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent>;
-  updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined>;
+  updatePushEvent(id: string, updates: Partial<PushEvent>): Promise<PushEvent | undefined>;
 
   // Slack workspace methods
-  getSlackWorkspace(id: number): Promise<SlackWorkspace | undefined>;
-  getSlackWorkspacesByUserId(userId: number): Promise<SlackWorkspace[]>;
+  getSlackWorkspace(id: string): Promise<SlackWorkspace | undefined>;
+  getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]>;
   getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined>;
   createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace>;
-  updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
+  updateSlackWorkspace(id: string, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
 
   // OpenRouter methods
-  getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]>;
-  getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number>;
-  getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }>;
-  getAiUsageCountForUser(userId: number): Promise<number>;
-  getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]>;
-  getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]>;
-  getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined>;
+  getAiUsageByUserId(userId: string, options?: { limit?: number }): Promise<AiUsage[]>;
+  getMonthlyAiSpend(userId: string, monthStart: Date): Promise<number>;
+  getMonthlyAiSummary(userId: string, monthStart: Date): Promise<{ totalSpend: number; callCount: number }>;
+  getAiUsageCountForUser(userId: string): Promise<number>;
+  getAiUsageDailyByUserId(userId: string, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]>;
+  getAiUsageByModelForAnalytics(userId: string, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]>;
+  getAiUsageByPushEventId(pushEventId: string, userId: string): Promise<AiUsage | undefined>;
   createAiUsage(aiUsage: InsertAiUsage): Promise<AiUsage>;
-  updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined>;
-  deleteAiUsage(pushEventId: number, userId: number): Promise<boolean>;
+  updateAiUsage(pushEventId: string, userId: string, updates: Partial<AiUsage>): Promise<AiUsage | undefined>;
+  deleteAiUsage(pushEventId: string, userId: string): Promise<boolean>;
 
   // Analytics methods
-  getStatsForUser(userId: number): Promise<AnalyticsStats>;
-  getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]>;
-  getAnalyticsTopRepos(userId: number, limit?: number): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]>;
-  getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]>;
-  getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]>;
+  getStatsForUser(userId: string): Promise<AnalyticsStats>;
+  getAnalyticsPushesByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]>;
+  getAnalyticsTopRepos(userId: string, limit?: number): Promise<{ repositoryId: string; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]>;
+  getAnalyticsSlackByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]>;
+  getAnalyticsAiModelUsage(userId: string): Promise<{ model: string; count: number }[]>;
 
   // Notification methods
-  getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]>;
-  getNotificationCountForUser(userId: number): Promise<number>;
-  getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined>;
-  hasNotificationOfType(userId: number, type: string): Promise<boolean>;
-  getUnreadNotificationsByUserId(userId: number): Promise<Notification[]>;
+  getNotificationsByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<Notification[]>;
+  getNotificationCountForUser(userId: string): Promise<number>;
+  getNotificationByIdAndUserId(id: string, userId: string): Promise<Notification | undefined>;
+  hasNotificationOfType(userId: string, type: string): Promise<boolean>;
+  getUnreadNotificationsByUserId(userId: string): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
-  markNotificationAsRead(id: number): Promise<Notification | undefined>;
-  markAllNotificationsAsRead(userId: number): Promise<void>;
-  deleteNotification(id: number): Promise<boolean>;
-  deleteAllNotifications(userId: number): Promise<boolean>;
+  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+  deleteNotification(id: string): Promise<boolean>;
+  deleteAllNotifications(userId: string): Promise<boolean>;
+}
+
+function newUuid(): string {
+  return crypto.randomUUID();
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<number, User> = new Map();
-  private repositories: Map<number, Repository> = new Map();
-  private integrations: Map<number, Integration> = new Map();
-  private pushEvents: Map<number, PushEvent> = new Map();
-  private slackWorkspaces: Map<number, SlackWorkspace> = new Map();
-  private notifications: Map<number, Notification> = new Map();
-  private currentUserId = 1;
-  private currentRepositoryId = 1;
-  private currentIntegrationId = 1;
-  private currentPushEventId = 1;
-  private currentSlackWorkspaceId = 1;
-  private currentNotificationId = 1;
-  private analyticsStats: Map<number, AnalyticsStats> = new Map();
-  private currentAnalyticsStatsId = 1;
-  private aiUsage: Map<number, AiUsage> = new Map();
-  private currentAiUsageId = 1;
+  private users: Map<string, User> = new Map();
+  private repositories: Map<string, Repository> = new Map();
+  private integrations: Map<string, Integration> = new Map();
+  private pushEvents: Map<string, PushEvent> = new Map();
+  private slackWorkspaces: Map<string, SlackWorkspace> = new Map();
+  private notifications: Map<string, Notification> = new Map();
+  private analyticsStats: Map<string, AnalyticsStats> = new Map();
+  private aiUsage: Map<string, AiUsage> = new Map();
 
   // User methods
-  async getUser(id: number): Promise<User | undefined> {
+  async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
   }
 
@@ -139,7 +135,7 @@ export class MemStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentUserId++;
+    const id = newUuid();
     const user: User = { 
       ...insertUser, 
       id, 
@@ -154,7 +150,7 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
     const user = this.users.get(id);
     if (!user) return undefined;
     const updatedUser = { ...user, ...updates };
@@ -163,11 +159,11 @@ export class MemStorage implements IStorage {
   }
 
   // Repository methods
-  async getRepository(id: number): Promise<Repository | undefined> {
+  async getRepository(id: string): Promise<Repository | undefined> {
     return this.repositories.get(id);
   }
 
-  async getRepositoriesByUserId(userId: number): Promise<Repository[]> {
+  async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
     return Array.from(this.repositories.values()).filter(repo => repo.userId === userId);
   }
 
@@ -176,7 +172,7 @@ export class MemStorage implements IStorage {
   }
 
   async createRepository(repository: InsertRepository): Promise<Repository> {
-    const id = this.currentRepositoryId++;
+    const id = newUuid();
     const newRepository: Repository = {
       ...repository,
       id,
@@ -190,7 +186,7 @@ export class MemStorage implements IStorage {
     return newRepository;
   }
 
-  async updateRepository(id: number, updates: Partial<Repository>): Promise<Repository | undefined> {
+  async updateRepository(id: string, updates: Partial<Repository>): Promise<Repository | undefined> {
     const repository = this.repositories.get(id);
     if (!repository) return undefined;
     const updatedRepository = { ...repository, ...updates };
@@ -198,35 +194,35 @@ export class MemStorage implements IStorage {
     return updatedRepository;
   }
 
-  async deleteRepository(id: number): Promise<boolean> {
+  async deleteRepository(id: string): Promise<boolean> {
     return this.repositories.delete(id);
   }
 
   // Integration methods
-  async getIntegration(id: number): Promise<Integration | undefined> {
+  async getIntegration(id: string): Promise<Integration | undefined> {
     return this.integrations.get(id);
   }
 
-  async getIntegrationsByUserId(userId: number): Promise<Integration[]> {
+  async getIntegrationsByUserId(userId: string): Promise<Integration[]> {
     return Array.from(this.integrations.values()).filter(integration => integration.userId === userId);
   }
 
-  async getIntegrationsByRepositoryId(repositoryId: number): Promise<Integration[]> {
+  async getIntegrationsByRepositoryId(repositoryId: string): Promise<Integration[]> {
     return Array.from(this.integrations.values()).filter(integration => integration.repositoryId === repositoryId);
   }
 
-  async getIntegrationByRepositoryId(repositoryId: number): Promise<Integration | undefined> {
+  async getIntegrationByRepositoryId(repositoryId: string): Promise<Integration | undefined> {
     return Array.from(this.integrations.values()).find(integration => integration.repositoryId === repositoryId);
   }
 
-  async getIntegrationsBySlackChannel(workspaceId: number, channelId: string): Promise<Integration[]> {
+  async getIntegrationsBySlackChannel(workspaceId: string, channelId: string): Promise<Integration[]> {
     return Array.from(this.integrations.values()).filter(
       i => i.slackWorkspaceId === workspaceId && i.slackChannelId === channelId
     );
   }
 
   async createIntegration(integration: InsertIntegration): Promise<Integration> {
-    const id = this.currentIntegrationId++;
+    const id = newUuid();
     const newIntegration: Integration = {
       ...integration,
       id,
@@ -243,7 +239,7 @@ export class MemStorage implements IStorage {
     return newIntegration;
   }
 
-  async updateIntegration(id: number, updates: Partial<Integration>): Promise<Integration | undefined> {
+  async updateIntegration(id: string, updates: Partial<Integration>): Promise<Integration | undefined> {
     const integration = this.integrations.get(id);
     if (!integration) return undefined;
     const updatedIntegration = { ...integration, ...updates };
@@ -251,16 +247,16 @@ export class MemStorage implements IStorage {
     return updatedIntegration;
   }
 
-  async deleteIntegration(id: number): Promise<boolean> {
+  async deleteIntegration(id: string): Promise<boolean> {
     return this.integrations.delete(id);
   }
 
   // Push event methods
-  async getPushEvent(id: number): Promise<PushEvent | undefined> {
+  async getPushEvent(id: string): Promise<PushEvent | undefined> {
     return this.pushEvents.get(id);
   }
 
-  async getPushEventsByRepositoryId(repositoryId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  async getPushEventsByRepositoryId(repositoryId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
     const limit = options?.limit ?? 200;
     const offset = options?.offset ?? 0;
     const list = Array.from(this.pushEvents.values())
@@ -270,7 +266,7 @@ export class MemStorage implements IStorage {
     return list;
   }
 
-  async getPushEventsForUser(userId: number, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
     const limit = options?.limit ?? 100;
     const offset = options?.offset ?? 0;
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
@@ -281,12 +277,12 @@ export class MemStorage implements IStorage {
     return list;
   }
 
-  async getPushEventCountForUser(userId: number): Promise<number> {
+  async getPushEventCountForUser(userId: string): Promise<number> {
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
     return Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId)).length;
   }
 
-  async searchPushEvents(userId: number, options: SearchPushEventsOptions): Promise<PushEvent[]> {
+  async searchPushEvents(userId: string, options: SearchPushEventsOptions): Promise<PushEvent[]> {
     const { q, repositoryId, from, to, minImpact, limit = 50, offset = 0 } = options;
     const query = (q ?? '').trim().toLowerCase();
     if (!query) return [];
@@ -312,7 +308,7 @@ export class MemStorage implements IStorage {
   }
 
   async createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent> {
-    const id = this.currentPushEventId++;
+    const id = newUuid();
     const newPushEvent: PushEvent = {
       ...pushEvent,
       id,
@@ -327,13 +323,14 @@ export class MemStorage implements IStorage {
       riskMetadata: pushEvent.riskMetadata ?? null,
       createdAt: new Date().toISOString(),
       additions: pushEvent.additions ?? null,
-      deletions: pushEvent.deletions ?? null
+      deletions: pushEvent.deletions ?? null,
+      searchVector: null, // generated column; not set in MemStorage
     };
     this.pushEvents.set(id, newPushEvent);
     return newPushEvent;
   }
 
-  async updatePushEvent(id: number, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
+  async updatePushEvent(id: string, updates: Partial<PushEvent>): Promise<PushEvent | undefined> {
     const pushEvent = this.pushEvents.get(id);
     if (!pushEvent) return undefined;
     const updatedPushEvent = { ...pushEvent, ...updates };
@@ -342,11 +339,11 @@ export class MemStorage implements IStorage {
   }
 
   // Slack workspace methods
-  async getSlackWorkspace(id: number): Promise<SlackWorkspace | undefined> {
+  async getSlackWorkspace(id: string): Promise<SlackWorkspace | undefined> {
     return this.slackWorkspaces.get(id);
   }
 
-  async getSlackWorkspacesByUserId(userId: number): Promise<SlackWorkspace[]> {
+  async getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]> {
     return Array.from(this.slackWorkspaces.values()).filter(workspace => workspace.userId === userId);
   }
 
@@ -355,7 +352,7 @@ export class MemStorage implements IStorage {
   }
 
   async createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
-    const id = this.currentSlackWorkspaceId++;
+    const id = newUuid();
     const newWorkspace: SlackWorkspace = {
       ...workspace,
       id,
@@ -365,7 +362,7 @@ export class MemStorage implements IStorage {
     return newWorkspace;
   }
 
-  async updateSlackWorkspace(id: number, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
+  async updateSlackWorkspace(id: string, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined> {
     const slackWorkspace = this.slackWorkspaces.get(id);
     if (!slackWorkspace) return undefined;
     const updatedSlackWorkspace = { ...slackWorkspace, ...updates };
@@ -375,7 +372,7 @@ export class MemStorage implements IStorage {
 
   // OpenRouter methods
   /** Get the user's OpenRouter usage history (bounded by limit when provided). */
-  async getAiUsageByUserId(userId: number, options?: { limit?: number }): Promise<AiUsage[]> {
+  async getAiUsageByUserId(userId: string, options?: { limit?: number }): Promise<AiUsage[]> {
     const list = Array.from(this.aiUsage.values())
       .filter(usage => usage.userId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) as AiUsage[];
@@ -383,22 +380,22 @@ export class MemStorage implements IStorage {
     return limit ? list.slice(0, limit) : list;
   }
 
-  async getMonthlyAiSpend(userId: number, monthStart: Date): Promise<number> {
+  async getMonthlyAiSpend(userId: string, monthStart: Date): Promise<number> {
     const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= monthStart);
     return list.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
   }
 
-  async getMonthlyAiSummary(userId: number, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+  async getMonthlyAiSummary(userId: string, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
     const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= monthStart);
     const totalSpend = list.reduce((sum, u) => sum + (typeof u.cost === "number" ? u.cost : Number(u.cost) || 0), 0);
     return { totalSpend, callCount: list.length };
   }
 
-  async getAiUsageCountForUser(userId: number): Promise<number> {
+  async getAiUsageCountForUser(userId: string): Promise<number> {
     return Array.from(this.aiUsage.values()).filter(u => u.userId === userId).length;
   }
 
-  async getAiUsageDailyByUserId(userId: number, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
+  async getAiUsageDailyByUserId(userId: string, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
     const list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId && new Date(u.createdAt) >= startDate);
     const byDay: Record<string, { totalCost: number; callCount: number }> = {};
     for (const u of list) {
@@ -411,7 +408,7 @@ export class MemStorage implements IStorage {
     return Object.entries(byDay).map(([date, v]) => ({ date, ...v })).sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  async getAiUsageByModelForAnalytics(userId: number, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
+  async getAiUsageByModelForAnalytics(userId: string, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
     let list = Array.from(this.aiUsage.values()).filter(u => u.userId === userId);
     if (startDate) list = list.filter(u => new Date(u.createdAt) >= startDate);
     const byModel: Record<string, { cost: number; calls: number; tokens: number }> = {};
@@ -426,12 +423,12 @@ export class MemStorage implements IStorage {
   }
 
   /** Get the OpenRouter usage for a specific push event. */
-  async getAiUsageByPushEventId(pushEventId: number, userId: number): Promise<AiUsage | undefined> {
-    return Array.from(this.aiUsage.values()).filter(usage => usage.userId === userId && usage.pushEventId === pushEventId).shift();
+  async getAiUsageByPushEventId(pushEventId: string, userId: string): Promise<AiUsage | undefined> {
+    return Array.from(this.aiUsage.values()).find(usage => usage.userId === userId && usage.pushEventId === pushEventId);
   }
 
   async createAiUsage(aiUsage: InsertAiUsage): Promise<AiUsage> {
-    const id = this.currentAiUsageId++;
+    const id = newUuid();
     const newAiUsage: AiUsage = {
       ...aiUsage,
       id,
@@ -442,23 +439,23 @@ export class MemStorage implements IStorage {
     return newAiUsage;
   }
 
-  async updateAiUsage(pushEventId: number, userId: number, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
-    const aiUsage = this.aiUsage.get(pushEventId) as AiUsage | undefined;
-    if (!aiUsage || aiUsage.userId !== userId) return undefined;
-    const updatedAiUsage = { ...aiUsage, ...updates } as AiUsage;
-    this.aiUsage.set(pushEventId, updatedAiUsage);
+  async updateAiUsage(pushEventId: string, userId: string, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
+    const usage = Array.from(this.aiUsage.values()).find(u => u.pushEventId === pushEventId && u.userId === userId);
+    if (!usage) return undefined;
+    const updatedAiUsage = { ...usage, ...updates } as AiUsage;
+    this.aiUsage.set(usage.id, updatedAiUsage);
     return updatedAiUsage;
   }
 
-  async deleteAiUsage(pushEventId: number, userId: number): Promise<boolean> {
-    const aiUsage = this.aiUsage.get(pushEventId) as AiUsage | undefined;
-    if (!aiUsage || aiUsage.userId !== userId) return false;
-    return this.aiUsage.delete(pushEventId);
+  async deleteAiUsage(pushEventId: string, userId: string): Promise<boolean> {
+    const usage = Array.from(this.aiUsage.values()).find(u => u.pushEventId === pushEventId && u.userId === userId);
+    if (!usage) return false;
+    return this.aiUsage.delete(usage.id);
   }
 
   // Analytics methods
-  async getStatsForUser(userId: number): Promise<AnalyticsStats> {
-    const analyticsStats = this.analyticsStats.get(userId);
+  async getStatsForUser(userId: string): Promise<AnalyticsStats> {
+    const analyticsStats = Array.from(this.analyticsStats.values()).find(s => s.userId === userId);
     if (analyticsStats) return analyticsStats;
 
     const userIntegrations = await this.getIntegrationsByUserId(userId);
@@ -481,7 +478,7 @@ export class MemStorage implements IStorage {
     ).length;
 
     const newAnalyticsStats: AnalyticsStats = {
-      id: this.currentAnalyticsStatsId++,
+      id: newUuid(),
       userId,
       activeIntegrations,
       totalRepositories,
@@ -493,7 +490,7 @@ export class MemStorage implements IStorage {
     return newAnalyticsStats;
   }
 
-  async getAnalyticsPushesByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+  async getAnalyticsPushesByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]> {
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
     const events = Array.from(this.pushEvents.values()).filter(e => repoIds.has(e.repositoryId) && new Date(e.pushedAt) >= startDate);
     const byDay: Record<string, number> = {};
@@ -504,7 +501,7 @@ export class MemStorage implements IStorage {
     return Object.entries(byDay).map(([date, count]) => ({ date, count }));
   }
 
-  async getAnalyticsTopRepos(userId: number, limit: number = 10): Promise<{ repositoryId: number; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
+  async getAnalyticsTopRepos(userId: string, limit: number = 10): Promise<{ repositoryId: string; name: string; fullName: string; pushCount: number; totalAdditions: number; totalDeletions: number }[]> {
     const userRepos = Array.from(this.repositories.values()).filter(r => r.userId === userId);
     const events = Array.from(this.pushEvents.values());
     const result = userRepos.map(repo => {
@@ -524,7 +521,7 @@ export class MemStorage implements IStorage {
     return result.slice(0, limit);
   }
 
-  async getAnalyticsSlackByDay(userId: number, startDate: Date): Promise<{ date: string; count: number }[]> {
+  async getAnalyticsSlackByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]> {
     const notifs = Array.from(this.notifications.values())
       .filter(n => n.userId === userId && n.type === "slack_message_sent" && new Date(n.createdAt) >= startDate);
     const byDay: Record<string, number> = {};
@@ -535,7 +532,7 @@ export class MemStorage implements IStorage {
     return Object.entries(byDay).map(([date, count]) => ({ date, count }));
   }
 
-  async getAnalyticsAiModelUsage(userId: number): Promise<{ model: string; count: number }[]> {
+  async getAnalyticsAiModelUsage(userId: string): Promise<{ model: string; count: number }[]> {
     const usage = Array.from(this.aiUsage.values()).filter(u => u.userId === userId);
     const byModel: Record<string, number> = {};
     for (const u of usage) {
@@ -548,7 +545,7 @@ export class MemStorage implements IStorage {
   }
 
   // Notification methods
-  async getNotificationsByUserId(userId: number, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
+  async getNotificationsByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<Notification[]> {
     let list = Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -558,27 +555,27 @@ export class MemStorage implements IStorage {
     return list;
   }
 
-  async getNotificationCountForUser(userId: number): Promise<number> {
+  async getNotificationCountForUser(userId: string): Promise<number> {
     return Array.from(this.notifications.values()).filter(n => n.userId === userId).length;
   }
 
-  async getNotificationByIdAndUserId(id: number, userId: number): Promise<Notification | undefined> {
+  async getNotificationByIdAndUserId(id: string, userId: string): Promise<Notification | undefined> {
     const n = this.notifications.get(id);
     return n && n.userId === userId ? n : undefined;
   }
 
-  async hasNotificationOfType(userId: number, type: string): Promise<boolean> {
+  async hasNotificationOfType(userId: string, type: string): Promise<boolean> {
     return Array.from(this.notifications.values()).some(n => n.userId === userId && n.type === type);
   }
 
-  async getUnreadNotificationsByUserId(userId: number): Promise<Notification[]> {
+  async getUnreadNotificationsByUserId(userId: string): Promise<Notification[]> {
     return Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId && !notification.isRead)
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
-    const id = this.currentNotificationId++;
+    const id = newUuid();
     const newNotification: Notification = {
       ...notification,
       id,
@@ -591,7 +588,7 @@ export class MemStorage implements IStorage {
     return newNotification;
   }
 
-  async markNotificationAsRead(id: number): Promise<Notification | undefined> {
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
     const notification = this.notifications.get(id);
     if (!notification) return undefined;
     const updatedNotification = { ...notification, isRead: true };
@@ -599,7 +596,7 @@ export class MemStorage implements IStorage {
     return updatedNotification;
   }
 
-  async markAllNotificationsAsRead(userId: number): Promise<void> {
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
     const userNotifications = Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId);
     
@@ -608,11 +605,11 @@ export class MemStorage implements IStorage {
     });
   }
 
-  async deleteNotification(id: number): Promise<boolean> {
+  async deleteNotification(id: string): Promise<boolean> {
     return this.notifications.delete(id);
   }
 
-  async deleteAllNotifications(userId: number): Promise<boolean> {
+  async deleteAllNotifications(userId: string): Promise<boolean> {
     const userNotifications = Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId);
     

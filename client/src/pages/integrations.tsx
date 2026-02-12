@@ -187,7 +187,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
 
   // Toggle integration status mutation
   const toggleIntegrationMutation = useMutation({
-    mutationFn: async ({ integrationId, isActive }: { integrationId: number; isActive: boolean }) => {
+    mutationFn: async ({ integrationId, isActive }: { integrationId: string; isActive: boolean }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${integrationId}`, {
         isActive,
       });
@@ -218,7 +218,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
 
   // Update integration mutation
   const updateIntegrationMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: number; updates: any }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
       const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
@@ -249,7 +249,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
 
   // Delete integration mutation
   const deleteIntegrationMutation = useMutation({
-    mutationFn: async (integrationId: number) => {
+    mutationFn: async (integrationId: string) => {
       const response = await apiRequest("DELETE", `/api/integrations/${integrationId}`);
       return response.json();
     },

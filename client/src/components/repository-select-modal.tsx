@@ -28,7 +28,7 @@ interface GitHubRepository {
 }
 
 interface RepositoryCardData {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   full_name: string; // GitHub API format
@@ -87,7 +87,7 @@ export function RepositorySelectModal({
       
       // Transform the GitHub API response into our expected format
       return (data as GitHubRepository[]).map((repo) => ({
-        id: repo.id, // Internal database ID if connected, GitHub ID if not connected
+        id: repo.id != null ? String(repo.id) : undefined, // Internal database ID if connected (UUID), GitHub ID if not (as string)
         githubId: repo.githubId || repo.id.toString(), // GitHub ID
         name: repo.name,
         full_name: repo.full_name, // Use GitHub API format

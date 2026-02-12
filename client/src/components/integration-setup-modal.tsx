@@ -17,7 +17,7 @@ import { SiSlack } from "react-icons/si";
 import { Github } from "lucide-react";
 
 interface Repository {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   full_name: string; // GitHub API format
@@ -33,7 +33,7 @@ interface Repository {
 }
 
 interface SlackWorkspace {
-  id: number;
+  id: string;
   teamId: string;
   teamName: string;
 }

@@ -1,0 +1,3 @@
+# Ensure GitHub Linguist counts Rust in the repo language stats
+server/risk-engine/** linguist-detectable=true
+*.rs linguist-language=Rust

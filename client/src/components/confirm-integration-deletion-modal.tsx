@@ -12,7 +12,7 @@ import { UseMutationResult } from "@tanstack/react-query";
 import { formatLocalDate } from "@/lib/date";
 
 interface Integration {
-  id: number;
+  id: string;
   repositoryName: string;
   slackChannelName: string;
   lastUsed?: string;
@@ -22,7 +22,7 @@ interface ConfirmIntegrationDeletionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integrationToDelete: Integration | null;
-  deleteIntegrationMutation: UseMutationResult<any, Error, number, unknown>;
+  deleteIntegrationMutation: UseMutationResult<any, Error, string, unknown>;
 }
 
 export function ConfirmIntegrationDeletionModal({

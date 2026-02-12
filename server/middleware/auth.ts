@@ -6,7 +6,7 @@ import { databaseStorage } from '../database';
  * This replaces the JWT payload and is stored in req.session
  */
 export interface SessionUser {
-  userId: number;
+  userId: string;
   username: string;
   email: string | null;
   githubConnected: boolean;

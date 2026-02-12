@@ -14,7 +14,7 @@ import { UseMutationResult } from "@tanstack/react-query";
 import React from "react"; // Added missing import
 
 interface RepositoryCardData {
-  id?: number;
+  id?: string;
   githubId: string;
   name: string;
   full_name: string; // GitHub API uses full_name
@@ -34,7 +34,7 @@ interface RepositorySettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repository: RepositoryCardData | null;
-  updateRepositoryMutation: UseMutationResult<any, Error, { id: number; updates: any }, unknown>;
+  updateRepositoryMutation: UseMutationResult<any, Error, { id: string; updates: any }, unknown>;
 }
 
 export function RepositorySettingsModal({

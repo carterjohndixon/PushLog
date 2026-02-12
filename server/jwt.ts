@@ -8,7 +8,7 @@ if (!JWT_SECRET) {
 const TOKEN_EXPIRY = '24h';
 
 export interface JWTPayload {
-  userId: number;
+  userId: string;
   username: string;
   email: string | null;
   githubConnected: boolean;

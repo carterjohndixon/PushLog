@@ -1,8 +1,8 @@
 declare global {
-  var notificationStreams: Map<number, any> | undefined;
+  var notificationStreams: Map<string, any> | undefined;
 }
 
-export default function broadcastNotification(userId: number, notification: any) {
+export default function broadcastNotification(userId: string, notification: any) {
   if (global.notificationStreams?.has(userId)) {
       const stream = global.notificationStreams.get(userId);
       if (stream) {
