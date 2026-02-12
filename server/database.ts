@@ -564,7 +564,7 @@ export class DatabaseStorage implements IStorage {
       SELECT
         (SELECT count(*)::int FROM integrations i WHERE i.user_id = ${userId} AND i.is_active = true) AS active_integrations,
         (SELECT count(*)::int FROM repositories r WHERE r.user_id = ${userId}) AS total_repositories,
-        (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.pushed_at >= ${oneDayAgo}) AS daily_pushes,
+        (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.pushed_at >= ${oneDayAgo.toISOString()}) AS daily_pushes,
         (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.notification_sent = true) AS push_event_notifications,
         (SELECT count(*)::int FROM notifications n WHERE n.user_id = ${userId} AND n.type = 'slack_message_sent') AS slack_messages_sent
     `);
