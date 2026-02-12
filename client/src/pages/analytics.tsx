@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { GitBranch, Bell, Cpu, Github, Folder, FileCode, TrendingUp, TrendingDown, Activity, Layers, DollarSign, BarChart3 } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
-import { formatLocalShortDate } from "@/lib/date";
+import { formatLocalShortDate, formatLocalDate } from "@/lib/date";
 import { Footer } from "@/components/footer";
 
 interface TopRepo {
@@ -185,6 +185,8 @@ export default function Analytics() {
   const slackByDay = data?.slackMessagesByDay ?? [];
   const activityTrendData = getLast30DayDates().map((date) => ({
     date: formatShortDate(date),
+    dateRaw: date,
+    dateExact: formatLocalDate(date),
     pushes: pushesByDay.find((p) => p.date === date)?.count ?? 0,
     notifications: slackByDay.find((s) => s.date === date)?.count ?? 0,
   }));
@@ -279,9 +281,25 @@ export default function Analytics() {
               <ChartContainer config={chartConfig} className="h-[240px] w-full">
                 <LineChart data={activityTrendData} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                  <XAxis dataKey="date" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }}
+                    tickLine={false}
+                    tickFormatter={(value, index) => {
+                      const d = activityTrendData[index];
+                      if (!d?.dateRaw) return value;
+                      const day = new Date(d.dateRaw + "T12:00:00").getDay();
+                      return day === 0 ? value : "";
+                    }}
+                  />
                   <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} />
-                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartTooltip
+                    content={
+                      <ChartTooltipContent
+                        labelFormatter={(_, payload) => payload?.[0]?.payload?.dateExact ?? ""}
+                      />
+                    }
+                  />
                   <Line type="monotone" dataKey="pushes" name="Daily Pushes" stroke="hsl(var(--log-green))" strokeWidth={2} dot={false} />
                   <Line type="monotone" dataKey="notifications" name="Daily Notifications" stroke="hsl(var(--accent))" strokeWidth={2} dot={false} />
                 </LineChart>

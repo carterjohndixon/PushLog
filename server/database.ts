@@ -443,14 +443,15 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  /** Analytics: Slack notifications by day (one query, GROUP BY date). */
+  /** Analytics: Slack notifications by day — counts push_events where notification_sent=true (source of truth for Slack sends). */
   async getAnalyticsSlackByDay(userId: string, startDate: Date): Promise<{ date: string; count: number }[]> {
     const startIso = startDate.toISOString().slice(0, 10);
     const rows = await db.execute<{ day: string; count: number }>(sql`
-      SELECT (created_at::date)::text AS day, count(*)::int AS count
-      FROM notifications
-      WHERE user_id = ${userId} AND type = 'slack_message_sent' AND created_at >= ${startIso}
-      GROUP BY created_at::date
+      SELECT (date_trunc('day', e.pushed_at)::date)::text AS day, count(*)::int AS count
+      FROM push_events e
+      INNER JOIN repositories r ON e.repository_id = r.id
+      WHERE r.user_id = ${userId} AND e.notification_sent = true AND e.pushed_at >= ${startIso}
+      GROUP BY date_trunc('day', e.pushed_at)::date
     `);
     const list = Array.isArray(rows) ? rows : [rows];
     return list.map((r) => ({ date: (r?.day ?? "").slice(0, 10), count: r?.count ?? 0 }));
