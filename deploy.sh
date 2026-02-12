@@ -90,21 +90,29 @@ npm run build || {
     exit 1
 }
 
-# Restart PM2 application
-log_info "Restarting PM2 application..."
-/usr/bin/pm2 restart pushlog || {
-    log_error "Failed to restart PM2 application"
+# Build streaming-stats (Rust)
+log_info "Building streaming-stats..."
+cargo build --release -p streaming-stats || {
+    log_error "Failed to build streaming-stats"
     exit 1
 }
 
-# Wait a moment for the app to start
+# Restart PM2 applications
+log_info "Restarting PM2 applications..."
+/usr/bin/pm2 restart pushlog || {
+    log_error "Failed to restart pushlog"
+    exit 1
+}
+/usr/bin/pm2 restart streaming-stats 2>/dev/null || /usr/bin/pm2 start ecosystem.config.js --only streaming-stats
+
+# Wait a moment for the apps to start
 sleep 2
 
-# Check if PM2 process is running
-if /usr/bin/pm2 list | grep -q "pushlog.*online"; then
+# Check if PM2 processes are running
+if /usr/bin/pm2 list | grep -q "pushlog.*online" && /usr/bin/pm2 list | grep -q "streaming-stats.*online"; then
     log_success "Deployment completed successfully!"
 else
-    log_error "Application failed to start. Check PM2 logs: pm2 logs pushlog"
+    log_error "Application failed to start. Check PM2 logs: pm2 logs"
     exit 1
 fi
 

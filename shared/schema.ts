@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, customType, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql, type SQL } from "drizzle-orm";
@@ -177,6 +177,17 @@ export const userSessions = pgTable("user_sessions", {
   expire: timestamp("expire", { withTimezone: true, mode: "date" }).notNull(),
 });
 
+/** Streaming stats engine aggregates (one row per user per day). */
+export const userDailyStats = pgTable("user_daily_stats", {
+    userId: uuid("user_id").notNull(),
+    statDate: date("stat_date").notNull(),
+    pushesCount: integer("pushes_count").notNull().default(0),
+    totalRisk: integer("total_risk").notNull().default(0),
+    perRepoCounts: jsonb("per_repo_counts").$type<Record<string, number>>().default({}),
+  },
+  (t) => [{ primaryKey: { columns: [t.userId, t.statDate], name: "user_daily_stats_pkey" } }]
+);
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   email: true,
@@ -235,6 +246,8 @@ export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit
   id: true,
   createdAt: true,
 });
+
+export const insertUserDailyStatsSchema = createInsertSchema(userDailyStats);
 
 export type User = {
   id: string;
@@ -296,3 +309,5 @@ export type Payment = typeof payments.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type FavoriteModel = typeof favoriteModels.$inferSelect;
 export type InsertFavoriteModel = z.infer<typeof insertFavoriteModelSchema>;
+export type UserDailyStats = typeof userDailyStats.$inferSelect;
+export type InsertUserDailyStats = z.infer<typeof insertUserDailyStatsSchema>;

@@ -14,7 +14,8 @@ import {
   type Payment, type InsertPayment,
   type AnalyticsStats,
   type FavoriteModel,
-  analyticsStats
+  analyticsStats,
+  userDailyStats,
 } from "@shared/schema";
 import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions } from "./storage";
@@ -554,24 +555,49 @@ export class DatabaseStorage implements IStorage {
   // Analytics methods
   async getStatsForUser(userId: string): Promise<AnalyticsStats> {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    // Single round-trip: all 5 stats via scalar subqueries (no full table loads, minimal latency)
+    const todayUtc = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+    // Try streaming stats first (precomputed by Rust engine)
+    const dailyRows = await db
+      .select({ statDate: userDailyStats.statDate, pushesCount: userDailyStats.pushesCount, totalRisk: userDailyStats.totalRisk })
+      .from(userDailyStats)
+      .where(and(eq(userDailyStats.userId, userId), gte(userDailyStats.statDate, sevenDaysAgoStr)))
+      .orderBy(desc(userDailyStats.statDate));
+
+    let dailyPushes: number;
+    if (dailyRows.length > 0) {
+      const todayRow = dailyRows.find((r) => String(r.statDate) === todayUtc);
+      dailyPushes = todayRow?.pushesCount ?? 0;
+    } else {
+      dailyPushes = 0;
+    }
+
+    // Fallback: compute daily_pushes from push_events when streaming stats empty
+    if (dailyPushes === 0 && dailyRows.length === 0) {
+      const [fallbackRow] = await db.execute<{ daily_pushes: number }>(sql`
+        SELECT (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.pushed_at >= ${oneDayAgo.toISOString()}) AS daily_pushes
+      `);
+      dailyPushes = fallbackRow?.daily_pushes ?? 0;
+    }
+
+    // active_integrations, total_repositories, notifications (unchanged)
     const [row] = await db.execute<{
       active_integrations: number;
       total_repositories: number;
-      daily_pushes: number;
       push_event_notifications: number;
       slack_messages_sent: number;
     }>(sql`
       SELECT
         (SELECT count(*)::int FROM integrations i WHERE i.user_id = ${userId} AND i.is_active = true) AS active_integrations,
         (SELECT count(*)::int FROM repositories r WHERE r.user_id = ${userId}) AS total_repositories,
-        (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.pushed_at >= ${oneDayAgo.toISOString()}) AS daily_pushes,
         (SELECT count(*)::int FROM push_events e INNER JOIN repositories r ON e.repository_id = r.id WHERE r.user_id = ${userId} AND e.notification_sent = true) AS push_event_notifications,
         (SELECT count(*)::int FROM notifications n WHERE n.user_id = ${userId} AND n.type = 'slack_message_sent') AS slack_messages_sent
     `);
     const activeIntegrations = row?.active_integrations ?? 0;
     const totalRepositories = row?.total_repositories ?? 0;
-    const dailyPushes = row?.daily_pushes ?? 0;
     const pushEventNotifications = row?.push_event_notifications ?? 0;
     const slackMessagesSent = row?.slack_messages_sent ?? 0;
     const totalNotifications = slackMessagesSent + pushEventNotifications;

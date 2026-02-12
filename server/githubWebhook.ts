@@ -13,6 +13,7 @@ import { generateCodeSummary, generateSlackMessage } from "./ai";
 import { sendPushNotification, sendSlackMessage } from "./slack";
 import broadcastNotification from "./helper/broadcastNotification";
 import { scorePush } from "./riskEngine";
+import { ingestPushEvent } from "./streamingStats";
 import { fetchOpenRouterGenerationUsage } from "./ai";
 
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
@@ -365,6 +366,15 @@ export async function persistPushAndNotifications(
       explanations: riskResult.explanations,
     },
   });
+
+  // Fire-and-forget: update streaming stats (no-op if STATS_ENGINE_URL unset)
+  ingestPushEvent({
+    user_id: integration.userId,
+    repository_id: storedRepo.id,
+    impact_score: riskResult.impact_score ?? 0,
+    timestamp: pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : String(pushEvent.pushedAt),
+  });
+
   if (aiResult.aiGenerated && aiResult.summary && ((aiResult.summary.tokensUsed > 0) || ((aiResult.summary.cost ?? 0) > 0))) {
     await databaseStorage.createAiUsage({
       userId: integration.userId,

@@ -43,9 +43,6 @@ import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/
 import broadcastNotification from "./helper/broadcastNotification";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
 
-/** OpenRouter model id used when user is over monthly budget (free tier). */
-const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
-
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
   if (!integration) return integration;
