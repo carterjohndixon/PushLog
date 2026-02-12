@@ -17,6 +17,19 @@ import { fetchOpenRouterGenerationUsage } from "./ai";
 
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Throws if ID looks like old integer (from pre-UUID migration). Gives a clear error. */
+function assertUuid(id: unknown, label: string): void {
+  const s = String(id ?? "");
+  if (s && !UUID_REGEX.test(s) && /^\d+$/.test(s)) {
+    throw new Error(
+      `Invalid ${label}=${s} (looks like old integer ID). ` +
+        "Ensure the UUID migration has been run on this database: psql $DATABASE_URL -f migrations/migrate-integer-to-uuid.sql"
+    );
+  }
+}
+
 function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
   return !!s?.trim().startsWith("sk-or-");
 }
@@ -113,6 +126,13 @@ export async function resolveRepoAndIntegration(
     console.log(`⚠️ [Webhook] No active integration for ${repository.full_name}.`);
     res.status(200).json({ message: "Integration not active" });
     return null;
+  }
+  // Catch old integer IDs from pre-UUID migration (fixes "invalid input syntax for type uuid" errors)
+  assertUuid(storedRepo.id, "repository.id");
+  assertUuid(integration.id, "integration.id");
+  assertUuid(integration.userId, "integration.userId");
+  if (integration.slackWorkspaceId) {
+    assertUuid(integration.slackWorkspaceId, "integration.slackWorkspaceId");
   }
   return { storedRepo, integration };
 }
