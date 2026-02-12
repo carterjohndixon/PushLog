@@ -9,7 +9,6 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
-import { verifyToken } from './jwt';
 import { authenticateToken, requireEmailVerification } from './middleware/auth';
 import { 
   exchangeCodeForToken, 
@@ -615,20 +614,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.redirect(redirectUrl);
       }
 
-      // If no code, this is a regular user info request
-      const authHeader = req.headers.authorization;
-      if (!authHeader) {
-        return res.status(401).json({ error: "No authorization header" });
+      // If no code, this is a regular user info request (uses session auth)
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
       }
 
-      const token = authHeader.split(' ')[1];
-      const decoded = verifyToken(token);
-      if (!decoded) {
-        return res.status(401).json({ error: "Invalid token" });
-      }
-
-      // Get user info
-      const user = await databaseStorage.getUserById(decoded.userId);
+      const user = await databaseStorage.getUserById(req.session.userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }

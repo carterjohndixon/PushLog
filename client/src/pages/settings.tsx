@@ -69,29 +69,26 @@ export default function Settings() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Fetch account data summary
+  // Fetch account data summary (uses session cookie via credentials: include)
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
     queryKey: ["/api/account/data-summary"],
     queryFn: async () => {
-      const token = localStorage.getItem('token');
-      if (!token) throw new Error('Not authenticated');
-      
       const response = await fetch('/api/account/data-summary', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
-      
       if (!response.ok) throw new Error('Failed to fetch data summary');
       return response.json();
     }
   });
 
-  // Export data mutation
+  // Export data mutation (uses session cookie via credentials: include)
   const handleExportData = async () => {
     setIsExporting(true);
     try {
-      const token = localStorage.getItem('token');
       const response = await fetch('/api/account/export', {
-        headers: { 'Authorization': `Bearer ${token}` }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       
       if (!response.ok) throw new Error('Failed to export data');
@@ -122,14 +119,14 @@ export default function Settings() {
     }
   };
 
-  // Delete account mutation
+  // Delete account mutation (uses session cookie via credentials: include)
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
-      const token = localStorage.getItem('token');
       const response = await fetch('/api/account', {
         method: 'DELETE',
+        credentials: 'include',
         headers: { 
-          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ confirmDelete: deleteConfirmation })
@@ -146,8 +143,6 @@ export default function Settings() {
         title: "Account Deleted",
         description: "Your account and all data have been permanently deleted.",
       });
-      localStorage.removeItem('token');
-      localStorage.removeItem('userId');
       setLocation('/');
     },
     onError: (error: any) => {

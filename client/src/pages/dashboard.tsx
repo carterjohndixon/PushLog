@@ -260,14 +260,13 @@ export default function Dashboard() {
   });
   const userProfile = profileResponse?.user;
 
-  // Fetch dashboard stats
+  // Fetch dashboard stats (uses session cookie via credentials: include)
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['/api/stats'],
     queryFn: async () => {
       const response = await fetch('/api/stats', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' },
       });
       if (!response.ok) {
         const errorData = await response.json();
