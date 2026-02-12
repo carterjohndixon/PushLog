@@ -5,8 +5,10 @@ yarn-debug.log*
 yarn-error.log*
 
 # Environment variables
-.env.production
+.env
+.env.local
 .env.staging
+.env.production
 
 
 # Build outputs
@@ -91,10 +93,3 @@ MEMORY.md
 
 /shannon_res/*
 .playwright-mcp
-.env.production
-.env.staging
-.env
-
-.env.production
-.env.staging
-.env

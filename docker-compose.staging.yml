@@ -1,0 +1,41 @@
+services:
+  staging-db:
+    image: postgres:16-alpine
+    container_name: pushlog-staging-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pushlog_staging
+      POSTGRES_USER: pushlog
+      POSTGRES_PASSWORD: pushlog_staging_password
+    volumes:
+      - pushlog_staging_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pushlog -d pushlog_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  staging-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pushlog-staging-app
+    restart: unless-stopped
+    depends_on:
+      staging-db:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    environment:
+      NODE_ENV: production
+      APP_ENV: staging
+      PORT: "3001"
+      DATABASE_URL: postgresql://pushlog:pushlog_staging_password@staging-db:5432/pushlog_staging
+      EMAIL_ENABLED: "false"
+      SLACK_NOTIFICATIONS_ENABLED: "false"
+      BILLING_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3001:3001"
+
+volumes:
+  pushlog_staging_db_data:
