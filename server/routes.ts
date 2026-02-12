@@ -18,8 +18,7 @@ import {
   deleteWebhook,
   verifyWebhookSignature,
   validateGitHubToken,
-  getGitHubTokenScopes,
-  getCommit
+  getGitHubTokenScopes
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -35,7 +34,7 @@ import { z } from "zod";
 import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail } from './email';
 import { generateCodeSummary, generateSlackMessage, fetchOpenRouterGenerationUsage } from './ai';
-import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES } from './stripe';
+import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
@@ -67,6 +66,7 @@ async function getUserIdFromOAuthState(state: string): Promise<string | null> {
 }
 
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
+const BILLING_ENABLED = isBillingEnabled();
 
 /** Same password rules as signup; used for reset-password and change-password (AUTH-VULN-21). Returns error message or null if valid. */
 function validatePasswordRequirements(password: string): string | null {
@@ -2405,18 +2405,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user stats (authenticated version)
-  app.get("/api/stats", authenticateToken, async (req, res) => {
-    try {
-      const userId = req.user!.userId;
-      const stats = await storage.getStatsForUser(userId);
-      res.status(200).json(stats);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-      res.status(500).json({ error: "Failed to fetch stats" });
-    }
-  });
-
   // Get analytics data (pushes by day, Slack messages by day, AI model usage) — one query per metric
   app.get("/api/analytics", authenticateToken, async (req, res) => {
     const userId = req.user!.userId;
@@ -3516,6 +3504,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Payment routes
   app.post("/api/payments/create-payment-intent", authenticateToken, async (req, res) => {
     try {
+      if (!BILLING_ENABLED) {
+        return res.status(503).json({ error: "Billing is disabled in this environment" });
+      }
+
       const userId = req.user?.userId;
       const { packageId } = req.body;
 
@@ -3557,6 +3549,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Test payment processing endpoint (for development/testing)
   app.post("/api/payments/process-test-payment", authenticateToken, async (req, res) => {
     try {
+      if (!BILLING_ENABLED) {
+        return res.status(503).json({ error: "Billing is disabled in this environment" });
+      }
+
       const userId = req.user?.userId;
       const { paymentIntentId, packageId, cardDetails } = req.body;
 
@@ -3609,6 +3605,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Stripe webhook for payment confirmation
   app.post("/api/payments/webhook", async (req, res) => {
+    if (!BILLING_ENABLED) {
+      return res.status(200).json({ received: true, ignored: true });
+    }
+
     const sig = req.headers['stripe-signature'];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 

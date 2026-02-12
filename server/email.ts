@@ -23,7 +23,15 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+function isEmailEnabled(): boolean {
+  return process.env.EMAIL_ENABLED !== 'false';
+}
+
 export async function sendVerificationEmail(email: string, token: string) {
+  if (!isEmailEnabled()) {
+    console.log("Email disabled by EMAIL_ENABLED=false. Skipping verification email.");
+    return;
+  }
   const verificationLink = `${process.env.APP_URL}/verify-email?token=${token}`;
   
   const { subject, html } = getVerificationEmailTemplate(verificationLink);
@@ -45,6 +53,10 @@ export async function sendVerificationEmail(email: string, token: string) {
 
 // Add sendPasswordResetEmail function
 export const sendPasswordResetEmail = async (email: string, resetToken: string) => {
+  if (!isEmailEnabled()) {
+    console.log("Email disabled by EMAIL_ENABLED=false. Skipping password reset email.");
+    return;
+  }
   const resetLink = `${process.env.APP_URL}/reset-password?token=${resetToken}`;
   const { subject, html } = getPasswordResetTemplate(resetLink);
 

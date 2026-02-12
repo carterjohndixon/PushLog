@@ -173,10 +173,10 @@ app.use((req, res, next) => {
 app.use(compression());
 
 // CORS configuration
-// Allow production domain only
 app.use(cors({
   origin: [
-    'https://pushlog.ai'
+    'https://pushlog.ai',
+    'https://staging.pushlog.ai',
   ],
   credentials: true, // Required for cookies to work
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -332,10 +332,8 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on port 5000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = 5001;
+  // Serve API + client on the configured app port.
+  const port = Number(process.env.PORT || 5001);
   server.listen({
     port,
     host: "0.0.0.0",

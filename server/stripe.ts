@@ -11,6 +11,16 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil',
 });
 
+export function isBillingEnabled(): boolean {
+  return process.env.BILLING_ENABLED !== 'false';
+}
+
+function assertBillingEnabled(): void {
+  if (!isBillingEnabled()) {
+    throw new Error('Billing is disabled');
+  }
+}
+
 export interface CreditPackage {
   id: string;
   name: string;
@@ -104,6 +114,7 @@ export const AI_MODELS: AiModel[] = [
 ];
 
 export async function createStripeCustomer(email: string, name?: string): Promise<Stripe.Customer> {
+  assertBillingEnabled();
   return await stripe.customers.create({
     email,
     name,
@@ -114,6 +125,7 @@ export async function createPaymentIntent(
   customerId: string,
   packageId: string
 ): Promise<Stripe.PaymentIntent> {
+  assertBillingEnabled();
   const creditPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
   if (!creditPackage) {
     throw new Error('Invalid credit package');
@@ -131,6 +143,7 @@ export async function createPaymentIntent(
 }
 
 export async function retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+  assertBillingEnabled();
   return await stripe.paymentIntents.retrieve(paymentIntentId);
 }
 

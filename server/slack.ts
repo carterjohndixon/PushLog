@@ -3,6 +3,10 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+function isSlackNotificationsEnabled(): boolean {
+  return process.env.SLACK_NOTIFICATIONS_ENABLED !== "false";
+}
+
 /**
  * Generate Slack OAuth URL for workspace connection
  */
@@ -158,6 +162,11 @@ export async function sendSlackMessage(
   accessToken: string,
   message: ChatPostMessageArguments
 ): Promise<string | undefined> {
+  if (!isSlackNotificationsEnabled()) {
+    console.log("Slack notifications disabled by SLACK_NOTIFICATIONS_ENABLED=false. Skipping send.");
+    return undefined;
+  }
+
   try {
     const client = new WebClient(accessToken);
     const response = await client.chat.postMessage(message);

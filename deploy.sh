@@ -99,8 +99,12 @@ cargo build --release -p streaming-stats || {
 
 # Restart PM2 applications
 log_info "Restarting PM2 applications..."
-/usr/bin/pm2 restart pushlog || {
-    log_error "Failed to restart pushlog"
+/usr/bin/pm2 restart pushlog-prod || /usr/bin/pm2 start ecosystem.config.js --only pushlog-prod || {
+    log_error "Failed to restart pushlog-prod"
+    exit 1
+}
+/usr/bin/pm2 restart pushlog-staging || /usr/bin/pm2 start ecosystem.config.js --only pushlog-staging || {
+    log_error "Failed to restart pushlog-staging"
     exit 1
 }
 /usr/bin/pm2 restart streaming-stats 2>/dev/null || /usr/bin/pm2 start ecosystem.config.js --only streaming-stats
@@ -109,7 +113,7 @@ log_info "Restarting PM2 applications..."
 sleep 2
 
 # Check if PM2 processes are running
-if /usr/bin/pm2 list | grep -q "pushlog.*online" && /usr/bin/pm2 list | grep -q "streaming-stats.*online"; then
+if /usr/bin/pm2 list | grep -q "pushlog-prod.*online" && /usr/bin/pm2 list | grep -q "pushlog-staging.*online" && /usr/bin/pm2 list | grep -q "streaming-stats.*online"; then
     log_success "Deployment completed successfully!"
 else
     log_error "Application failed to start. Check PM2 logs: pm2 logs"
