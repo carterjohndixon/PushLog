@@ -100,10 +100,17 @@ const limiter = rateLimit({
     trustProxy: false, // Disable validation since we trust nginx
   },
   skip: (req) => {
-    // Skip rate limiting for health checks and profile endpoint (used frequently for auth checks)
+    // Skip rate limiting for health checks, frequent auth checks, and
+    // promotion admin/status endpoints that poll frequently.
     return req.path === '/health' || 
            req.path === '/health/detailed' || 
-           req.path === '/api/profile'; // Profile endpoint is called frequently for auth checks
+           req.path === '/api/profile' ||
+           req.path === '/api/admin/staging/status' ||
+           req.path === '/api/admin/staging/promote' ||
+           req.path === '/api/admin/staging/cancel-promote' ||
+           req.path === '/api/webhooks/promote-production/status' ||
+           req.path === '/api/webhooks/promote-production' ||
+           req.path === '/api/webhooks/promote-production/cancel'; // Admin promotion flow
   },
 });
 app.use('/api/', limiter);
