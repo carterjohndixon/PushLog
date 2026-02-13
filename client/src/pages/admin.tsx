@@ -46,8 +46,9 @@ export default function AdminPage() {
   const { data, isLoading, error } = useQuery<AdminStatus>({
     queryKey: ["/api/admin/staging/status"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/staging/status", {
+      const res = await fetch(`/api/admin/staging/status?t=${Date.now()}`, {
         credentials: "include",
+        cache: "no-store",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
