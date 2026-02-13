@@ -152,14 +152,24 @@ export default function AdminPage() {
   // ── Derived state ──
   const remoteInProgress = data?.promoteRemoteStatus?.inProgress === true;
   const localInProgress = Boolean(localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL);
-  const isPromotionRunning = remoteInProgress || localInProgress || data?.promoteInProgress === true;
 
   const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
   const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-12);
+  const lastLogLine = promoteLogTail[promoteLogTail.length - 1] || "";
+  const promotionFinishedFromLogs =
+    lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
+  const isPromotionRunning =
+    (remoteInProgress || localInProgress || data?.promoteInProgress === true) && !promotionFinishedFromLogs;
+
+  useEffect(() => {
+    if (promotionFinishedFromLogs && localPromoteAt) {
+      setLocalPromoteAt(null);
+    }
+  }, [promotionFinishedFromLogs, localPromoteAt]);
 
   const getProgressStep = useCallback((): string => {
     if (!isPromotionRunning) return "";
-    const lastLine = promoteLogTail[promoteLogTail.length - 1] || "";
+    const lastLine = lastLogLine;
     if (lastLine.includes("completed")) return "Completed!";
     if (lastLine.includes("CANCELLED")) return "Cancelled";
     if (lastLine.includes("Restarting")) return "Restarting PM2...";
@@ -167,7 +177,7 @@ export default function AdminPage() {
     if (lastLine.includes("Installing")) return "Installing dependencies...";
     if (lastLine.includes("Starting")) return "Starting promotion...";
     return "Running...";
-  }, [isPromotionRunning, promoteLogTail]);
+  }, [isPromotionRunning, lastLogLine]);
 
   // ── Commit classification helpers ──
   const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;

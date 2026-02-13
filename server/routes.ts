@@ -122,6 +122,54 @@ function getProdPromotionStatusUrl(): string | null {
   }
 }
 
+function getProdPromotionCancelUrl(): string | null {
+  if (!PROMOTE_PROD_WEBHOOK_URL) return null;
+  try {
+    const cancelUrl = new URL(PROMOTE_PROD_WEBHOOK_URL);
+    cancelUrl.pathname = "/api/webhooks/promote-production/cancel";
+    cancelUrl.search = "";
+    return cancelUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+    if (!res.ok) return [];
+    const data: any[] = await res.json();
+    return data
+      .map((item) => ({
+        sha: String(item?.sha || ""),
+        shortSha: String(item?.sha || "").slice(0, 7),
+        dateIso: String(item?.commit?.author?.date || ""),
+        author: String(item?.commit?.author?.name || item?.author?.login || "unknown"),
+        subject: String(item?.commit?.message || "").split("\n")[0] || "No commit message",
+      }))
+      .filter((c) => !!c.sha);
+  } catch {
+    return [];
+  }
+}
+
+function derivePendingFromRecent(
+  recentCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>,
+  deployedSha: string | null
+) {
+  if (!recentCommits.length || !deployedSha) {
+    return { pendingCount: 0, pendingCommits: [] as Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> };
+  }
+  const idx = recentCommits.findIndex((c) => c.sha === deployedSha);
+  if (idx === -1) {
+    return { pendingCount: 0, pendingCommits: [] as Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> };
+  }
+  const pendingCommits = recentCommits.slice(0, idx);
+  return { pendingCount: pendingCommits.length, pendingCommits };
+}
+
 async function getCurrentUser(req: any) {
   const userId = req?.user?.userId;
   if (!userId) return null;
@@ -391,7 +439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lockFile = path.join(appDir, ".promote-production.lock");
 
       if (!fs.existsSync(lockFile)) {
-        return res.status(404).json({ error: "No promotion in progress" });
+        return res.json({ message: "No promotion in progress", cancelledAt: new Date().toISOString() });
       }
 
       // Kill any running deploy-production.sh processes
@@ -462,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
       const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
 
-      const recentCommits = recentCommitsRaw
+      let recentCommits = recentCommitsRaw
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
@@ -470,6 +518,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
           return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
         });
+
+      // Fallback for environments where git metadata is unavailable.
+      if (recentCommits.length === 0) {
+        recentCommits = await fetchRecentCommitsFromGitHub(30);
+        if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
+        if (branch === "unknown" && recentCommits.length > 0) branch = "main";
+      }
 
       // Compute pending commits if we have a deployed SHA
       let pendingCount = 0;
@@ -493,6 +548,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pendingCount = 0;
           pendingCommits = [];
         }
+      }
+      if (pendingCommits.length === 0 && recentCommits.length > 0) {
+        const derived = derivePendingFromRecent(recentCommits, prodDeployedSha);
+        pendingCount = derived.pendingCount;
+        pendingCommits = derived.pendingCommits;
       }
 
       return res.json({
@@ -610,13 +670,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasLocalGit = branch !== "unknown" && headSha !== "";
       const remote = promoteRemoteStatus && !promoteRemoteStatus.error ? promoteRemoteStatus : null;
 
-      const finalBranch = hasLocalGit ? branch : (remote?.branch || "unknown");
-      const finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
+      let finalBranch = hasLocalGit ? branch : (remote?.branch || "unknown");
+      let finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
       const finalProdDeployedSha = prodDeployedSha || remote?.prodDeployedSha || null;
       const finalProdDeployedAt = prodDeployedAt || remote?.prodDeployedAt || null;
-      const finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remote?.recentCommits || []);
-      const finalPendingCount = hasLocalGit ? pendingCount : (remote?.pendingCount ?? 0);
-      const finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remote?.pendingCommits || []);
+      let finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remote?.recentCommits || []);
+      let finalPendingCount = hasLocalGit ? pendingCount : (remote?.pendingCount ?? 0);
+      let finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remote?.pendingCommits || []);
+
+      if (finalRecentCommits.length === 0) {
+        finalRecentCommits = await fetchRecentCommitsFromGitHub(30);
+      }
+      if (!finalHeadSha && finalRecentCommits[0]?.sha) {
+        finalHeadSha = finalRecentCommits[0].sha;
+      }
+      if (finalBranch === "unknown" && finalRecentCommits.length > 0) {
+        finalBranch = "main";
+      }
+      if (finalPendingCommits.length === 0 && finalRecentCommits.length > 0) {
+        const derived = derivePendingFromRecent(finalRecentCommits, finalProdDeployedSha);
+        finalPendingCount = derived.pendingCount;
+        finalPendingCommits = derived.pendingCommits;
+      }
 
       res.json({
         appEnv: APP_ENV,
@@ -712,7 +787,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
         // Proxy cancel to production
-        const cancelUrl = getProdPromotionStatusUrl()?.replace("/status", "/cancel") || "";
+        const cancelUrl = getProdPromotionCancelUrl() || "";
         if (!cancelUrl) {
           return res.status(500).json({ error: "Could not determine production cancel URL" });
         }
@@ -735,7 +810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const appDir = resolveAppDir();
       const lockFile = path.join(appDir, ".promote-production.lock");
       if (!fs.existsSync(lockFile)) {
-        return res.status(404).json({ error: "No promotion in progress" });
+        return res.json({ message: "No promotion in progress", cancelledAt: new Date().toISOString() });
       }
       try {
         await execAsync("pkill -f deploy-production.sh || true", { cwd: appDir });
