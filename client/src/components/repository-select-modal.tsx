@@ -182,7 +182,7 @@ export function RepositorySelectModal({
                 }
               </p>
               
-                              {error instanceof Error && (error.message.includes('Authentication required') || error.message.includes('Not authenticated')) ? (
+                  {error instanceof Error && (error.message.includes('Authentication required') || error.message.includes('Not authenticated')) ? (
                   <div className="text-center">
                   <Button
                     onClick={async () => {
@@ -325,8 +325,8 @@ export function RepositorySelectModal({
                           disabled={repo.isConnected || selectedRepoId === repo.githubId}
                           className={`w-full justify-start group pt-6 pb-6 px-4 ${
                             selectedRepoId === repo.githubId 
-                              ? 'bg-log-green text-white cursor-wait' 
-                              : 'hover:bg-log-green'
+                              ? 'bg-log-green text-white cursor-wait hover:bg-log-green' 
+                              : 'hover:bg-log-green hover:text-white'
                           }`}
                           onClick={() => handleSelect(repo)}
                         >
