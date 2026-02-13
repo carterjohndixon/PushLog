@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,15 @@ type CommitInfo = {
   dateIso: string;
   author: string;
   subject: string;
+};
+
+type RemoteStatus = {
+  inProgress?: boolean;
+  lock?: { startedAt?: string; by?: string; [k: string]: any } | null;
+  recentLogLines?: string[];
+  prodDeployedSha?: string | null;
+  prodDeployedAt?: string | null;
+  error?: string;
 };
 
 type AdminStatus = {
@@ -27,21 +37,22 @@ type AdminStatus = {
     webhookUrlConfigured: boolean;
     webhookSecretConfigured: boolean;
   };
-  promoteRemoteStatus?: {
-    inProgress?: boolean;
-    lock?: { startedAt?: string; by?: string; [k: string]: any } | null;
-    recentLogLines?: string[];
-    prodDeployedSha?: string | null;
-    prodDeployedAt?: string | null;
-    error?: string;
-  } | null;
+  promoteRemoteStatus?: RemoteStatus | null;
   recentCommits: CommitInfo[];
   pendingCommits: CommitInfo[];
 };
 
+/** How long (ms) to keep showing "in progress" locally after clicking Promote,
+ *  even if remote status can't confirm it (e.g. prod doesn't have status endpoint yet). */
+const LOCAL_PROMOTE_TTL = 120_000; // 2 minutes
+
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // Local tracking: when did we last click promote?
+  const [localPromoteAt, setLocalPromoteAt] = useState<number | null>(null);
+  const prevRemoteSha = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery<AdminStatus>({
     queryKey: ["/api/admin/staging/status"],
@@ -59,10 +70,44 @@ export default function AdminPage() {
     },
     refetchInterval: (query) => {
       const current = query.state.data;
-      const isRunning = Boolean(current?.promoteRemoteStatus?.inProgress ?? current?.promoteInProgress);
-      return isRunning ? 3000 : 10000;
+      const remoteRunning = current?.promoteRemoteStatus?.inProgress;
+      const localRunning = localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL;
+      return remoteRunning || localRunning ? 3000 : 10000;
     },
   });
+
+  // Detect when promotion finishes: remote SHA changes or lock disappears after we started
+  useEffect(() => {
+    if (!localPromoteAt || !data) return;
+
+    const remote = data.promoteRemoteStatus;
+    const remoteAvailable = remote && !remote.error;
+
+    if (remoteAvailable) {
+      // Remote status is available — trust it
+      if (remote.inProgress === false) {
+        // Check if SHA changed (promotion completed)
+        const newSha = remote.prodDeployedSha || data.prodDeployedSha;
+        if (newSha && newSha !== prevRemoteSha.current) {
+          toast({ title: "Promotion complete", description: `Deployed SHA: ${newSha.slice(0, 10)}` });
+        }
+        setLocalPromoteAt(null);
+      }
+    } else {
+      // Remote status unavailable (prod on old code) — use timer
+      if (Date.now() - localPromoteAt > LOCAL_PROMOTE_TTL) {
+        setLocalPromoteAt(null);
+      }
+    }
+  }, [data, localPromoteAt, toast]);
+
+  // Track initial SHA so we can detect changes
+  useEffect(() => {
+    if (data && !prevRemoteSha.current) {
+      prevRemoteSha.current =
+        data.promoteRemoteStatus?.prodDeployedSha || data.prodDeployedSha || null;
+    }
+  }, [data]);
 
   const promoteMutation = useMutation({
     mutationFn: async () => {
@@ -78,6 +123,9 @@ export default function AdminPage() {
       return res.json();
     },
     onSuccess: () => {
+      prevRemoteSha.current =
+        data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
+      setLocalPromoteAt(Date.now());
       toast({
         title: "Promotion started",
         description: "Production promotion is running now.",
@@ -93,8 +141,25 @@ export default function AdminPage() {
     },
   });
 
-  const isPromotionRunning = Boolean(data?.promoteRemoteStatus?.inProgress ?? data?.promoteInProgress);
-  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-8);
+  // Determine if promotion is running from any source
+  const remoteInProgress = data?.promoteRemoteStatus?.inProgress === true;
+  const localInProgress = Boolean(localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL);
+  const isPromotionRunning = remoteInProgress || localInProgress || data?.promoteInProgress === true;
+
+  const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
+  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-12);
+
+  // Estimate progress step from last log line
+  const getProgressStep = useCallback((): string => {
+    if (!isPromotionRunning) return "";
+    const lastLine = promoteLogTail[promoteLogTail.length - 1] || "";
+    if (lastLine.includes("completed")) return "Completed!";
+    if (lastLine.includes("Restarting")) return "Restarting PM2...";
+    if (lastLine.includes("Building")) return "Building production bundle...";
+    if (lastLine.includes("Installing")) return "Installing dependencies...";
+    if (lastLine.includes("Starting")) return "Starting promotion...";
+    return "Running...";
+  }, [isPromotionRunning, promoteLogTail]);
 
   return (
     <div className="min-h-screen bg-forest-gradient">
@@ -140,7 +205,7 @@ export default function AdminPage() {
               <CardHeader>
                 <CardTitle>Approve Production Promotion</CardTitle>
                 <CardDescription>
-                  Runs <code>deploy-production.sh</code> on this server: build production bundle and restart <code>pushlog-prod</code>.
+                  Build production bundle and restart <code>pushlog-prod</code> via secured webhook.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -148,8 +213,11 @@ export default function AdminPage() {
                   onClick={() => promoteMutation.mutate()}
                   disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
                 >
-                  {isPromotionRunning || promoteMutation.isPending ? "Promotion in progress..." : "Approve & Promote to Production"}
+                  {isPromotionRunning || promoteMutation.isPending
+                    ? "Promotion in progress..."
+                    : "Approve & Promote to Production"}
                 </Button>
+
                 {!data.promoteAvailable && (
                   <p className="text-sm text-red-600 mt-3">
                     Production promotion is not configured yet.
@@ -157,27 +225,38 @@ export default function AdminPage() {
                     {!data.promoteConfig?.webhookSecretConfigured ? " Missing PROMOTE_PROD_WEBHOOK_SECRET." : ""}
                   </p>
                 )}
-                {data.promoteViaWebhook && (
-                  <p className="text-sm text-muted-foreground mt-3">Promotion runs via secured production webhook.</p>
-                )}
-                {data.promoteRemoteStatus?.error && (
-                  <p className="text-sm text-amber-700 mt-3">
-                    Unable to load live production progress: {data.promoteRemoteStatus.error}
-                  </p>
-                )}
+
+                {/* Live progress panel */}
                 {isPromotionRunning && (
-                  <div className="mt-4 rounded border border-border p-3 bg-muted/20 text-sm space-y-2">
-                    <p className="font-medium">Live production promotion status: running</p>
+                  <div className="mt-4 rounded border border-border p-4 bg-muted/20 text-sm space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                      </span>
+                      <p className="font-medium">
+                        Production promotion is running
+                        {remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
+                      </p>
+                    </div>
+
                     {data.promoteRemoteStatus?.lock?.startedAt && (
-                      <p>
+                      <p className="text-muted-foreground">
                         Started: {new Date(data.promoteRemoteStatus.lock.startedAt).toLocaleString()}
                         {data.promoteRemoteStatus.lock.by ? ` by ${data.promoteRemoteStatus.lock.by}` : ""}
                       </p>
                     )}
-                    {promoteLogTail.length > 0 && (
-                      <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border">
+
+                    {remoteStatusAvailable && promoteLogTail.length > 0 && (
+                      <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border font-mono">
 {promoteLogTail.join("\n")}
                       </pre>
+                    )}
+
+                    {!remoteStatusAvailable && (
+                      <p className="text-xs text-muted-foreground">
+                        Live log streaming will be available after this promotion deploys the status endpoint to production.
+                      </p>
                     )}
                   </div>
                 )}
