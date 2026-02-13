@@ -78,6 +78,23 @@ function parseCsvEnv(value: string | undefined): string[] {
 
 const STAGING_ADMIN_EMAILS = parseCsvEnv(process.env.STAGING_ADMIN_EMAILS);
 const STAGING_ADMIN_USERNAMES = parseCsvEnv(process.env.STAGING_ADMIN_USERNAMES);
+const PROMOTE_PROD_WEBHOOK_URL = process.env.PROMOTE_PROD_WEBHOOK_URL || "";
+const PROMOTE_PROD_WEBHOOK_SECRET = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
+
+function resolveAppDir(): string {
+  const candidates = [
+    process.env.APP_DIR,
+    process.cwd(),
+    "/app",
+    "/var/www/pushlog",
+  ].filter(Boolean) as string[];
+  for (const dir of candidates) {
+    try {
+      if (fs.existsSync(dir)) return dir;
+    } catch {}
+  }
+  return process.cwd();
+}
 
 async function getCurrentUser(req: any) {
   const userId = req?.user?.userId;
@@ -223,7 +240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get deployment script path
-      const appDir = process.env.APP_DIR || '/var/www/pushlog';
+      const appDir = resolveAppDir();
       const deployScript = path.join(appDir, 'deploy.sh');
 
       // Check if deploy script exists
@@ -262,89 +279,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Staging admin: show promotion status and pending commits
-  app.get("/api/admin/staging/status", authenticateToken, async (req: any, res: any) => {
+  // Production webhook: trigger host-side production promotion script.
+  // Intended to be called by staging admin flow with x-promote-secret.
+  app.post("/api/webhooks/promote-production", async (req, res) => {
     try {
-      const admin = await ensureStagingAdmin(req, res);
-      if (!admin.ok) return;
-
-      const appDir = process.env.APP_DIR || "/var/www/pushlog";
-      const prodShaFile = path.join(appDir, ".prod_deployed_sha");
-      const prodAtFile = path.join(appDir, ".prod_deployed_at");
-      const promoteScript = path.join(appDir, "deploy-production.sh");
-
-      const [{ stdout: branchOut }, { stdout: headOut }, { stdout: recentOut }] = await Promise.all([
-        execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir }),
-        execAsync("git rev-parse HEAD", { cwd: appDir }),
-        execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso -n 20", { cwd: appDir }),
-      ]);
-
-      const branch = branchOut.trim();
-      const headSha = headOut.trim();
-      const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
-      const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
-
-      const recentCommits = recentOut
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
-          return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
-        });
-
-      let pendingCount = 0;
-      let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
-      if (prodDeployedSha) {
-        const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
-          execAsync(`git rev-list --count ${prodDeployedSha}..HEAD`, { cwd: appDir }),
-          execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..HEAD -n 20`, { cwd: appDir }),
-        ]);
-        pendingCount = Number(countOut.trim() || "0");
-        pendingCommits = pendingOut
-          .split("\n")
-          .map((line) => line.trim())
-          .filter(Boolean)
-          .map((line) => {
-            const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
-            return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
-          });
+      if (APP_ENV !== "production") {
+        return res.status(404).json({ error: "Not found" });
       }
 
-      const lockFile = path.join(appDir, ".promote-production.lock");
-      const promoteInProgress = fs.existsSync(lockFile);
+      const providedSecret = String(req.headers["x-promote-secret"] || "");
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      if (!expectedSecret || providedSecret !== expectedSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
 
-      res.json({
-        appEnv: APP_ENV,
-        branch,
-        headSha,
-        prodDeployedSha,
-        prodDeployedAt,
-        pendingCount,
-        promoteInProgress,
-        promoteScriptExists: fs.existsSync(promoteScript),
-        recentCommits,
-        pendingCommits,
-      });
-    } catch (error: any) {
-      console.error("Failed to load staging admin status:", error);
-      res.status(500).json({ error: error?.message || "Failed to load status" });
-    }
-  });
-
-  // Staging admin: approve and promote currently staged commit to production
-  app.post("/api/admin/staging/promote", authenticateToken, async (req: any, res: any) => {
-    try {
-      const admin = await ensureStagingAdmin(req, res);
-      if (!admin.ok) return;
-
-      const appDir = process.env.APP_DIR || "/var/www/pushlog";
+      const appDir = resolveAppDir();
       const promoteScript = path.join(appDir, "deploy-production.sh");
-      const lockFile = path.join(appDir, ".promote-production.lock");
-
       if (!fs.existsSync(promoteScript)) {
         return res.status(500).json({ error: "deploy-production.sh not found" });
       }
+
+      const lockFile = path.join(appDir, ".promote-production.lock");
       if (fs.existsSync(lockFile)) {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
@@ -354,9 +309,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         JSON.stringify(
           {
             startedAt: new Date().toISOString(),
-            byUserId: admin.user.id,
-            byEmail: admin.user.email || null,
-            byUsername: admin.user.username || null,
+            byWebhook: true,
+            by: req.body?.promotedBy || "staging-admin",
           },
           null,
           2
@@ -368,7 +322,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         env: {
           ...process.env,
           APP_DIR: appDir,
-          PROMOTED_BY: String(admin.user.email || admin.user.username || admin.user.id || "unknown"),
+          PROMOTED_BY: String(req.body?.promotedBy || "staging-admin"),
         },
         maxBuffer: 1024 * 1024 * 10,
       })
@@ -388,6 +342,150 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Production promotion started",
         startedAt: new Date().toISOString(),
       });
+    } catch (error: any) {
+      console.error("Failed to start production promotion webhook:", error);
+      return res.status(500).json({ error: error?.message || "Failed to start promotion" });
+    }
+  });
+
+  // Staging admin: show promotion status and pending commits
+  app.get("/api/admin/staging/status", authenticateToken, async (req: any, res: any) => {
+    try {
+      const admin = await ensureStagingAdmin(req, res);
+      if (!admin.ok) return;
+
+      const appDir = resolveAppDir();
+      const prodShaFile = path.join(appDir, ".prod_deployed_sha");
+      const prodAtFile = path.join(appDir, ".prod_deployed_at");
+      const promoteScript = path.join(appDir, "deploy-production.sh");
+      const promoteViaWebhook = APP_ENV === "staging" && !!PROMOTE_PROD_WEBHOOK_URL && !!PROMOTE_PROD_WEBHOOK_SECRET;
+
+      let branch = "unknown";
+      let headSha = "";
+      let recentOut = "";
+      try {
+        const [{ stdout: branchOut }, { stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+          execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir }),
+          execAsync("git rev-parse HEAD", { cwd: appDir }),
+          execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso -n 20", { cwd: appDir }),
+        ]);
+        branch = branchOut.trim();
+        headSha = headOut.trim();
+        recentOut = recentLogOut;
+      } catch {
+        // Running in a container/dir without git metadata; keep admin page usable.
+      }
+      const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
+      const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
+
+      const recentCommits = recentOut
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+          return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+        });
+
+      let pendingCount = 0;
+      let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
+      if (prodDeployedSha && headSha) {
+        try {
+          const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
+            execAsync(`git rev-list --count ${prodDeployedSha}..HEAD`, { cwd: appDir }),
+            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..HEAD -n 20`, { cwd: appDir }),
+          ]);
+          pendingCount = Number(countOut.trim() || "0");
+          pendingCommits = pendingOut
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+              const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+              return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+            });
+        } catch {
+          pendingCount = 0;
+          pendingCommits = [];
+        }
+      }
+
+      const lockFile = path.join(appDir, ".promote-production.lock");
+      const promoteInProgress = fs.existsSync(lockFile);
+
+      res.json({
+        appEnv: APP_ENV,
+        branch,
+        headSha,
+        prodDeployedSha,
+        prodDeployedAt,
+        pendingCount,
+        promoteInProgress,
+        promoteScriptExists: fs.existsSync(promoteScript),
+        promoteViaWebhook,
+        promoteAvailable: promoteViaWebhook || fs.existsSync(promoteScript),
+        recentCommits,
+        pendingCommits,
+      });
+    } catch (error: any) {
+      console.error("Failed to load staging admin status:", error);
+      res.status(500).json({ error: error?.message || "Failed to load status" });
+    }
+  });
+
+  // Staging admin: approve and promote currently staged commit to production
+  app.post("/api/admin/staging/promote", authenticateToken, async (req: any, res: any) => {
+    try {
+      const admin = await ensureStagingAdmin(req, res);
+      if (!admin.ok) return;
+
+      const promotedBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
+
+      // Preferred in Docker staging: proxy to production webhook that runs host-side script.
+      if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
+        const response = await fetch(PROMOTE_PROD_WEBHOOK_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
+          },
+          body: JSON.stringify({ promotedBy }),
+        });
+
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          return res.status(response.status).json({ error: body.error || "Production webhook failed" });
+        }
+        return res.json({
+          message: "Production promotion started via webhook",
+          startedAt: new Date().toISOString(),
+        });
+      }
+
+      // Fallback for non-container setups where script is local.
+      const appDir = resolveAppDir();
+      const promoteScript = path.join(appDir, "deploy-production.sh");
+      const lockFile = path.join(appDir, ".promote-production.lock");
+      if (!fs.existsSync(promoteScript)) {
+        return res.status(500).json({ error: "deploy-production.sh not found and webhook is not configured" });
+      }
+      if (fs.existsSync(lockFile)) {
+        return res.status(409).json({ error: "Promotion already in progress" });
+      }
+      fs.writeFileSync(lockFile, JSON.stringify({ startedAt: new Date().toISOString(), by: promotedBy }, null, 2));
+      execAsync(`bash ${promoteScript}`, {
+        cwd: appDir,
+        env: { ...process.env, APP_DIR: appDir, PROMOTED_BY: promotedBy },
+        maxBuffer: 1024 * 1024 * 10,
+      })
+        .then(() => {
+          try { fs.unlinkSync(lockFile); } catch {}
+        })
+        .catch((err) => {
+          console.error("Production promotion failed:", err?.message || err);
+          try { fs.unlinkSync(lockFile); } catch {}
+        });
+      return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Failed to start production promotion:", error);
       res.status(500).json({ error: error?.message || "Failed to start promotion" });

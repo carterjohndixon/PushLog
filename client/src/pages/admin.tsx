@@ -21,6 +21,8 @@ type AdminStatus = {
   pendingCount: number;
   promoteInProgress: boolean;
   promoteScriptExists: boolean;
+  promoteViaWebhook: boolean;
+  promoteAvailable: boolean;
   recentCommits: CommitInfo[];
   pendingCommits: CommitInfo[];
 };
@@ -124,12 +126,15 @@ export default function AdminPage() {
               <CardContent>
                 <Button
                   onClick={() => promoteMutation.mutate()}
-                  disabled={!data.promoteScriptExists || data.promoteInProgress || promoteMutation.isPending}
+                  disabled={!data.promoteAvailable || data.promoteInProgress || promoteMutation.isPending}
                 >
                   {data.promoteInProgress || promoteMutation.isPending ? "Promotion in progress..." : "Approve & Promote to Production"}
                 </Button>
-                {!data.promoteScriptExists && (
-                  <p className="text-sm text-red-600 mt-3">deploy-production.sh not found on server.</p>
+                {!data.promoteAvailable && (
+                  <p className="text-sm text-red-600 mt-3">Production promotion is not configured yet.</p>
+                )}
+                {data.promoteViaWebhook && (
+                  <p className="text-sm text-muted-foreground mt-3">Promotion runs via secured production webhook.</p>
                 )}
               </CardContent>
             </Card>
