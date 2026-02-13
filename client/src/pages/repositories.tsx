@@ -293,8 +293,21 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     },
     onSuccess: (data, repository) => {
       setConnectingRepoId(null);
-      // Refetch so the list updates immediately without a full page refresh
-      queryClient.refetchQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      // Update cache immediately so the UI shows connected without waiting for refetch
+      queryClient.setQueryData(
+        ["/api/repositories-and-integrations"],
+        (prev: { repositories: RepositoryCardData[]; integrations: ActiveIntegration[] } | undefined) => {
+          if (!prev) return prev;
+          const repoId = String(repository.githubId);
+          const repositories = prev.repositories.map((r) =>
+            String(r.githubId) === repoId
+              ? { ...r, isConnected: true, id: data.id ?? r.id }
+              : r
+          );
+          return { ...prev, repositories };
+        }
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       toast({
         title: "Repository connected",
