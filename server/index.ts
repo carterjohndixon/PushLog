@@ -101,22 +101,24 @@ const limiter = rateLimit({
   },
   skip: (req) => {
     // IMPORTANT: this limiter is mounted on /api/, so req.path here is usually
-    // '/profile' (not '/api/profile'). Use both req.path and req.originalUrl.
+    // '/profile' (not '/api/profile'). Normalize path, strip querystring,
+    // and ignore trailing slash so polling endpoints always match.
     const path = req.path || "";
     const original = req.originalUrl || "";
-    const apiPath = original.startsWith("/api/") ? original.slice(4) : path;
+    const rawApiPath = original.startsWith("/api/") ? original.slice(4) : path;
+    const apiPath = rawApiPath.split("?")[0].replace(/\/+$/, "") || "/";
 
     // Skip rate limiting for health checks, frequent auth checks, and
     // promotion admin/status endpoints that poll frequently.
-    return apiPath === '/health' ||
-           apiPath === '/health/detailed' ||
-           apiPath === '/profile' ||
-           apiPath === '/admin/staging/status' ||
-           apiPath === '/admin/staging/promote' ||
-           apiPath === '/admin/staging/cancel-promote' ||
-           apiPath === '/webhooks/promote-production/status' ||
-           apiPath === '/webhooks/promote-production' ||
-           apiPath === '/webhooks/promote-production/cancel';
+    return apiPath === "/health" ||
+           apiPath === "/health/detailed" ||
+           apiPath === "/profile" ||
+           apiPath.startsWith("/admin/staging/status") ||
+           apiPath.startsWith("/admin/staging/promote") ||
+           apiPath.startsWith("/admin/staging/cancel-promote") ||
+           apiPath.startsWith("/webhooks/promote-production/status") ||
+           apiPath === "/webhooks/promote-production" ||
+           apiPath.startsWith("/webhooks/promote-production/cancel");
   },
 });
 app.use('/api/', limiter);
