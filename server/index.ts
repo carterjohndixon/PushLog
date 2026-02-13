@@ -100,17 +100,23 @@ const limiter = rateLimit({
     trustProxy: false, // Disable validation since we trust nginx
   },
   skip: (req) => {
+    // IMPORTANT: this limiter is mounted on /api/, so req.path here is usually
+    // '/profile' (not '/api/profile'). Use both req.path and req.originalUrl.
+    const path = req.path || "";
+    const original = req.originalUrl || "";
+    const apiPath = original.startsWith("/api/") ? original.slice(4) : path;
+
     // Skip rate limiting for health checks, frequent auth checks, and
     // promotion admin/status endpoints that poll frequently.
-    return req.path === '/health' || 
-           req.path === '/health/detailed' || 
-           req.path === '/api/profile' ||
-           req.path === '/api/admin/staging/status' ||
-           req.path === '/api/admin/staging/promote' ||
-           req.path === '/api/admin/staging/cancel-promote' ||
-           req.path === '/api/webhooks/promote-production/status' ||
-           req.path === '/api/webhooks/promote-production' ||
-           req.path === '/api/webhooks/promote-production/cancel'; // Admin promotion flow
+    return apiPath === '/health' ||
+           apiPath === '/health/detailed' ||
+           apiPath === '/profile' ||
+           apiPath === '/admin/staging/status' ||
+           apiPath === '/admin/staging/promote' ||
+           apiPath === '/admin/staging/cancel-promote' ||
+           apiPath === '/webhooks/promote-production/status' ||
+           apiPath === '/webhooks/promote-production' ||
+           apiPath === '/webhooks/promote-production/cancel';
   },
 });
 app.use('/api/', limiter);

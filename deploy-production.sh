@@ -36,7 +36,11 @@ npm run build:production
 log "Restarting production PM2 app..."
 /usr/bin/pm2 restart pushlog-prod --update-env || /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env
 
-git rev-parse HEAD > "${APP_DIR}/.prod_deployed_sha"
-date -u +"%Y-%m-%dT%H:%M:%SZ" > "${APP_DIR}/.prod_deployed_at"
+# Metadata writes should not fail the whole deployment.
+DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"
+DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
-log "Production promotion completed. SHA=$(cat "${APP_DIR}/.prod_deployed_sha")"
+echo "$DEPLOYED_SHA" > "${APP_DIR}/.prod_deployed_sha" || true
+echo "$DEPLOYED_AT" > "${APP_DIR}/.prod_deployed_at" || true
+
+log "Production promotion completed. SHA=${DEPLOYED_SHA}"
