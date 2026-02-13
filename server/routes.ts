@@ -487,11 +487,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const response = await fetch(promoteStatusUrl, {
             headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
           });
-          if (response.ok) {
-            promoteRemoteStatus = await response.json();
-          } else {
+          const contentType = response.headers.get("content-type") || "";
+
+          if (contentType.includes("application/json")) {
             const body = await response.json().catch(() => ({}));
-            promoteRemoteStatus = { error: body.error || `Status API failed (${response.status})` };
+            if (response.ok) {
+              promoteRemoteStatus = body;
+            } else {
+              promoteRemoteStatus = { error: body.error || `Status API failed (${response.status})` };
+            }
+          } else {
+            const text = await response.text().catch(() => "");
+            const snippet = text.slice(0, 120).replace(/\s+/g, " ").trim();
+            promoteRemoteStatus = {
+              error: `Status API returned non-JSON (${response.status}, ${contentType || "unknown content-type"}). ${snippet}`,
+            };
           }
         } catch (error: any) {
           promoteRemoteStatus = { error: error?.message || "Status API unavailable" };
