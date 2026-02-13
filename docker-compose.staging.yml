@@ -35,6 +35,7 @@ services:
       DATABASE_URL: postgresql://pushlog:pushlog_staging_password@staging-db:5432/pushlog_staging
       APP_URL: https://staging.pushlog.ai
       COOKIE_DOMAIN: staging.pushlog.ai
+      # GitHub: set GITHUB_OAUTH_CLIENT_ID + GITHUB_OAUTH_CLIENT_SECRET in .env.staging (PushLog DEV app)
       EMAIL_ENABLED: "false"
       SLACK_NOTIFICATIONS_ENABLED: "false"
       BILLING_ENABLED: "false"

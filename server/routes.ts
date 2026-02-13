@@ -463,6 +463,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public config for OAuth (client ID only; secret stays on server). Lets staging use a different GitHub OAuth app.
+  app.get("/api/auth/config", (_req, res) => {
+    const fromEnv = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID;
+    const githubClientId = fromEnv || "Ov23li5UgB18JcaZHnxk";
+    const googleClientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || undefined;
+    res.status(200).json({
+      githubClientId,
+      googleClientId: googleClientId || null,
+      // Debug: "env" = using own OAuth app; "default" = prod client id (check GITHUB_OAUTH_CLIENT_ID in .env.staging)
+      githubClientIdSource: fromEnv ? "env" : "default",
+    });
+  });
+
   // Get current user info or handle GitHub OAuth
   app.get("/api/auth/user", async (req, res) => {
     try {
