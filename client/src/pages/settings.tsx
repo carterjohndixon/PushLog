@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -68,6 +68,9 @@ export default function Settings() {
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
+
+  const queryClient = useQueryClient();
 
   // Fetch account data summary (uses session cookie via credentials: include)
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
@@ -80,6 +83,61 @@ export default function Settings() {
       if (!response.ok) throw new Error('Failed to fetch data summary');
       return response.json();
     }
+  });
+
+  // GitHub connect/reconnect: get OAuth URL and redirect
+  const [isGithubConnectLoading, setIsGithubConnectLoading] = useState(false);
+  const handleGitHubConnect = async () => {
+    setIsGithubConnectLoading(true);
+    try {
+      const response = await fetch("/api/github/connect", { credentials: "include", headers: { Accept: "application/json" } });
+      const data = await response.json();
+      if (response.status === 401) {
+        setLocation("/login");
+        return;
+      }
+      if (!response.ok) {
+        if (response.status === 400 && data.error === "GitHub account already connected") {
+          toast({
+            title: "Already connected",
+            description: "GitHub is already connected. If you're having issues, disconnect and reconnect.",
+            variant: "default",
+          });
+        } else {
+          toast({ title: "Connection failed", description: data.error || "Failed to connect GitHub.", variant: "destructive" });
+        }
+        return;
+      }
+      if (data.url) {
+        if (data.state) localStorage.setItem("github_oauth_state", data.state);
+        localStorage.setItem("returnPath", "/settings");
+        window.location.href = data.url;
+      }
+    } catch (e) {
+      toast({ title: "Connection failed", description: "Could not start GitHub connection.", variant: "destructive" });
+    } finally {
+      setIsGithubConnectLoading(false);
+    }
+  };
+
+  const githubDisconnectMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/github/disconnect", { method: "POST", credentials: "include", headers: { Accept: "application/json" } });
+      if (!response.ok) {
+        const d = await response.json().catch(() => ({}));
+        throw new Error(d.error || "Failed to disconnect");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      setGithubDisconnectModalOpen(false);
+      toast({ title: "GitHub disconnected", description: "You can reconnect anytime from this page." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });
+    },
   });
 
   // Export data mutation (uses session cookie via credentials: include)
@@ -258,6 +316,51 @@ export default function Settings() {
                 </>
               ) : (
                 <p className="text-steel-gray">Unable to load account data</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* GitHub connection */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Github className="w-5 h-5" />
+                GitHub
+              </CardTitle>
+              <CardDescription>
+                Connect or reconnect your GitHub account to list repositories and connect them to PushLog. Disconnecting will hide all repositories until you reconnect.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {dataSummary && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={dataSummary.connectedServices.github ? "default" : "secondary"}>
+                      {dataSummary.connectedServices.github ? "Connected" : "Not connected"}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="glow"
+                      className="text-white"
+                      disabled={isGithubConnectLoading}
+                      onClick={handleGitHubConnect}
+                    >
+                      <Github className="w-4 h-4 mr-2" />
+                      {dataSummary.connectedServices.github ? (isGithubConnectLoading ? "Redirecting…" : "Reconnect GitHub") : (isGithubConnectLoading ? "Connecting…" : "Connect GitHub")}
+                    </Button>
+                    {dataSummary.connectedServices.github && (
+                      <Button
+                        variant="outline"
+                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+                        onClick={() => setGithubDisconnectModalOpen(true)}
+                        disabled={githubDisconnectMutation.isPending}
+                      >
+                        Disconnect GitHub
+                      </Button>
+                    )}
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -535,6 +638,40 @@ export default function Settings() {
           </Card>
         </div>
       </main>
+
+      {/* GitHub disconnect confirmation */}
+      <AlertDialog open={githubDisconnectModalOpen} onOpenChange={setGithubDisconnectModalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect GitHub?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Disconnecting GitHub will remove your GitHub connection from PushLog. Your existing repository and integration data in PushLog will stay, but:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 text-muted-foreground">
+                  <li>You will no longer see your full list of GitHub repositories</li>
+                  <li>You will not be able to add new repositories until you reconnect</li>
+                  <li>Webhooks for already-connected repos may stop receiving push events</li>
+                </ul>
+                <p className="pt-2">
+                  You can reconnect GitHub anytime from this page to restore access.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => githubDisconnectMutation.mutate()}
+              disabled={githubDisconnectMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {githubDisconnectMutation.isPending ? "Disconnecting…" : "Disconnect GitHub"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Footer />
     </div>
