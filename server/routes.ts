@@ -170,6 +170,35 @@ function derivePendingFromRecent(
   return { pendingCount: pendingCommits.length, pendingCommits };
 }
 
+async function isPromotionProcessRunning(): Promise<boolean> {
+  try {
+    await execAsync("pgrep -f deploy-production.sh || pgrep -f 'npm run build:production'");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function clearStalePromotionLockIfNeeded(appDir: string, lockFile: string): Promise<boolean> {
+  if (!fs.existsSync(lockFile)) return false;
+  const running = await isPromotionProcessRunning();
+  if (running) return false;
+
+  try {
+    fs.unlinkSync(lockFile);
+  } catch {
+    return false;
+  }
+
+  try {
+    const logFile = path.join(appDir, "deploy-production.log");
+    const line = `[${new Date().toISOString().replace("T", " ").slice(0, 19)}] Stale promotion lock removed automatically\n`;
+    fs.appendFileSync(logFile, line);
+  } catch {}
+
+  return true;
+}
+
 async function getCurrentUser(req: any) {
   const userId = req?.user?.userId;
   if (!userId) return null;
@@ -374,6 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const lockFile = path.join(appDir, ".promote-production.lock");
+      await clearStalePromotionLockIfNeeded(appDir, lockFile);
       if (fs.existsSync(lockFile)) {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
@@ -437,6 +467,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const appDir = resolveAppDir();
       const lockFile = path.join(appDir, ".promote-production.lock");
+      await clearStalePromotionLockIfNeeded(appDir, lockFile);
 
       if (!fs.existsSync(lockFile)) {
         return res.json({ message: "No promotion in progress", cancelledAt: new Date().toISOString() });
@@ -482,6 +513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logFile = path.join(appDir, "deploy-production.log");
       const prodShaFile = path.join(appDir, ".prod_deployed_sha");
       const prodAtFile = path.join(appDir, ".prod_deployed_at");
+      await clearStalePromotionLockIfNeeded(appDir, lockFile);
 
       let lockData: any = null;
       if (fs.existsSync(lockFile)) {
