@@ -292,9 +292,10 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       setConnectingRepoId(String(repository.githubId));
     },
     onSuccess: (data, repository) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       setConnectingRepoId(null);
+      // Refetch so the list updates immediately without a full page refresh
+      queryClient.refetchQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       toast({
         title: "Repository connected",
         description: data.warning ?? `${repository.name} has been connected to PushLog.`,
