@@ -34,7 +34,19 @@ log "Building production bundle..."
 npm run build:production
 
 log "Restarting production PM2 app..."
-/usr/bin/pm2 restart pushlog-prod --update-env || /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env
+restart_pm2() {
+  # Prevent rare PM2 hangs from blocking promotions forever.
+  timeout 30s /usr/bin/pm2 restart pushlog-prod --update-env
+}
+
+if ! restart_pm2; then
+  log "PM2 restart timed out/failed. Retrying once..."
+  if ! restart_pm2; then
+    log "PM2 restart failed twice. Attempting fresh start path..."
+    /usr/bin/pm2 delete pushlog-prod >/dev/null 2>&1 || true
+    timeout 30s /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env
+  fi
+fi
 
 # Metadata writes should not fail the whole deployment.
 DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"
