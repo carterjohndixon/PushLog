@@ -5,6 +5,10 @@
 
 set -e
 
+# Ignore hangup so this script survives its parent being killed
+# (e.g. PM2 restart kills the Node process that spawned us).
+trap '' HUP
+
 APP_DIR="${APP_DIR:-/var/www/pushlog}"
 LOG_FILE="${APP_DIR}/deploy-production.log"
 

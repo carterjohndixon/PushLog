@@ -5,7 +5,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
@@ -421,26 +421,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
       );
 
-      execAsync(`bash ${promoteScript}`, {
+      // Spawn detached so deploy script survives PM2 restarting this Node process.
+      const child = spawn("bash", [promoteScript], {
         cwd: appDir,
         env: {
           ...process.env,
           APP_DIR: appDir,
           PROMOTED_BY: String(req.body?.promotedBy || "staging-admin"),
         },
-        maxBuffer: 1024 * 1024 * 10,
-      })
-        .then(() => {
-          try {
-            fs.unlinkSync(lockFile);
-          } catch {}
-        })
-        .catch((err) => {
-          console.error("Production promotion failed:", err?.message || err);
-          try {
-            fs.unlinkSync(lockFile);
-          } catch {}
-        });
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+
+      // Clean up lock when child exits (if this process is still alive).
+      child.on("exit", (code) => {
+        if (code !== 0) {
+          console.error(`Production promotion exited with code ${code}`);
+        }
+        try { fs.unlinkSync(lockFile); } catch {}
+      });
 
       return res.json({
         message: "Production promotion started",
@@ -790,18 +790,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
       fs.writeFileSync(lockFile, JSON.stringify({ startedAt: new Date().toISOString(), by: promotedBy }, null, 2));
-      execAsync(`bash ${promoteScript}`, {
+
+      // Spawn detached so deploy script survives PM2 restarting this Node process.
+      const child = spawn("bash", [promoteScript], {
         cwd: appDir,
         env: { ...process.env, APP_DIR: appDir, PROMOTED_BY: promotedBy },
-        maxBuffer: 1024 * 1024 * 10,
-      })
-        .then(() => {
-          try { fs.unlinkSync(lockFile); } catch {}
-        })
-        .catch((err) => {
-          console.error("Production promotion failed:", err?.message || err);
-          try { fs.unlinkSync(lockFile); } catch {}
-        });
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
+      child.on("exit", (code) => {
+        if (code !== 0) {
+          console.error(`Production promotion exited with code ${code}`);
+        }
+        try { fs.unlinkSync(lockFile); } catch {}
+      });
+
       return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Failed to start production promotion:", error);
