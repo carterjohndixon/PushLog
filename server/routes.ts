@@ -2684,6 +2684,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               
               await sendSlackMessage(workspace.accessToken, {
                 channel: integrationToUse.slackChannelId,
+                blocks: [{ type: "section", text: { type: "mrkdwn", text: slackMessage } }],
                 text: slackMessage,
                 unfurl_links: false
               });
@@ -2811,6 +2812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         const ts = await sendSlackMessage(workspaceToken, {
           channel: integration.slackChannelId,
+          blocks: [{ type: "section", text: { type: "mrkdwn", text: slackMessage } }],
           text: slackMessage,
           unfurl_links: false,
         });

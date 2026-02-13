@@ -309,7 +309,12 @@ export async function sendSlackForPush(
         category: aiResult.aiCategory!,
         details: aiResult.aiDetails!,
       });
-      await sendSlackMessage(workspaceToken, { channel: integration.slackChannelId, text: slackMessage, unfurl_links: false });
+      await sendSlackMessage(workspaceToken, {
+        channel: integration.slackChannelId,
+        blocks: [{ type: "section", text: { type: "mrkdwn", text: slackMessage } }],
+        text: slackMessage,
+        unfurl_links: false,
+      });
       console.log(`✅ [Webhook] AI Slack message sent to #${integration.slackChannelName}`);
     } else {
       await sendPushNotification(workspaceToken, integration.slackChannelId, pushData.repositoryName, pushData.commitMessage, authorName, pushData.branch, pushData.commitSha, Boolean(integration.includeCommitSummaries));
