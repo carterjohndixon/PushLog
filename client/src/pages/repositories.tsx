@@ -293,12 +293,12 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     },
     onSuccess: (data, repository) => {
       setConnectingRepoId(null);
-      // Update cache immediately so the UI shows connected without waiting for refetch
+      const repoId = String(repository.githubId);
+      // Update cache so the list re-renders with this repo as connected (no refetch = no race)
       queryClient.setQueryData(
         ["/api/repositories-and-integrations"],
         (prev: { repositories: RepositoryCardData[]; integrations: ActiveIntegration[] } | undefined) => {
           if (!prev) return prev;
-          const repoId = String(repository.githubId);
           const repositories = prev.repositories.map((r) =>
             String(r.githubId) === repoId
               ? { ...r, isConnected: true, id: data.id ?? r.id }
@@ -307,8 +307,9 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
           return { ...prev, repositories };
         }
       );
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      // Switch to Active tab so the newly connected repo is visible (it moved from Unconnected → Active)
+      setActiveTab("active");
+      setStatusFilter("active");
       toast({
         title: "Repository connected",
         description: data.warning ?? `${repository.name} has been connected to PushLog.`,
