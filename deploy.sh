@@ -97,26 +97,38 @@ cargo build --release -p streaming-stats || {
     exit 1
 }
 
-# Restart PM2 applications
-log_info "Restarting PM2 applications..."
-/usr/bin/pm2 restart pushlog-prod || /usr/bin/pm2 start ecosystem.config.js --only pushlog-prod || {
-    log_error "Failed to restart pushlog-prod"
+# Restart Docker staging services (staging uses containers, not PM2)
+COMPOSE_FILE="${APP_DIR}/docker-compose.staging.yml"
+if [ ! -f "$COMPOSE_FILE" ]; then
+    log_error "docker-compose file not found: $COMPOSE_FILE"
     exit 1
-}
-/usr/bin/pm2 restart pushlog-staging || /usr/bin/pm2 start ecosystem.config.js --only pushlog-staging || {
-    log_error "Failed to restart pushlog-staging"
-    exit 1
-}
-/usr/bin/pm2 restart streaming-stats 2>/dev/null || /usr/bin/pm2 start ecosystem.config.js --only streaming-stats
+fi
+
+log_info "Deploying staging Docker services..."
+if ! docker compose -f "$COMPOSE_FILE" up -d --build staging-db staging-app; then
+    log_error "Staging Docker deploy failed. Pruning Docker cache/garbage and retrying once..."
+    docker container prune -f || true
+    docker image prune -f || true
+    docker builder prune -f || true
+
+    if ! docker compose -f "$COMPOSE_FILE" up -d --build staging-db staging-app; then
+        log_error "Staging Docker deploy failed after prune/retry."
+        docker compose -f "$COMPOSE_FILE" ps || true
+        docker compose -f "$COMPOSE_FILE" logs --tail=200 staging-app || true
+        exit 1
+    fi
+fi
 
 # Wait a moment for the apps to start
 sleep 2
 
-# Check if PM2 processes are running
-if /usr/bin/pm2 list | grep -q "pushlog-prod.*online" && /usr/bin/pm2 list | grep -q "pushlog-staging.*online" && /usr/bin/pm2 list | grep -q "streaming-stats.*online"; then
+# Check if Docker staging app is running
+if docker compose -f "$COMPOSE_FILE" ps --status running | grep -q "staging-app"; then
     log_success "Deployment completed successfully!"
 else
-    log_error "Application failed to start. Check PM2 logs: pm2 logs"
+    log_error "Staging deployment failed to start. Check Docker logs."
+    docker compose -f "$COMPOSE_FILE" ps || true
+    docker compose -f "$COMPOSE_FILE" logs --tail=200 staging-app || true
     exit 1
 fi
 
