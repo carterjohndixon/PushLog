@@ -119,7 +119,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const integrations = reposAndIntegrations?.integrations ?? [];
   const requiresGitHubReconnect = reposAndIntegrations?.requiresGitHubReconnect ?? false;
   const repositoriesLoading = reposAndIntegrationsLoading;
-  const integrationsLoading = reposAndIntegrationsLoading;
 
   // Fetch push events for repositories
   const { data: pushEvents, isLoading: pushEventsLoading } = useQuery({
@@ -816,7 +815,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedActiveRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedActiveRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={() => handleConnectRepository(repository)} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (
@@ -834,7 +833,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedPausedRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedPausedRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={() => handleConnectRepository(repository)} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (

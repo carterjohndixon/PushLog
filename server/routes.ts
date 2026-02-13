@@ -1247,10 +1247,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const schema = insertRepositorySchema;
-      // userId comes from session; githubId may be sent as number from client
+      // userId comes from session (never from body); githubId may be sent as number from client
+      const userId = req.user?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const payload = {
         ...req.body,
-        userId: req.user!.userId,
+        userId,
         githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
       };
       const validatedData = schema.parse(payload);
