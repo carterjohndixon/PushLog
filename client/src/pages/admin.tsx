@@ -49,6 +49,7 @@ export default function AdminPage() {
   const { toast } = useToast();
 
   const [localPromoteAt, setLocalPromoteAt] = useState<number | null>(null);
+  const [forceInProgress, setForceInProgress] = useState(false);
   const prevRemoteSha = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery<AdminStatus>({
@@ -117,11 +118,19 @@ export default function AdminPage() {
       prevRemoteSha.current =
         data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
       setLocalPromoteAt(Date.now());
+      setForceInProgress(false);
       toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
     onError: (e: Error) => {
+      if (e.message.toLowerCase().includes("already in progress")) {
+        // If backend reports an active promotion, immediately reflect that in UI
+        // so admin can see/click Cancel while status polling catches up.
+        setForceInProgress(true);
+        setLocalPromoteAt(Date.now());
+      }
       toast({ title: "Promotion failed", description: e.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
   });
 
@@ -141,6 +150,7 @@ export default function AdminPage() {
     },
     onSuccess: () => {
       setLocalPromoteAt(null);
+      setForceInProgress(false);
       toast({ title: "Promotion cancelled", description: "The deployment has been stopped." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
@@ -159,11 +169,12 @@ export default function AdminPage() {
   const promotionFinishedFromLogs =
     lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
   const isPromotionRunning =
-    (remoteInProgress || localInProgress || data?.promoteInProgress === true) && !promotionFinishedFromLogs;
+    (remoteInProgress || localInProgress || data?.promoteInProgress === true || forceInProgress) && !promotionFinishedFromLogs;
 
   useEffect(() => {
     if (promotionFinishedFromLogs && localPromoteAt) {
       setLocalPromoteAt(null);
+      setForceInProgress(false);
     }
   }, [promotionFinishedFromLogs, localPromoteAt]);
 
