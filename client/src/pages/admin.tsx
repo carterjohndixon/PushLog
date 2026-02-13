@@ -42,15 +42,12 @@ type AdminStatus = {
   pendingCommits: CommitInfo[];
 };
 
-/** How long (ms) to keep showing "in progress" locally after clicking Promote,
- *  even if remote status can't confirm it (e.g. prod doesn't have status endpoint yet). */
-const LOCAL_PROMOTE_TTL = 120_000; // 2 minutes
+const LOCAL_PROMOTE_TTL = 120_000;
 
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Local tracking: when did we last click promote?
   const [localPromoteAt, setLocalPromoteAt] = useState<number | null>(null);
   const prevRemoteSha = useRef<string | null>(null);
 
@@ -76,17 +73,12 @@ export default function AdminPage() {
     },
   });
 
-  // Detect when promotion finishes: remote SHA changes or lock disappears after we started
   useEffect(() => {
     if (!localPromoteAt || !data) return;
-
     const remote = data.promoteRemoteStatus;
     const remoteAvailable = remote && !remote.error;
-
     if (remoteAvailable) {
-      // Remote status is available — trust it
       if (remote.inProgress === false) {
-        // Check if SHA changed (promotion completed)
         const newSha = remote.prodDeployedSha || data.prodDeployedSha;
         if (newSha && newSha !== prevRemoteSha.current) {
           toast({ title: "Promotion complete", description: `Deployed SHA: ${newSha.slice(0, 10)}` });
@@ -94,14 +86,12 @@ export default function AdminPage() {
         setLocalPromoteAt(null);
       }
     } else {
-      // Remote status unavailable (prod on old code) — use timer
       if (Date.now() - localPromoteAt > LOCAL_PROMOTE_TTL) {
         setLocalPromoteAt(null);
       }
     }
   }, [data, localPromoteAt, toast]);
 
-  // Track initial SHA so we can detect changes
   useEffect(() => {
     if (data && !prevRemoteSha.current) {
       prevRemoteSha.current =
@@ -109,6 +99,7 @@ export default function AdminPage() {
     }
   }, [data]);
 
+  // ── Promote mutation ──
   const promoteMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch("/api/admin/staging/promote", {
@@ -126,22 +117,39 @@ export default function AdminPage() {
       prevRemoteSha.current =
         data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
       setLocalPromoteAt(Date.now());
-      toast({
-        title: "Promotion started",
-        description: "Production promotion is running now.",
-      });
+      toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
     onError: (e: Error) => {
-      toast({
-        title: "Promotion failed",
-        description: e.message,
-        variant: "destructive",
-      });
+      toast({ title: "Promotion failed", description: e.message, variant: "destructive" });
     },
   });
 
-  // Determine if promotion is running from any source
+  // ── Cancel mutation ──
+  const cancelMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/staging/cancel-promote", {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || "Failed to cancel promotion");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setLocalPromoteAt(null);
+      toast({ title: "Promotion cancelled", description: "The deployment has been stopped." });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Cancel failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  // ── Derived state ──
   const remoteInProgress = data?.promoteRemoteStatus?.inProgress === true;
   const localInProgress = Boolean(localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL);
   const isPromotionRunning = remoteInProgress || localInProgress || data?.promoteInProgress === true;
@@ -149,17 +157,30 @@ export default function AdminPage() {
   const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
   const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-12);
 
-  // Estimate progress step from last log line
   const getProgressStep = useCallback((): string => {
     if (!isPromotionRunning) return "";
     const lastLine = promoteLogTail[promoteLogTail.length - 1] || "";
     if (lastLine.includes("completed")) return "Completed!";
+    if (lastLine.includes("CANCELLED")) return "Cancelled";
     if (lastLine.includes("Restarting")) return "Restarting PM2...";
     if (lastLine.includes("Building")) return "Building production bundle...";
     if (lastLine.includes("Installing")) return "Installing dependencies...";
     if (lastLine.includes("Starting")) return "Starting promotion...";
     return "Running...";
   }, [isPromotionRunning, promoteLogTail]);
+
+  // ── Commit classification helpers ──
+  const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
+
+  /** Build a set of pending SHAs for quick lookup */
+  const pendingShaSet = new Set((data?.pendingCommits || []).map((c) => c.sha));
+
+  /** Classify a commit relative to deployed prod SHA */
+  function commitStatus(c: CommitInfo): "deployed" | "pending" | "old" {
+    if (prodSha && c.sha === prodSha) return "deployed";
+    if (pendingShaSet.has(c.sha)) return "pending";
+    return "old";
+  }
 
   return (
     <div className="min-h-screen bg-forest-gradient">
@@ -183,6 +204,7 @@ export default function AdminPage() {
           </Card>
         ) : data ? (
           <div className="space-y-6">
+            {/* ── Environment ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Environment</CardTitle>
@@ -192,8 +214,8 @@ export default function AdminPage() {
                 <p><strong>App env:</strong> {data.appEnv}</p>
                 <p><strong>Branch:</strong> {data.branch}</p>
                 <p><strong>Staging HEAD:</strong> <code>{data.headSha}</code></p>
-                <p><strong>Last deployed prod SHA:</strong> <code>{data.prodDeployedSha || "unknown (first run)"}</code></p>
-                <p><strong>Last deployed prod at:</strong> {data.prodDeployedAt || "unknown"}</p>
+                <p><strong>Last deployed prod SHA:</strong> <code>{prodSha || "unknown (first run)"}</code></p>
+                <p><strong>Last deployed prod at:</strong> {data.promoteRemoteStatus?.prodDeployedAt || data.prodDeployedAt || "unknown"}</p>
                 <p className="flex items-center gap-2">
                   <strong>Pending commits:</strong>
                   <Badge variant={data.pendingCount > 0 ? "default" : "secondary"}>{data.pendingCount}</Badge>
@@ -201,6 +223,7 @@ export default function AdminPage() {
               </CardContent>
             </Card>
 
+            {/* ── Promote / Cancel ── */}
             <Card>
               <CardHeader>
                 <CardTitle>Approve Production Promotion</CardTitle>
@@ -209,14 +232,27 @@ export default function AdminPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button
-                  onClick={() => promoteMutation.mutate()}
-                  disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
-                >
-                  {isPromotionRunning || promoteMutation.isPending
-                    ? "Promotion in progress..."
-                    : "Approve & Promote to Production"}
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => promoteMutation.mutate()}
+                    disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
+                  >
+                    {isPromotionRunning || promoteMutation.isPending
+                      ? "Promotion in progress..."
+                      : "Approve & Promote to Production"}
+                  </Button>
+
+                  {isPromotionRunning && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => cancelMutation.mutate()}
+                      disabled={cancelMutation.isPending}
+                    >
+                      {cancelMutation.isPending ? "Cancelling..." : "Cancel Deployment"}
+                    </Button>
+                  )}
+                </div>
 
                 {!data.promoteAvailable && (
                   <p className="text-sm text-red-600 mt-3">
@@ -263,23 +299,80 @@ export default function AdminPage() {
               </CardContent>
             </Card>
 
+            {/* ── Commit Timeline ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Commits Pending for Prod</CardTitle>
-                <CardDescription>Commits on staging HEAD not yet promoted to production.</CardDescription>
+                <CardTitle>Commit History</CardTitle>
+                <CardDescription>
+                  Recent commits on <code>{data.branch || "main"}</code>.
+                  Pending commits are highlighted; the last deployed commit is marked.
+                </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                {data.pendingCommits.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending commits.</p>
+              <CardContent>
+                {data.recentCommits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No commit history available (running in container without git).</p>
                 ) : (
-                  data.pendingCommits.map((c) => (
-                    <div key={c.sha} className="rounded border border-border p-3 text-sm">
-                      <p className="font-medium">{c.subject}</p>
-                      <p className="text-muted-foreground">
-                        {c.shortSha} • {c.author} • {new Date(c.dateIso).toLocaleString()}
-                      </p>
+                  <div className="relative">
+                    {/* Vertical timeline line */}
+                    <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
+
+                    <div className="space-y-0">
+                      {data.recentCommits.map((c, i) => {
+                        const status = commitStatus(c);
+                        const isDeployed = status === "deployed";
+                        const isPending = status === "pending";
+                        const isHead = i === 0;
+
+                        return (
+                          <div key={c.sha} className="relative flex items-start gap-3 py-2 pl-0">
+                            {/* Timeline dot */}
+                            <div className="relative z-10 mt-1.5 flex-shrink-0">
+                              {isDeployed ? (
+                                <div className="h-[22px] w-[22px] rounded-full bg-green-500 border-2 border-green-300 flex items-center justify-center">
+                                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              ) : isPending ? (
+                                <div className="h-[22px] w-[22px] rounded-full bg-amber-500 border-2 border-amber-300" />
+                              ) : (
+                                <div className="h-[22px] w-[22px] rounded-full bg-muted border-2 border-border" />
+                              )}
+                            </div>
+
+                            {/* Commit content */}
+                            <div
+                              className={`flex-1 rounded border p-3 text-sm ${
+                                isDeployed
+                                  ? "border-green-500/40 bg-green-500/5"
+                                  : isPending
+                                    ? "border-amber-500/40 bg-amber-500/5"
+                                    : "border-border bg-transparent opacity-60"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-medium flex-1 min-w-0">{c.subject}</p>
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  {isHead && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0">HEAD</Badge>
+                                  )}
+                                  {isDeployed && (
+                                    <Badge className="bg-green-600 hover:bg-green-600 text-[10px] px-1.5 py-0">DEPLOYED</Badge>
+                                  )}
+                                  {isPending && (
+                                    <Badge className="bg-amber-600 hover:bg-amber-600 text-[10px] px-1.5 py-0">PENDING</Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <p className="text-muted-foreground mt-1">
+                                <code className="text-xs">{c.shortSha}</code> &middot; {c.author} &middot; {new Date(c.dateIso).toLocaleString()}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))
+                  </div>
                 )}
               </CardContent>
             </Card>

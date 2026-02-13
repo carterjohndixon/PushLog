@@ -374,6 +374,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Production webhook: cancel an in-progress promotion (kill deploy script, remove lock).
+  app.post("/api/webhooks/promote-production/cancel", async (req, res) => {
+    try {
+      if (APP_ENV !== "production") {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const providedSecret = String(req.headers["x-promote-secret"] || "");
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      if (!expectedSecret || providedSecret !== expectedSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const appDir = resolveAppDir();
+      const lockFile = path.join(appDir, ".promote-production.lock");
+
+      if (!fs.existsSync(lockFile)) {
+        return res.status(404).json({ error: "No promotion in progress" });
+      }
+
+      // Kill any running deploy-production.sh processes
+      try {
+        await execAsync("pkill -f deploy-production.sh || true", { cwd: appDir });
+        // Also kill child processes (npm, vite, esbuild)
+        await execAsync("pkill -f 'npm run build:production' || true", { cwd: appDir });
+      } catch {}
+
+      // Remove lock
+      try { fs.unlinkSync(lockFile); } catch {}
+
+      // Log cancellation
+      const logFile = path.join(appDir, "deploy-production.log");
+      const cancelLine = `[${new Date().toISOString().replace("T", " ").slice(0, 19)}] Promotion CANCELLED by ${req.body?.cancelledBy || "admin"}\n`;
+      fs.appendFileSync(logFile, cancelLine);
+
+      return res.json({ message: "Promotion cancelled", cancelledAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("Failed to cancel production promotion:", error);
+      return res.status(500).json({ error: error?.message || "Failed to cancel promotion" });
+    }
+  });
+
   // Production webhook status: used by staging admin to show live promotion progress.
   app.get("/api/webhooks/promote-production/status", async (req, res) => {
     try {
@@ -402,12 +444,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Git info (available on host, not in Docker staging)
+      let branch = "unknown";
+      let headSha = "";
+      let recentCommitsRaw = "";
+      try {
+        const [{ stdout: branchOut }, { stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+          execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir }),
+          execAsync("git rev-parse HEAD", { cwd: appDir }),
+          execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso -n 30", { cwd: appDir }),
+        ]);
+        branch = branchOut.trim();
+        headSha = headOut.trim();
+        recentCommitsRaw = recentLogOut;
+      } catch {}
+
+      const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
+      const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
+
+      const recentCommits = recentCommitsRaw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+          return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+        });
+
+      // Compute pending commits if we have a deployed SHA
+      let pendingCount = 0;
+      let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
+      if (prodDeployedSha && headSha) {
+        try {
+          const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
+            execAsync(`git rev-list --count ${prodDeployedSha}..HEAD`, { cwd: appDir }),
+            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..HEAD -n 30`, { cwd: appDir }),
+          ]);
+          pendingCount = Number(countOut.trim() || "0");
+          pendingCommits = pendingOut
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+              const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+              return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+            });
+        } catch {
+          pendingCount = 0;
+          pendingCommits = [];
+        }
+      }
+
       return res.json({
         inProgress: fs.existsSync(lockFile),
         lock: lockData,
         recentLogLines: readLastLines(logFile, 80),
-        prodDeployedSha: fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null,
-        prodDeployedAt: fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null,
+        prodDeployedSha,
+        prodDeployedAt,
+        branch,
+        headSha,
+        recentCommits,
+        pendingCount,
+        pendingCommits,
       });
     } catch (error: any) {
       console.error("Failed to load promotion webhook status:", error);
@@ -508,14 +606,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Use remote (prod) data as fallback when staging has no git (Docker)
+      const hasLocalGit = branch !== "unknown" && headSha !== "";
+      const remote = promoteRemoteStatus && !promoteRemoteStatus.error ? promoteRemoteStatus : null;
+
+      const finalBranch = hasLocalGit ? branch : (remote?.branch || "unknown");
+      const finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
+      const finalProdDeployedSha = prodDeployedSha || remote?.prodDeployedSha || null;
+      const finalProdDeployedAt = prodDeployedAt || remote?.prodDeployedAt || null;
+      const finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remote?.recentCommits || []);
+      const finalPendingCount = hasLocalGit ? pendingCount : (remote?.pendingCount ?? 0);
+      const finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remote?.pendingCommits || []);
+
       res.json({
         appEnv: APP_ENV,
-        branch,
-        headSha,
-        prodDeployedSha,
-        prodDeployedAt,
-        pendingCount,
-        promoteInProgress,
+        branch: finalBranch,
+        headSha: finalHeadSha,
+        prodDeployedSha: finalProdDeployedSha,
+        prodDeployedAt: finalProdDeployedAt,
+        pendingCount: finalPendingCount,
+        promoteInProgress: remote ? !!remote.inProgress : promoteInProgress,
         promoteScriptExists: fs.existsSync(promoteScript),
         promoteViaWebhook,
         promoteAvailable: promoteViaWebhook || fs.existsSync(promoteScript),
@@ -524,8 +634,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           webhookSecretConfigured: !!PROMOTE_PROD_WEBHOOK_SECRET,
         },
         promoteRemoteStatus,
-        recentCommits,
-        pendingCommits,
+        recentCommits: finalRecentCommits,
+        pendingCommits: finalPendingCommits,
       });
     } catch (error: any) {
       console.error("Failed to load staging admin status:", error);
@@ -589,6 +699,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to start production promotion:", error);
       res.status(500).json({ error: error?.message || "Failed to start promotion" });
+    }
+  });
+
+  // Staging admin: cancel an in-progress promotion
+  app.post("/api/admin/staging/cancel-promote", authenticateToken, async (req: any, res: any) => {
+    try {
+      const admin = await ensureStagingAdmin(req, res);
+      if (!admin.ok) return;
+
+      const cancelledBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
+
+      if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
+        // Proxy cancel to production
+        const cancelUrl = getProdPromotionStatusUrl()?.replace("/status", "/cancel") || "";
+        if (!cancelUrl) {
+          return res.status(500).json({ error: "Could not determine production cancel URL" });
+        }
+        const response = await fetch(cancelUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
+          },
+          body: JSON.stringify({ cancelledBy }),
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          return res.status(response.status).json({ error: body.error || "Cancel failed" });
+        }
+        return res.json(body);
+      }
+
+      // Fallback: local cancel
+      const appDir = resolveAppDir();
+      const lockFile = path.join(appDir, ".promote-production.lock");
+      if (!fs.existsSync(lockFile)) {
+        return res.status(404).json({ error: "No promotion in progress" });
+      }
+      try {
+        await execAsync("pkill -f deploy-production.sh || true", { cwd: appDir });
+        await execAsync("pkill -f 'npm run build:production' || true", { cwd: appDir });
+      } catch {}
+      try { fs.unlinkSync(lockFile); } catch {}
+      const logFile = path.join(appDir, "deploy-production.log");
+      const cancelLine = `[${new Date().toISOString().replace("T", " ").slice(0, 19)}] Promotion CANCELLED by ${cancelledBy}\n`;
+      fs.appendFileSync(logFile, cancelLine);
+      return res.json({ message: "Promotion cancelled", cancelledAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error("Failed to cancel promotion:", error);
+      res.status(500).json({ error: error?.message || "Failed to cancel" });
     }
   });
 
