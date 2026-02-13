@@ -249,6 +249,11 @@ if (!sessionSecret) {
   throw new Error('SESSION_SECRET environment variable is required');
 }
 
+// When behind a proxy (e.g. staging), the app may see Host as 127.0.0.1 so the
+// session cookie would be set for that host and never sent to staging.pushlog.ai.
+// Set COOKIE_DOMAIN (e.g. staging.pushlog.ai) so the cookie is sent on every request.
+const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+
 app.use(session({
   store: sessionStore,
   secret: sessionSecret,
@@ -261,9 +266,7 @@ app.use(session({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
     sameSite: 'lax',
-    // Don't set domain - let browser handle it automatically
-    // Setting domain to '.pushlog.ai' can cause issues with cookie sending
-    // The browser will automatically send cookies to the correct domain
+    ...(cookieDomain && { domain: cookieDomain }),
   }
 }));
 

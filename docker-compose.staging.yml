@@ -33,6 +33,7 @@ services:
       APP_ENV: staging
       PORT: "3001"
       DATABASE_URL: postgresql://pushlog:pushlog_staging_password@staging-db:5432/pushlog_staging
+      COOKIE_DOMAIN: staging.pushlog.ai
       EMAIL_ENABLED: "false"
       SLACK_NOTIFICATIONS_ENABLED: "false"
       BILLING_ENABLED: "false"
