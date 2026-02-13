@@ -60,10 +60,13 @@ export function RepositorySelectModal({
 
   // Fetch repositories only when modal is open.
   // Uses cookie-based auth (credentials: "include"); do not rely on localStorage token/userId.
-  const { data: repositories, isLoading, error, refetch } = useQuery({
+  const { data: repoData, isLoading, error, refetch } = useQuery<{
+    repositories: RepositoryCardData[];
+    requiresGitHubReconnect?: boolean;
+  }>({
     queryKey: ["/api/repositories", open], // Include open in the queryKey
     queryFn: async () => {
-      if (!open) return []; // Return empty array if modal is closed
+      if (!open) return { repositories: [] };
 
       const response = await fetch('/api/repositories', {
         credentials: 'include',
@@ -84,26 +87,31 @@ export function RepositorySelectModal({
       }
 
       const data = await response.json();
-      
-      // Transform the GitHub API response into our expected format
-      return (data as GitHubRepository[]).map((repo) => ({
-        id: repo.id != null ? String(repo.id) : undefined, // Internal database ID if connected (UUID), GitHub ID if not (as string)
-        githubId: repo.githubId || repo.id.toString(), // GitHub ID
+      const requiresGitHubReconnect = response.headers.get("X-Requires-GitHub-Reconnect") === "true";
+      const list = Array.isArray(data) ? data : (data.repositories ?? data) ?? [];
+      const ownerFor = (r: any) => typeof r.owner === "string" ? { login: r.owner } : (r.owner && typeof r.owner === "object" && "login" in r.owner ? r.owner : { login: String(r.owner ?? "") });
+      const repositories = (list as GitHubRepository[]).map((repo) => ({
+        id: repo.id != null ? String(repo.id) : undefined,
+        githubId: repo.githubId || (repo.id != null ? String(repo.id) : ""),
         name: repo.name,
-        full_name: repo.full_name, // Use GitHub API format
-        owner: repo.owner, // Use GitHub API format
-        default_branch: repo.default_branch || 'main', // Use GitHub API format
+        full_name: repo.full_name ?? (repo as any).fullName,
+        owner: ownerFor(repo),
+        default_branch: repo.default_branch ?? (repo as any).branch ?? "main",
         isActive: true,
         isConnected: repo.isConnected || false,
         pushEvents: 0,
-        lastPush: repo.pushed_at || '',
-        private: repo.private
+        lastPush: repo.pushed_at || "",
+        private: repo.private ?? false,
       } as RepositoryCardData));
+      return { repositories, requiresGitHubReconnect };
     },
     enabled: open,
     refetchOnWindowFocus: false,
     refetchOnMount: false
   });
+
+  const repositories = repoData?.repositories ?? [];
+  const requiresGitHubReconnect = repoData?.requiresGitHubReconnect ?? false;
 
   // Reset search query when modal closes and handle OAuth return
   useEffect(() => {
@@ -172,7 +180,23 @@ export function RepositorySelectModal({
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
-          {error ? (
+          {requiresGitHubReconnect && !error ? (
+            <div className="flex flex-col items-center justify-center space-y-4 p-6">
+              <Github className="w-12 h-12 text-gray-400" />
+              <p className="text-center text-gray-600">
+                Reconnect your GitHub account to see all repositories and add new ones.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  onOpenChange(false);
+                  window.location.href = "/settings";
+                }}
+              >
+                Go to Settings to reconnect GitHub
+              </Button>
+            </div>
+          ) : error ? (
             <div className="flex flex-col items-center justify-center space-y-4 p-8">
               <Github className="w-12 h-12 text-gray-400" />
               <p className="text-center text-gray-600">

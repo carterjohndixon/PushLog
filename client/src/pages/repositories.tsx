@@ -87,6 +87,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const { data: reposAndIntegrations, isLoading: reposAndIntegrationsLoading } = useQuery<{
     repositories: RepositoryCardData[];
     integrations: ActiveIntegration[];
+    requiresGitHubReconnect?: boolean;
   }>({
     queryKey: ['/api/repositories-and-integrations'],
     queryFn: async () => {
@@ -109,11 +110,16 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       }));
       queryClient.setQueryData(['/api/repositories'], data.repositories ?? []);
       queryClient.setQueryData(['/api/integrations'], integrations);
-      return { repositories: data.repositories ?? [], integrations };
+      return {
+        repositories: data.repositories ?? [],
+        integrations,
+        requiresGitHubReconnect: !!data.requiresGitHubReconnect,
+      };
     },
   });
   const repositories = reposAndIntegrations?.repositories ?? [];
   const integrations = reposAndIntegrations?.integrations ?? [];
+  const requiresGitHubReconnect = reposAndIntegrations?.requiresGitHubReconnect ?? false;
   const repositoriesLoading = reposAndIntegrationsLoading;
   const integrationsLoading = reposAndIntegrationsLoading;
 
@@ -264,12 +270,13 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
   const connectRepositoryMutation = useMutation({
     mutationFn: async (repository: RepositoryCardData) => {
+      const ownerLogin = typeof repository.owner === "string" ? repository.owner : repository.owner?.login ?? "";
       const body = {
         name: repository.name,
-        owner: repository.owner.login,
+        owner: ownerLogin,
         githubId: Number(repository.githubId) || repository.githubId,
-        fullName: repository.full_name,
-        branch: repository.default_branch || "main",
+        fullName: repository.full_name ?? (repository as any).fullName,
+        branch: repository.default_branch || (repository as any).branch || "main",
         isActive: true,
       };
       const response = await fetch("/api/repositories", {
@@ -315,10 +322,12 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     setIsRepoModalOpen(false);
   };
 
+  const ownerLogin = (repo: RepositoryCardData) => typeof repo.owner === "string" ? repo.owner : repo.owner?.login ?? "";
+
   // Filter repositories based on search and status
   const filteredRepositories = repositories?.filter(repo => {
     const matchesSearch = repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         repo.owner.login.toLowerCase().includes(searchTerm.toLowerCase());
+                         ownerLogin(repo).toLowerCase().includes(searchTerm.toLowerCase());
     
     const isRepositoryActive = repo.isActive !== false;
     const isConnected = repo.isConnected;
@@ -339,7 +348,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   // Search results for dropdown (all repositories, not filtered by status)
   const searchResults = repositories?.filter(repository => {
     const matchesSearch = repository.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         repository.owner.login.toLowerCase().includes(searchTerm.toLowerCase());
+                         ownerLogin(repository).toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch && searchTerm.length > 0;
   }) || [];
 
@@ -412,7 +421,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     {repository.name}
                   </CardTitle>
                   <p className="text-sm text-muted-foreground truncate">
-                    {repository.owner.login}/{repository.name}
+                    {ownerLogin(repository)}/{repository.name}
                   </p>
                 </div>
               </div>
@@ -496,7 +505,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                   {repository.name}
                 </CardTitle>
                 <p className="text-sm text-steel-gray">
-                  {repository.owner.login}/{repository.name}
+                  {ownerLogin(repository)}/{repository.name}
                 </p>
               </div>
             </div>
@@ -596,6 +605,21 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
           <p className="text-steel-gray mt-2">Connect and manage your GitHub repositories for monitoring</p>
         </div>
 
+        {requiresGitHubReconnect && (
+          <div className="mb-6 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
+            <p className="font-medium">GitHub connection needed to see all repos and add new ones</p>
+            <p className="text-sm mt-1">Reconnect your GitHub account to list all repositories and connect new ones.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3 border-amber-600 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+              onClick={() => window.location.href = "/settings"}
+            >
+              Go to Settings to reconnect GitHub
+            </Button>
+          </div>
+        )}
+
         {/* Search and Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <div className="relative flex-1">
@@ -627,7 +651,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     }`} />
                     <div className="flex-1">
                       <div className="font-medium text-graphite">{repository.name}</div>
-                      <div className="text-sm text-steel-gray">{repository.owner.login}/{repository.name}</div>
+                      <div className="text-sm text-steel-gray">{ownerLogin(repository)}/{repository.name}</div>
                     </div>
                     <Badge 
                       variant="outline"
@@ -880,7 +904,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     Push Events - {selectedRepositoryForEvents.name}
                   </h2>
                   <p className="text-sm text-steel-gray mt-1">
-                    {selectedRepositoryForEvents.owner.login}/{selectedRepositoryForEvents.name}
+                    {selectedRepositoryForEvents ? ownerLogin(selectedRepositoryForEvents) : ""}/{selectedRepositoryForEvents?.name ?? ""}
                   </p>
                 </div>
                 <button

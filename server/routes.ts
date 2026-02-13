@@ -1027,7 +1027,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           githubId: repo.githubId,
           name: repo.name,
           fullName: repo.fullName,
-          owner: repo.owner,
+          full_name: repo.fullName,
+          owner: { login: typeof repo.owner === "string" ? repo.owner : (repo.owner as any)?.login ?? "" },
+          default_branch: repo.branch ?? "main",
           branch: repo.branch ?? "main",
           isActive: repo.isActive ?? true,
           isConnected: true,
@@ -1035,6 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           integrationCount: integrationCountByRepoId.get(repo.id) ?? 0,
         }));
         res.setHeader("Cache-Control", "private, max-age=15");
+        res.setHeader("X-Requires-GitHub-Reconnect", "true");
         return res.status(200).json(cardData);
       }
 
@@ -1778,7 +1781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           githubId: repo.githubId,
           name: repo.name,
           fullName: repo.fullName,
-          owner: repo.owner,
+          full_name: repo.fullName,
+          owner: { login: typeof repo.owner === "string" ? repo.owner : (repo.owner as any)?.login ?? "" },
+          default_branch: repo.branch ?? "main",
           branch: repo.branch ?? "main",
           isActive: repo.isActive ?? true,
           isConnected: true,
@@ -1800,7 +1805,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         });
         res.setHeader("Cache-Control", "private, max-age=15");
-        return res.status(200).json({ repositories, integrations: enrichedIntegrations });
+        return res.status(200).json({ repositories, integrations: enrichedIntegrations, requiresGitHubReconnect: true });
       }
 
       try {
