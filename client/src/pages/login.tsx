@@ -104,7 +104,7 @@ export default function Login() {
     setOauthProvider("GitHub");
     
     const clientId = import.meta.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
-    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user"
+    const redirectUri = import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`;
     const scope = "repo user:email admin:org_hook";
     
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
