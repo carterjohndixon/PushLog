@@ -166,7 +166,7 @@ Please provide a summary in this JSON format:
 {
   "summary": "Brief 1-2 sentence summary of what changed",
   "impact": "low|medium|high - based on the scope and nature of changes",
-  "category": "feature|bugfix|refactor|docs|test|other",
+  "category": "feature|bugfix|refactor|docs|test|security|other",
   "details": "More detailed explanation of the changes and their purpose"
 }
 
@@ -601,18 +601,20 @@ export async function generateSlackMessage(pushData: PushEventData, summary: Cod
     refactor: ':wrench:',
     docs: ':books:',
     test: ':test_tube:',
+    security: ':shield:',
     other: ':memo:'
   };
 
   // Ensure impact is a valid key, default to medium if not
   const impact = (summary.impact && impactEmoji[summary.impact]) ? summary.impact : 'medium';
   const category = summary.category || 'other';
+  const emoji = categoryEmoji[category] ?? categoryEmoji.other;
 
   return `*${pushData.repositoryName}* - ${pushData.branch} branch 
 
 ${impactEmoji[impact]} *${summary.summary}*
 
-${categoryEmoji[category]} **${category.toUpperCase()}** | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
+${emoji} *${category.toUpperCase()}* | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
 ${summary.details}
 
 🔗 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
