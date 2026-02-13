@@ -661,6 +661,7 @@ export default function Models() {
                   placeholder="sk-or-v1-..."
                   value={apiKeyInput}
                   onChange={(e) => setApiKeyInput(e.target.value)}
+                  autoComplete="off"
                   className="font-mono bg-background border-border text-foreground"
                 />
                 <Button

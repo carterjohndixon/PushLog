@@ -167,6 +167,7 @@ export default function Login() {
               id="password" 
               placeholder="••••••••" 
               required 
+              autoComplete="off"
               className="mt-1.5 pr-10"
             />
             <button

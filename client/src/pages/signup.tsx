@@ -203,6 +203,7 @@ export default function Signup() {
                 id="password" 
                 placeholder="••••••••" 
                 required 
+                autoComplete="off"
                 className="pr-10"
               />
               <button

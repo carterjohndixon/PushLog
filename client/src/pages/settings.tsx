@@ -480,8 +480,8 @@ export default function Settings() {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="off"
                     className="mt-1 bg-background text-foreground border-input pr-10"
-                    autoComplete="current-password"
                   />
                   <button
                     type="button"
@@ -502,8 +502,8 @@ export default function Settings() {
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="off"
                     className="mt-1 bg-background text-foreground border-input pr-10"
-                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -527,8 +527,8 @@ export default function Settings() {
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
+                    autoComplete="off"
                     className="mt-1 bg-background text-foreground border-input pr-10"
-                    autoComplete="new-password"
                   />
                   <button
                     type="button"

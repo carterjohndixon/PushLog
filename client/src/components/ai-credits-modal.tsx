@@ -294,6 +294,7 @@ export function AiCreditsModal({
                       value={cardDetails.cvc}
                       onChange={(e) => setCardDetails({...cardDetails, cvc: e.target.value})}
                       maxLength={4}
+                      autoComplete="off"
                     />
                   </div>
                   <div>

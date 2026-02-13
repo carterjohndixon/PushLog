@@ -161,6 +161,7 @@ export default function ResetPassword() {
                 id="password" 
                 placeholder="••••••••" 
                 required 
+                autoComplete="off"
               />
               <button
                 type="button"
@@ -197,6 +198,7 @@ export default function ResetPassword() {
                 id="confirmPassword" 
                 placeholder="••••••••" 
                 required 
+                autoComplete="off"
               />
               <button
                 type="button"
