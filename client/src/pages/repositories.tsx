@@ -78,6 +78,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
   const [selectedRepositoryForEvents, setSelectedRepositoryForEvents] = useState<RepositoryCardData | null>(null);
+  const [connectingRepoId, setConnectingRepoId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -261,6 +262,55 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     setIsDeleteRepoConfirmationOpen(true);
   };
 
+  const connectRepositoryMutation = useMutation({
+    mutationFn: async (repository: RepositoryCardData) => {
+      const body = {
+        name: repository.name,
+        owner: repository.owner.login,
+        githubId: Number(repository.githubId) || repository.githubId,
+        fullName: repository.full_name,
+        branch: repository.default_branch || "main",
+        isActive: true,
+      };
+      const response = await fetch("/api/repositories", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to connect repository");
+      }
+      return response.json();
+    },
+    onMutate: (repository) => {
+      setConnectingRepoId(String(repository.githubId));
+    },
+    onSuccess: (data, repository) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      setConnectingRepoId(null);
+      toast({
+        title: "Repository connected",
+        description: data.warning ?? `${repository.name} has been connected to PushLog.`,
+        variant: data.warning ? "default" : "default",
+      });
+    },
+    onError: (error: Error) => {
+      setConnectingRepoId(null);
+      toast({
+        title: "Connection failed",
+        description: error.message || "Failed to connect repository.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleConnectRepository = (repository: RepositoryCardData) => {
+    connectRepositoryMutation.mutate(repository);
+  };
+
   const handleRepositorySelect = (repository: RepositoryCardData) => {
     setIsRepoModalOpen(false);
   };
@@ -329,7 +379,13 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   };
 
   // Repository Card Component
-  const RepositoryCard = ({ repository }: { repository: RepositoryCardData }) => {
+  const RepositoryCard = ({
+    repository,
+    onConnectRepository,
+  }: {
+    repository: RepositoryCardData;
+    onConnectRepository?: (repository: RepositoryCardData) => void;
+  }) => {
     const repoHasIntegration = integrations?.some(
       (integration) => integration.repositoryId === repository.id
     );
@@ -392,14 +448,18 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                 size="sm"
                 variant="glow"
                 onClick={() => {
-                  // Open integration setup modal for this repository
-                  setSelectedRepository(repository);
-                  setIsRepoModalOpen(true);
+                  if (onConnectRepository) {
+                    onConnectRepository(repository);
+                  } else {
+                    setSelectedRepository(repository);
+                    setIsRepoModalOpen(true);
+                  }
                 }}
+                disabled={connectingRepoId === String(repository.githubId)}
                 className="text-white"
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Connect Repository
+                {connectingRepoId === String(repository.githubId) ? "Connecting…" : "Connect Repository"}
               </Button>
             </div>
           </CardContent>
@@ -703,7 +763,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             ) : filteredRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (
@@ -734,7 +794,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedActiveRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedActiveRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (
@@ -752,7 +812,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedPausedRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedPausedRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (
@@ -770,7 +830,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {unconnectedRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {unconnectedRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} />
+                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
                 ))}
               </div>
             ) : (
