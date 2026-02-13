@@ -27,6 +27,14 @@ type AdminStatus = {
     webhookUrlConfigured: boolean;
     webhookSecretConfigured: boolean;
   };
+  promoteRemoteStatus?: {
+    inProgress?: boolean;
+    lock?: { startedAt?: string; by?: string; [k: string]: any } | null;
+    recentLogLines?: string[];
+    prodDeployedSha?: string | null;
+    prodDeployedAt?: string | null;
+    error?: string;
+  } | null;
   recentCommits: CommitInfo[];
   pendingCommits: CommitInfo[];
 };
@@ -48,7 +56,11 @@ export default function AdminPage() {
       }
       return res.json();
     },
-    refetchInterval: 10000,
+    refetchInterval: (query) => {
+      const current = query.state.data;
+      const isRunning = Boolean(current?.promoteRemoteStatus?.inProgress ?? current?.promoteInProgress);
+      return isRunning ? 3000 : 10000;
+    },
   });
 
   const promoteMutation = useMutation({
@@ -79,6 +91,9 @@ export default function AdminPage() {
       });
     },
   });
+
+  const isPromotionRunning = Boolean(data?.promoteRemoteStatus?.inProgress ?? data?.promoteInProgress);
+  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-8);
 
   return (
     <div className="min-h-screen bg-forest-gradient">
@@ -130,9 +145,9 @@ export default function AdminPage() {
               <CardContent>
                 <Button
                   onClick={() => promoteMutation.mutate()}
-                  disabled={!data.promoteAvailable || data.promoteInProgress || promoteMutation.isPending}
+                  disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
                 >
-                  {data.promoteInProgress || promoteMutation.isPending ? "Promotion in progress..." : "Approve & Promote to Production"}
+                  {isPromotionRunning || promoteMutation.isPending ? "Promotion in progress..." : "Approve & Promote to Production"}
                 </Button>
                 {!data.promoteAvailable && (
                   <p className="text-sm text-red-600 mt-3">
@@ -143,6 +158,27 @@ export default function AdminPage() {
                 )}
                 {data.promoteViaWebhook && (
                   <p className="text-sm text-muted-foreground mt-3">Promotion runs via secured production webhook.</p>
+                )}
+                {data.promoteRemoteStatus?.error && (
+                  <p className="text-sm text-amber-700 mt-3">
+                    Unable to load live production progress: {data.promoteRemoteStatus.error}
+                  </p>
+                )}
+                {isPromotionRunning && (
+                  <div className="mt-4 rounded border border-border p-3 bg-muted/20 text-sm space-y-2">
+                    <p className="font-medium">Live production promotion status: running</p>
+                    {data.promoteRemoteStatus?.lock?.startedAt && (
+                      <p>
+                        Started: {new Date(data.promoteRemoteStatus.lock.startedAt).toLocaleString()}
+                        {data.promoteRemoteStatus.lock.by ? ` by ${data.promoteRemoteStatus.lock.by}` : ""}
+                      </p>
+                    )}
+                    {promoteLogTail.length > 0 && (
+                      <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border">
+{promoteLogTail.join("\n")}
+                      </pre>
+                    )}
+                  </div>
                 )}
               </CardContent>
             </Card>

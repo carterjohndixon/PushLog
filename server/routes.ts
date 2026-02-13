@@ -96,6 +96,32 @@ function resolveAppDir(): string {
   return process.cwd();
 }
 
+function readLastLines(filePath: string, maxLines = 40): string[] {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const content = fs.readFileSync(filePath, "utf8");
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter(Boolean)
+      .slice(-maxLines);
+  } catch {
+    return [];
+  }
+}
+
+function getProdPromotionStatusUrl(): string | null {
+  if (!PROMOTE_PROD_WEBHOOK_URL) return null;
+  try {
+    const statusUrl = new URL(PROMOTE_PROD_WEBHOOK_URL);
+    statusUrl.pathname = "/api/webhooks/promote-production/status";
+    statusUrl.search = "";
+    return statusUrl.toString();
+  } catch {
+    return null;
+  }
+}
+
 async function getCurrentUser(req: any) {
   const userId = req?.user?.userId;
   if (!userId) return null;
@@ -348,6 +374,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Production webhook status: used by staging admin to show live promotion progress.
+  app.get("/api/webhooks/promote-production/status", async (req, res) => {
+    try {
+      if (APP_ENV !== "production") {
+        return res.status(404).json({ error: "Not found" });
+      }
+
+      const providedSecret = String(req.headers["x-promote-secret"] || "");
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      if (!expectedSecret || providedSecret !== expectedSecret) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+
+      const appDir = resolveAppDir();
+      const lockFile = path.join(appDir, ".promote-production.lock");
+      const logFile = path.join(appDir, "deploy-production.log");
+      const prodShaFile = path.join(appDir, ".prod_deployed_sha");
+      const prodAtFile = path.join(appDir, ".prod_deployed_at");
+
+      let lockData: any = null;
+      if (fs.existsSync(lockFile)) {
+        try {
+          lockData = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+        } catch {
+          lockData = { raw: fs.readFileSync(lockFile, "utf8").trim() };
+        }
+      }
+
+      return res.json({
+        inProgress: fs.existsSync(lockFile),
+        lock: lockData,
+        recentLogLines: readLastLines(logFile, 80),
+        prodDeployedSha: fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null,
+        prodDeployedAt: fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null,
+      });
+    } catch (error: any) {
+      console.error("Failed to load promotion webhook status:", error);
+      return res.status(500).json({ error: error?.message || "Failed to load promotion status" });
+    }
+  });
+
   // Staging admin: show promotion status and pending commits
   app.get("/api/admin/staging/status", authenticateToken, async (req: any, res: any) => {
     try {
@@ -412,6 +479,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const lockFile = path.join(appDir, ".promote-production.lock");
       const promoteInProgress = fs.existsSync(lockFile);
+      const promoteStatusUrl = promoteViaWebhook ? getProdPromotionStatusUrl() : null;
+
+      let promoteRemoteStatus: any = null;
+      if (promoteStatusUrl && PROMOTE_PROD_WEBHOOK_SECRET) {
+        try {
+          const response = await fetch(promoteStatusUrl, {
+            headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
+          });
+          if (response.ok) {
+            promoteRemoteStatus = await response.json();
+          } else {
+            const body = await response.json().catch(() => ({}));
+            promoteRemoteStatus = { error: body.error || `Status API failed (${response.status})` };
+          }
+        } catch (error: any) {
+          promoteRemoteStatus = { error: error?.message || "Status API unavailable" };
+        }
+      }
 
       res.json({
         appEnv: APP_ENV,
@@ -428,6 +513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           webhookUrlConfigured: !!PROMOTE_PROD_WEBHOOK_URL,
           webhookSecretConfigured: !!PROMOTE_PROD_WEBHOOK_SECRET,
         },
+        promoteRemoteStatus,
         recentCommits,
         pendingCommits,
       });
