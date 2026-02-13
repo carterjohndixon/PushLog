@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PROFILE_QUERY_KEY, fetchProfile, ProfileError, type ProfileResponse } from "@/lib/profile";
 
 interface ProtectedRouteProps {
@@ -10,6 +10,19 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  // After GitHub connect/reconnect (redirect with ?github_connected=1), invalidate repo queries once and clean URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("github_connected") === "1") {
+      params.delete("github_connected");
+      const newSearch = params.toString();
+      window.history.replaceState(null, "", window.location.pathname + (newSearch ? `?${newSearch}` : ""));
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+    }
+  }, [queryClient]);
 
   const { data: profileResponse, isLoading, isError, error, isFetched } = useQuery<ProfileResponse>({
     queryKey: PROFILE_QUERY_KEY,

@@ -618,8 +618,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emailVerified: true
         };
 
-        // Redirect to dashboard - no token needed, cookie is set automatically
-        const redirectUrl = `/dashboard`;
+        // Redirect to dashboard; if they were connecting GitHub from Settings, add param so client refetches repos
+        const redirectUrl = currentUserId ? `/dashboard?github_connected=1` : `/dashboard`;
         console.log(`Redirecting to dashboard for user ${user.id} (session-based auth)`);
         return res.redirect(redirectUrl);
       }
@@ -1247,9 +1247,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const schema = insertRepositorySchema;
+      // userId comes from session; githubId may be sent as number from client
+      const payload = {
+        ...req.body,
+        userId: req.user!.userId,
+        githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
+      };
+      const validatedData = schema.parse(payload);
 
-      const validatedData = schema.parse(req.body);
-      
       const user = await storage.getUser(req.user!.userId);
 
       if (!user) {
