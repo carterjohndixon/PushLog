@@ -23,6 +23,10 @@ type AdminStatus = {
   promoteScriptExists: boolean;
   promoteViaWebhook: boolean;
   promoteAvailable: boolean;
+  promoteConfig: {
+    webhookUrlConfigured: boolean;
+    webhookSecretConfigured: boolean;
+  };
   recentCommits: CommitInfo[];
   pendingCommits: CommitInfo[];
 };
@@ -131,7 +135,11 @@ export default function AdminPage() {
                   {data.promoteInProgress || promoteMutation.isPending ? "Promotion in progress..." : "Approve & Promote to Production"}
                 </Button>
                 {!data.promoteAvailable && (
-                  <p className="text-sm text-red-600 mt-3">Production promotion is not configured yet.</p>
+                  <p className="text-sm text-red-600 mt-3">
+                    Production promotion is not configured yet.
+                    {!data.promoteConfig?.webhookUrlConfigured ? " Missing PROMOTE_PROD_WEBHOOK_URL." : ""}
+                    {!data.promoteConfig?.webhookSecretConfigured ? " Missing PROMOTE_PROD_WEBHOOK_SECRET." : ""}
+                  </p>
                 )}
                 {data.promoteViaWebhook && (
                   <p className="text-sm text-muted-foreground mt-3">Promotion runs via secured production webhook.</p>

@@ -424,6 +424,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         promoteScriptExists: fs.existsSync(promoteScript),
         promoteViaWebhook,
         promoteAvailable: promoteViaWebhook || fs.existsSync(promoteScript),
+        promoteConfig: {
+          webhookUrlConfigured: !!PROMOTE_PROD_WEBHOOK_URL,
+          webhookSecretConfigured: !!PROMOTE_PROD_WEBHOOK_SECRET,
+        },
         recentCommits,
         pendingCommits,
       });

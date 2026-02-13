@@ -48,11 +48,13 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/admin"];
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings"];
 
 function Router() {
   const [location] = useLocation();
-  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location);
+  const host = typeof window !== "undefined" ? window.location.hostname : "";
+  const isStagingHost = host === "staging.pushlog.ai" || host === "localhost" || host === "127.0.0.1";
+  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location) || (location === "/admin" && isStagingHost);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -116,11 +118,13 @@ function Router() {
           <Settings />
         </ProtectedRoute>
       </Route>
-      <Route path="/admin">
-        <ProtectedRoute pageName="admin">
-          <Admin />
-        </ProtectedRoute>
-      </Route>
+      {isStagingHost && (
+        <Route path="/admin">
+          <ProtectedRoute pageName="admin">
+            <Admin />
+          </ProtectedRoute>
+        </Route>
+      )}
       
       <Route component={NotFound} />
     </Switch>
