@@ -67,6 +67,48 @@ async function getUserIdFromOAuthState(state: string): Promise<string | null> {
 
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
 const BILLING_ENABLED = isBillingEnabled();
+const APP_ENV = process.env.APP_ENV || "production";
+
+function parseCsvEnv(value: string | undefined): string[] {
+  return (value || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+const STAGING_ADMIN_EMAILS = parseCsvEnv(process.env.STAGING_ADMIN_EMAILS);
+const STAGING_ADMIN_USERNAMES = parseCsvEnv(process.env.STAGING_ADMIN_USERNAMES);
+
+async function getCurrentUser(req: any) {
+  const userId = req?.user?.userId;
+  if (!userId) return null;
+  return await storage.getUser(userId);
+}
+
+async function ensureStagingAdmin(req: any, res: any): Promise<{ ok: true; user: any } | { ok: false }> {
+  if (APP_ENV !== "staging") {
+    res.status(404).json({ error: "Not found" });
+    return { ok: false };
+  }
+
+  const user = await getCurrentUser(req);
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return { ok: false };
+  }
+
+  const email = String(user.email || "").toLowerCase();
+  const username = String(user.username || "").toLowerCase();
+  const allowedByEmail = email && STAGING_ADMIN_EMAILS.includes(email);
+  const allowedByUsername = username && STAGING_ADMIN_USERNAMES.includes(username);
+
+  if (!allowedByEmail && !allowedByUsername) {
+    res.status(403).json({ error: "Admin access required" });
+    return { ok: false };
+  }
+
+  return { ok: true, user };
+}
 
 /** Same password rules as signup; used for reset-password and change-password (AUTH-VULN-21). Returns error message or null if valid. */
 function validatePasswordRequirements(password: string): string | null {
@@ -217,6 +259,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❌ Deployment webhook error:', error);
       res.status(500).json({ error: 'Deployment failed' });
+    }
+  });
+
+  // Staging admin: show promotion status and pending commits
+  app.get("/api/admin/staging/status", authenticateToken, async (req: any, res: any) => {
+    try {
+      const admin = await ensureStagingAdmin(req, res);
+      if (!admin.ok) return;
+
+      const appDir = process.env.APP_DIR || "/var/www/pushlog";
+      const prodShaFile = path.join(appDir, ".prod_deployed_sha");
+      const prodAtFile = path.join(appDir, ".prod_deployed_at");
+      const promoteScript = path.join(appDir, "deploy-production.sh");
+
+      const [{ stdout: branchOut }, { stdout: headOut }, { stdout: recentOut }] = await Promise.all([
+        execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir }),
+        execAsync("git rev-parse HEAD", { cwd: appDir }),
+        execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso -n 20", { cwd: appDir }),
+      ]);
+
+      const branch = branchOut.trim();
+      const headSha = headOut.trim();
+      const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
+      const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
+
+      const recentCommits = recentOut
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+          return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+        });
+
+      let pendingCount = 0;
+      let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
+      if (prodDeployedSha) {
+        const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
+          execAsync(`git rev-list --count ${prodDeployedSha}..HEAD`, { cwd: appDir }),
+          execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..HEAD -n 20`, { cwd: appDir }),
+        ]);
+        pendingCount = Number(countOut.trim() || "0");
+        pendingCommits = pendingOut
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+            return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+          });
+      }
+
+      const lockFile = path.join(appDir, ".promote-production.lock");
+      const promoteInProgress = fs.existsSync(lockFile);
+
+      res.json({
+        appEnv: APP_ENV,
+        branch,
+        headSha,
+        prodDeployedSha,
+        prodDeployedAt,
+        pendingCount,
+        promoteInProgress,
+        promoteScriptExists: fs.existsSync(promoteScript),
+        recentCommits,
+        pendingCommits,
+      });
+    } catch (error: any) {
+      console.error("Failed to load staging admin status:", error);
+      res.status(500).json({ error: error?.message || "Failed to load status" });
+    }
+  });
+
+  // Staging admin: approve and promote currently staged commit to production
+  app.post("/api/admin/staging/promote", authenticateToken, async (req: any, res: any) => {
+    try {
+      const admin = await ensureStagingAdmin(req, res);
+      if (!admin.ok) return;
+
+      const appDir = process.env.APP_DIR || "/var/www/pushlog";
+      const promoteScript = path.join(appDir, "deploy-production.sh");
+      const lockFile = path.join(appDir, ".promote-production.lock");
+
+      if (!fs.existsSync(promoteScript)) {
+        return res.status(500).json({ error: "deploy-production.sh not found" });
+      }
+      if (fs.existsSync(lockFile)) {
+        return res.status(409).json({ error: "Promotion already in progress" });
+      }
+
+      fs.writeFileSync(
+        lockFile,
+        JSON.stringify(
+          {
+            startedAt: new Date().toISOString(),
+            byUserId: admin.user.id,
+            byEmail: admin.user.email || null,
+            byUsername: admin.user.username || null,
+          },
+          null,
+          2
+        )
+      );
+
+      execAsync(`bash ${promoteScript}`, {
+        cwd: appDir,
+        env: {
+          ...process.env,
+          APP_DIR: appDir,
+          PROMOTED_BY: String(admin.user.email || admin.user.username || admin.user.id || "unknown"),
+        },
+        maxBuffer: 1024 * 1024 * 10,
+      })
+        .then(() => {
+          try {
+            fs.unlinkSync(lockFile);
+          } catch {}
+        })
+        .catch((err) => {
+          console.error("Production promotion failed:", err?.message || err);
+          try {
+            fs.unlinkSync(lockFile);
+          } catch {}
+        });
+
+      return res.json({
+        message: "Production promotion started",
+        startedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      console.error("Failed to start production promotion:", error);
+      res.status(500).json({ error: error?.message || "Failed to start promotion" });
     }
   });
 

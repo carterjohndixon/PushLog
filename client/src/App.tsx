@@ -27,6 +27,7 @@ const Policy = lazy(() => import("@/pages/policy"));
 const Terms = lazy(() => import("@/pages/terms"));
 const SubProcessors = lazy(() => import("@/pages/sub-processors"));
 const Settings = lazy(() => import("@/pages/settings"));
+const Admin = lazy(() => import("@/pages/admin"));
 const Support = lazy(() => import("@/pages/support"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -47,7 +48,7 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings"];
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/admin"];
 
 function Router() {
   const [location] = useLocation();
@@ -113,6 +114,11 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute pageName="settings">
           <Settings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin">
+        <ProtectedRoute pageName="admin">
+          <Admin />
         </ProtectedRoute>
       </Route>
       

@@ -44,6 +44,8 @@ export function Header() {
 
   const { theme, setTheme } = useTheme();
 
+  const isStagingHost = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
+
   const navLinks = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/integrations", label: "Integrations" },
@@ -51,6 +53,7 @@ export function Header() {
     { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "Models" },
+    ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
 
   const themeCycle: Theme[] = ["light", "dark", "system"];
