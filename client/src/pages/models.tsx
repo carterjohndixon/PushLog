@@ -143,10 +143,6 @@ export default function Models() {
     if (savedPreferredModel) setDefaultModelId((prev) => prev || savedPreferredModel);
   }, [savedPreferredModel]);
 
-  useEffect(() => {
-    setRecentCallsPage(0);
-  }, [recentCallsModelFilter, recentCallsSearch]);
-
   const { data: modelsData, isLoading: modelsLoading } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
     queryFn: async () => {
@@ -990,7 +986,13 @@ export default function Models() {
                               <span className="text-muted-foreground font-normal text-xs ml-1">({usageData.calls.length})</span>
                             </Button>
                           </CollapsibleTrigger>
-                          <Select value={recentCallsModelFilter || "all"} onValueChange={(v) => setRecentCallsModelFilter(v === "all" ? "" : v)}>
+                          <Select
+                            value={recentCallsModelFilter || "all"}
+                            onValueChange={(v) => {
+                              setRecentCallsModelFilter(v === "all" ? "" : v);
+                              setRecentCallsPage(0);
+                            }}
+                          >
                             <SelectTrigger className="w-[200px] h-8 text-sm bg-background border-border text-foreground">
                               <SelectValue placeholder="All models" />
                             </SelectTrigger>
@@ -1006,7 +1008,10 @@ export default function Models() {
                             <Input
                               placeholder="Search calls…"
                               value={recentCallsSearch}
-                              onChange={(e) => setRecentCallsSearch(e.target.value)}
+                              onChange={(e) => {
+                                setRecentCallsSearch(e.target.value);
+                                setRecentCallsPage(0);
+                              }}
                               className="h-8 pl-8 text-sm bg-background border-border text-foreground"
                             />
                           </div>
