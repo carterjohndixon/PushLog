@@ -80,8 +80,11 @@ export function IncidentToast() {
   return (
     <div
       className={cn(
-        "fixed bottom-6 right-6 z-[90] w-[360px] max-w-[calc(100vw-2rem)] transition-transform duration-300 ease-out",
-        visible && !exiting ? "translate-x-0 opacity-100" : "translate-x-[calc(100%+2rem)] opacity-0"
+        "fixed bottom-6 right-6 z-[90] w-[360px] max-w-[calc(100vw-2rem)]",
+        "transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
+        visible && !exiting
+          ? "translate-x-0 opacity-100"
+          : "translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none"
       )}
       aria-live="assertive"
       role="alert"
