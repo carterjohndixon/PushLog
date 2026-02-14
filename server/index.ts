@@ -215,6 +215,42 @@ app.post(
   slackCommandsHandler
 );
 
+// Sentry tunnel: proxy client events through our server (avoids ad-blockers blocking ingest.sentry.io)
+const sentryDsn = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN || "https://76dff591029ab7f40572c74af67aa470@o4510881753137152.ingest.us.sentry.io/4510881854521344";
+const sentryIngestUrl = (() => {
+  try {
+    const match = sentryDsn.match(/^https?:\/\/[^@]+@([^/]+)\/(\d+)/);
+    if (match) return `https://${match[1]}/api/${match[2]}/envelope/`;
+  } catch (_) {}
+  return "";
+})();
+if (sentryIngestUrl) {
+  app.post(
+    "/api/sentry/tunnel",
+    express.raw({ type: () => true, limit: "1mb" }),
+    async (req: express.Request, res: express.Response) => {
+      try {
+        const body = req.body;
+        if (!body || !Buffer.isBuffer(body)) {
+          res.status(400).end();
+          return;
+        }
+        const r = await fetch(sentryIngestUrl, {
+          method: "POST",
+          body: new Uint8Array(body),
+          headers: {
+            "Content-Type": req.headers["content-type"] || "application/x-sentry-envelope",
+          },
+        });
+        res.status(r.status).end();
+      } catch (e) {
+        console.warn("[sentry/tunnel] forward failed:", e);
+        res.status(500).end();
+      }
+    }
+  );
+}
+
 // GitHub webhook: must receive raw body for signature verification (before body parsers)
 app.post(
   "/api/webhooks/github",

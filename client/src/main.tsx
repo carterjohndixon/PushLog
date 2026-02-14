@@ -9,6 +9,7 @@ const dsn = import.meta.env.VITE_SENTRY_DSN ?? "https://76dff591029ab7f40572c74a
 if (dsn) {
   Sentry.init({
     dsn,
+    tunnel: "/api/sentry/tunnel", // Proxy via our server — avoids ad-blockers
     enableLogs: true,
   });
   Sentry.logger.info("User triggered test log", { log_source: "sentry_test" });
