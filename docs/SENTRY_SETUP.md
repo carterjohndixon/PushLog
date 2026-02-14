@@ -14,25 +14,32 @@ PushLog can receive error events from Sentry and surface them as **incident aler
 
 ### 1. Create a Sentry Internal Integration
 
-1. Go to [Sentry](https://sentry.io) → **Settings** → **Developer Settings** → **Internal Integrations**
-2. Click **Create New Internal Integration**
-3. Name it (e.g. "PushLog Incident Alerts")
-4. Under **Webhooks**, check **Issue Alerts**
-5. Set **Webhook URL** to:
+1. Go to [Sentry](https://sentry.io) → **Settings** → **Developer Settings** → **Custom Integrations** (or **Internal Integrations**)
+2. Click **Create New Integration**
+3. Choose **Internal Integration** (not Public Integration — that's for publishing to the Sentry marketplace)
+4. Fill in the form:
+   - **Name:** e.g. "PushLog Incident Alerts"
+   - **Webhook URL:**
    ```
    https://YOUR-PUSHLOG-DOMAIN.com/api/webhooks/sentry
    ```
    (Replace with your PushLog URL, e.g. `https://pushlog.ai` or `https://staging.pushlog.ai`)
-6. Copy the **Webhook Secret** — you’ll use it in PushLog
-7. Click **Save**
+   - **Alert Rule Action:** Enable (required)
+   - **Webhooks:** Leave default; **Permissions:** Leave "No Access"
+5. Copy the **Webhook Secret** (optional — for signature verification)
+6. Click **Save Changes**
 
-### 2. Create an Alert Rule in Sentry
+> You do *not* need to create an app or add the React SDK. The Internal Integration is enough.
+
+### 2. Create an Alert Rule
 
 1. Go to **Alerts** → **Create Alert**
-2. Choose **Create an alert from scratch** or use a template
-3. Set conditions (e.g. "The issue's events increase by more than 100%")
-4. Under **Then**, add **Send a notification via PushLog** (or the name of your integration)
-5. Save the rule
+2. On **Select Alert**, choose **Errors** → **Issues**
+3. **WHEN:** e.g. "A new issue is created"
+4. **THEN:** Select **Send a notification via [PushLog Incident Alerts]** — not "Send an email"
+5. Click **Set Conditions**, finish, and save
+
+> You need both the Integration and the Alert Rule.
 
 ### 3. Configure PushLog (optional)
 
