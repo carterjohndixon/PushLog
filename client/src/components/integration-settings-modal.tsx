@@ -175,6 +175,17 @@ export function IntegrationSettingsModal({
     }
   }, [integration]);
 
+  const baseUseOpenRouter = !!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey);
+  const baseAiModel = integration?.aiModel || "gpt-4o";
+  const hasChanges = !!integration && (
+    isActive !== (integration.isActive ?? true) ||
+    notificationLevel !== (integration.notificationLevel || "all") ||
+    includeCommitSummaries !== (integration.includeCommitSummaries ?? true) ||
+    useOpenRouter !== baseUseOpenRouter ||
+    aiModel !== baseAiModel ||
+    maxTokens !== (integration.maxTokens ?? 350)
+  );
+
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen && integration) {
       setNotificationLevel(integration.notificationLevel || 'all');
@@ -482,6 +493,7 @@ export function IntegrationSettingsModal({
             onClick={handleSave}
             disabled={
               updateIntegrationMutation.isPending ||
+              !hasChanges ||
               (useOpenRouter && !userHasOpenRouterKey) ||
               (useOpenRouter && userHasOpenRouterKey && !openRouterModels.some((m) => m.id === aiModel))
             }
