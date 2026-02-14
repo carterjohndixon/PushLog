@@ -76,7 +76,7 @@ export function IncidentToast() {
   const viewDetails = () => {
     if (!incident) return;
     window.dispatchEvent(
-      new CustomEvent("show-notification-modal", { detail: { id: incident.id } })
+      new CustomEvent("show-notification-modal", { detail: { id: incident.id, notification: incident } })
     );
     dismiss();
   };

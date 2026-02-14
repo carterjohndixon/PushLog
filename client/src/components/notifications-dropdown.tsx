@@ -27,12 +27,12 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
   const { notifications, count, hasUnread, markAllAsRead, removeNotification, readNotification, clearAllNotifications, refetchNotifications } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
 
-  // Open notification modal when incident toast "View details" is clicked
+  // Open notification modal when incident toast "View details" is clicked (or when triggered with id)
   useEffect(() => {
-    const handle = (e: CustomEvent<{ id: string | number }>) => {
-      const targetId = e.detail?.id;
-      if (targetId == null) return;
-      const notif = notifications.find((n) => String(n.id) === String(targetId));
+    const handle = (e: CustomEvent<{ id?: string | number; notification?: any }>) => {
+      const { id: targetId, notification: directNotif } = e.detail ?? {};
+      // Use direct notification from toast (works before it's in the list), else find by id
+      const notif = directNotif ?? (targetId != null ? notifications.find((n) => String(n.id) === String(targetId)) : null);
       if (notif) {
         setSelectedNotification(notif);
         readNotification(notif.id);
