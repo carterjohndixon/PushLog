@@ -16,6 +16,7 @@ import {
   Shield, 
   Database, 
   AlertTriangle,
+  AlertCircle,
   CheckCircle,
   Github,
   CreditCard,
@@ -38,6 +39,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface DataSummary {
   accountCreated: string;
@@ -99,7 +101,7 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       toast({
         title: checked ? "Developer mode enabled" : "Developer mode disabled",
-        description: checked ? "Test features are now visible on Integrations." : "Test features are now hidden.",
+        description: checked ? "Incident test features are now visible below." : "Test features are now hidden.",
       });
     },
     onError: (error: Error) => {
@@ -599,7 +601,7 @@ export default function Settings() {
                 Developer Mode
               </CardTitle>
               <CardDescription>
-                Enable test features such as the &quot;Simulate production incident&quot; button on the Integrations page. Useful for testing Sentry webhooks and incident notifications.
+                Enable test features such as incident simulation. Useful for testing Sentry webhooks and incident notifications.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -614,6 +616,93 @@ export default function Settings() {
                   onCheckedChange={(checked) => updateDevModeMutation.mutate(checked)}
                 />
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Incident Test — revealed when dev mode is on */}
+          <Card className="border-amber-500/20 bg-amber-500/[0.03]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                Incident Test
+              </CardTitle>
+              <CardDescription>
+                Simulate Sentry-style incidents to test notifications and the incident toast.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!devMode && (
+                <p className="text-muted-foreground py-2">
+                  Developer mode must be activated to use these test features.
+                </p>
+              )}
+              <Collapsible open={devMode}>
+                <CollapsibleContent>
+                  <div className="space-y-3 pt-1">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/simulate-incident", {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({}),
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
+                              return;
+                            }
+                            if (data.notification) {
+                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
+                            } else {
+                              toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
+                            }
+                          } catch (e) {
+                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Simulate Sentry alert
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/simulate-incident", {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ fullPipeline: true }),
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
+                              return;
+                            }
+                            if (data.notification) {
+                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
+                            } else {
+                              toast({ title: "Incident sent", description: "Check your notifications (bell icon). You may see 2 (Sentry + incident engine)." });
+                            }
+                          } catch (e) {
+                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Simulate full pipeline
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine (may create a second notification e.g. spike).
+                    </p>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
             </CardContent>
           </Card>
 
