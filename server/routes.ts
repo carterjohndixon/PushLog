@@ -462,6 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Sentry webhook adapter: accepts Sentry issue-alert payload, transforms to incident engine format
   app.post("/api/webhooks/sentry", async (req, res) => {
+    console.log("[webhooks/sentry] Request received");
     try {
       const configuredSecret = process.env.SENTRY_WEBHOOK_SECRET?.trim();
       if (configuredSecret) {

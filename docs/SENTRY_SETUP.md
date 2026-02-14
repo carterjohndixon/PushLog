@@ -87,6 +87,67 @@ To correlate errors with recent deploys, include a **change window** when sendin
 
 ---
 
+## Testing & Verifying
+
+### 1. Confirm the webhook URL
+
+In Sentry → **Settings** → **Developer Settings** → **Custom Integrations** → your PushLog integration:
+
+- Webhook URL should be: `https://pushlog.ai/api/webhooks/sentry` (or your production domain)
+- Save if you change it
+
+### 2. Trigger a test alert
+
+1. In Sentry → your project → **Settings** → **Projects** → [your project]
+2. Find **Create Sample Event** or **Send Test Alert**
+3. Or add the Sentry `ErrorButton` to your app and click it to trigger a real error
+
+### 3. Check Sentry Alert History
+
+In Sentry → **Alerts** → **Alert History** to see if the rule fired and if the webhook was sent (success/failure).
+
+### 4. Optional: test the URL is reachable
+
+From your terminal (to confirm the endpoint is public and accepting requests):
+
+```bash
+curl -X POST https://pushlog.ai/api/webhooks/sentry \
+  -H "Content-Type: application/json" \
+  -d '{"data":{"event":{}}}'
+```
+
+- **202** or **400** = endpoint reachable (400 is expected for empty payload)
+- **Connection refused / timeout** = firewall, wrong URL, or app not running
+
+### 5. View PushLog logs on EC2
+
+SSH into your EC2 instance and run:
+
+```bash
+# Live logs (follow new output)
+pm2 logs pushlog-prod
+
+# Last 200 lines
+pm2 logs pushlog-prod --lines 200
+
+# Only Sentry/incident-related lines
+pm2 logs pushlog-prod --lines 500 --nostream | grep -E "webhooks/sentry|incident-engine"
+```
+
+**What to look for:**
+
+| Log line | Meaning |
+|----------|---------|
+| `[webhooks/sentry] Request received` | Sentry's webhook hit your server |
+| `[webhooks/sentry] Ingested: ... in .../...` | Event parsed and sent to incident engine |
+| `[incident-engine] incident inc-xxx (new_issue) ...` | Engine triggered; notification created |
+| `[incident-engine] child not writable; event dropped` | Incident-engine binary missing or crashed |
+| `Sentry webhook error:` | Parsing or processing failed |
+
+If you see **Request received** but not **Ingested**, the payload may be missing `data.event`. If you see **Ingested** but not **incident inc-xxx**, the engine may not have triggered (e.g. environment not "prod").
+
+---
+
 ## Troubleshooting
 
 **No incidents showing up?**
