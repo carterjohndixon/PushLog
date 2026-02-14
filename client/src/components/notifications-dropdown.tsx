@@ -52,8 +52,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             key={notification.id} 
             className={`flex items-center justify-between gap-2 p-4 min-w-0 [&:hover]:!bg-muted ${
               notification.type === 'email_verification' ? 'bg-amber-500/10 dark:bg-amber-500/20 border-b border-border' : 
-              (notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert') ? 'bg-destructive/10 border-l-4 border-destructive' :
-              !notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : ''
+              (notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert')
+                ? (!notification.isRead ? 'bg-destructive/10 border-l-4 border-destructive' : '')
+                : (!notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : '')
             }`}
           >
             <div className="flex items-center flex-1 min-w-0 overflow-hidden">
