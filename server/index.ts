@@ -1,3 +1,6 @@
+/** Build-time: set by esbuild --define for prod/staging bundles; undefined in dev (tsx) */
+declare const __APP_ENV__: string | undefined;
+
 import dotenv from "dotenv";
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
@@ -374,21 +377,18 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  // Vite in development only; static when APP_ENV is production/staging. Uses __APP_ENV__ define
+  // so esbuild can tree-shake the vite branch out of the prod bundle (vite is a devDep).
+  if (typeof __APP_ENV__ === "undefined" || __APP_ENV__ === "development") {
     try {
       const { setupVite } = await import("./vite");
       await setupVite(app, server);
     } catch (error) {
       console.error("Failed to load Vite (vite may not be installed):", error);
-      // Fallback to static serving if vite isn't available
       const { serveStatic } = await import("./vite");
       serveStatic(app);
     }
   } else {
-    // In production, use static-only module (no Vite dependency in bundle)
     const { serveStatic } = await import("./static");
     serveStatic(app);
   }
