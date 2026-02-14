@@ -38,6 +38,7 @@ fn main() {
         let err = ErrorOutput::new(format!("json parse: {}", e));
         let _ = serde_json::to_writer(&mut out, &err);
         let _ = writeln!(out);
+        let _ = out.flush();
         continue;
       }
     };
@@ -47,6 +48,7 @@ fn main() {
       Ok(Some(summary)) => {
         let _ = serde_json::to_writer(&mut out, &summary);
         let _ = writeln!(out);
+        let _ = out.flush();
       }
       Ok(None) => {
         // No incident triggered — no output.
@@ -60,6 +62,7 @@ fn main() {
         };
         let _ = serde_json::to_writer(&mut out, &err);
         let _ = writeln!(out);
+        let _ = out.flush();
       }
     }
   }
