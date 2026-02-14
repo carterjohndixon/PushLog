@@ -40,6 +40,9 @@ else
   log "Dependencies unchanged, skipping npm install."
 fi
 
+log "Building incident-engine (Rust)..."
+cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-engine build skipped (cargo/rust not available)"
+
 log "Building production bundle..."
 npm run build:production
 

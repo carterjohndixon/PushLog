@@ -515,6 +515,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else if (tags && typeof tags === "object" && tags.environment) {
         environment = String(tags.environment);
       }
+      // Engine triggers new_issue only when environment === "prod"
+      if (environment.toLowerCase() === "production") environment = "prod";
       const proj = data?.project as Record<string, unknown> | string | number | undefined;
       const projectSlug = typeof proj === "object" && proj?.slug ? String(proj.slug) : typeof ev.project === "string" ? ev.project : "api";
       const service = projectSlug || "api";
