@@ -17,7 +17,7 @@ import { useNotifications } from "@/hooks/use-notifications";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { formatRelativeOrLocal, formatCreatedAt } from "@/lib/date";
 import { ErrorBoundary } from "@/components/error-boundary";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface NotificationsDropdownProps {
   isEmailVerified: boolean;
@@ -26,6 +26,20 @@ interface NotificationsDropdownProps {
 export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdownProps) {
   const { notifications, count, hasUnread, markAllAsRead, removeNotification, readNotification, clearAllNotifications, refetchNotifications } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
+
+  // Open notification modal when incident toast "View details" is clicked
+  useEffect(() => {
+    const handle = (e: CustomEvent<{ id: string | number }>) => {
+      const targetId = e.detail.id;
+      const notif = notifications.find((n) => String(n.id) === String(targetId));
+      if (notif) {
+        setSelectedNotification(notif);
+        readNotification(notif.id);
+      }
+    };
+    window.addEventListener("show-notification-modal", handle as EventListener);
+    return () => window.removeEventListener("show-notification-modal", handle as EventListener);
+  }, [notifications, readNotification]);
 
   return (
     <>

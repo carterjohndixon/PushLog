@@ -97,11 +97,13 @@ export function useNotifications() {
           
           // Handle credit-related notifications with toast
           if (data.data.type === 'low_credits' || data.data.type === 'no_credits') {
-            // Dispatch custom event for credit notifications
-            const creditEvent = new CustomEvent('credit-notification', {
-              detail: data.data
-            });
+            const creditEvent = new CustomEvent('credit-notification', { detail: data.data });
             window.dispatchEvent(creditEvent);
+          }
+          
+          // Dispatch for incident toast (slide-in notification)
+          if (data.data.type === 'incident_alert') {
+            window.dispatchEvent(new CustomEvent('incident-notification', { detail: data.data }));
           }
           
           // Invalidate the query to refetch from database
