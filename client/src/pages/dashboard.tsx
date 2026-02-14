@@ -634,7 +634,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Active Integrations</p>
+                  <p className="text-sm text-muted-foreground pr-2">Active Integrations</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
@@ -655,7 +655,7 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Connected Repos</p>
+                  <p className="text-sm text-muted-foreground pr-2">Connected Repos</p>
                   {statsLoading ? (
                     <Skeleton className="h-8 w-8 mt-1" />
                   ) : (
