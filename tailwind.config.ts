@@ -5,6 +5,9 @@ export default {
   content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
+      transitionTimingFunction: {
+        'bounce-out': 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+      },
       fontFamily: {
         sans: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
       },

@@ -3757,48 +3757,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test route: simulate Sentry-style production incident (triggers NewIssue in incident engine). Enable with ENABLE_TEST_ROUTES=true.
+  // Test route: simulate Sentry-style production incident. Creates notification immediately so the
+  // incident toast shows right away; also sends to incident engine for full pipeline.
   app.post("/api/test/simulate-incident", authenticateToken, async (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
       return res.status(404).json({ error: "Not found" });
     }
     try {
-      const userId = (req as any).user?.userId;
+      const userId = (req as any).user?.userId as string;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
       const now = new Date().toISOString();
       const ts5MinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      const exceptionType = String(req.body?.exceptionType ?? "TypeError");
+      const message = String(req.body?.message ?? "Cannot read property 'id' of undefined");
 
-      // Realistic Sentry-style event: prod env triggers NewIssue on first occurrence
+      // Create notification immediately so client can show toast right away
+      const notif = await databaseStorage.createNotification({
+        userId,
+        type: "incident_alert",
+        title: `${exceptionType}: ${message}`,
+        message: `New issue detected in api/prod (priority 1)`,
+        metadata: JSON.stringify({
+          service: "api",
+          environment: "prod",
+          trigger: "NewIssue",
+          severity: "error",
+          stacktrace: [
+            { file: "src/handler.ts", function: "handleRequest", line: 42 },
+            { file: "src/middleware/auth.ts", function: "verifyToken", line: 18 },
+          ],
+        }),
+      });
+      broadcastNotification(userId, {
+        id: notif.id,
+        type: notif.type,
+        title: notif.title,
+        message: notif.message,
+        metadata: notif.metadata,
+        createdAt: notif.createdAt,
+        isRead: false,
+      });
+
+      // Also send to incident engine for full pipeline (optional)
       const event = {
         source: "sentry",
-        service: String(req.body?.service ?? "api"),
+        service: "api",
         environment: "prod",
         timestamp: now,
         severity: "error" as const,
-        exception_type: String(req.body?.exceptionType ?? "TypeError"),
-        message: String(req.body?.message ?? "Cannot read property 'id' of undefined"),
-        stacktrace: Array.isArray(req.body?.stacktrace) && req.body.stacktrace.length > 0
-          ? req.body.stacktrace.map((f: { file: string; function?: string; line?: number }) => ({
-              file: String(f.file || "unknown"),
-              function: f.function ?? "anonymous",
-              line: typeof f.line === "number" ? f.line : undefined,
-            }))
-          : [
-              { file: "src/handler.ts", function: "handleRequest", line: 42 },
-              { file: "src/middleware/auth.ts", function: "verifyToken", line: 18 },
-            ],
-        links: { ...(typeof userId === "string" && userId ? { pushlog_user_id: userId } : {}), source_url: "https://sentry.io/issues/simulated-test" },
+        exception_type: exceptionType,
+        message,
+        stacktrace: [
+          { file: "src/handler.ts", function: "handleRequest", line: 42 },
+          { file: "src/middleware/auth.ts", function: "verifyToken", line: 18 },
+        ],
+        links: { pushlog_user_id: userId, source_url: "https://sentry.io/issues/simulated-test" },
         change_window: {
           deploy_time: ts5MinAgo,
           commits: [
-            { id: "abc123" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/handler.ts", "src/utils/format.ts"] },
+            { id: "abc123" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/handler.ts"] },
             { id: "def456" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/middleware/auth.ts"] },
           ],
         },
       };
       ingestIncidentEvent(event);
-      console.log(`🧪 [TEST] Simulate incident: ${event.exception_type} in ${event.service}/${event.environment} → incident engine`);
-      res.status(200).json({ ok: true, message: "Incident event sent to engine. Check notifications (bell icon) in a few seconds." });
+
+      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification + engine`);
+      res.status(200).json({
+        ok: true,
+        message: "Incident sent",
+        notification: {
+          id: notif.id,
+          type: notif.type,
+          title: notif.title,
+          message: notif.message,
+          metadata: notif.metadata,
+          createdAt: notif.createdAt,
+          isRead: false,
+        },
+      });
     } catch (err) {
       console.error("🧪 [TEST] simulate-incident error:", err);
       res.status(500).json({

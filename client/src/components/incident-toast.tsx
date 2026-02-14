@@ -24,13 +24,17 @@ export function IncidentToast() {
   const [exiting, setExiting] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastShownId = useRef<string | null>(null);
 
   useEffect(() => {
     const handle = (e: CustomEvent<IncidentNotification>) => {
+      const data = e.detail;
+      const idStr = String(data.id);
+      if (lastShownId.current === idStr) return;
+      lastShownId.current = idStr;
+
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
-
-      const data = e.detail;
       setIncident(data);
       setExiting(false);
       setVisible(false); // Start off-screen for slide-in
@@ -45,6 +49,7 @@ export function IncidentToast() {
         exitTimer.current = setTimeout(() => {
           setVisible(false);
           setIncident(null);
+          lastShownId.current = null;
           dismissTimer.current = null;
           exitTimer.current = null;
         }, EXIT_DURATION_MS);
@@ -64,7 +69,7 @@ export function IncidentToast() {
     setTimeout(() => {
       setVisible(false);
       setIncident(null);
-    }, 300);
+    }, EXIT_DURATION_MS);
   };
 
   const viewDetails = () => {
