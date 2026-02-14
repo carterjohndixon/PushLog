@@ -14,6 +14,7 @@ client/.env.local
 
 # Build outputs
 dist
+.docker-build
 build
 server/public
 server/risk-engine/target
