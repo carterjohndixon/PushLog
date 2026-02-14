@@ -7,7 +7,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
@@ -23,10 +22,6 @@ import {
   CheckCircle,
   ChevronDown,
   MoreVertical,
-  Copy,
-  Check,
-  ExternalLink,
-  ChevronRight,
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { IntegrationSetupModal } from "@/components/integration-setup-modal";
@@ -147,8 +142,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   const [activeTab, setActiveTab] = useState("all");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
-  const [incidentAlertsOpen, setIncidentAlertsOpen] = useState(false);
-  const [webhookCopied, setWebhookCopied] = useState(false);
 
   const queryClient = useQueryClient();
   const { data: profileResponse } = useQuery({
@@ -428,73 +421,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
             </CardContent>
           </Card>
         </div>
-
-        {/* Incident Alerts (Sentry) - setup instructions */}
-        <Card className="group mb-8 mt-6 border-amber-500/20 bg-amber-500/[0.03] transition-all duration-200 hover:border-amber-500/40 hover:shadow-xl hover:-translate-y-0.5 hover:bg-amber-500/[0.06]">
-          <Collapsible open={incidentAlertsOpen} onOpenChange={setIncidentAlertsOpen}>
-            <CollapsibleTrigger asChild>
-              <button className="w-full text-left p-6 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
-                      <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-graphite">Incident Alerts (Sentry)</h3>
-                      <p className="text-sm text-steel-gray">Connect Sentry to receive error &amp; deploy incident notifications</p>
-                    </div>
-                  </div>
-                  <ChevronRight className={`w-5 h-5 text-steel-gray transition-transform ${incidentAlertsOpen ? "rotate-90" : ""}`} />
-                </div>
-              </button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="px-6 pb-6 pt-0 space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                  <div className="flex-1 rounded-md bg-muted px-3 py-2 font-mono text-sm truncate">
-                    {typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/sentry` : "/api/webhooks/sentry"}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={async () => {
-                      const url = typeof window !== "undefined" ? `${window.location.origin}/api/webhooks/sentry` : "";
-                      try {
-                        await navigator.clipboard.writeText(url);
-                        setWebhookCopied(true);
-                        toast({ title: "Copied!", description: "Webhook URL copied to clipboard." });
-                        setTimeout(() => setWebhookCopied(false), 2000);
-                      } catch {
-                        toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" });
-                      }
-                    }}
-                  >
-                    {webhookCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    {webhookCopied ? " Copied" : " Copy"}
-                  </Button>
-                </div>
-                <ol className="text-sm text-steel-gray space-y-2 list-decimal list-inside">
-                  <li>In Sentry → Settings → Developer Settings → Internal Integrations → Create New</li>
-                  <li>Enable <strong>Issue Alerts</strong>, paste the Webhook URL above, save</li>
-                  <li>In Alerts → Create Alert → add your integration as the action</li>
-                </ol>
-                <p className="text-xs text-muted-foreground">
-                  Every push creates a deploy incident. To disable: set <code className="bg-muted px-1 rounded">DISABLE_DEPLOY_INCIDENTS=true</code> in your server env.
-                </p>
-                <a
-                  href="https://github.com/carterjohndixon/PushLog/blob/main/docs/SENTRY_SETUP.md"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-log-green hover:underline"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Full setup guide (docs/SENTRY_SETUP.md)
-                </a>
-              </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </Card>
 
         {/* Search and Filter */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
