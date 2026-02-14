@@ -511,9 +511,10 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                             toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
                             return;
                           }
-                          toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
                           if (data.notification) {
                             window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
+                          } else {
+                            toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
                           }
                         } catch (e) {
                           toast({ title: "Request failed", description: String(e), variant: "destructive" });

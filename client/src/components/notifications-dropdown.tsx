@@ -30,7 +30,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
   // Open notification modal when incident toast "View details" is clicked
   useEffect(() => {
     const handle = (e: CustomEvent<{ id: string | number }>) => {
-      const targetId = e.detail.id;
+      const targetId = e.detail?.id;
+      if (targetId == null) return;
       const notif = notifications.find((n) => String(n.id) === String(targetId));
       if (notif) {
         setSelectedNotification(notif);

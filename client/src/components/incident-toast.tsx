@@ -29,6 +29,7 @@ export function IncidentToast() {
   useEffect(() => {
     const handle = (e: CustomEvent<IncidentNotification>) => {
       const data = e.detail;
+      if (!data || (data.id !== 0 && !data.id)) return;
       const idStr = String(data.id);
       if (lastShownId.current === idStr) return;
       lastShownId.current = idStr;
