@@ -11,6 +11,12 @@ if (dsn) {
     dsn,
     tunnel: "/api/sentry/tunnel", // Proxy via our server — avoids ad-blockers
     enableLogs: true,
+    ignoreErrors: [
+      // Chunk load failures during deploys — stale app requests old chunk URLs; we auto-reload
+      /Failed to fetch dynamically imported module/,
+      /Loading chunk [\d]+ failed/,
+      /Loading CSS chunk [\d]+ failed/,
+    ],
   });
 }
 

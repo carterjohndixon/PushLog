@@ -113,7 +113,7 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
                 variant="ghost"
                 onClick={() => onDelete(integration)}
                 disabled={deletePending}
-                className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
