@@ -27,6 +27,10 @@ export function serveStatic(app: Express) {
         ? indexInDist
         : null;
     if (indexPath) {
+      // Prevent caching so users always get fresh HTML after deploys (avoids chunk mismatch errors)
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(indexPath);
     } else {
       console.error(
