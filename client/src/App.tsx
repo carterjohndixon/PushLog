@@ -1,4 +1,4 @@
-import { Switch, Route, useLocation } from "wouter";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import { Suspense, lazy, useEffect } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -32,7 +32,6 @@ const SubProcessors = lazy(() => import("@/pages/sub-processors"));
 const Settings = lazy(() => import("@/pages/settings"));
 const Admin = lazy(() => import("@/pages/admin"));
 const Support = lazy(() => import("@/pages/support"));
-const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -129,7 +128,9 @@ function Router() {
         </Route>
       )}
       
-      <Route component={NotFound} />
+      <Route path="*">
+        <Redirect to="/" />
+      </Route>
     </Switch>
     </>
   );

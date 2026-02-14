@@ -31,17 +31,50 @@ cd "$APP_DIR"
 log "Starting production promotion..."
 log "Triggered by: ${PROMOTED_BY:-unknown}"
 
-# Install deps only when lockfile changed or node_modules missing.
-if [ ! -d node_modules ] || [ ! -f .deps_installed_for ] || [ package-lock.json -nt .deps_installed_for ]; then
-  log "Installing dependencies..."
-  npm install --include=dev
-  cp package-lock.json .deps_installed_for
-else
-  log "Dependencies unchanged, skipping npm install."
+# ── Stage: Check packages ──
+log "Checking package.json for dependency changes..."
+PKG_COMPARE_BIN=""
+if [ -f target/release/pkg-compare ]; then
+  PKG_COMPARE_BIN="target/release/pkg-compare"
+elif command -v pkg-compare >/dev/null 2>&1; then
+  PKG_COMPARE_BIN="pkg-compare"
 fi
 
+NEED_INSTALL=false
+if [ ! -d node_modules ]; then
+  log "  → node_modules missing, will install."
+  NEED_INSTALL=true
+elif [ ! -f .deps_installed_pkg.json ]; then
+  log "  → No baseline package.json, will install."
+  NEED_INSTALL=true
+elif [ -n "$PKG_COMPARE_BIN" ]; then
+  if $PKG_COMPARE_BIN package.json .deps_installed_pkg.json -q 2>/dev/null; then
+    log "  → Packages unchanged, skipping npm install."
+  else
+    log "  → Packages changed, will install."
+    NEED_INSTALL=true
+  fi
+else
+  # Fallback: use lockfile mtime (pkg-compare not built yet)
+  if [ ! -f .deps_installed_for ] || [ package-lock.json -nt .deps_installed_for ]; then
+    log "  → Lockfile changed (pkg-compare not available), will install."
+    NEED_INSTALL=true
+  else
+    log "  → Lockfile unchanged, skipping npm install."
+  fi
+fi
+
+if [ "$NEED_INSTALL" = true ]; then
+  log "Installing dependencies..."
+  npm install --include=dev
+  cp package.json .deps_installed_pkg.json 2>/dev/null || true
+  cp package-lock.json .deps_installed_for 2>/dev/null || true
+fi
+
+# ── Stage: Build Rust ──
 log "Building incident-engine (Rust)..."
 cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-engine build skipped (cargo/rust not available)"
+cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare build skipped (cargo/rust not available)"
 
 log "Building production bundle..."
 npm run build:production

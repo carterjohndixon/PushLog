@@ -184,8 +184,12 @@ export default function AdminPage() {
     if (lastLine.includes("completed")) return "Completed!";
     if (lastLine.includes("CANCELLED")) return "Cancelled";
     if (lastLine.includes("Restarting")) return "Restarting PM2...";
-    if (lastLine.includes("Building")) return "Building production bundle...";
-    if (lastLine.includes("Installing")) return "Installing dependencies...";
+    if (lastLine.includes("Building production bundle")) return "Building production bundle...";
+    if (lastLine.includes("Building incident-engine")) return "Building Rust engines...";
+    if (lastLine.includes("Installing dependencies")) return "Installing dependencies...";
+    if (lastLine.includes("Checking package")) return "Checking packages...";
+    if (lastLine.includes("Packages unchanged") || lastLine.includes("Lockfile unchanged")) return "Packages unchanged, skipping install";
+    if (lastLine.includes("Packages changed") || lastLine.includes("will install")) return "Packages changed, preparing install";
     if (lastLine.includes("Starting")) return "Starting promotion...";
     return "Running...";
   }, [isPromotionRunning, lastLogLine]);
