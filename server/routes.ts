@@ -350,6 +350,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       priorityScore: summary.priority_score,
       startTime: summary.start_time,
       lastSeen: summary.last_seen,
+      peakTime: (summary as any).peak_time,
+      topSymptoms: (summary as any).top_symptoms ?? [],
+      suspectedCauses: (summary as any).suspected_causes ?? [],
+      recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
+      stacktrace: (summary as any).stacktrace ?? [],
       links: summary.links || {},
     });
 

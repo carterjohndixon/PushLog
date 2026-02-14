@@ -382,31 +382,35 @@ export async function persistPushAndNotifications(
   });
 
   // Feed push as deploy event into incident-engine for all integrations (incident alerts when engine triggers)
-  const pushedAtStr = pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : String(pushEvent.pushedAt);
-  const files = pushData.filesChanged ?? [];
-  const stacktrace = (files.length ? files.filter((f: string) => f !== "(no file list)") : [])
-    .slice(0, 10)
-    .map((f: string) => ({ file: f, function: "changed" }));
-  if (stacktrace.length === 0) stacktrace.push({ file: pushData.repositoryName, function: "deploy" });
-  const severity = (riskResult.impact_score ?? 0) >= 60 ? "critical" : (riskResult.impact_score ?? 0) >= 30 ? "error" : "warning";
-  try {
-    ingestIncidentEvent({
-      source: "pushlog",
-      service: pushData.repositoryName,
-      environment: pushData.branch,
-      timestamp: pushedAtStr,
-      severity,
-      exception_type: "GitPush",
-      message: pushData.commitMessage,
-      stacktrace,
-      links: { pushlog_user_id: integration.userId },
-      change_window: {
-        deploy_time: pushedAtStr,
-        commits: [{ id: pushData.commitSha, timestamp: commit?.timestamp, files: files }],
-      },
-    });
-  } catch (e) {
-    console.warn("⚠️ [Webhook] Failed to ingest push into incident-engine (non-fatal):", e instanceof Error ? e.message : e);
+  // Set DISABLE_DEPLOY_INCIDENTS=true to skip — reduces noise when every push would create an incident
+  const disableDeployIncidents = /^(1|true|yes)$/i.test(process.env.DISABLE_DEPLOY_INCIDENTS ?? "");
+  if (!disableDeployIncidents) {
+    const pushedAtStr = pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : String(pushEvent.pushedAt);
+    const files = pushData.filesChanged ?? [];
+    const stacktrace = (files.length ? files.filter((f: string) => f !== "(no file list)") : [])
+      .slice(0, 10)
+      .map((f: string) => ({ file: f, function: "changed" }));
+    if (stacktrace.length === 0) stacktrace.push({ file: pushData.repositoryName, function: "deploy" });
+    const severity = (riskResult.impact_score ?? 0) >= 60 ? "critical" : (riskResult.impact_score ?? 0) >= 30 ? "error" : "warning";
+    try {
+      ingestIncidentEvent({
+        source: "pushlog",
+        service: pushData.repositoryName,
+        environment: pushData.branch,
+        timestamp: pushedAtStr,
+        severity,
+        exception_type: "GitPush",
+        message: pushData.commitMessage,
+        stacktrace,
+        links: { pushlog_user_id: integration.userId },
+        change_window: {
+          deploy_time: pushedAtStr,
+          commits: [{ id: pushData.commitSha, timestamp: commit?.timestamp, files: files }],
+        },
+      });
+    } catch (e) {
+      console.warn("⚠️ [Webhook] Failed to ingest push into incident-engine (non-fatal):", e instanceof Error ? e.message : e);
+    }
   }
 
   if (aiResult.aiGenerated && aiResult.summary && ((aiResult.summary.tokensUsed > 0) || ((aiResult.summary.cost ?? 0) > 0))) {

@@ -9,6 +9,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Bell, Mail, MessageSquare, GitBranch, X, Eye, ExternalLink, AlertCircle } from "lucide-react";
@@ -179,6 +180,9 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             )}
             Notification Details
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            {selectedNotification ? `Details for ${selectedNotification.title || selectedNotification.message}` : 'Notification details'}
+          </DialogDescription>
         </DialogHeader>
         {selectedNotification && (() => {
           // Parse metadata if it's a string (guard against throw)
@@ -397,39 +401,129 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 </div>
               )}
 
-              {/* Incident alert */}
+              {/* Incident alert — detailed view from Rust incident engine */}
               {isIncidentAlert && (
-                <div className="border-t border-border pt-4 space-y-3">
+                <div className="border-t border-border pt-4 space-y-4">
                   <h4 className="font-semibold text-destructive text-sm flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
-                    Incident detected
+                    Incident details
                   </h4>
                   <p className="text-sm text-muted-foreground">
                     {selectedNotification.message}
                   </p>
-                  {metadata?.service && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">Service:</span>{' '}
-                      <span className="text-muted-foreground">{metadata.service}</span>
+
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm">
+                    <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Summary</h5>
+                    <div className="grid gap-1.5">
+                      {metadata?.incidentId && (
+                        <div><span className="font-medium text-foreground">Incident ID:</span>{' '}
+                          <code className="text-xs bg-muted px-1 rounded">{metadata.incidentId}</code>
+                        </div>
+                      )}
+                      {metadata?.service && (
+                        <div><span className="font-medium text-foreground">Service:</span>{' '}
+                          <span className="text-muted-foreground">{metadata.service}</span></div>
+                      )}
+                      {metadata?.environment && (
+                        <div><span className="font-medium text-foreground">Environment:</span>{' '}
+                          <span className="text-muted-foreground">{metadata.environment}</span></div>
+                      )}
+                      {metadata?.trigger && (
+                        <div><span className="font-medium text-foreground">Trigger:</span>{' '}
+                          <span className="text-muted-foreground capitalize">{String(metadata.trigger).replace(/_/g, ' ')}</span></div>
+                      )}
+                      {metadata?.severity && (
+                        <div><span className="font-medium text-foreground">Severity:</span>{' '}
+                          <span className="text-muted-foreground capitalize">{metadata.severity}</span></div>
+                      )}
+                      {metadata?.priorityScore != null && (
+                        <div><span className="font-medium text-foreground">Priority score:</span>{' '}
+                          <span className="text-muted-foreground">{metadata.priorityScore}</span></div>
+                      )}
+                      {metadata?.startTime && (
+                        <div><span className="font-medium text-foreground">First seen:</span>{' '}
+                          <span className="text-muted-foreground">{new Date(metadata.startTime).toLocaleString()}</span></div>
+                      )}
+                      {metadata?.lastSeen && (
+                        <div><span className="font-medium text-foreground">Last seen:</span>{' '}
+                          <span className="text-muted-foreground">{new Date(metadata.lastSeen).toLocaleString()}</span></div>
+                      )}
+                      {metadata?.peakTime && (
+                        <div><span className="font-medium text-foreground">Peak time:</span>{' '}
+                          <span className="text-muted-foreground">{metadata.peakTime}</span></div>
+                      )}
+                    </div>
+                  </div>
+
+                  {Array.isArray(metadata?.topSymptoms) && metadata.topSymptoms.length > 0 && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Top symptoms</h5>
+                      {metadata.topSymptoms.map((s: { exception_type?: string; message?: string; count?: number; spike_factor?: number; fingerprint?: string }, i: number) => (
+                        <div key={i} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1">
+                          <div><span className="font-medium text-foreground">Type:</span> {s.exception_type}</div>
+                          {s.message && <div><span className="font-medium text-foreground">Message:</span> {s.message}</div>}
+                          {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}
+                          {s.spike_factor != null && <div><span className="font-medium text-foreground">Spike factor:</span> {s.spike_factor}</div>}
+                          {s.fingerprint && <div className="text-xs font-mono text-muted-foreground truncate" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {metadata?.environment && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">Environment:</span>{' '}
-                      <span className="text-muted-foreground">{metadata.environment}</span>
+
+                  {Array.isArray(metadata?.suspectedCauses) && metadata.suspectedCauses.length > 0 && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Suspected causes</h5>
+                      {metadata.suspectedCauses.map((c: { commit_id?: string; score?: number; evidence?: string[] }, i: number) => (
+                        <div key={i} className="text-sm pl-3 border-l-2 border-amber-500/50 space-y-1">
+                          <div><span className="font-medium text-foreground">Commit:</span> <code className="text-xs bg-muted px-1 rounded">{c.commit_id}</code></div>
+                          {c.score != null && <div><span className="font-medium text-foreground">Score:</span> {c.score}</div>}
+                          {Array.isArray(c.evidence) && c.evidence.length > 0 && (
+                            <ul className="list-disc list-inside text-muted-foreground text-xs">
+                              {c.evidence.map((e: string, j: number) => <li key={j}>{e}</li>)}
+                            </ul>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
-                  {metadata?.trigger && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">Trigger:</span>{' '}
-                      <span className="text-muted-foreground">{String(metadata.trigger).replace(/_/g, ' ')}</span>
+
+                  {Array.isArray(metadata?.recommendedFirstActions) && metadata.recommendedFirstActions.length > 0 && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Recommended actions</h5>
+                      <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+                        {metadata.recommendedFirstActions.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                      </ol>
                     </div>
                   )}
-                  {metadata?.priorityScore != null && (
-                    <div className="text-sm">
-                      <span className="font-medium text-foreground">Priority:</span>{' '}
-                      <span className="text-muted-foreground">{metadata.priorityScore}</span>
+
+                  {Array.isArray(metadata?.stacktrace) && metadata.stacktrace.length > 0 && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
+                      <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto">
+                        {metadata.stacktrace.map((f: { file?: string; function?: string }, i: number) => (
+                          <div key={i} className="pl-3 border-l-2 border-amber-500/30 truncate" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
+                            <span className="text-muted-foreground">at</span> {f.file}{f.function ? ` (${f.function})` : ''}
+                          </div>
+                        ))}
+                      </div>
                     </div>
+                  )}
+
+                  {metadata?.links?.source_url && (
+                    <div className="text-sm">
+                      <a
+                        href={metadata.links.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sky-blue hover:underline inline-flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        View in Sentry
+                      </a>
+                    </div>
+                  )}
+                  {metadata?.links?.pushlog_user_id && (
+                    <p className="text-xs text-muted-foreground">Target user: {metadata.links.pushlog_user_id}</p>
                   )}
                 </div>
               )}

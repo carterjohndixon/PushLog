@@ -78,6 +78,16 @@ PushLog’s Sentry adapter accepts Sentry’s native webhook payload and transfo
 
 ---
 
+## Reducing notification noise
+
+**Deploy incidents:** By default, every GitHub push creates a "Deploy" incident notification. If that's too noisy, set in your environment:
+
+```bash
+DISABLE_DEPLOY_INCIDENTS=true
+```
+
+This stops push events from being sent to the incident engine. You'll still get Sentry error alerts (spike, regression, new issue).
+
 ## Deploy Correlation (Optional)
 
 To correlate errors with recent deploys, include a **change window** when sending events. PushLog’s GitHub integrations do this automatically for push events. For Sentry-only setups, you’d need to:

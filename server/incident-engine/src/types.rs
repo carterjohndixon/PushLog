@@ -211,6 +211,13 @@ pub struct SuspectedCause {
 }
 
 #[derive(Debug, Clone, Serialize)]
+pub struct StackFrameOutput {
+  pub file: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub function: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct IncidentSummary {
   pub incident_id: String,
   pub title: String,
@@ -226,6 +233,8 @@ pub struct IncidentSummary {
   pub top_symptoms: Vec<IssueGroupSummary>,
   pub suspected_causes: Vec<SuspectedCause>,
   pub recommended_first_actions: Vec<String>,
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub stacktrace: Vec<StackFrameOutput>,
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub links: HashMap<String, String>,
 }

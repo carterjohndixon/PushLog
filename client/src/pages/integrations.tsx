@@ -479,6 +479,9 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                   <li>Enable <strong>Issue Alerts</strong>, paste the Webhook URL above, save</li>
                   <li>In Alerts → Create Alert → add your integration as the action</li>
                 </ol>
+                <p className="text-xs text-muted-foreground">
+                  Every push creates a deploy incident. To disable: set <code className="bg-muted px-1 rounded">DISABLE_DEPLOY_INCIDENTS=true</code> in your server env.
+                </p>
                 <a
                   href="https://github.com/carterjohndixon/PushLog/blob/main/docs/SENTRY_SETUP.md"
                   target="_blank"

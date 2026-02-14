@@ -178,6 +178,19 @@ impl Engine {
       .max_by_key(|(_, &count)| count)
       .map(|(bucket, _)| format!("{}:00Z", bucket));
 
+    let stacktrace: Vec<_> = event
+      .frames
+      .iter()
+      .map(|f| crate::types::StackFrameOutput {
+        file: f.file.clone(),
+        function: if f.function.is_empty() {
+          None
+        } else {
+          Some(f.function.clone())
+        },
+      })
+      .collect();
+
     IncidentSummary {
       incident_id,
       title,
@@ -192,6 +205,7 @@ impl Engine {
       top_symptoms: vec![symptom],
       suspected_causes,
       recommended_first_actions: actions,
+      stacktrace,
       links: event.links.clone(),
     }
   }
