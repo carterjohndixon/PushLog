@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { IncidentToast } from "@/components/incident-toast";
+import { NotificationSSE } from "@/components/notification-sse";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -139,6 +140,7 @@ export default function App() {
       <TooltipProvider>
         <Suspense fallback={<PageLoader />}>
           <Router />
+          <NotificationSSE />
           <Toaster />
           <IncidentToast />
         </Suspense>
