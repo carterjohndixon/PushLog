@@ -3769,8 +3769,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) {
         return res.status(401).json({ error: "Not authenticated" });
       }
-      const now = new Date().toISOString();
-      const ts5MinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
       const exceptionType = String(req.body?.exceptionType ?? "TypeError");
       const message = String(req.body?.message ?? "Cannot read property 'id' of undefined");
 
@@ -3801,31 +3799,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isRead: false,
       });
 
-      // Also send to incident engine for full pipeline (optional)
-      const event = {
-        source: "sentry",
-        service: "api",
-        environment: "prod",
-        timestamp: now,
-        severity: "error" as const,
-        exception_type: exceptionType,
-        message,
-        stacktrace: [
-          { file: "src/handler.ts", function: "handleRequest", line: 42 },
-          { file: "src/middleware/auth.ts", function: "verifyToken", line: 18 },
-        ],
-        links: { pushlog_user_id: userId, source_url: "https://sentry.io/issues/simulated-test" },
-        change_window: {
-          deploy_time: ts5MinAgo,
-          commits: [
-            { id: "abc123" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/handler.ts"] },
-            { id: "def456" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/middleware/auth.ts"] },
-          ],
-        },
-      };
-      ingestIncidentEvent(event);
+      // Skip incident engine for simulate — we already created the notification above.
+      // Sending to the engine would cause handleIncidentSummary to create a duplicate.
 
-      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification + engine`);
+      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification`);
       res.status(200).json({
         ok: true,
         message: "Incident sent",

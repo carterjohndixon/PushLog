@@ -14,7 +14,7 @@ interface NotificationsDropdownProps {
 }
 
 export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdownProps) {
-  const { notifications, count, hasUnread, markAllAsRead, removeNotification, readNotification, clearAllNotifications, refetchNotifications } = useNotifications();
+  const { notifications, count, hasUnread, markAllAsRead, removeNotification, clearAllNotifications, refetchNotifications } = useNotifications();
 
   return (
     <>
