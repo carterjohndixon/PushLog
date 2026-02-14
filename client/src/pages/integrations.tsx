@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integratio
 import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { ActiveIntegration, RepositoryCardData } from "@/lib/types";
+import { Link } from "wouter";
 
 interface IntegrationsProps {
   userProfile?: any;
@@ -149,6 +150,12 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [incidentAlertsOpen, setIncidentAlertsOpen] = useState(false);
   const [webhookCopied, setWebhookCopied] = useState(false);
+  const [devMode, setDevMode] = useState(() => typeof window !== "undefined" && localStorage.getItem("pushlog_dev_mode") === "true");
+  useEffect(() => {
+    const handler = (e: CustomEvent<boolean>) => setDevMode(e.detail);
+    window.addEventListener("pushlog-dev-mode-changed", handler as EventListener);
+    return () => window.removeEventListener("pushlog-dev-mode-changed", handler as EventListener);
+  }, []);
 
   const queryClient = useQueryClient();
   const { data: profileResponse } = useQuery({
@@ -430,10 +437,10 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
         </div>
 
         {/* Incident Alerts (Sentry) - setup instructions */}
-        <Card className="group mb-8 mt-6 border-amber-500/20 bg-amber-500/[0.03] transition-all duration-200 hover:border-amber-500/40 hover:shadow-xl hover:-translate-y-0.5 hover:bg-amber-500/[0.05]">
+        <Card className="group mb-8 mt-6 border-amber-500/20 bg-amber-500/[0.03] transition-all duration-200 hover:border-amber-500/40 hover:shadow-xl hover:-translate-y-0.5 hover:bg-amber-500/[0.06]">
           <Collapsible open={incidentAlertsOpen} onOpenChange={setIncidentAlertsOpen}>
             <CollapsibleTrigger asChild>
-              <button className="w-full text-left p-6 rounded-lg transition-colors hover:bg-amber-500/[0.06] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              <button className="w-full text-left p-6 rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
@@ -491,33 +498,39 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                   <ExternalLink className="w-4 h-4" />
                   Full setup guide (docs/SENTRY_SETUP.md)
                 </a>
-                <div className="pt-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch("/api/test/simulate-incident", {
-                          method: "POST",
-                          credentials: "include",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({}),
-                        });
-                        const data = await res.json().catch(() => ({}));
-                        if (!res.ok) {
-                          toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
-                          return;
+                {devMode ? (
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch("/api/test/simulate-incident", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({}),
+                          });
+                          const data = await res.json().catch(() => ({}));
+                          if (!res.ok) {
+                            toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
+                            return;
+                          }
+                          toast({ title: "Incident sent", description: "Check your notifications (bell icon) in a few seconds." });
+                        } catch (e) {
+                          toast({ title: "Request failed", description: String(e), variant: "destructive" });
                         }
-                        toast({ title: "Incident sent", description: "Check your notifications (bell icon) in a few seconds." });
-                      } catch (e) {
-                        toast({ title: "Request failed", description: String(e), variant: "destructive" });
-                      }
-                    }}
-                  >
-                    Simulate production incident
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-2">Sends a realistic Sentry-style event. Works in dev or when ENABLE_TEST_ROUTES=true.</p>
-                </div>
+                      }}
+                    >
+                      Simulate production incident
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">Sends a realistic Sentry-style event. Works in dev or when ENABLE_TEST_ROUTES=true.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground pt-2">
+                    <Link href="/settings" className="text-log-green hover:underline">Enable Developer Mode</Link> in Settings to test incident notifications.
+                  </p>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

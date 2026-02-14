@@ -32,6 +32,7 @@ export const users = pgTable("users", {
   openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, integrations can use OpenRouter with this key
   monthlyBudget: integer("monthly_budget"), // Monthly AI spend budget in units of $0.0001; nullable = no budget
   overBudgetBehavior: text("over_budget_behavior").default("skip_ai"), // "skip_ai" = send plain push when over budget; "free_model" = use free model
+  devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 

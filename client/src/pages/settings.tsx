@@ -20,7 +20,8 @@ import {
   CreditCard,
   KeyRound,
   EyeIcon,
-  EyeOffIcon
+  EyeOffIcon,
+  Code2
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -35,6 +36,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 
 interface DataSummary {
   accountCreated: string;
@@ -57,10 +59,16 @@ interface DataSummary {
   aiCredits: number;
 }
 
+const DEV_MODE_STORAGE_KEY = "pushlog_dev_mode";
+
 export default function Settings() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [devMode, setDevMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(DEV_MODE_STORAGE_KEY) === "true";
+  });
   const [isExporting, setIsExporting] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -553,6 +561,39 @@ export default function Settings() {
               >
                 {changePasswordMutation.isPending ? "Updating..." : "Change password"}
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Developer mode */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Code2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                Developer Mode
+              </CardTitle>
+              <CardDescription>
+                Enable test features such as the &quot;Simulate production incident&quot; button on the Integrations page. Useful for testing Sentry webhooks and incident notifications.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="dev-mode" className="cursor-pointer font-medium">
+                  Enable developer mode
+                </Label>
+                <Switch
+                  id="dev-mode"
+                  checked={devMode}
+                  onCheckedChange={(checked) => {
+                    setDevMode(checked);
+                    localStorage.setItem(DEV_MODE_STORAGE_KEY, String(checked));
+                    window.dispatchEvent(new CustomEvent("pushlog-dev-mode-changed", { detail: checked }));
+                    toast({
+                      title: checked ? "Developer mode enabled" : "Developer mode disabled",
+                      description: checked ? "Test features are now visible on Integrations." : "Test features are now hidden.",
+                    });
+                  }}
+                />
+              </div>
             </CardContent>
           </Card>
 
