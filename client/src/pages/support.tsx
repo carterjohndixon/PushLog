@@ -99,6 +99,20 @@ export default function Support() {
                   Go to Settings → Danger Zone → Delete Account. This will permanently remove all your data.
                 </p>
               </div>
+              <div>
+                <h3 className="font-semibold text-foreground">How do I connect Sentry for incident alerts?</h3>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Go to Integrations → expand &quot;Incident Alerts (Sentry)&quot; for the webhook URL and steps. Full guide:{" "}
+                  <a
+                    href="https://github.com/carterjohndixon/PushLog/blob/main/docs/SENTRY_SETUP.md"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    docs/SENTRY_SETUP.md
+                  </a>
+                </p>
+              </div>
             </CardContent>
           </Card>
 

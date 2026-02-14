@@ -186,6 +186,8 @@ pub enum TriggerReason {
   Spike,
   NewIssue,
   Regression,
+  /// Emitted for GitPush events — every push gets an incident report.
+  Deploy,
 }
 
 // ---------------------------------------------------------------------------

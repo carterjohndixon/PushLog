@@ -53,7 +53,10 @@ impl Engine {
       stats::record_event(&mut group.stats, event.timestamp, &self.config);
 
     // Determine trigger reason (if any).
-    let trigger = if is_new && event.environment == "prod" {
+    // GitPush (deploy) events always emit an incident report.
+    let trigger = if event.exception_type == "GitPush" {
+      Some(TriggerReason::Deploy)
+    } else if is_new && event.environment == "prod" {
       Some(TriggerReason::NewIssue)
     } else if is_regression && event.environment == "prod" {
       Some(TriggerReason::Regression)
@@ -106,6 +109,7 @@ impl Engine {
         TriggerReason::Spike => "Spike",
         TriggerReason::NewIssue => "New issue",
         TriggerReason::Regression => "Regression",
+        TriggerReason::Deploy => "Deploy",
       },
       group.exception_type,
       group.service,
@@ -117,6 +121,7 @@ impl Engine {
       TriggerReason::NewIssue => 10,
       TriggerReason::Regression => 15,
       TriggerReason::Spike => 20,
+      TriggerReason::Deploy => 5,
     };
     let spike_bonus = ((spike_factor - 1.0).max(0.0) * 2.0).min(20.0) as u8;
     let priority_score = (event.severity.score() + trigger_bonus + spike_bonus).min(100);
@@ -152,6 +157,10 @@ impl Engine {
       TriggerReason::Regression => {
         actions.push("Compare current stack trace with the previous occurrence".into());
         actions.push("Check if a recent change re-introduced a previously fixed bug".into());
+      }
+      TriggerReason::Deploy => {
+        actions.push("Review the commit message and changed files for risk".into());
+        actions.push("Monitor for errors correlated to this deploy".into());
       }
     }
     if !suspected_causes.is_empty() {

@@ -14,6 +14,7 @@ import { sendPushNotification, sendSlackMessage } from "./slack";
 import broadcastNotification from "./helper/broadcastNotification";
 import { scorePush } from "./riskEngine";
 import { ingestPushEvent } from "./streamingStats";
+import { ingestIncidentEvent } from "./incidentEngine";
 import { fetchOpenRouterGenerationUsage } from "./ai";
 
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
@@ -379,6 +380,34 @@ export async function persistPushAndNotifications(
     impact_score: riskResult.impact_score ?? 0,
     timestamp: pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : String(pushEvent.pushedAt),
   });
+
+  // Feed push as deploy event into incident-engine for all integrations (incident alerts when engine triggers)
+  const pushedAtStr = pushEvent.pushedAt instanceof Date ? pushEvent.pushedAt.toISOString() : String(pushEvent.pushedAt);
+  const files = pushData.filesChanged ?? [];
+  const stacktrace = (files.length ? files.filter((f: string) => f !== "(no file list)") : [])
+    .slice(0, 10)
+    .map((f: string) => ({ file: f, function: "changed" }));
+  if (stacktrace.length === 0) stacktrace.push({ file: pushData.repositoryName, function: "deploy" });
+  const severity = (riskResult.impact_score ?? 0) >= 60 ? "critical" : (riskResult.impact_score ?? 0) >= 30 ? "error" : "warning";
+  try {
+    ingestIncidentEvent({
+      source: "pushlog",
+      service: pushData.repositoryName,
+      environment: pushData.branch,
+      timestamp: pushedAtStr,
+      severity,
+      exception_type: "GitPush",
+      message: pushData.commitMessage,
+      stacktrace,
+      links: { pushlog_user_id: integration.userId },
+      change_window: {
+        deploy_time: pushedAtStr,
+        commits: [{ id: pushData.commitSha, timestamp: commit?.timestamp, files: files }],
+      },
+    });
+  } catch (e) {
+    console.warn("⚠️ [Webhook] Failed to ingest push into incident-engine (non-fatal):", e instanceof Error ? e.message : e);
+  }
 
   if (aiResult.aiGenerated && aiResult.summary && ((aiResult.summary.tokensUsed > 0) || ((aiResult.summary.cost ?? 0) > 0))) {
     await databaseStorage.createAiUsage({

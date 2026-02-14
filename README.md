@@ -10,6 +10,7 @@ PushLog is a **web application** that you can access directly in your browser. S
 
 ## Features
 
+- **🚨 Incident Alerts**: Connect Sentry to get error/deploy incident reports in PushLog. See [Sentry Setup](docs/SENTRY_SETUP.md).
 - **🌐 Web-Based**: Access directly from your browser - no installation required
 - **🔗 GitHub Integration**: Connect your repositories and automatically detect code pushes
 - **💬 Slack Notifications**: Send formatted push summaries to your designated Slack channels
@@ -65,6 +66,12 @@ PushLog is a hosted web service - no installation or setup required!
    - Generates an AI-powered summary of the changes
    - Sends a formatted notification to your Slack channel
    - Deducts credits based on AI usage
+
+## Incident Alerts (Sentry)
+
+PushLog can receive error events from Sentry and surface them as incident notifications. When you push code or Sentry detects a spike/regression, PushLog will alert you.
+
+**Quick setup:** Create a Sentry Internal Integration with Webhook URL `https://pushlog.ai/api/webhooks/sentry`, add an Alert Rule, and you're done. Full instructions: [docs/SENTRY_SETUP.md](docs/SENTRY_SETUP.md)
 
 ## Pricing
 

@@ -49,7 +49,7 @@ export interface IncidentSummaryOutput {
   environment: string;
   severity: "warning" | "error" | "critical";
   priority_score: number;
-  trigger: "spike" | "new_issue" | "regression";
+  trigger: "spike" | "new_issue" | "regression" | "deploy";
   start_time: string;
   last_seen: string;
   links?: Record<string, string>;
