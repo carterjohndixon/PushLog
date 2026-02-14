@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
@@ -150,12 +150,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
   const [incidentAlertsOpen, setIncidentAlertsOpen] = useState(false);
   const [webhookCopied, setWebhookCopied] = useState(false);
-  const [devMode, setDevMode] = useState(() => typeof window !== "undefined" && localStorage.getItem("pushlog_dev_mode") === "true");
-  useEffect(() => {
-    const handler = (e: CustomEvent<boolean>) => setDevMode(e.detail);
-    window.addEventListener("pushlog-dev-mode-changed", handler as EventListener);
-    return () => window.removeEventListener("pushlog-dev-mode-changed", handler as EventListener);
-  }, []);
 
   const queryClient = useQueryClient();
   const { data: profileResponse } = useQuery({
@@ -163,6 +157,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
     queryFn: fetchProfile,
   });
   const userProfile = profileResponse?.user ?? userProfileProp;
+  const devMode = profileResponse?.user?.devMode ?? false;
   const { toast } = useToast();
 
   // Single request for repos + integrations (faster load); also populate separate caches for other components

@@ -3906,6 +3906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           monthlyBudget: user.monthlyBudget ?? null,
           overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai",
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
+          devMode: !!(user as any).devMode,
         }
       };
       res.status(200).json(payload);
@@ -3922,7 +3923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/user", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string };
+      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean };
       const updates: Record<string, unknown> = {};
       if (body.overBudgetBehavior && body.overBudgetBehavior === "free_model" || body.overBudgetBehavior === "skip_ai") {
         updates.overBudgetBehavior = body.overBudgetBehavior;
@@ -3930,14 +3931,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.preferredAiModel) {
         updates.preferredAiModel = body.preferredAiModel;
       }
+      if (typeof body.devMode === "boolean") {
+        updates.devMode = body.devMode;
+      }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid updates" });
       }
       const user = await databaseStorage.updateUser(userId, updates as any);
       if (!user) return res.status(404).json({ error: "User not found" });
-      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string } = { success: true };
+      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean } = { success: true };
       if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
       if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
+      if (updates.devMode !== undefined) resBody.devMode = !!(user as any).devMode;
       res.status(200).json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);

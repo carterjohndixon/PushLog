@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
 import { 
   Download, 
@@ -59,16 +60,10 @@ interface DataSummary {
   aiCredits: number;
 }
 
-const DEV_MODE_STORAGE_KEY = "pushlog_dev_mode";
-
 export default function Settings() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
-  const [devMode, setDevMode] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(DEV_MODE_STORAGE_KEY) === "true";
-  });
   const [isExporting, setIsExporting] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -79,6 +74,38 @@ export default function Settings() {
   const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
 
   const queryClient = useQueryClient();
+
+  const { data: profileResponse } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+  });
+  const devMode = profileResponse?.user?.devMode ?? false;
+
+  const updateDevModeMutation = useMutation({
+    mutationFn: async (checked: boolean) => {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ devMode: checked }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update");
+      }
+      return res.json();
+    },
+    onSuccess: (_, checked) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: checked ? "Developer mode enabled" : "Developer mode disabled",
+        description: checked ? "Test features are now visible on Integrations." : "Test features are now hidden.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
 
   // Fetch account data summary (uses session cookie via credentials: include)
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
@@ -583,15 +610,8 @@ export default function Settings() {
                 <Switch
                   id="dev-mode"
                   checked={devMode}
-                  onCheckedChange={(checked) => {
-                    setDevMode(checked);
-                    localStorage.setItem(DEV_MODE_STORAGE_KEY, String(checked));
-                    window.dispatchEvent(new CustomEvent("pushlog-dev-mode-changed", { detail: checked }));
-                    toast({
-                      title: checked ? "Developer mode enabled" : "Developer mode disabled",
-                      description: checked ? "Test features are now visible on Integrations." : "Test features are now hidden.",
-                    });
-                  }}
+                  disabled={updateDevModeMutation.isPending}
+                  onCheckedChange={(checked) => updateDevModeMutation.mutate(checked)}
                 />
               </div>
             </CardContent>

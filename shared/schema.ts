@@ -271,6 +271,7 @@ export type User = {
   openRouterApiKey: string | null;
   monthlyBudget: number | null;
   overBudgetBehavior: "free_model" | "skip_ai";
+  devMode?: boolean;
   createdAt: string;
 };
 

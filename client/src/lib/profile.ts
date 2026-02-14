@@ -22,6 +22,8 @@ export interface ProfileUser {
   monthlyBudget?: number | null;
   /** When over budget: "free_model" = use free model; "skip_ai" = plain push, no AI */
   overBudgetBehavior?: "free_model" | "skip_ai";
+  /** Enable test features (e.g. Simulate incident on Integrations) */
+  devMode?: boolean;
 }
 
 export interface ProfileResponse {
