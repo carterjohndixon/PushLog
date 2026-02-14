@@ -74,7 +74,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://api.github.com", "https://slack.com", "https://api.stripe.com"],
+      connectSrc: ["'self'", "https://api.github.com", "https://slack.com", "https://api.stripe.com", "https://*.ingest.sentry.io", "https://*.ingest.us.sentry.io"],
       frameSrc: ["'self'", "https://js.stripe.com"],
       frameAncestors: ["'self'"], // Clickjacking protection (reinforces X-Frame-Options)
       objectSrc: ["'none'"],
