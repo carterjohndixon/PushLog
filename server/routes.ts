@@ -327,11 +327,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
 
     // Route incidents to one user when payload includes links.pushlog_user_id.
-    // Otherwise fan out to users from INCIDENT_NOTIFY_USER_IDS env (comma-separated UUIDs).
+    // Otherwise fan out to INCIDENT_NOTIFY_USER_IDS; if unset, notify all users.
     const targetUsers = new Set<string>();
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
     for (const id of getDefaultIncidentNotifyUserIds()) targetUsers.add(id);
+
+    if (targetUsers.size === 0) {
+      const allUserIds = await storage.getAllUserIds();
+      for (const id of allUserIds) targetUsers.add(id);
+    }
 
     if (targetUsers.size === 0) return;
 

@@ -186,6 +186,11 @@ export class DatabaseStorage implements IStorage {
     return result[0] ? convertToUser(result[0] as any) : undefined;
   }
 
+  async getAllUserIds(): Promise<string[]> {
+    const result = await db.select({ id: users.id }).from(users);
+    return result.map((row) => row.id as string).filter(Boolean);
+  }
+
   async getUserByResetToken(resetToken: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.resetPasswordToken, resetToken)).limit(1);
     return result[0] ? convertToUser(result[0] as any) : null;

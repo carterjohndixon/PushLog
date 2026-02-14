@@ -29,6 +29,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
   getUserByVerificationToken(token: string): Promise<User | undefined>;
+  getAllUserIds(): Promise<string[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
 
@@ -132,6 +133,10 @@ export class MemStorage implements IStorage {
 
   async getUserByVerificationToken(token: string): Promise<User | undefined> {
     return Array.from(this.users.values()).find(user => user.verificationToken === token);
+  }
+
+  async getAllUserIds(): Promise<string[]> {
+    return Array.from(this.users.keys());
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
