@@ -21,7 +21,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load .env file from the project root (one level up from server directory)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+// Load .env.{APP_ENV} (e.g. .env.production, .env.staging) when set so env vars are applied regardless of PM2/Docker
+const root = path.join(__dirname, '..');
+dotenv.config({ path: path.join(root, '.env') });
+const appEnv = process.env.APP_ENV || '';
+if (appEnv && appEnv !== 'development') {
+  dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
+}
 
 // Initialize Sentry for error tracking
 if (process.env.SENTRY_DSN) {
