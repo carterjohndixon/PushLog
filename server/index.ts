@@ -388,8 +388,8 @@ app.use((req, res, next) => {
       serveStatic(app);
     }
   } else {
-    // In production, always use static file serving
-    const { serveStatic } = await import("./vite");
+    // In production, use static-only module (no Vite dependency in bundle)
+    const { serveStatic } = await import("./static");
     serveStatic(app);
   }
 

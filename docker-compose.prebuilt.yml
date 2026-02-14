@@ -1,7 +1,7 @@
-# Override: use Dockerfile.prebuilt (requires dist/ and bin/incident-engine)
+# Override: use pre-built context from scripts/build-for-docker.sh
 # Usage: docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
 services:
   staging-app:
     build:
-      context: .
-      dockerfile: Dockerfile.prebuilt
+      context: .docker-build/prebuilt
+      dockerfile: Dockerfile
