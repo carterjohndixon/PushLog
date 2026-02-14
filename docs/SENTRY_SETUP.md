@@ -171,6 +171,9 @@ If you see **Request received** but not **Ingested**, the payload may be missing
 **Need the generic webhook instead?**
 - Use `POST /api/webhooks/incidents` with the [Incident Event schema](../server/incidentEngine.ts) — useful for Datadog, custom scripts, etc.
 
+**Want to test without Sentry?**
+- Set `ENABLE_TEST_ROUTES=true` and use **Simulate production incident** on Integrations → Incident Alerts. Or `POST /api/test/simulate-incident` (authenticated). Sends a realistic Sentry-style event and triggers a notification.
+
 ---
 
 ## Related
