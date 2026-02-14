@@ -52,7 +52,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
             key={notification.id} 
             className={`flex items-center justify-between gap-2 p-4 min-w-0 [&:hover]:!bg-muted ${
               notification.type === 'email_verification' ? 'bg-amber-500/10 dark:bg-amber-500/20 border-b border-border' : 
-              (notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' || (notification as { type: string }).type === 'budget_alert') ? 'bg-destructive/10 border-l-4 border-destructive' :
+              (notification.type === 'openrouter_error' || notification.type === 'slack_delivery_failed' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert') ? 'bg-destructive/10 border-l-4 border-destructive' :
               !notification.isRead ? 'bg-primary/10 border-l-4 border-primary' : ''
             }`}
           >
@@ -61,7 +61,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <GitBranch className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_message_sent' ? (
                 <MessageSquare className="w-5 h-5 text-sky-blue mr-3 flex-shrink-0" />
-              ) : notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || (notification as { type: string }).type === 'budget_alert' ? (
+              ) : notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert' ? (
                 <AlertCircle className="w-5 h-5 text-destructive mr-3 flex-shrink-0" />
               ) : (
                 <Mail className={`w-5 h-5 mr-3 flex-shrink-0 ${
@@ -73,7 +73,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                   notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
                   notification.type === 'slack_message_sent' ? 'text-sky-blue' :
-                  notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || (notification as { type: string }).type === 'budget_alert' ? 'text-destructive' : 'text-foreground'
+                  notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert' ? 'text-destructive' : 'text-foreground'
                 }`}>
                   {(notification as { type: string }).type === 'budget_alert' ? 'Urgent: ' + (notification.title || notification.message) : (notification.title || notification.message)}
                 </span>
@@ -171,7 +171,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
               <GitBranch className="w-5 h-5 text-log-green mr-2" />
             ) : selectedNotification?.type === 'slack_message_sent' ? (
               <MessageSquare className="w-5 h-5 text-sky-blue mr-2" />
-            ) : selectedNotification?.type === 'slack_delivery_failed' || selectedNotification?.type === 'openrouter_error' || (selectedNotification as { type?: string })?.type === 'budget_alert' ? (
+            ) : selectedNotification?.type === 'slack_delivery_failed' || selectedNotification?.type === 'openrouter_error' || selectedNotification?.type === 'incident_alert' || (selectedNotification as { type?: string })?.type === 'budget_alert' ? (
               <AlertCircle className="w-5 h-5 text-destructive mr-2" />
             ) : (
               <Mail className="w-5 h-5 text-amber-500 mr-2" />
@@ -197,6 +197,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
           const isSlackMessage = notifType === 'slack_message_sent';
           const isSlackDeliveryFailed = notifType === 'slack_delivery_failed';
           const isOpenRouterError = notifType === 'openrouter_error';
+          const isIncidentAlert = notifType === 'incident_alert';
           const commitUrl = metadata?.repositoryFullName && metadata?.commitSha
             ? `https://github.com/${metadata.repositoryFullName}/commit/${metadata.commitSha}`
             : null;
@@ -392,6 +393,43 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                     </a>
                     , or try a different model in Integration Settings.
                   </p>
+                </div>
+              )}
+
+              {/* Incident alert */}
+              {isIncidentAlert && (
+                <div className="border-t border-border pt-4 space-y-3">
+                  <h4 className="font-semibold text-destructive text-sm flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4" />
+                    Incident detected
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedNotification.message}
+                  </p>
+                  {metadata?.service && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Service:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.service}</span>
+                    </div>
+                  )}
+                  {metadata?.environment && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Environment:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.environment}</span>
+                    </div>
+                  )}
+                  {metadata?.trigger && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Trigger:</span>{' '}
+                      <span className="text-muted-foreground">{String(metadata.trigger).replace(/_/g, ' ')}</span>
+                    </div>
+                  )}
+                  {metadata?.priorityScore != null && (
+                    <div className="text-sm">
+                      <span className="font-medium text-foreground">Priority:</span>{' '}
+                      <span className="text-muted-foreground">{metadata.priorityScore}</span>
+                    </div>
+                  )}
                 </div>
               )}
 

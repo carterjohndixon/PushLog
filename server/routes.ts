@@ -41,7 +41,12 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
-import { ingestIncidentEvent, onIncidentSummary, type IncidentEventInput } from "./incidentEngine";
+import {
+  ingestIncidentEvent,
+  onIncidentSummary,
+  type IncidentEventInput,
+  type IncidentSummaryOutput,
+} from "./incidentEngine";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -309,11 +314,70 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Subscribe once to incident-engine summaries for operational visibility.
-  onIncidentSummary((summary) => {
+  const getDefaultIncidentNotifyUserIds = (): string[] => {
+    return (process.env.INCIDENT_NOTIFY_USER_IDS || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const handleIncidentSummary = async (summary: IncidentSummaryOutput) => {
     console.log(
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
+
+    // Route incidents to one user when payload includes links.pushlog_user_id.
+    // Otherwise fan out to users from INCIDENT_NOTIFY_USER_IDS env (comma-separated UUIDs).
+    const targetUsers = new Set<string>();
+    const linkedUserId = summary.links?.pushlog_user_id?.trim();
+    if (linkedUserId) targetUsers.add(linkedUserId);
+    for (const id of getDefaultIncidentNotifyUserIds()) targetUsers.add(id);
+
+    if (targetUsers.size === 0) return;
+
+    const message = `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
+    const metadata = JSON.stringify({
+      incidentId: summary.incident_id,
+      service: summary.service,
+      environment: summary.environment,
+      trigger: summary.trigger,
+      severity: summary.severity,
+      priorityScore: summary.priority_score,
+      startTime: summary.start_time,
+      lastSeen: summary.last_seen,
+      links: summary.links || {},
+    });
+
+    await Promise.all(
+      Array.from(targetUsers).map(async (userId) => {
+        try {
+          const notif = await storage.createNotification({
+            userId,
+            type: "incident_alert",
+            title: summary.title,
+            message,
+            metadata,
+          });
+
+          broadcastNotification(userId, {
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            metadata: notif.metadata,
+            createdAt: notif.createdAt,
+            isRead: false,
+          });
+        } catch (err) {
+          console.warn(`[incident-engine] failed to notify user ${userId}:`, err);
+        }
+      })
+    );
+  };
+
+  // Subscribe once to incident-engine summaries for UI notifications + logs.
+  onIncidentSummary((summary) => {
+    void handleIncidentSummary(summary);
   });
 
   // Health check endpoints

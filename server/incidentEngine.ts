@@ -52,6 +52,7 @@ export interface IncidentSummaryOutput {
   trigger: "spike" | "new_issue" | "regression";
   start_time: string;
   last_seen: string;
+  links?: Record<string, string>;
 }
 
 type IncidentListener = (summary: IncidentSummaryOutput) => void;
