@@ -421,25 +421,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
       );
 
-      // Spawn detached so deploy script survives PM2 restarting this Node process.
-      const child = spawn("bash", [promoteScript], {
+      // PM2 treekill kills ALL descendants of the worker process, even detached ones.
+      // Use nohup setsid to launch the script in a completely new session so it's
+      // NOT a descendant of this worker and survives PM2 restart.
+      const promotedBy = String(req.body?.promotedBy || "staging-admin");
+      const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
+      exec(cmd, {
         cwd: appDir,
         env: {
           ...process.env,
           APP_DIR: appDir,
-          PROMOTED_BY: String(req.body?.promotedBy || "staging-admin"),
+          PROMOTED_BY: promotedBy,
+          PROMOTE_LOCK_FILE: lockFile,
         },
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
-
-      // Clean up lock when child exits (if this process is still alive).
-      child.on("exit", (code) => {
-        if (code !== 0) {
-          console.error(`Production promotion exited with code ${code}`);
-        }
-        try { fs.unlinkSync(lockFile); } catch {}
       });
 
       return res.json({
@@ -791,19 +785,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       fs.writeFileSync(lockFile, JSON.stringify({ startedAt: new Date().toISOString(), by: promotedBy }, null, 2));
 
-      // Spawn detached so deploy script survives PM2 restarting this Node process.
-      const child = spawn("bash", [promoteScript], {
+      // PM2 treekill kills ALL descendants. Use nohup setsid to fully escape the process tree.
+      const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
+      exec(cmd, {
         cwd: appDir,
-        env: { ...process.env, APP_DIR: appDir, PROMOTED_BY: promotedBy },
-        detached: true,
-        stdio: "ignore",
-      });
-      child.unref();
-      child.on("exit", (code) => {
-        if (code !== 0) {
-          console.error(`Production promotion exited with code ${code}`);
-        }
-        try { fs.unlinkSync(lockFile); } catch {}
+        env: { ...process.env, APP_DIR: appDir, PROMOTED_BY: promotedBy, PROMOTE_LOCK_FILE: lockFile },
       });
 
       return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });

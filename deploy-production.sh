@@ -5,12 +5,18 @@
 
 set -e
 
-# Ignore hangup so this script survives its parent being killed
-# (e.g. PM2 restart kills the Node process that spawned us).
+# Ignore hangup so this script survives its parent being killed.
 trap '' HUP
 
 APP_DIR="${APP_DIR:-/var/www/pushlog}"
 LOG_FILE="${APP_DIR}/deploy-production.log"
+LOCK_FILE="${PROMOTE_LOCK_FILE:-${APP_DIR}/.promote-production.lock}"
+
+# Always clean up lock on exit (success or failure).
+cleanup() {
+  rm -f "$LOCK_FILE" 2>/dev/null || true
+}
+trap cleanup EXIT
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
