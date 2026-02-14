@@ -38,18 +38,28 @@ log "Building production bundle..."
 npm run build:production
 
 log "Restarting production PM2 app..."
-restart_pm2() {
-  # Prevent rare PM2 hangs from blocking promotions forever.
-  timeout 30s /usr/bin/pm2 restart pushlog-prod --update-env
-}
 
-if ! restart_pm2; then
-  log "PM2 restart timed out/failed. Retrying once..."
-  if ! restart_pm2; then
-    log "PM2 restart failed twice. Attempting fresh start path..."
-    /usr/bin/pm2 delete pushlog-prod >/dev/null 2>&1 || true
-    timeout 30s /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env
+# PM2 restart can hang when called from a child of the process being restarted.
+# Fire-and-forget: background the restart, sleep to let it take effect, then verify.
+nohup /usr/bin/pm2 restart pushlog-prod --update-env </dev/null >/dev/null 2>&1 &
+PM2_PID=$!
+
+# Wait up to 15 seconds for PM2 restart to finish
+for i in $(seq 1 15); do
+  if ! kill -0 "$PM2_PID" 2>/dev/null; then
+    break
   fi
+  sleep 1
+done
+
+# Check if app is running
+if /usr/bin/pm2 pid pushlog-prod >/dev/null 2>&1; then
+  log "PM2 restart succeeded."
+else
+  log "PM2 restart may have failed. Attempting fresh start..."
+  /usr/bin/pm2 delete pushlog-prod >/dev/null 2>&1 || true
+  nohup /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env </dev/null >/dev/null 2>&1 &
+  sleep 5
 fi
 
 # Metadata writes should not fail the whole deployment.
