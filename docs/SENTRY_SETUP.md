@@ -2,6 +2,8 @@
 
 PushLog can receive error events from Sentry and surface them as **incident alerts** in your dashboard. When Sentry detects a spike, new issue, or regression, PushLog will notify you and correlate errors to recent deploys.
 
+**Client & server:** The React app uses `@sentry/react` (configured in `client/src/main.tsx`). Set `VITE_SENTRY_DSN` to override the default DSN or leave empty to disable client-side reporting. The Node server uses `SENTRY_DSN` (see `server/index.ts`).
+
 ## What You Get
 
 - **Incident notifications** in PushLog (bell icon) when Sentry fires an alert
