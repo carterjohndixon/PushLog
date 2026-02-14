@@ -12,7 +12,6 @@ if (dsn) {
     tunnel: "/api/sentry/tunnel", // Proxy via our server — avoids ad-blockers
     enableLogs: true,
   });
-  Sentry.logger.info("User triggered test log", { log_source: "sentry_test" });
 }
 
 createRoot(document.getElementById("root")!).render(
