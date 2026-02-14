@@ -10,6 +10,7 @@ import morgan from "morgan";
 import * as Sentry from "@sentry/node";
 import { registerRoutes, slackCommandsHandler, githubWebhookHandler } from "./routes";
 import { verifyWebhookSignature } from "./github";
+import { ensureIncidentEngineStarted, stopIncidentEngine } from "./incidentEngine";
 import pkg from 'pg';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -358,6 +359,16 @@ app.use((req, res, next) => {
     // reusePort: true,
   }, () => {
     console.log(`serving on port ${port}`);
+    // Start incident engine early so it can keep warm state.
+    ensureIncidentEngineStarted();
+  });
+
+  process.on("SIGTERM", () => {
+    stopIncidentEngine();
+  });
+
+  process.on("SIGINT", () => {
+    stopIncidentEngine();
   });
 })();
 

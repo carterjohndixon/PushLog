@@ -41,6 +41,7 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
+import { ingestIncidentEvent, onIncidentSummary, type IncidentEventInput } from "./incidentEngine";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -308,6 +309,13 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Subscribe once to incident-engine summaries for operational visibility.
+  onIncidentSummary((summary) => {
+    console.log(
+      `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
+    );
+  });
+
   // Health check endpoints
   app.get("/health", (req, res) => {
     res.status(200).json({ 
@@ -315,6 +323,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString(),
       uptime: process.uptime()
     });
+  });
+
+  // Incident webhook endpoint (Sentry-style event JSON)
+  // Optional shared-secret auth via INCIDENT_WEBHOOK_SECRET header.
+  app.post("/api/webhooks/incidents", async (req, res) => {
+    try {
+      const configuredSecret = process.env.INCIDENT_WEBHOOK_SECRET?.trim();
+      if (configuredSecret) {
+        const providedSecret =
+          (req.headers["x-incident-webhook-secret"] as string | undefined)?.trim() || "";
+        if (!providedSecret || providedSecret !== configuredSecret) {
+          return res.status(401).json({ error: "Unauthorized" });
+        }
+      }
+
+      const schema = z.object({
+        source: z.string().min(1),
+        service: z.string().min(1),
+        environment: z.string().min(1),
+        timestamp: z.string().min(1),
+        severity: z.enum(["warning", "error", "critical"]),
+        exception_type: z.string().min(1),
+        message: z.string().min(1),
+        stacktrace: z
+          .array(
+            z.object({
+              file: z.string().min(1),
+              function: z.string().optional(),
+              line: z.number().int().positive().optional(),
+            })
+          )
+          .min(1),
+        tags: z.record(z.string(), z.string()).optional(),
+        links: z.record(z.string(), z.string()).optional(),
+        change_window: z
+          .object({
+            deploy_time: z.string().min(1),
+            commits: z.array(
+              z.object({
+                id: z.string().min(1),
+                timestamp: z.string().optional(),
+                files: z.array(z.string()),
+              })
+            ),
+          })
+          .optional(),
+      });
+
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid incident payload",
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        });
+      }
+
+      const event = parsed.data as IncidentEventInput;
+      ingestIncidentEvent(event);
+      return res.status(202).json({ accepted: true });
+    } catch (error) {
+      console.error("Incident webhook error:", error);
+      return res.status(500).json({ error: "Failed to ingest incident event" });
+    }
   });
 
   // Deployment webhook endpoint (secured with secret token)

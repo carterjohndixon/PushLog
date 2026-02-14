@@ -97,6 +97,13 @@ cargo build --release -p streaming-stats || {
     exit 1
 }
 
+# Build incident-engine (Rust)
+log_info "Building incident-engine..."
+cargo build --release -p incident-engine || {
+    log_error "Failed to build incident-engine"
+    exit 1
+}
+
 # Restart Docker staging services (staging uses containers, not PM2)
 COMPOSE_FILE="${APP_DIR}/docker-compose.staging.yml"
 if [ ! -f "$COMPOSE_FILE" ]; then

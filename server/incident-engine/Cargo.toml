@@ -1,0 +1,22 @@
+# PushLog Incident Correlation Engine (MVP)
+#
+# Deterministic incident correlation pipeline:
+# - Ingest structured error/alert events (Sentry-style payloads) via JSON lines stdin.
+# - Group by stable fingerprint, detect spikes/regressions with streaming stats.
+# - Correlate incidents to recent deploy/commit windows.
+# - Emit structured IncidentSummary JSON lines to stdout.
+# - No AI, no DB, no network; pure computation + in-memory state.
+
+[package]
+name = "incident-engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+blake3 = "1"
+
+[dev-dependencies]

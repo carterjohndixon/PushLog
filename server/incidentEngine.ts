@@ -1,0 +1,175 @@
+/**
+ * PushLog Incident Engine — Node integration (long-lived subprocess).
+ * Keeps one Rust process alive so in-memory stats persist across events.
+ */
+
+import fs from "fs";
+import path from "path";
+import { spawn, type ChildProcessWithoutNullStreams } from "child_process";
+import { fileURLToPath } from "url";
+import readline from "readline";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+export interface IncidentFrameInput {
+  file: string;
+  function?: string;
+  line?: number;
+}
+
+export interface IncidentCommitInput {
+  id: string;
+  timestamp?: string;
+  files: string[];
+}
+
+export interface IncidentChangeWindowInput {
+  deploy_time: string;
+  commits: IncidentCommitInput[];
+}
+
+export interface IncidentEventInput {
+  source: string;
+  service: string;
+  environment: string;
+  timestamp: string;
+  severity: "warning" | "error" | "critical";
+  exception_type: string;
+  message: string;
+  stacktrace: IncidentFrameInput[];
+  tags?: Record<string, string>;
+  links?: Record<string, string>;
+  change_window?: IncidentChangeWindowInput;
+}
+
+export interface IncidentSummaryOutput {
+  incident_id: string;
+  title: string;
+  service: string;
+  environment: string;
+  severity: "warning" | "error" | "critical";
+  priority_score: number;
+  trigger: "spike" | "new_issue" | "regression";
+  start_time: string;
+  last_seen: string;
+}
+
+type IncidentListener = (summary: IncidentSummaryOutput) => void;
+
+let child: ChildProcessWithoutNullStreams | null = null;
+let started = false;
+let listeners: IncidentListener[] = [];
+let restarting = false;
+
+function getBinaryPath(): string {
+  if (process.env.INCIDENT_ENGINE_BIN) return process.env.INCIDENT_ENGINE_BIN;
+  const root = path.join(__dirname, "..");
+  const release = path.join(root, "target", "release", "incident-engine");
+  const debug = path.join(root, "target", "debug", "incident-engine");
+  if (fs.existsSync(release)) return release;
+  if (fs.existsSync(debug)) return debug;
+  return release;
+}
+
+function parseAndDispatch(line: string): void {
+  const raw = line.trim();
+  if (!raw) return;
+
+  try {
+    const payload = JSON.parse(raw) as Record<string, unknown>;
+    if (payload.error === true) {
+      console.warn("[incident-engine] input error:", payload);
+      return;
+    }
+
+    const summary = payload as unknown as IncidentSummaryOutput;
+    if (summary.incident_id && summary.title) {
+      for (const listener of listeners) listener(summary);
+    }
+  } catch (err) {
+    console.warn("[incident-engine] stdout parse error:", err);
+  }
+}
+
+function spawnEngine(): void {
+  const bin = getBinaryPath();
+  const cwd = path.join(__dirname, "..");
+
+  child = spawn(bin, [], {
+    stdio: ["pipe", "pipe", "pipe"],
+    cwd,
+  });
+
+  started = true;
+  restarting = false;
+
+  const rl = readline.createInterface({ input: child.stdout });
+  rl.on("line", parseAndDispatch);
+
+  child.stderr.on("data", (chunk: Buffer) => {
+    const text = chunk.toString("utf8").trim();
+    if (text) console.warn("[incident-engine]", text);
+  });
+
+  child.on("error", (err) => {
+    console.warn("[incident-engine] spawn error:", err.message);
+  });
+
+  child.on("close", (code, signal) => {
+    started = false;
+    child = null;
+    rl.close();
+    console.warn("[incident-engine] exited", { code, signal });
+
+    // Best-effort auto-restart unless process is shutting down.
+    if (!restarting && process.env.NODE_ENV !== "test") {
+      restarting = true;
+      setTimeout(() => {
+        try {
+          ensureIncidentEngineStarted();
+        } catch (e) {
+          restarting = false;
+          console.warn("[incident-engine] restart failed:", e);
+        }
+      }, 500);
+    }
+  });
+}
+
+export function ensureIncidentEngineStarted(): void {
+  if (started && child && !child.killed) return;
+  spawnEngine();
+}
+
+export function onIncidentSummary(listener: IncidentListener): () => void {
+  listeners.push(listener);
+  return () => {
+    listeners = listeners.filter((l) => l !== listener);
+  };
+}
+
+export function ingestIncidentEvent(event: IncidentEventInput): void {
+  try {
+    ensureIncidentEngineStarted();
+    if (!child || child.killed || !child.stdin.writable) {
+      console.warn("[incident-engine] child not writable; event dropped");
+      return;
+    }
+    child.stdin.write(`${JSON.stringify(event)}\n`);
+  } catch (err) {
+    console.warn("[incident-engine] ingest failed:", err);
+  }
+}
+
+export function stopIncidentEngine(): void {
+  if (!child || child.killed) return;
+  try {
+    child.kill("SIGTERM");
+  } catch (err) {
+    console.warn("[incident-engine] stop failed:", err);
+  } finally {
+    started = false;
+    child = null;
+  }
+}
+
