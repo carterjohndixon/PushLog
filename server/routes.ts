@@ -485,17 +485,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing data.event" });
       }
 
-      const exception = ev.exception as { values?: Array<{ type?: string; value?: string; stacktrace?: { frames?: Array<{ filename?: string; abs_path?: string; function?: string; raw_function?: string; lineno?: number }> }> } } | undefined;
-      const firstExc = exception?.values?.[0];
-      const frames = firstExc?.stacktrace?.frames ?? [];
-      const stacktrace = frames
-        .map((f: { filename?: string; abs_path?: string; function?: string; raw_function?: string; lineno?: number }) => {
-          const file = (f.filename || f.abs_path || "unknown").trim() || "unknown";
-          const fn = f.function || f.raw_function || "";
-          return { file, function: fn, line: f.lineno };
+      const exception = ev.exception as Record<string, unknown> | undefined;
+      const firstExc = exception?.values as Array<Record<string, unknown>> | undefined;
+      const first = firstExc?.[0];
+      const stacktraceFrames = (first?.stacktrace as Record<string, unknown>)?.frames as Array<Record<string, unknown>> | undefined ?? [];
+      const stacktrace = stacktraceFrames
+        .map((f) => {
+          const file = String(f.filename || f.abs_path || "unknown").trim() || "unknown";
+          const fn = String(f.function || f.raw_function || "");
+          return { file, function: fn, line: f.lineno as number | undefined };
         })
-        .filter((f: { file: string }) => f.file !== "unknown" && f.file.length > 0);
-      if (stacktrace.length === 0) stacktrace.push({ file: "sentry", function: "unknown" });
+        .filter((f) => f.file !== "unknown" && f.file.length > 0);
+      if (stacktrace.length === 0) stacktrace.push({ file: "sentry", function: "unknown", line: undefined });
 
       const level = String(ev.level || "error").toLowerCase();
       const severity = level === "fatal" || level === "critical" ? "critical" : level === "warning" ? "warning" : "error";
@@ -504,7 +505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!timestamp && typeof ev.timestamp === "number") {
         timestamp = new Date(ev.timestamp * 1000).toISOString();
       }
-      if (!timestamp) timestamp = new Date().toISOString();
+      if (!timestamp) timestamp = new Date().toISOString(); 
 
       const tags = ev.tags as Array<[string, string]> | Record<string, string> | undefined;
       let environment = "production";
@@ -524,8 +525,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         environment,
         timestamp,
         severity,
-        exception_type: firstExc?.type || (ev.metadata as Record<string, unknown>)?.type as string || "Error",
-        message: firstExc?.value || (ev.title as string) || (ev.metadata as Record<string, unknown>)?.value as string || "Unknown error",
+        exception_type: String(first?.type ?? (ev.metadata as Record<string, unknown>)?.type ?? "Error"),
+        message: String(first?.value ?? ev.title ?? (ev.metadata as Record<string, unknown>)?.value ?? "Unknown error"),
         stacktrace,
         links: ev.web_url ? { source_url: ev.web_url as string } : undefined,
       };
