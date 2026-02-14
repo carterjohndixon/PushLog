@@ -19,7 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 log() {
-  echo "[$(TZ='America/Los_Angeles' date '+%Y-%m-%d %H:%M:%S %Z')] $1" | tee -a "$LOG_FILE"
+  echo "[$(TZ='America/Los_Angeles' date '+%Y-%m-%d %I:%M:%S %p %Z')] $1" | tee -a "$LOG_FILE"
 }
 
 if [ ! -d "$APP_DIR" ]; then
