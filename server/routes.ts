@@ -3771,6 +3771,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const exceptionType = String(req.body?.exceptionType ?? "TypeError");
       const message = String(req.body?.message ?? "Cannot read property 'id' of undefined");
+      const fullPipeline = Boolean(req.body?.fullPipeline);
+
+      const now = new Date().toISOString();
+      const ts5MinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
       // Create notification immediately so client can show toast right away
       const notif = await databaseStorage.createNotification({
@@ -3799,10 +3803,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isRead: false,
       });
 
-      // Skip incident engine for simulate — we already created the notification above.
-      // Sending to the engine would cause handleIncidentSummary to create a duplicate.
+      // Optionally send to incident engine (full pipeline) — creates a second notification
+      // when the engine emits a summary (e.g. spike detection).
+      if (fullPipeline) {
+        const event = {
+          source: "sentry",
+          service: "api",
+          environment: "prod",
+          timestamp: now,
+          severity: "error" as const,
+          exception_type: exceptionType,
+          message,
+          stacktrace: [
+            { file: "src/handler.ts", function: "handleRequest", line: 42 },
+            { file: "src/middleware/auth.ts", function: "verifyToken", line: 18 },
+          ],
+          links: { pushlog_user_id: userId, source_url: "https://sentry.io/issues/simulated-test" },
+          change_window: {
+            deploy_time: ts5MinAgo,
+            commits: [
+              { id: "abc123" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/handler.ts"] },
+              { id: "def456" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/middleware/auth.ts"] },
+            ],
+          },
+        };
+        ingestIncidentEvent(event);
+      }
 
-      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification`);
+      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification${fullPipeline ? " + engine" : ""}`);
       res.status(200).json({
         ok: true,
         message: "Incident sent",

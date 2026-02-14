@@ -494,36 +494,68 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                   Full setup guide (docs/SENTRY_SETUP.md)
                 </a>
                 {devMode ? (
-                  <div className="pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={async () => {
-                        try {
-                          const res = await fetch("/api/test/simulate-incident", {
-                            method: "POST",
-                            credentials: "include",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({}),
-                          });
-                          const data = await res.json().catch(() => ({}));
-                          if (!res.ok) {
-                            toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
-                            return;
+                  <div className="pt-2 space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/simulate-incident", {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({}),
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
+                              return;
+                            }
+                            if (data.notification) {
+                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
+                            } else {
+                              toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
+                            }
+                          } catch (e) {
+                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
                           }
-                          if (data.notification) {
-                            window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
-                          } else {
-                            toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
+                        }}
+                      >
+                        Simulate Sentry alert
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/simulate-incident", {
+                              method: "POST",
+                              credentials: "include",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ fullPipeline: true }),
+                            });
+                            const data = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
+                              return;
+                            }
+                            if (data.notification) {
+                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
+                            } else {
+                              toast({ title: "Incident sent", description: "Check your notifications (bell icon). You may see 2 (Sentry + incident engine)." });
+                            }
+                          } catch (e) {
+                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
                           }
-                        } catch (e) {
-                          toast({ title: "Request failed", description: String(e), variant: "destructive" });
-                        }
-                      }}
-                    >
-                      Simulate production incident
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">Sends a realistic Sentry-style event. Works in dev or when ENABLE_TEST_ROUTES=true.</p>
+                        }}
+                      >
+                        Simulate full pipeline
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine (may create a second notification e.g. spike).
+                    </p>
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground pt-2">
