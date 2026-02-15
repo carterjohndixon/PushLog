@@ -812,11 +812,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
         });
 
-      // When detached (rollback) or no git history: use GitHub API for canonical branch history
-      if (isDetachedHead || recentCommits.length === 0) {
-        recentCommits = await fetchRecentCommitsFromGitHub(30);
+      // Always prefer canonical GitHub history for Admin timeline.
+      // If GitHub is unavailable/rate-limited, fall back to local git history.
+      const githubCommits = await fetchRecentCommitsFromGitHub(30);
+      if (githubCommits.length > 0) {
+        recentCommits = githubCommits;
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
-        if (branch === "unknown" && recentCommits.length > 0) branch = "main";
+        if (branch === "unknown") branch = "main";
+      } else if (recentCommits.length === 0) {
+        try {
+          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+            execAsync("git rev-parse HEAD", { cwd: appDir }),
+            execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso HEAD -n 30", { cwd: appDir }),
+          ]);
+          headSha = headOut.trim() || headSha;
+          recentCommits = recentLogOut
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+              const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+              return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+            });
+          if (branch === "unknown" && recentCommits.length > 0) {
+            branch = isDetachedHead ? "detached" : "main";
+          }
+        } catch {
+          // ignore local fallback errors
+        }
       }
 
       // Compute pending commits: branch tip vs deployed SHA (uses branch ref, not HEAD)
@@ -925,10 +948,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
         });
 
-      if (isDetachedHead || recentCommits.length === 0) {
-        recentCommits = await fetchRecentCommitsFromGitHub(30);
+      // Always prefer canonical GitHub history for Admin timeline.
+      // If GitHub is unavailable/rate-limited, fall back to local git history.
+      const githubCommits = await fetchRecentCommitsFromGitHub(30);
+      if (githubCommits.length > 0) {
+        recentCommits = githubCommits;
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
-        if (branch === "unknown" && recentCommits.length > 0) branch = "main";
+        if (branch === "unknown") branch = "main";
+      } else if (recentCommits.length === 0) {
+        try {
+          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+            execAsync("git rev-parse HEAD", { cwd: appDir }),
+            execAsync("git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso HEAD -n 30", { cwd: appDir }),
+          ]);
+          headSha = headOut.trim() || headSha;
+          recentCommits = recentLogOut
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .map((line) => {
+              const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
+              return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
+            });
+          if (branch === "unknown" && recentCommits.length > 0) {
+            branch = isDetachedHead ? "detached" : "main";
+          }
+        } catch {
+          // Running in a container/dir without git metadata; keep admin page usable.
+        }
       }
 
       let pendingCount = 0;
