@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, ArrowUp, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, ArrowUp, RotateCcw, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type CommitInfo = {
@@ -449,10 +449,27 @@ export default function AdminPage() {
             {/* ── Commit Timeline ── */}
             <Card>
               <CardHeader>
-                <CardTitle>Commit History</CardTitle>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <CardTitle>Commit History</CardTitle>
+                  {data.recentCommits.length > 0 && (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20 px-2.5 py-0.5 text-xs font-medium">
+                      <span className="relative flex h-2 w-2">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+                      </span>
+                      Live
+                    </span>
+                  )}
+                </div>
                 <CardDescription>
                   Recent commits on <code>{data.branch || "main"}</code>.
                   Pending commits are highlighted; the last deployed commit is marked.
+                  {data.recentCommits.length > 0 && (
+                    <span className="block mt-1 text-green-600 dark:text-green-400">
+                      <CheckCircle2 className="inline h-3.5 w-3.5 mr-1 align-text-bottom" />
+                      {data.recentCommits.length} commits loaded — rollback and deploy work from this list.
+                    </span>
+                  )}
                 </CardDescription>
               </CardHeader>
               <CardContent>

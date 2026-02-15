@@ -1,8 +1,22 @@
+import { useQuery } from "@tanstack/react-query";
 import { Logo } from "./logo";
 import { Github, Twitter, Linkedin, User } from "lucide-react";
 import { Link } from "wouter";
 
 export function Footer() {
+  const { data: healthy, isSuccess, isError } = useQuery({
+    queryKey: ["/health"],
+    queryFn: async () => {
+      const res = await fetch("/health", { credentials: "include" });
+      return res.ok;
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
+
+  const status = isSuccess ? (healthy ? "up" : "down") : isError ? "down" : null;
+
   return (
     <footer className="bg-footer text-white py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -15,6 +29,19 @@ export function Footer() {
                 <p className="text-sm text-gray-400">GitHub ↔ Slack Integration</p>
               </div>
             </div>
+            {status !== null && (
+              <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full shrink-0 ${
+                    status === "up"
+                      ? "bg-green-500 shadow-[0_0_6px_rgba(34,197,94,0.6)]"
+                      : "bg-amber-500"
+                  }`}
+                  aria-hidden
+                />
+                {status === "up" ? "All systems operational" : "Service temporarily unavailable"}
+              </p>
+            )}
             <p className="text-gray-400 mb-4 max-w-md">
               Streamline your development workflow with intelligent GitHub and Slack integration. 
               Keep your team synchronized with automated notifications and AI-powered code summaries.
