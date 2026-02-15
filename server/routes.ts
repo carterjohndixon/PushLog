@@ -3908,6 +3908,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test route: throw a real error so Sentry captures it → new issue → alert → webhook → PushLog.
+  // Use this to verify the full pipeline (real error → Sentry → your webhook → incident in app).
+  // Only available when ENABLE_TEST_ROUTES=true or NODE_ENV=development.
+  app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
+    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
+    if (!allow) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    throw new Error("[PushLog test] Intentional incident: trigger-error — used to verify Sentry → webhook → incident alerts");
+  });
+
   // Test route: simulate Sentry-style production incident. Creates notification immediately so the
   // incident toast shows right away; also sends to incident engine for full pipeline.
   app.post("/api/test/simulate-incident", authenticateToken, async (req, res) => {

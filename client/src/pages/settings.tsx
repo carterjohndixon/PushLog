@@ -696,9 +696,32 @@ export default function Settings() {
                       >
                         Simulate full pipeline
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/trigger-error", { credentials: "include" });
+                            const data = await res.json().catch(() => ({}));
+                            if (res.ok) return;
+                            toast({
+                              title: "Real error triggered",
+                              description: "Server threw a test error. If Sentry + webhook are set up, a new issue and incident alert should appear shortly.",
+                            });
+                          } catch {
+                            toast({
+                              title: "Real error triggered",
+                              description: "Server threw a test error. If Sentry + webhook are set up, a new issue and incident alert should appear shortly.",
+                            });
+                          }
+                        }}
+                      >
+                        Trigger real error (Sentry)
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine (may create a second notification e.g. spike).
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine (may create a second notification e.g. spike). <strong>Trigger real error:</strong> Throws on the server so Sentry captures it → new issue → alert → webhook → incident in app (proves full pipeline).
                     </p>
                   </div>
                 </CollapsibleContent>
