@@ -619,6 +619,44 @@ export default function Settings() {
             </CardContent>
           </Card>
 
+          {/* Incident alerts — in-app toast + optional browser notifications */}
+          <Card className="border-amber-500/20 bg-amber-500/[0.03]">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                Incident alerts
+              </CardTitle>
+              <CardDescription>
+                New incidents show in the app (toast in the bottom-right) and in your notification list. Enable browser notifications to get desktop alerts when the tab is in the background.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {typeof Notification !== "undefined" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    Browser notifications: {Notification.permission === "granted" ? "On" : Notification.permission === "denied" ? "Blocked" : "Not set"}
+                  </span>
+                  {Notification.permission !== "granted" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={Notification.permission === "denied"}
+                      onClick={async () => {
+                        const p = await Notification.requestPermission();
+                        toast({
+                          title: p === "granted" ? "Browser notifications enabled" : p === "denied" ? "Notifications blocked" : "Permission dismissed",
+                          variant: p === "granted" ? "default" : "destructive",
+                        });
+                      }}
+                    >
+                      {Notification.permission === "denied" ? "Unblock in browser settings" : "Enable browser notifications"}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Incident Test — revealed when dev mode is on */}
           <Card className="border-amber-500/20 bg-amber-500/[0.03]">
             <CardHeader>

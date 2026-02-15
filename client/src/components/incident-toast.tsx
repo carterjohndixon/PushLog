@@ -29,14 +29,23 @@ export function IncidentToast() {
   useEffect(() => {
     const handle = (e: CustomEvent<IncidentNotification>) => {
       const data = e.detail;
-      if (!data || (data.id !== 0 && !data.id)) return;
-      const idStr = String(data.id);
+      if (!data || !data.title) return;
+      const idStr = String(data.id ?? data.createdAt ?? Date.now());
       if (lastShownId.current === idStr) return;
       lastShownId.current = idStr;
+      const payload: IncidentNotification = {
+        id: data.id ?? idStr,
+        type: "incident_alert",
+        title: data.title,
+        message: data.message ?? "New incident",
+        metadata: data.metadata,
+        createdAt: data.createdAt ?? new Date().toISOString(),
+        isRead: data.isRead,
+      };
 
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
-      setIncident(data);
+      setIncident(payload);
       setExiting(false);
       setVisible(false); // Start off-screen for slide-in
 
@@ -86,7 +95,7 @@ export function IncidentToast() {
   return (
     <div
       className={cn(
-        "fixed bottom-6 right-6 z-[90] w-[360px] max-w-[calc(100vw-2rem)]",
+        "fixed bottom-6 right-6 z-[9999] w-[360px] max-w-[calc(100vw-2rem)]",
         "transition-all duration-300 ease-out",
         visible && !exiting
           ? "translate-x-0 opacity-100"

@@ -37,9 +37,21 @@ export function NotificationSSE() {
           queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
           const notifType = data.data?.type;
           if (notifType === "incident_alert") {
+            const incident = data.data as { title?: string; message?: string };
             window.dispatchEvent(
               new CustomEvent("incident-notification", { detail: data.data }),
             );
+            if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+              try {
+                new Notification(incident.title ?? "Incident", {
+                  body: incident.message ?? "New incident detected",
+                  icon: "/images/PushLog-06p_njbF.png",
+                  tag: "pushlog-incident",
+                });
+              } catch {
+                // ignore
+              }
+            }
           } else if (notifType === "low_credits" || notifType === "no_credits") {
             window.dispatchEvent(
               new CustomEvent("credit-notification", { detail: data.data }),
