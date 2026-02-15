@@ -47,6 +47,7 @@ import {
   type IncidentEventInput,
   type IncidentSummaryOutput,
 } from "./incidentEngine";
+import * as Sentry from "@sentry/node";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -3908,15 +3909,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test route: throw a real error so Sentry captures it → new issue → alert → webhook → PushLog.
-  // Use this to verify the full pipeline (real error → Sentry → your webhook → incident in app).
-  // Only available when ENABLE_TEST_ROUTES=true or NODE_ENV=development.
+  // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
+  // We capture then return 200 so the UI doesn't see a 500; Sentry still gets the event.
   app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
       return res.status(404).json({ error: "Not found" });
     }
-    throw new Error("[PushLog test] Intentional incident: trigger-error — used to verify Sentry → webhook → incident alerts");
+    const err = new Error("[PushLog test] Intentional incident: trigger-error — used to verify Sentry → webhook → incident alerts");
+    Sentry.captureException(err);
+    res.status(200).json({
+      ok: true,
+      message: "Test error reported to Sentry. If your alert rule and webhook are set up, a new issue and incident should appear shortly.",
+    });
   });
 
   // Test route: simulate Sentry-style production incident. Creates notification immediately so the

@@ -704,16 +704,16 @@ export default function Settings() {
                           try {
                             const res = await fetch("/api/test/trigger-error", { credentials: "include" });
                             const data = await res.json().catch(() => ({}));
-                            if (res.ok) return;
-                            toast({
-                              title: "Real error triggered",
-                              description: "Server threw a test error. If Sentry + webhook are set up, a new issue and incident alert should appear shortly.",
-                            });
+                            if (res.ok) {
+                              toast({
+                                title: "Test error reported",
+                                description: data.message || "Sentry should have received it. Check your Sentry project and, if webhook is set up, your incident alerts.",
+                              });
+                            } else {
+                              toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
+                            }
                           } catch {
-                            toast({
-                              title: "Real error triggered",
-                              description: "Server threw a test error. If Sentry + webhook are set up, a new issue and incident alert should appear shortly.",
-                            });
+                            toast({ title: "Request failed", description: "Network or server error.", variant: "destructive" });
                           }
                         }}
                       >

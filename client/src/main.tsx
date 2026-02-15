@@ -16,7 +16,21 @@ if (dsn) {
       /Failed to fetch dynamically imported module/,
       /Loading chunk [\d]+ failed/,
       /Loading CSS chunk [\d]+ failed/,
+      /dynamically imported module/,
+      /Importing a module script failed/,
     ],
+    beforeSend(event, hint) {
+      const msg = (hint?.originalException as Error)?.message ?? event.message ?? "";
+      if (
+        msg.includes("dynamically imported module") ||
+        msg.includes("Loading chunk") ||
+        msg.includes("Loading CSS chunk") ||
+        msg.includes("Importing a module script failed")
+      ) {
+        return null; // drop event — deploy stale chunk; user will reload
+      }
+      return event;
+    },
   });
 }
 
