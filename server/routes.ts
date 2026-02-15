@@ -751,17 +751,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Git info: use branch ref (origin/main) so history stays correct after rollback (detached HEAD)
+      // Never use HEAD - after rollback, HEAD is the old commit.
       let branch = "unknown";
       let headSha = "";
       let recentCommitsRaw = "";
-      let branchRef = "HEAD";
+      let branchRef: string | null = null;
       try {
+        await execAsync("git fetch origin", { cwd: appDir }).catch(() => {});
         const branchOut = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir })).stdout.trim();
         if (branchOut !== "HEAD") {
           branch = branchOut;
         }
-        // Prefer origin/main for history so it's unaffected by rollback
-        for (const ref of ["origin/main", "origin/master", "main", "HEAD"]) {
+        for (const ref of ["origin/main", "origin/master"]) {
           try {
             await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
             branchRef = ref;
@@ -771,12 +772,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
         }
-        const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
-          execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
-          execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 30`, { cwd: appDir }),
-        ]);
-        headSha = headOut.trim();
-        recentCommitsRaw = recentLogOut;
+        if (branchRef) {
+          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+            execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
+            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 30`, { cwd: appDir }),
+          ]);
+          headSha = headOut.trim();
+          recentCommitsRaw = recentLogOut;
+        }
       } catch {}
 
       const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
@@ -801,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Compute pending commits: branch tip vs deployed SHA (uses branch ref, not HEAD)
       let pendingCount = 0;
       let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
-      if (prodDeployedSha && headSha) {
+      if (prodDeployedSha && headSha && branchRef) {
         try {
           const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
             execAsync(`git rev-list --count ${prodDeployedSha}..${branchRef}`, { cwd: appDir }),
@@ -860,13 +863,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let branch = "unknown";
       let headSha = "";
       let recentOut = "";
-      let branchRef = "HEAD";
+      let branchRef: string | null = null;
       try {
+        await execAsync("git fetch origin", { cwd: appDir }).catch(() => {});
         const branchOut = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir })).stdout.trim();
         if (branchOut !== "HEAD") {
           branch = branchOut;
         }
-        for (const ref of ["origin/main", "origin/master", "main", "HEAD"]) {
+        for (const ref of ["origin/main", "origin/master"]) {
           try {
             await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
             branchRef = ref;
@@ -876,12 +880,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             continue;
           }
         }
-        const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
-          execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
-          execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 20`, { cwd: appDir }),
-        ]);
-        headSha = headOut.trim();
-        recentOut = recentLogOut;
+        if (branchRef) {
+          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+            execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
+            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 20`, { cwd: appDir }),
+          ]);
+          headSha = headOut.trim();
+          recentOut = recentLogOut;
+        }
       } catch {
         // Running in a container/dir without git metadata; keep admin page usable.
       }
@@ -899,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let pendingCount = 0;
       let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
-      if (prodDeployedSha && headSha) {
+      if (prodDeployedSha && headSha && branchRef) {
         try {
           const [{ stdout: countOut }, { stdout: pendingOut }] = await Promise.all([
             execAsync(`git rev-list --count ${prodDeployedSha}..${branchRef}`, { cwd: appDir }),
