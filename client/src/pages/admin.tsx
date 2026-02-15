@@ -5,7 +5,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ChevronDown, ChevronUp, ArrowUp, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type CommitInfo = {
@@ -54,6 +64,7 @@ export default function AdminPage() {
   const [localPromoteAt, setLocalPromoteAt] = useState<number | null>(null);
   const [forceInProgress, setForceInProgress] = useState(false);
   const [logsOpen, setLogsOpen] = useState(true);
+  const [deployTarget, setDeployTarget] = useState<CommitInfo | null>(null);
   const prevRemoteSha = useRef<string | null>(null);
 
   const { data: rawData, isLoading, error } = useQuery<AdminStatus>({
@@ -433,6 +444,22 @@ export default function AdminPage() {
                                   {isPending && (
                                     <Badge className="bg-amber-600 hover:bg-amber-600 text-[10px] px-1.5 py-0">PENDING</Badge>
                                   )}
+                                  {data.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-7 text-xs gap-1"
+                                      onClick={() => setDeployTarget(c)}
+                                    >
+                                      {isPending ? (
+                                        <><ArrowUp className="h-3 w-3" /> Deploy</>
+                                      ) : isDeployed ? (
+                                        <><RotateCcw className="h-3 w-3" /> Redeploy</>
+                                      ) : (
+                                        <><RotateCcw className="h-3 w-3" /> Rollback</>
+                                      )}
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                               <p className="text-muted-foreground mt-1">
@@ -450,6 +477,42 @@ export default function AdminPage() {
           </div>
         ) : null}
       </main>
+
+      {/* Deploy/Rollback confirmation */}
+      <AlertDialog open={!!deployTarget} onOpenChange={(open) => !open && setDeployTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {deployTarget && (commitStatus(deployTarget) === "pending" ? "Deploy this commit?" : "Rollback to this commit?")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deployTarget && (
+                <>
+                  {commitStatus(deployTarget) === "pending" ? (
+                    <span>Production will be fast-forwarded to <strong>{deployTarget.shortSha}</strong>: {deployTarget.subject}</span>
+                  ) : (
+                    <span>Production will be rolled back to <strong>{deployTarget.shortSha}</strong>: {deployTarget.subject}</span>
+                  )}
+                  {" "}The deploy script will check out this commit and rebuild. This may take a few minutes.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deployTarget) {
+                  promoteMutation.mutate(deployTarget.sha);
+                  setDeployTarget(null);
+                }
+              }}
+            >
+              Deploy
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

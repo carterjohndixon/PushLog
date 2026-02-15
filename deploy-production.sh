@@ -31,6 +31,28 @@ cd "$APP_DIR"
 log "Starting production promotion..."
 log "Triggered by: ${PROMOTED_BY:-unknown}"
 
+# ── Stage: Checkout target SHA (fast-forward or rollback) ──
+if [ -n "${PROMOTED_SHA:-}" ] && [ -d .git ]; then
+  CURRENT="$(git rev-parse HEAD 2>/dev/null || true)"
+  if [ "$CURRENT" != "$PROMOTED_SHA" ]; then
+    log "Checking out target SHA: ${PROMOTED_SHA:0:10}..."
+    if git fetch origin 2>/dev/null; then
+      if git checkout "$PROMOTED_SHA" 2>/dev/null; then
+        log "Checked out ${PROMOTED_SHA:0:10}."
+      else
+        log "ERROR: Failed to checkout $PROMOTED_SHA. Aborting."
+        exit 1
+      fi
+    else
+      log "Warning: git fetch failed, trying checkout of local ref..."
+      if ! git checkout "$PROMOTED_SHA" 2>/dev/null; then
+        log "ERROR: Failed to checkout $PROMOTED_SHA. Aborting."
+        exit 1
+      fi
+    fi
+  fi
+fi
+
 # ── Stage: Check packages ──
 log "Checking package.json for dependency changes..."
 PKG_COMPARE_BIN=""
