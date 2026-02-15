@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type CommitInfo = {
@@ -50,6 +52,7 @@ export default function AdminPage() {
 
   const [localPromoteAt, setLocalPromoteAt] = useState<number | null>(null);
   const [forceInProgress, setForceInProgress] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(true);
   const prevRemoteSha = useRef<string | null>(null);
 
   const { data, isLoading, error } = useQuery<AdminStatus>({
@@ -120,6 +123,7 @@ export default function AdminPage() {
         data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
       setLocalPromoteAt(Date.now());
       setForceInProgress(false);
+      setLogsOpen(true);
       toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
@@ -310,9 +314,19 @@ export default function AdminPage() {
                     )}
 
                     {remoteStatusAvailable && promoteLogTail.length > 0 && (
-                      <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border font-mono">
-{promoteLogTail.join("\n")}
-                      </pre>
+                      <Collapsible open={logsOpen} onOpenChange={setLogsOpen}>
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="gap-2 -ml-1 text-muted-foreground hover:text-foreground">
+                            {logsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            {logsOpen ? "Hide logs" : "Show logs"}
+                          </Button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border font-mono mt-2">
+                            {promoteLogTail.join("\n")}
+                          </pre>
+                        </CollapsibleContent>
+                      </Collapsible>
                     )}
 
                     {!remoteStatusAvailable && (
