@@ -500,12 +500,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Sentry webhook adapter: accepts Sentry issue-alert payload, transforms to incident engine format
   app.post("/api/webhooks/sentry", async (req, res) => {
-    console.log("[webhooks/sentry] Request received");
+    const body = req.body as Record<string, unknown>;
+    const bodyKeys = body ? Object.keys(body) : [];
+    console.log("[webhooks/sentry] Request received", { bodyKeys, hasData: !!body?.data });
     try {
       const configuredSecret = process.env.SENTRY_WEBHOOK_SECRET?.trim();
       if (configuredSecret) {
         const sig = (req.headers["sentry-hook-signature"] as string)?.trim();
         if (!sig) {
+          console.log("[webhooks/sentry] 401 Missing Sentry-Hook-Signature");
           return res.status(401).json({ error: "Missing Sentry-Hook-Signature" });
         }
         const crypto = await import("crypto");
@@ -513,14 +516,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const computed = crypto.createHmac("sha256", configuredSecret).update(payload).digest("hex");
         const expected = sig.startsWith("sha256=") ? "sha256=" + computed : computed;
         if (sig !== expected) {
+          console.log("[webhooks/sentry] 401 Invalid signature");
           return res.status(401).json({ error: "Invalid signature" });
         }
       }
 
-      const body = req.body as Record<string, unknown>;
       const data = body?.data as Record<string, unknown> | undefined;
       const ev = data?.event as Record<string, unknown> | undefined;
       if (!ev) {
+        // Sentry "Send Test Notification" often sends a minimal payload without data.event
+        console.log("[webhooks/sentry] 400 Missing data.event — real issue alerts include it; test notification may not");
         return res.status(400).json({ error: "Missing data.event" });
       }
 
