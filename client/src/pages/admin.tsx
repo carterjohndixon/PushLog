@@ -183,11 +183,13 @@ export default function AdminPage() {
     }
   }, [promotionFinishedFromLogs, localPromoteAt]);
 
+  const showLogsPanel = isPromotionRunning || (remoteStatusAvailable && promoteLogTail.length > 0);
+
   const getProgressStep = useCallback((): string => {
-    if (!isPromotionRunning) return "";
     const lastLine = lastLogLine;
-    if (lastLine.includes("completed")) return "Completed!";
-    if (lastLine.includes("CANCELLED")) return "Cancelled";
+    if (lastLine.includes("Production promotion completed.")) return "Completed!";
+    if (lastLine.includes("Promotion CANCELLED")) return "Cancelled";
+    if (!isPromotionRunning) return "";
     if (lastLine.includes("Restarting")) return "Restarting PM2...";
     if (lastLine.includes("Building production bundle")) return "Building production bundle...";
     if (lastLine.includes("Building incident-engine")) return "Building Rust engines...";
@@ -292,18 +294,29 @@ export default function AdminPage() {
                   </p>
                 )}
 
-                {/* Live progress panel */}
-                {isPromotionRunning && (
+                {/* Live progress panel (shows during promotion and after completion) */}
+                {showLogsPanel && (
                   <div className="mt-4 rounded border border-border p-4 bg-muted/20 text-sm space-y-3">
                     <div className="flex items-center gap-2">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
-                      </span>
-                      <p className="font-medium">
-                        Production promotion is running
-                        {remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
-                      </p>
+                      {isPromotionRunning ? (
+                        <>
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
+                          </span>
+                          <p className="font-medium">
+                            Production promotion is running
+                            {remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <span className="flex h-2.5 w-2.5 rounded-full bg-green-500" />
+                          <p className="font-medium">
+                            Last promotion {getProgressStep() ? `— ${getProgressStep()}` : ""}
+                          </p>
+                        </>
+                      )}
                     </div>
 
                     {data.promoteRemoteStatus?.lock?.startedAt && (
