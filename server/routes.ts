@@ -86,6 +86,7 @@ const STAGING_ADMIN_EMAILS = parseCsvEnv(process.env.STAGING_ADMIN_EMAILS);
 const STAGING_ADMIN_USERNAMES = parseCsvEnv(process.env.STAGING_ADMIN_USERNAMES);
 const PROMOTE_PROD_WEBHOOK_URL = process.env.PROMOTE_PROD_WEBHOOK_URL || "";
 const PROMOTE_PROD_WEBHOOK_SECRET = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_PAT || "";
 
 function resolveAppDir(): string {
   const candidates = [
@@ -142,12 +143,18 @@ function getProdPromotionCancelUrl(): string | null {
 
 async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
   const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`;
-  const opts: RequestInit = { headers: { Accept: "application/vnd.github+json" } };
+  const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+  if (GITHUB_TOKEN) {
+    headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
+  }
+  const opts: RequestInit = { headers };
   const maxAttempts = 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const res = await fetch(url, opts);
       if (!res.ok) {
+        const remaining = res.headers.get("x-ratelimit-remaining");
+        console.error(`[fetchGitHubCommits] attempt ${attempt}: HTTP ${res.status}, rate-limit-remaining: ${remaining}, token: ${GITHUB_TOKEN ? "yes" : "no"}`);
         if (attempt < maxAttempts) continue;
         return [];
       }
@@ -161,10 +168,14 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
           subject: String(item?.commit?.message || "").split("\n")[0] || "No commit message",
         }))
         .filter((c) => !!c.sha);
-      if (list.length > 0) return list;
+      if (list.length > 0) {
+        console.log(`[fetchGitHubCommits] OK: ${list.length} commits fetched`);
+        return list;
+      }
       if (attempt < maxAttempts) continue;
       return [];
-    } catch (_e) {
+    } catch (err: any) {
+      console.error(`[fetchGitHubCommits] attempt ${attempt} error:`, err?.message || err);
       if (attempt >= maxAttempts) return [];
     }
   }
@@ -1036,6 +1047,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasLocalGit = branch !== "unknown" && headSha !== "";
       const remote = promoteRemoteStatus && !promoteRemoteStatus.error ? promoteRemoteStatus : null;
 
+      console.log(`[staging/status] hasLocalGit=${hasLocalGit}, localCommits=${recentCommits.length}, remoteCommits=${remote?.recentCommits?.length ?? "n/a"}, remoteError=${promoteRemoteStatus?.error || "none"}`);
+
       let finalBranch = hasLocalGit ? branch : (remote?.branch || "unknown");
       let finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
       const finalProdDeployedSha = prodDeployedSha || remote?.prodDeployedSha || null;
@@ -1044,27 +1057,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let finalPendingCount = hasLocalGit ? pendingCount : (remote?.pendingCount ?? 0);
       let finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remote?.pendingCommits || []);
 
+      // Always fetch from GitHub as the canonical source — production may be on old code after rollback
       if (finalRecentCommits.length === 0) {
+        console.log("[staging/status] No commits from local or remote, fetching from GitHub...");
         finalRecentCommits = await fetchRecentCommitsFromGitHub(30);
-      }
-      // When still empty (e.g. production after rollback, GitHub API failed): try same-origin status endpoint
-      if (finalRecentCommits.length === 0 && PROMOTE_PROD_WEBHOOK_SECRET && req) {
-        try {
-          const host = req.get("host") || req.get("x-forwarded-host") || "localhost";
-          const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-          const base = `${proto}://${host}`.replace(/\/$/, "");
-          const statusRes = await fetch(`${base}/api/webhooks/promote-production/status`, {
-            headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
-          });
-          if (statusRes.ok) {
-            const body = await statusRes.json().catch(() => ({}));
-            if (Array.isArray(body.recentCommits) && body.recentCommits.length > 0) {
-              finalRecentCommits = body.recentCommits;
-            }
-          }
-        } catch {
-          // ignore
-        }
+        console.log(`[staging/status] GitHub returned ${finalRecentCommits.length} commits`);
       }
       if (!finalHeadSha && finalRecentCommits[0]?.sha) {
         finalHeadSha = finalRecentCommits[0].sha;
