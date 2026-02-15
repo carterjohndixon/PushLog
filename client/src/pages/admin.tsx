@@ -304,7 +304,34 @@ export default function AdminPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Button
-                    onClick={() => promoteMutation.mutate({ sha: data?.headSha ?? "", isRollback: false })}
+                    onClick={async () => {
+                      try {
+                        // Refetch status first so we deploy the true latest, not stale headSha
+                        const fresh = await queryClient.fetchQuery({
+                          queryKey: ["/api/admin/staging/status"],
+                          queryFn: async () => {
+                            const res = await fetch(`/api/admin/staging/status?t=${Date.now()}`, {
+                              credentials: "include",
+                              cache: "no-store",
+                              headers: { Accept: "application/json" },
+                            });
+                            if (!res.ok) {
+                              const body = await res.json().catch(() => ({}));
+                              throw new Error(body.error || "Failed to fetch status");
+                            }
+                            return res.json();
+                          },
+                        });
+                        const sha = fresh?.headSha ?? fresh?.recentCommits?.[0]?.sha ?? data?.headSha ?? "";
+                        if (!sha) {
+                          toast({ title: "Cannot deploy", description: "No branch tip available. Refresh the page.", variant: "destructive" });
+                          return;
+                        }
+                        promoteMutation.mutate({ sha, isRollback: false });
+                      } catch (e) {
+                        toast({ title: "Failed to refresh status", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+                      }
+                    }}
                     disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
                   >
                     {isPromotionRunning || promoteMutation.isPending
