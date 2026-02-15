@@ -631,7 +631,7 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               {typeof Notification !== "undefined" && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">
                     Browser notifications: {Notification.permission === "granted" ? "On" : Notification.permission === "denied" ? "Blocked" : "Not set"}
                   </span>
@@ -649,6 +649,26 @@ export default function Settings() {
                       }}
                     >
                       {Notification.permission === "denied" ? "Unblock in browser settings" : "Enable browser notifications"}
+                    </Button>
+                  )}
+                  {Notification.permission === "granted" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        try {
+                          new Notification("PushLog test", {
+                            body: "If you see this, browser notifications are working. You'll get these when incidents occur.",
+                            icon: "/images/PushLog-06p_njbF.png",
+                            tag: "pushlog-test",
+                          });
+                          toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
+                        } catch (e) {
+                          toast({ title: "Could not send test notification", variant: "destructive", description: String(e) });
+                        }
+                      }}
+                    >
+                      Send test notification
                     </Button>
                   )}
                 </div>
