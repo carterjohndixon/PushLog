@@ -354,12 +354,14 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
   try {
     const data = body?.data as Record<string, unknown> | undefined;
     const ev = data?.event as Record<string, unknown> | undefined;
-    if (!ev) {
-      console.log("[webhooks/sentry] 400 Missing data.event");
-      res.status(400).json({ error: "Missing data.event" });
+    const issue = data?.issue as Record<string, unknown> | undefined;
+    if (!ev && !issue) {
+      console.log("[webhooks/sentry] 400 Missing data.event and data.issue");
+      res.status(400).json({ error: "Missing data.event and data.issue" });
       return;
     }
-    const exception = ev.exception as Record<string, unknown> | undefined;
+
+    const exception = ev?.exception as Record<string, unknown> | undefined;
     const firstExc = exception?.values as Array<Record<string, unknown>> | undefined;
     const first = firstExc?.[0];
     const stacktraceFrames = (first?.stacktrace as Record<string, unknown>)?.frames as Array<Record<string, unknown>> | undefined ?? [];
@@ -370,18 +372,27 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
         return { file, function: fn, line: f.lineno as number | undefined };
       })
       .filter((f) => f.file !== "unknown" && f.file.length > 0);
-    if (stacktrace.length === 0) stacktrace.push({ file: "sentry", function: "unknown", line: undefined });
+    if (stacktrace.length === 0) {
+      stacktrace.push({ file: "sentry", function: ev ? "event_alert" : "issue_alert", line: undefined });
+    }
 
-    const level = String(ev.level || "error").toLowerCase();
+    const issueLevel = String((issue as any)?.level || "").toLowerCase();
+    const level = String((ev as any)?.level || issueLevel || "error").toLowerCase();
     const severity = level === "fatal" || level === "critical" ? "critical" : level === "warning" ? "warning" : "error";
 
-    let timestamp = ev.datetime as string | undefined;
-    if (!timestamp && typeof ev.timestamp === "number") {
-      timestamp = new Date(ev.timestamp * 1000).toISOString();
+    let timestamp = ev?.datetime as string | undefined;
+    if (!timestamp && typeof (ev as any)?.timestamp === "number") {
+      timestamp = new Date(((ev as any).timestamp as number) * 1000).toISOString();
+    }
+    if (!timestamp) {
+      timestamp =
+        String((issue as any)?.lastSeen || (issue as any)?.firstSeen || "").trim() || undefined;
     }
     if (!timestamp) timestamp = new Date().toISOString();
 
-    const tags = ev.tags as Array<[string, string]> | Record<string, string> | undefined;
+    const tags =
+      (ev?.tags as Array<[string, string]> | Record<string, string> | undefined) ||
+      ((issue as any)?.tags as Array<[string, string]> | Record<string, string> | undefined);
     let environment = "production";
     if (Array.isArray(tags)) {
       const envTag = tags.find((t) => t[0] === "environment");
@@ -391,22 +402,89 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
     }
     if (environment.toLowerCase() === "production") environment = "prod";
     const proj = data?.project as Record<string, unknown> | string | number | undefined;
-    const projectSlug = typeof proj === "object" && proj?.slug ? String(proj.slug) : typeof ev.project === "string" ? ev.project : "api";
+    const projectSlug =
+      (typeof proj === "object" && proj?.slug ? String(proj.slug) : "") ||
+      (typeof (ev as any)?.project === "string" ? (ev as any).project : "") ||
+      (typeof (issue as any)?.project?.slug === "string" ? String((issue as any).project.slug) : "") ||
+      "api";
     const service = projectSlug || "api";
 
+    const issueMeta = ((issue as any)?.metadata || {}) as Record<string, unknown>;
+    const evMeta = ((ev as any)?.metadata || {}) as Record<string, unknown>;
     const event: IncidentEventInput = {
       source: "sentry",
       service,
       environment,
       timestamp,
       severity,
-      exception_type: String(first?.type ?? (ev.metadata as Record<string, unknown>)?.type ?? "Error"),
-      message: String(first?.value ?? ev.title ?? (ev.metadata as Record<string, unknown>)?.value ?? "Unknown error"),
+      exception_type: String(first?.type ?? evMeta?.type ?? issueMeta?.type ?? "Error"),
+      message: String(
+        first?.value ??
+          (ev as any)?.title ??
+          evMeta?.value ??
+          issueMeta?.value ??
+          (issue as any)?.title ??
+          "Unknown error"
+      ),
       stacktrace,
-      links: ev.web_url ? { source_url: ev.web_url as string } : undefined,
+      links: ((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink)
+        ? { source_url: String((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink) }
+        : undefined,
     };
     ingestIncidentEvent(event);
     console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
+
+    // Sentry "Send Test Notification" is often issue-level (no data.event). Emit a direct
+    // notification so users still see in-app toast + browser notification path immediately.
+    if (!ev) {
+      const targetUsers = new Set<string>();
+      const configured = (process.env.INCIDENT_NOTIFY_USER_IDS || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const id of configured) targetUsers.add(id);
+      if (targetUsers.size === 0) {
+        const allUserIds = await storage.getAllUserIds();
+        for (const id of allUserIds) targetUsers.add(id);
+      }
+
+      const directTitle = `Sentry alert: ${event.exception_type} in ${service}/${environment}`;
+      const directMessage = `${String(body?.action || "Alert")} from Sentry (priority webhook event)`;
+      const directMeta = JSON.stringify({
+        source: "sentry_issue_alert",
+        service,
+        environment,
+        severity,
+        links: event.links || {},
+      });
+
+      await Promise.all(
+        Array.from(targetUsers).map(async (userId) => {
+          try {
+            const notif = await storage.createNotification({
+              userId,
+              type: "incident_alert",
+              title: directTitle,
+              message: directMessage,
+              metadata: directMeta,
+            });
+            broadcastNotification(userId, {
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              metadata: notif.metadata,
+              createdAt: notif.createdAt,
+              isRead: false,
+            });
+          } catch (err) {
+            console.warn("[webhooks/sentry] failed direct notify:", err);
+          }
+        })
+      );
+      console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users (issue-level payload)`);
+    }
+
     res.status(202).json({ accepted: true });
   } catch (error) {
     console.error("Sentry webhook error:", error);
