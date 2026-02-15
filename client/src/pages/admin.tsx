@@ -124,13 +124,15 @@ export default function AdminPage() {
           toast({ title: "Promotion complete", description: `Deployed SHA: ${newSha.slice(0, 10)}` });
         }
         setLocalPromoteAt(null);
+        // Force immediate refetch to ensure we have the latest deployed SHA (avoids race with file write)
+        queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
       }
     } else {
       if (Date.now() - localPromoteAt > LOCAL_PROMOTE_TTL) {
         setLocalPromoteAt(null);
       }
     }
-  }, [data, localPromoteAt, toast]);
+  }, [data, localPromoteAt, toast, queryClient]);
 
   useEffect(() => {
     if (data && !prevRemoteSha.current) {

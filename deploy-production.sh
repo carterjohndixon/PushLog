@@ -101,6 +101,18 @@ cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare bu
 log "Building production bundle..."
 npm run build:production
 
+# Write deployed metadata BEFORE PM2 restart so the new Node process sees it immediately
+DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
+if [ -z "$DEPLOYED_SHA" ] && [ -n "${PROMOTED_SHA:-}" ]; then
+  DEPLOYED_SHA="$PROMOTED_SHA"
+fi
+if [ -z "$DEPLOYED_SHA" ]; then
+  DEPLOYED_SHA="unknown"
+fi
+DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+echo "$DEPLOYED_SHA" > "${APP_DIR}/.prod_deployed_sha" || true
+echo "$DEPLOYED_AT" > "${APP_DIR}/.prod_deployed_at" || true
+
 log "Restarting production PM2 app..."
 
 # PM2 restart can hang when called from a child of the process being restarted.
@@ -125,19 +137,5 @@ else
   nohup /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env </dev/null >/dev/null 2>&1 &
   sleep 5
 fi
-
-# Metadata writes should not fail the whole deployment.
-# Use git if available; otherwise fall back to PROMOTED_SHA from staging (passed via webhook)
-DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
-if [ -z "$DEPLOYED_SHA" ] && [ -n "${PROMOTED_SHA:-}" ]; then
-  DEPLOYED_SHA="$PROMOTED_SHA"
-fi
-if [ -z "$DEPLOYED_SHA" ]; then
-  DEPLOYED_SHA="unknown"
-fi
-DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-
-echo "$DEPLOYED_SHA" > "${APP_DIR}/.prod_deployed_sha" || true
-echo "$DEPLOYED_AT" > "${APP_DIR}/.prod_deployed_at" || true
 
 log "Production promotion completed. SHA=${DEPLOYED_SHA}"
