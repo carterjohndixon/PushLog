@@ -97,20 +97,30 @@ export default function AdminPage() {
     },
   });
 
-  // Hold onto last good promoteRemoteStatus when production status fetch intermittently fails
+  // Hold onto last good promoteRemoteStatus and recentCommits when fetches intermittently fail
   const lastGoodRemoteRef = useRef<RemoteStatus | null>(null);
+  const lastGoodCommitsRef = useRef<CommitInfo[] | null>(null);
   if (rawData?.promoteRemoteStatus && !rawData.promoteRemoteStatus.error) {
     lastGoodRemoteRef.current = rawData.promoteRemoteStatus;
   }
+  if (rawData?.recentCommits && rawData.recentCommits.length > 0) {
+    lastGoodCommitsRef.current = rawData.recentCommits;
+  }
   const data = useMemo((): AdminStatus | undefined => {
     if (!rawData) return undefined;
+    let patched = rawData;
+    // Preserve last good remote status
     const remote = rawData.promoteRemoteStatus;
     const hasError = remote?.error;
     const fallback = lastGoodRemoteRef.current;
     if (hasError && fallback) {
-      return { ...rawData, promoteRemoteStatus: fallback };
+      patched = { ...patched, promoteRemoteStatus: fallback };
     }
-    return rawData;
+    // Preserve last good commit list — never replace good data with empty
+    if (patched.recentCommits.length === 0 && lastGoodCommitsRef.current) {
+      patched = { ...patched, recentCommits: lastGoodCommitsRef.current };
+    }
+    return patched;
   }, [rawData]);
 
   useEffect(() => {

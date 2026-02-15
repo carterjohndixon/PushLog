@@ -141,7 +141,16 @@ function getProdPromotionCancelUrl(): string | null {
   }
 }
 
+// Cache GitHub commits for 60s so polling doesn't burn through rate limits or add latency
+let _ghCommitsCache: { data: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>; ts: number } | null = null;
+const GH_CACHE_TTL = 60_000; // 60 seconds
+
 async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
+  // Return cached data if fresh
+  if (_ghCommitsCache && Date.now() - _ghCommitsCache.ts < GH_CACHE_TTL && _ghCommitsCache.data.length > 0) {
+    return _ghCommitsCache.data;
+  }
+
   const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`;
   const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
   if (GITHUB_TOKEN) {
@@ -156,7 +165,8 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
         const remaining = res.headers.get("x-ratelimit-remaining");
         console.error(`[fetchGitHubCommits] attempt ${attempt}: HTTP ${res.status}, rate-limit-remaining: ${remaining}, token: ${GITHUB_TOKEN ? "yes" : "no"}`);
         if (attempt < maxAttempts) continue;
-        return [];
+        // Return stale cache if available rather than nothing
+        return _ghCommitsCache?.data || [];
       }
       const data: any[] = await res.json();
       const list = data
@@ -169,17 +179,18 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
         }))
         .filter((c) => !!c.sha);
       if (list.length > 0) {
-        console.log(`[fetchGitHubCommits] OK: ${list.length} commits fetched`);
+        _ghCommitsCache = { data: list, ts: Date.now() };
+        console.log(`[fetchGitHubCommits] OK: ${list.length} commits fetched (cached)`);
         return list;
       }
       if (attempt < maxAttempts) continue;
-      return [];
+      return _ghCommitsCache?.data || [];
     } catch (err: any) {
       console.error(`[fetchGitHubCommits] attempt ${attempt} error:`, err?.message || err);
-      if (attempt >= maxAttempts) return [];
+      if (attempt >= maxAttempts) return _ghCommitsCache?.data || [];
     }
   }
-  return [];
+  return _ghCommitsCache?.data || [];
 }
 
 function derivePendingFromRecent(
