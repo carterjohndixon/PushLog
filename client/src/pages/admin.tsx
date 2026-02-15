@@ -447,7 +447,9 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent>
                 {data.recentCommits.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No commit history available (running in container without git).</p>
+                  <p className="text-sm text-muted-foreground">
+                    No commit history available. After a rollback, history is loaded from GitHub; it may be temporarily unavailable or rate-limited.
+                  </p>
                 ) : (
                   <div className="relative">
                     {/* Vertical timeline line */}

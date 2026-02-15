@@ -141,24 +141,34 @@ function getProdPromotionCancelUrl(): string | null {
 }
 
 async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
-  try {
-    const res = await fetch(`https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`, {
-      headers: { Accept: "application/vnd.github+json" },
-    });
-    if (!res.ok) return [];
-    const data: any[] = await res.json();
-    return data
-      .map((item) => ({
-        sha: String(item?.sha || ""),
-        shortSha: String(item?.sha || "").slice(0, 7),
-        dateIso: String(item?.commit?.author?.date || ""),
-        author: String(item?.commit?.author?.name || item?.author?.login || "unknown"),
-        subject: String(item?.commit?.message || "").split("\n")[0] || "No commit message",
-      }))
-      .filter((c) => !!c.sha);
-  } catch {
-    return [];
+  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`;
+  const opts: RequestInit = { headers: { Accept: "application/vnd.github+json" } };
+  const maxAttempts = 2;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, opts);
+      if (!res.ok) {
+        if (attempt < maxAttempts) continue;
+        return [];
+      }
+      const data: any[] = await res.json();
+      const list = data
+        .map((item) => ({
+          sha: String(item?.sha || ""),
+          shortSha: String(item?.sha || "").slice(0, 7),
+          dateIso: String(item?.commit?.author?.date || ""),
+          author: String(item?.commit?.author?.name || item?.author?.login || "unknown"),
+          subject: String(item?.commit?.message || "").split("\n")[0] || "No commit message",
+        }))
+        .filter((c) => !!c.sha);
+      if (list.length > 0) return list;
+      if (attempt < maxAttempts) continue;
+      return [];
+    } catch (_e) {
+      if (attempt >= maxAttempts) return [];
+    }
   }
+  return [];
 }
 
 function derivePendingFromRecent(
@@ -989,6 +999,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (finalRecentCommits.length === 0) {
         finalRecentCommits = await fetchRecentCommitsFromGitHub(30);
+      }
+      // When still empty (e.g. production after rollback, GitHub API failed): try same-origin status endpoint
+      if (finalRecentCommits.length === 0 && PROMOTE_PROD_WEBHOOK_SECRET && req) {
+        try {
+          const host = req.get("host") || req.get("x-forwarded-host") || "localhost";
+          const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+          const base = `${proto}://${host}`.replace(/\/$/, "");
+          const statusRes = await fetch(`${base}/api/webhooks/promote-production/status`, {
+            headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
+          });
+          if (statusRes.ok) {
+            const body = await statusRes.json().catch(() => ({}));
+            if (Array.isArray(body.recentCommits) && body.recentCommits.length > 0) {
+              finalRecentCommits = body.recentCommits;
+            }
+          }
+        } catch {
+          // ignore
+        }
       }
       if (!finalHeadSha && finalRecentCommits[0]?.sha) {
         finalHeadSha = finalRecentCommits[0].sha;
