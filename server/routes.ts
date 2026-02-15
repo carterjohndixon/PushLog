@@ -346,6 +346,74 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
   return handleGitHubWebhook(req, res);
 }
 
+/** Sentry webhook handler. Expects req.body to be already parsed (signature verified in index with raw body). */
+export async function sentryWebhookHandler(req: Request, res: Response): Promise<void> {
+  const body = req.body as Record<string, unknown>;
+  const bodyKeys = body ? Object.keys(body) : [];
+  console.log("[webhooks/sentry] Request received", { bodyKeys, hasData: !!body?.data });
+  try {
+    const data = body?.data as Record<string, unknown> | undefined;
+    const ev = data?.event as Record<string, unknown> | undefined;
+    if (!ev) {
+      console.log("[webhooks/sentry] 400 Missing data.event");
+      res.status(400).json({ error: "Missing data.event" });
+      return;
+    }
+    const exception = ev.exception as Record<string, unknown> | undefined;
+    const firstExc = exception?.values as Array<Record<string, unknown>> | undefined;
+    const first = firstExc?.[0];
+    const stacktraceFrames = (first?.stacktrace as Record<string, unknown>)?.frames as Array<Record<string, unknown>> | undefined ?? [];
+    const stacktrace = stacktraceFrames
+      .map((f) => {
+        const file = String(f.filename || f.abs_path || "unknown").trim() || "unknown";
+        const fn = String(f.function || f.raw_function || "");
+        return { file, function: fn, line: f.lineno as number | undefined };
+      })
+      .filter((f) => f.file !== "unknown" && f.file.length > 0);
+    if (stacktrace.length === 0) stacktrace.push({ file: "sentry", function: "unknown", line: undefined });
+
+    const level = String(ev.level || "error").toLowerCase();
+    const severity = level === "fatal" || level === "critical" ? "critical" : level === "warning" ? "warning" : "error";
+
+    let timestamp = ev.datetime as string | undefined;
+    if (!timestamp && typeof ev.timestamp === "number") {
+      timestamp = new Date(ev.timestamp * 1000).toISOString();
+    }
+    if (!timestamp) timestamp = new Date().toISOString();
+
+    const tags = ev.tags as Array<[string, string]> | Record<string, string> | undefined;
+    let environment = "production";
+    if (Array.isArray(tags)) {
+      const envTag = tags.find((t) => t[0] === "environment");
+      if (envTag?.[1]) environment = envTag[1];
+    } else if (tags && typeof tags === "object" && tags.environment) {
+      environment = String(tags.environment);
+    }
+    if (environment.toLowerCase() === "production") environment = "prod";
+    const proj = data?.project as Record<string, unknown> | string | number | undefined;
+    const projectSlug = typeof proj === "object" && proj?.slug ? String(proj.slug) : typeof ev.project === "string" ? ev.project : "api";
+    const service = projectSlug || "api";
+
+    const event: IncidentEventInput = {
+      source: "sentry",
+      service,
+      environment,
+      timestamp,
+      severity,
+      exception_type: String(first?.type ?? (ev.metadata as Record<string, unknown>)?.type ?? "Error"),
+      message: String(first?.value ?? ev.title ?? (ev.metadata as Record<string, unknown>)?.value ?? "Unknown error"),
+      stacktrace,
+      links: ev.web_url ? { source_url: ev.web_url as string } : undefined,
+    };
+    ingestIncidentEvent(event);
+    console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
+    res.status(202).json({ accepted: true });
+  } catch (error) {
+    console.error("Sentry webhook error:", error);
+    res.status(500).json({ error: "Failed to process Sentry webhook" });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const getDefaultIncidentNotifyUserIds = (): string[] => {
     return (process.env.INCIDENT_NOTIFY_USER_IDS || "")
@@ -498,92 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Sentry webhook adapter: accepts Sentry issue-alert payload, transforms to incident engine format
-  app.post("/api/webhooks/sentry", async (req, res) => {
-    const body = req.body as Record<string, unknown>;
-    const bodyKeys = body ? Object.keys(body) : [];
-    console.log("[webhooks/sentry] Request received", { bodyKeys, hasData: !!body?.data });
-    try {
-      const configuredSecret = process.env.SENTRY_WEBHOOK_SECRET?.trim();
-      if (configuredSecret) {
-        const sig = (req.headers["sentry-hook-signature"] as string)?.trim();
-        if (!sig) {
-          console.log("[webhooks/sentry] 401 Missing Sentry-Hook-Signature");
-          return res.status(401).json({ error: "Missing Sentry-Hook-Signature" });
-        }
-        const crypto = await import("crypto");
-        const payload = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-        const computed = crypto.createHmac("sha256", configuredSecret).update(payload).digest("hex");
-        const expected = sig.startsWith("sha256=") ? "sha256=" + computed : computed;
-        if (sig !== expected) {
-          console.log("[webhooks/sentry] 401 Invalid signature");
-          return res.status(401).json({ error: "Invalid signature" });
-        }
-      }
-
-      const data = body?.data as Record<string, unknown> | undefined;
-      const ev = data?.event as Record<string, unknown> | undefined;
-      if (!ev) {
-        // Sentry "Send Test Notification" often sends a minimal payload without data.event
-        console.log("[webhooks/sentry] 400 Missing data.event — real issue alerts include it; test notification may not");
-        return res.status(400).json({ error: "Missing data.event" });
-      }
-
-      const exception = ev.exception as Record<string, unknown> | undefined;
-      const firstExc = exception?.values as Array<Record<string, unknown>> | undefined;
-      const first = firstExc?.[0];
-      const stacktraceFrames = (first?.stacktrace as Record<string, unknown>)?.frames as Array<Record<string, unknown>> | undefined ?? [];
-      const stacktrace = stacktraceFrames
-        .map((f) => {
-          const file = String(f.filename || f.abs_path || "unknown").trim() || "unknown";
-          const fn = String(f.function || f.raw_function || "");
-          return { file, function: fn, line: f.lineno as number | undefined };
-        })
-        .filter((f) => f.file !== "unknown" && f.file.length > 0);
-      if (stacktrace.length === 0) stacktrace.push({ file: "sentry", function: "unknown", line: undefined });
-
-      const level = String(ev.level || "error").toLowerCase();
-      const severity = level === "fatal" || level === "critical" ? "critical" : level === "warning" ? "warning" : "error";
-
-      let timestamp = ev.datetime as string | undefined;
-      if (!timestamp && typeof ev.timestamp === "number") {
-        timestamp = new Date(ev.timestamp * 1000).toISOString();
-      }
-      if (!timestamp) timestamp = new Date().toISOString(); 
-
-      const tags = ev.tags as Array<[string, string]> | Record<string, string> | undefined;
-      let environment = "production";
-      if (Array.isArray(tags)) {
-        const envTag = tags.find((t) => t[0] === "environment");
-        if (envTag?.[1]) environment = envTag[1];
-      } else if (tags && typeof tags === "object" && tags.environment) {
-        environment = String(tags.environment);
-      }
-      // Engine triggers new_issue only when environment === "prod"
-      if (environment.toLowerCase() === "production") environment = "prod";
-      const proj = data?.project as Record<string, unknown> | string | number | undefined;
-      const projectSlug = typeof proj === "object" && proj?.slug ? String(proj.slug) : typeof ev.project === "string" ? ev.project : "api";
-      const service = projectSlug || "api";
-
-      const event: IncidentEventInput = {
-        source: "sentry",
-        service,
-        environment,
-        timestamp,
-        severity,
-        exception_type: String(first?.type ?? (ev.metadata as Record<string, unknown>)?.type ?? "Error"),
-        message: String(first?.value ?? ev.title ?? (ev.metadata as Record<string, unknown>)?.value ?? "Unknown error"),
-        stacktrace,
-        links: ev.web_url ? { source_url: ev.web_url as string } : undefined,
-      };
-      ingestIncidentEvent(event);
-      console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
-      return res.status(202).json({ accepted: true });
-    } catch (error) {
-      console.error("Sentry webhook error:", error);
-      return res.status(500).json({ error: "Failed to process Sentry webhook" });
-    }
-  });
+  // Sentry webhook is mounted in index.ts with express.raw() so signature is verified against raw body.
 
   // Deployment webhook endpoint (secured with secret token)
   app.post("/api/webhooks/deploy", async (req, res) => {

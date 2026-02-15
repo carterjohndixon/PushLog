@@ -11,11 +11,12 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
-import { registerRoutes, slackCommandsHandler, githubWebhookHandler } from "./routes";
+import { registerRoutes, slackCommandsHandler, githubWebhookHandler, sentryWebhookHandler } from "./routes";
 import { verifyWebhookSignature } from "./github";
 import { ensureIncidentEngineStarted, stopIncidentEngine } from "./incidentEngine";
 import pkg from 'pg';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 const { Pool } = pkg;
 
@@ -280,6 +281,43 @@ app.post(
     next();
   },
   githubWebhookHandler
+);
+
+// Sentry webhook: must receive raw body for signature verification (Sentry signs the raw body)
+app.post(
+  "/api/webhooks/sentry",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const raw = req.body;
+    if (!raw || !Buffer.isBuffer(raw)) {
+      res.status(400).json({ error: "Invalid body" });
+      return;
+    }
+    const configuredSecret = process.env.SENTRY_WEBHOOK_SECRET?.trim();
+    if (configuredSecret) {
+      const sig = (req.headers["sentry-hook-signature"] as string)?.trim();
+      if (!sig) {
+        console.log("[webhooks/sentry] 401 Missing Sentry-Hook-Signature");
+        res.status(401).json({ error: "Missing Sentry-Hook-Signature" });
+        return;
+      }
+      const computed = crypto.createHmac("sha256", configuredSecret).update(raw).digest("hex");
+      const expected = sig.startsWith("sha256=") ? "sha256=" + computed : computed;
+      if (sig !== expected) {
+        console.log("[webhooks/sentry] 401 Invalid signature (verify SENTRY_WEBHOOK_SECRET matches Sentry integration)");
+        res.status(401).json({ error: "Invalid signature" });
+        return;
+      }
+    }
+    try {
+      (req as any).body = JSON.parse(raw.toString("utf8"));
+    } catch {
+      res.status(400).json({ error: "Invalid JSON" });
+      return;
+    }
+    next();
+  },
+  sentryWebhookHandler
 );
 
 // Body parsing with security limits
