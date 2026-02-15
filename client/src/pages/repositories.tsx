@@ -598,7 +598,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                 variant="ghost"
                 onClick={() => handleDeleteRepository(repository)}
                 disabled={deleteRepositoryMutation.isPending}
-                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-muted dark:hover:text-foreground"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 <Trash2 className="w-4 h-4" />
               </Button>

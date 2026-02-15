@@ -27,28 +27,45 @@ if [ ! -d "$APP_DIR" ]; then
   exit 1
 fi
 
-cd "$APP_DIR"
+cd "$APP_DIR" || { log "ERROR: Cannot cd to $APP_DIR"; exit 1; }
+ACTUAL_PWD="$(pwd)"
 log "Starting production promotion..."
+log "Working directory: $ACTUAL_PWD (APP_DIR=$APP_DIR)"
 log "Triggered by: ${PROMOTED_BY:-unknown}"
+log "Target SHA: ${PROMOTED_SHA:-<not specified, will use current HEAD>}"
 
-# ── Stage: Checkout target SHA (fast-forward or rollback) ──
-if [ -n "${PROMOTED_SHA:-}" ] && [ -d .git ]; then
-  CURRENT="$(git rev-parse HEAD 2>/dev/null || true)"
-  if [ "$CURRENT" != "$PROMOTED_SHA" ]; then
-    log "Checking out target SHA: ${PROMOTED_SHA:0:10}..."
-    if git fetch origin 2>/dev/null; then
-      if git checkout "$PROMOTED_SHA" 2>/dev/null; then
-        log "Checked out ${PROMOTED_SHA:0:10}."
-      else
-        log "ERROR: Failed to checkout $PROMOTED_SHA. Aborting."
+# ── Stage: Fetch latest and checkout target SHA ──
+if [ -d .git ]; then
+  log "Fetching from origin..."
+  if ! git fetch origin >> "$LOG_FILE" 2>&1; then
+    log "Warning: git fetch failed (check deploy-production.log). Continuing with existing refs."
+  fi
+
+  if [ -n "${PROMOTED_SHA:-}" ]; then
+    # Normalize to full SHA for comparison
+    TARGET_FULL="$(git rev-parse "$PROMOTED_SHA" 2>/dev/null || true)"
+    if [ -z "$TARGET_FULL" ]; then
+      log "ERROR: Commit $PROMOTED_SHA not found locally. Try: git fetch origin main"
+      exit 1
+    fi
+    CURRENT="$(git rev-parse HEAD 2>/dev/null || true)"
+    if [ "$CURRENT" != "$TARGET_FULL" ]; then
+      log "Checking out target SHA: ${TARGET_FULL:0:10} (from $PROMOTED_SHA)..."
+      if ! git checkout "$TARGET_FULL" >> "$LOG_FILE" 2>&1; then
+        log "ERROR: Failed to checkout $TARGET_FULL. Aborting."
         exit 1
       fi
+      log "Checked out ${TARGET_FULL:0:10}."
     else
-      log "Warning: git fetch failed, trying checkout of local ref..."
-      if ! git checkout "$PROMOTED_SHA" 2>/dev/null; then
-        log "ERROR: Failed to checkout $PROMOTED_SHA. Aborting."
-        exit 1
-      fi
+      log "Already at target SHA ${TARGET_FULL:0:10}."
+    fi
+  else
+    # No target SHA passed: pull latest main so we don't deploy stale code
+    log "No target SHA specified; pulling latest from origin/main..."
+    if git checkout main >> "$LOG_FILE" 2>&1 && git pull origin main >> "$LOG_FILE" 2>&1; then
+      log "Updated to latest main."
+    else
+      log "Warning: could not pull main. Building from current HEAD."
     fi
   fi
 fi
@@ -105,6 +122,9 @@ npm run build:production
 DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
 if [ -z "$DEPLOYED_SHA" ] && [ -n "${PROMOTED_SHA:-}" ]; then
   DEPLOYED_SHA="$PROMOTED_SHA"
+fi
+if [ -n "$DEPLOYED_SHA" ]; then
+  log "Deployed SHA will be: ${DEPLOYED_SHA:0:10}"
 fi
 if [ -z "$DEPLOYED_SHA" ]; then
   DEPLOYED_SHA="unknown"

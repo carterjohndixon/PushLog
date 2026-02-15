@@ -344,7 +344,14 @@ export default function AdminPage() {
                           </span>
                           <p className="font-medium">
                             {data.promoteRemoteStatus?.lock?.isRollback ? "Rollback" : "Deployment"} in progress
-                            {remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
+                            {data.promoteRemoteStatus?.lock?.targetSha
+                              ? (() => {
+                                  const c = data.recentCommits.find((x) => x.sha === data.promoteRemoteStatus?.lock?.targetSha);
+                                  const commitLabel = c ? `${c.shortSha}: ${c.subject}` : data.promoteRemoteStatus.lock.targetSha.slice(0, 12);
+                                  const step = remoteStatusAvailable ? getProgressStep() : "";
+                                  return ` — ${commitLabel}${step ? ` (${step})` : ""}`;
+                                })()
+                              : remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
                           </p>
                         </>
                       ) : (
