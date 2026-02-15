@@ -612,7 +612,6 @@ export default function Settings() {
                 <Switch
                   id="dev-mode"
                   checked={devMode}
-                  disabled={updateDevModeMutation.isPending}
                   onCheckedChange={(checked) => updateDevModeMutation.mutate(checked)}
                 />
               </div>

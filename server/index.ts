@@ -288,6 +288,7 @@ app.post(
   "/api/webhooks/sentry",
   express.raw({ type: "application/json", limit: "1mb" }),
   (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.log("[webhooks/sentry] POST received");
     const raw = req.body;
     if (!raw || !Buffer.isBuffer(raw)) {
       res.status(400).json({ error: "Invalid body" });
