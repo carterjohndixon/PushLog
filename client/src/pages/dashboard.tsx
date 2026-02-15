@@ -621,7 +621,12 @@ export default function Dashboard() {
         {userProfile && !userProfile.emailVerified && <EmailVerificationBanner />}
         
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+            <Badge className="bg-green-600 hover:bg-green-600 text-white shrink-0">
+              Latest
+            </Badge>
+          </div>
           <p className="text-muted-foreground mt-2">Manage your integrations and monitor repository activity</p>
         </div>
 
