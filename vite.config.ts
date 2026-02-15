@@ -27,7 +27,12 @@ export default defineConfig({
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes("node_modules")) return "vendor";
+            if (!id.includes("node_modules")) return;
+            // Split large deps so no chunk exceeds chunkSizeWarningLimit
+            if (id.includes("recharts")) return "vendor-recharts";
+            if (id.includes("@tanstack")) return "vendor-tanstack";
+            if (id.includes("react-dom") || id.includes("react/") || id.includes("scheduler")) return "vendor-react";
+            return "vendor";
           },
           chunkFileNames: "js/[name]-[hash].js",
           entryFileNames: "js/[name]-[hash].js",

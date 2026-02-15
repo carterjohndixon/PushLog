@@ -355,9 +355,44 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
     const data = body?.data as Record<string, unknown> | undefined;
     const ev = data?.event as Record<string, unknown> | undefined;
     const issue = data?.issue as Record<string, unknown> | undefined;
+
+    // Sentry "Send test notification" often sends a minimal payload with no data.event and no data.issue.
+    // Accept it and create a visible test notification so the user sees something on both prod and staging.
     if (!ev && !issue) {
-      console.log("[webhooks/sentry] 400 Missing data.event and data.issue");
-      res.status(400).json({ error: "Missing data.event and data.issue" });
+      const action = String(body?.action ?? "test").trim() || "test";
+      console.log("[webhooks/sentry] Test/minimal payload (no event/issue), sending test notification");
+      const allUserIds = await storage.getAllUserIds();
+      const targetUsers = new Set<string>(allUserIds);
+      const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
+      const directTitle = "Sentry test notification";
+      const directMessage = `Webhook received (action: ${action}). If you see this, the Sentry → PushLog integration is working. [${appEnv}]`;
+
+      await Promise.all(
+        Array.from(targetUsers).map(async (userId) => {
+          try {
+            const notif = await storage.createNotification({
+              userId,
+              type: "incident_alert",
+              title: directTitle,
+              message: directMessage,
+              metadata: JSON.stringify({ source: "sentry_test", action, appEnv }),
+            });
+            broadcastNotification(userId, {
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              metadata: notif.metadata,
+              createdAt: notif.createdAt,
+              isRead: false,
+            });
+          } catch (err) {
+            console.warn("[webhooks/sentry] failed test notify:", err);
+          }
+        })
+      );
+      console.log(`[webhooks/sentry] Test notification sent to ${targetUsers.size} users`);
+      res.status(202).json({ accepted: true });
       return;
     }
 
@@ -434,56 +469,49 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
     ingestIncidentEvent(event);
     console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
 
-    // Sentry "Send Test Notification" is often issue-level (no data.event). Emit a direct
-    // notification so users still see in-app toast + browser notification path immediately.
-    if (!ev) {
-      const targetUsers = new Set<string>();
-      const configured = (process.env.INCIDENT_NOTIFY_USER_IDS || "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      for (const id of configured) targetUsers.add(id);
-      if (targetUsers.size === 0) {
-        const allUserIds = await storage.getAllUserIds();
-        for (const id of allUserIds) targetUsers.add(id);
-      }
+    // Always send a direct notification so the user sees the alert immediately. The incident-engine
+    // may also emit a summary later (spike/new_issue); without this, event-level payloads would
+    // show nothing until/unless the engine decides to emit. Notify all users.
+    const allUserIds = await storage.getAllUserIds();
+    const targetUsers = new Set<string>(allUserIds);
 
-      const directTitle = `Sentry alert: ${event.exception_type} in ${service}/${environment}`;
-      const directMessage = `${String(body?.action || "Alert")} from Sentry (priority webhook event)`;
-      const directMeta = JSON.stringify({
-        source: "sentry_issue_alert",
-        service,
-        environment,
-        severity,
-        links: event.links || {},
-      });
+    const directTitle = `Sentry: ${event.exception_type} in ${service}/${environment}`;
+    const directMessage = ev
+      ? `${event.message} (${severity})`
+      : `${String(body?.action || "Alert")} from Sentry`;
+    const directMeta = JSON.stringify({
+      source: ev ? "sentry_event_alert" : "sentry_issue_alert",
+      service,
+      environment,
+      severity,
+      links: event.links || {},
+    });
 
-      await Promise.all(
-        Array.from(targetUsers).map(async (userId) => {
-          try {
-            const notif = await storage.createNotification({
-              userId,
-              type: "incident_alert",
-              title: directTitle,
-              message: directMessage,
-              metadata: directMeta,
-            });
-            broadcastNotification(userId, {
-              id: notif.id,
-              type: notif.type,
-              title: notif.title,
-              message: notif.message,
-              metadata: notif.metadata,
-              createdAt: notif.createdAt,
-              isRead: false,
-            });
-          } catch (err) {
-            console.warn("[webhooks/sentry] failed direct notify:", err);
-          }
-        })
-      );
-      console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users (issue-level payload)`);
-    }
+    await Promise.all(
+      Array.from(targetUsers).map(async (userId) => {
+        try {
+          const notif = await storage.createNotification({
+            userId,
+            type: "incident_alert",
+            title: directTitle,
+            message: directMessage,
+            metadata: directMeta,
+          });
+          broadcastNotification(userId, {
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            metadata: notif.metadata,
+            createdAt: notif.createdAt,
+            isRead: false,
+          });
+        } catch (err) {
+          console.warn("[webhooks/sentry] failed direct notify:", err);
+        }
+      })
+    );
+    console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users`);
 
     res.status(202).json({ accepted: true });
   } catch (error) {
