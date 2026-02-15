@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,7 @@ export default function AdminPage() {
   const [logsOpen, setLogsOpen] = useState(true);
   const prevRemoteSha = useRef<string | null>(null);
 
-  const { data, isLoading, error } = useQuery<AdminStatus>({
+  const { data: rawData, isLoading, error } = useQuery<AdminStatus>({
     queryKey: ["/api/admin/staging/status"],
     queryFn: async () => {
       const res = await fetch(`/api/admin/staging/status?t=${Date.now()}`, {
@@ -69,6 +70,7 @@ export default function AdminPage() {
       }
       return res.json();
     },
+    placeholderData: keepPreviousData,
     refetchInterval: (query) => {
       const current = query.state.data;
       const remoteRunning = current?.promoteRemoteStatus?.inProgress;
@@ -76,6 +78,22 @@ export default function AdminPage() {
       return remoteRunning || localRunning ? 3000 : 10000;
     },
   });
+
+  // Hold onto last good promoteRemoteStatus when production status fetch intermittently fails
+  const lastGoodRemoteRef = useRef<RemoteStatus | null>(null);
+  if (rawData?.promoteRemoteStatus && !rawData.promoteRemoteStatus.error) {
+    lastGoodRemoteRef.current = rawData.promoteRemoteStatus;
+  }
+  const data = useMemo((): AdminStatus | undefined => {
+    if (!rawData) return undefined;
+    const remote = rawData.promoteRemoteStatus;
+    const hasError = remote?.error;
+    const fallback = lastGoodRemoteRef.current;
+    if (hasError && fallback) {
+      return { ...rawData, promoteRemoteStatus: fallback };
+    }
+    return rawData;
+  }, [rawData]);
 
   useEffect(() => {
     if (!localPromoteAt || !data) return;
