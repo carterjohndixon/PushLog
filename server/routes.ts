@@ -3914,10 +3914,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
+      console.warn("[trigger-error] 404 — ENABLE_TEST_ROUTES not set and not development");
       return res.status(404).json({ error: "Not found" });
     }
     const err = new Error("[PushLog test] Intentional incident: trigger-error — used to verify Sentry → webhook → incident alerts");
     Sentry.captureException(err);
+    console.warn("[trigger-error] 200 — test error sent to Sentry");
     res.status(200).json({
       ok: true,
       message: "Test error reported to Sentry. If your alert rule and webhook are set up, a new issue and incident should appear shortly.",
