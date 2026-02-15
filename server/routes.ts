@@ -655,6 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Use nohup setsid to launch the script in a completely new session so it's
       // NOT a descendant of this worker and survives PM2 restart.
       const promotedBy = String(req.body?.promotedBy || "staging-admin");
+      const promotedSha = String(req.body?.headSha || "").trim();
       const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
       exec(cmd, {
         cwd: appDir,
@@ -662,6 +663,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...process.env,
           APP_DIR: appDir,
           PROMOTED_BY: promotedBy,
+          PROMOTED_SHA: promotedSha,
           PROMOTE_LOCK_FILE: lockFile,
         },
       });
@@ -981,6 +983,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!admin.ok) return;
 
       const promotedBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
+      const headSha = req.body?.headSha?.trim() || "";
 
       // Preferred in Docker staging: proxy to production webhook that runs host-side script.
       if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
@@ -990,7 +993,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             "Content-Type": "application/json",
             "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
           },
-          body: JSON.stringify({ promotedBy }),
+          body: JSON.stringify({ promotedBy, headSha: headSha || undefined }),
         });
 
         const body = await response.json().catch(() => ({}));
@@ -1015,11 +1018,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       fs.writeFileSync(lockFile, JSON.stringify({ startedAt: new Date().toISOString(), by: promotedBy }, null, 2));
 
-      // PM2 treekill kills ALL descendants. Use nohup setsid to fully escape the process tree.
+      const promotedSha = String(req.body?.headSha || "").trim();
       const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
       exec(cmd, {
         cwd: appDir,
-        env: { ...process.env, APP_DIR: appDir, PROMOTED_BY: promotedBy, PROMOTE_LOCK_FILE: lockFile },
+        env: {
+          ...process.env,
+          APP_DIR: appDir,
+          PROMOTED_BY: promotedBy,
+          PROMOTED_SHA: promotedSha,
+          PROMOTE_LOCK_FILE: lockFile,
+        },
       });
 
       return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });

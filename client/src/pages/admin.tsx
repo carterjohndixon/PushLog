@@ -102,11 +102,12 @@ export default function AdminPage() {
 
   // ── Promote mutation ──
   const promoteMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (headSha?: string) => {
       const res = await fetch("/api/admin/staging/promote", {
         method: "POST",
         credentials: "include",
-        headers: { Accept: "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ headSha: headSha || undefined }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -259,7 +260,7 @@ export default function AdminPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Button
-                    onClick={() => promoteMutation.mutate()}
+                    onClick={() => promoteMutation.mutate(data?.headSha)}
                     disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
                   >
                     {isPromotionRunning || promoteMutation.isPending

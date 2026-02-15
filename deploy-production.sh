@@ -105,7 +105,14 @@ else
 fi
 
 # Metadata writes should not fail the whole deployment.
-DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "unknown")"
+# Use git if available; otherwise fall back to PROMOTED_SHA from staging (passed via webhook)
+DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "")"
+if [ -z "$DEPLOYED_SHA" ] && [ -n "${PROMOTED_SHA:-}" ]; then
+  DEPLOYED_SHA="$PROMOTED_SHA"
+fi
+if [ -z "$DEPLOYED_SHA" ]; then
+  DEPLOYED_SHA="unknown"
+fi
 DEPLOYED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 echo "$DEPLOYED_SHA" > "${APP_DIR}/.prod_deployed_sha" || true
