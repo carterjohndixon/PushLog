@@ -15,6 +15,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, ArrowUp, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -65,6 +71,7 @@ export default function AdminPage() {
   const [forceInProgress, setForceInProgress] = useState(false);
   const [logsOpen, setLogsOpen] = useState(true);
   const [deployTarget, setDeployTarget] = useState<CommitInfo | null>(null);
+  const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
   const prevRemoteSha = useRef<string | null>(null);
 
   const { data: rawData, isLoading, error } = useQuery<AdminStatus>({
@@ -134,12 +141,12 @@ export default function AdminPage() {
 
   // ── Promote mutation ──
   const promoteMutation = useMutation({
-    mutationFn: async (headSha?: string) => {
+    mutationFn: async (args: { sha: string; isRollback?: boolean }) => {
       const res = await fetch("/api/admin/staging/promote", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ headSha: headSha || undefined }),
+        body: JSON.stringify({ headSha: args.sha, isRollback: args.isRollback ?? false }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -295,7 +302,7 @@ export default function AdminPage() {
               <CardContent>
                 <div className="flex items-center gap-3">
                   <Button
-                    onClick={() => promoteMutation.mutate(data?.headSha)}
+                    onClick={() => promoteMutation.mutate({ sha: data?.headSha ?? "", isRollback: false })}
                     disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
                   >
                     {isPromotionRunning || promoteMutation.isPending
@@ -334,7 +341,7 @@ export default function AdminPage() {
                             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" />
                           </span>
                           <p className="font-medium">
-                            Production promotion is running
+                            {data.promoteRemoteStatus?.lock?.isRollback ? "Rollback" : "Deployment"} in progress
                             {remoteStatusAvailable ? ` — ${getProgressStep()}` : "..."}
                           </p>
                         </>
@@ -347,6 +354,18 @@ export default function AdminPage() {
                         </>
                       )}
                     </div>
+
+                    {isPromotionRunning && data.promoteRemoteStatus?.lock?.targetSha && (
+                      <div className="rounded border border-border bg-background/50 px-3 py-2">
+                        <p className="text-xs text-muted-foreground mb-0.5">Deploying commit</p>
+                        <p className="font-mono text-xs font-medium">
+                          {(() => {
+                            const c = data.recentCommits.find((x) => x.sha === data.promoteRemoteStatus?.lock?.targetSha);
+                            return c ? `${c.shortSha} — ${c.subject}` : data.promoteRemoteStatus.lock.targetSha.slice(0, 12);
+                          })()}
+                        </p>
+                      </div>
+                    )}
 
                     {data.promoteRemoteStatus?.lock?.startedAt && (
                       <p className="text-muted-foreground">
@@ -424,17 +443,18 @@ export default function AdminPage() {
 
                             {/* Commit content */}
                             <div
-                              className={`flex-1 rounded border p-3 text-sm ${
+                              className={`flex-1 rounded border p-3 text-sm cursor-pointer transition-colors hover:bg-muted/30 ${
                                 isDeployed
                                   ? "border-green-500/40 bg-green-500/5"
                                   : isPending
                                     ? "border-amber-500/40 bg-amber-500/5"
                                     : "border-border bg-transparent opacity-60"
                               }`}
+                              onClick={() => setSelectedCommit(c)}
                             >
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-medium flex-1 min-w-0">{c.subject}</p>
-                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                                   {isHead && (
                                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">HEAD</Badge>
                                   )}
@@ -503,7 +523,7 @@ export default function AdminPage() {
             <AlertDialogAction
               onClick={() => {
                 if (deployTarget) {
-                  promoteMutation.mutate(deployTarget.sha);
+                  promoteMutation.mutate({ sha: deployTarget.sha, isRollback: commitStatus(deployTarget) === "old" });
                   setDeployTarget(null);
                 }
               }}
@@ -513,6 +533,69 @@ export default function AdminPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Commit detail dialog */}
+      <Dialog open={!!selectedCommit} onOpenChange={(open) => !open && setSelectedCommit(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Commit details</DialogTitle>
+          </DialogHeader>
+          {selectedCommit && (
+            <div className="space-y-4 text-sm">
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Full SHA</p>
+                <code className="block break-all bg-muted px-2 py-1.5 rounded text-xs">{selectedCommit.sha}</code>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Subject</p>
+                <p className="font-medium">{selectedCommit.subject}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Author</p>
+                <p>{selectedCommit.author}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Date</p>
+                <p>{new Date(selectedCommit.dateIso).toLocaleString()}</p>
+              </div>
+              <div className="pt-2">
+                <p className="text-muted-foreground text-xs mb-1">Status</p>
+                <Badge
+                  variant={commitStatus(selectedCommit) === "deployed" ? "default" : commitStatus(selectedCommit) === "pending" ? "secondary" : "outline"}
+                  className={
+                    commitStatus(selectedCommit) === "deployed"
+                      ? "bg-green-600 hover:bg-green-600"
+                      : commitStatus(selectedCommit) === "pending"
+                        ? "bg-amber-600 hover:bg-amber-600"
+                        : ""
+                  }
+                >
+                  {commitStatus(selectedCommit) === "deployed" ? "DEPLOYED" : commitStatus(selectedCommit) === "pending" ? "PENDING" : "OLDER"}
+                </Badge>
+              </div>
+              {data?.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 gap-1"
+                  onClick={() => {
+                    setSelectedCommit(null);
+                    setDeployTarget(selectedCommit);
+                  }}
+                >
+                  {commitStatus(selectedCommit) === "pending" ? (
+                    <><ArrowUp className="h-3 w-3" /> Deploy this commit</>
+                  ) : commitStatus(selectedCommit) === "deployed" ? (
+                    <><RotateCcw className="h-3 w-3" /> Redeploy</>
+                  ) : (
+                    <><RotateCcw className="h-3 w-3" /> Rollback to this</>
+                  )}
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -638,6 +638,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
 
+      const targetSha = String(req.body?.headSha || "").trim();
+      const isRollback = !!req.body?.isRollback;
       fs.writeFileSync(
         lockFile,
         JSON.stringify(
@@ -645,6 +647,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             startedAt: new Date().toISOString(),
             byWebhook: true,
             by: req.body?.promotedBy || "staging-admin",
+            targetSha: targetSha || undefined,
+            isRollback: isRollback || undefined,
           },
           null,
           2
@@ -750,35 +754,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Git info: use branch ref (origin/main) so history stays correct after rollback (detached HEAD)
-      // Never use HEAD - after rollback, HEAD is the old commit.
+      // Git info: use branch ref (origin/main) so history stays correct after rollback (detached HEAD).
+      // When in detached HEAD (e.g. after rollback), always use GitHub API - never trust local git for history.
       let branch = "unknown";
       let headSha = "";
       let recentCommitsRaw = "";
       let branchRef: string | null = null;
+      let isDetachedHead = false;
       try {
         await execAsync("git fetch origin", { cwd: appDir }).catch(() => {});
         const branchOut = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir })).stdout.trim();
-        if (branchOut !== "HEAD") {
+        isDetachedHead = branchOut === "HEAD";
+        if (!isDetachedHead) {
           branch = branchOut;
         }
-        for (const ref of ["origin/main", "origin/master"]) {
-          try {
-            await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
-            branchRef = ref;
-            if (branch === "unknown") branch = ref.replace("origin/", "");
-            break;
-          } catch {
-            continue;
+        if (!isDetachedHead) {
+          for (const ref of ["origin/main", "origin/master", "main"]) {
+            try {
+              await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
+              branchRef = ref;
+              if (branch === "unknown") branch = ref.replace("origin/", "");
+              break;
+            } catch {
+              continue;
+            }
           }
-        }
-        if (branchRef) {
-          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
-            execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
-            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 30`, { cwd: appDir }),
-          ]);
-          headSha = headOut.trim();
-          recentCommitsRaw = recentLogOut;
+          if (branchRef) {
+            const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+              execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
+              execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 30`, { cwd: appDir }),
+            ]);
+            headSha = headOut.trim();
+            recentCommitsRaw = recentLogOut;
+          }
         }
       } catch {}
 
@@ -794,8 +802,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
         });
 
-      // Fallback for environments where git metadata is unavailable.
-      if (recentCommits.length === 0) {
+      // When detached (rollback) or no git history: use GitHub API for canonical branch history
+      if (isDetachedHead || recentCommits.length === 0) {
         recentCommits = await fetchRecentCommitsFromGitHub(30);
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
         if (branch === "unknown" && recentCommits.length > 0) branch = "main";
@@ -864,29 +872,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let headSha = "";
       let recentOut = "";
       let branchRef: string | null = null;
+      let isDetachedHead = false;
       try {
         await execAsync("git fetch origin", { cwd: appDir }).catch(() => {});
         const branchOut = (await execAsync("git rev-parse --abbrev-ref HEAD", { cwd: appDir })).stdout.trim();
-        if (branchOut !== "HEAD") {
+        isDetachedHead = branchOut === "HEAD";
+        if (!isDetachedHead) {
           branch = branchOut;
         }
-        for (const ref of ["origin/main", "origin/master"]) {
-          try {
-            await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
-            branchRef = ref;
-            if (branch === "unknown") branch = ref.replace("origin/", "");
-            break;
-          } catch {
-            continue;
+        if (!isDetachedHead) {
+          for (const ref of ["origin/main", "origin/master", "main"]) {
+            try {
+              await execAsync(`git rev-parse ${ref}`, { cwd: appDir });
+              branchRef = ref;
+              if (branch === "unknown") branch = ref.replace("origin/", "");
+              break;
+            } catch {
+              continue;
+            }
           }
-        }
-        if (branchRef) {
-          const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
-            execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
-            execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 20`, { cwd: appDir }),
-          ]);
-          headSha = headOut.trim();
-          recentOut = recentLogOut;
+          if (branchRef) {
+            const [{ stdout: headOut }, { stdout: recentLogOut }] = await Promise.all([
+              execAsync(`git rev-parse ${branchRef}`, { cwd: appDir }),
+              execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${branchRef} -n 20`, { cwd: appDir }),
+            ]);
+            headSha = headOut.trim();
+            recentOut = recentLogOut;
+          }
         }
       } catch {
         // Running in a container/dir without git metadata; keep admin page usable.
@@ -894,7 +906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prodDeployedSha = fs.existsSync(prodShaFile) ? fs.readFileSync(prodShaFile, "utf8").trim() : null;
       const prodDeployedAt = fs.existsSync(prodAtFile) ? fs.readFileSync(prodAtFile, "utf8").trim() : null;
 
-      const recentCommits = recentOut
+      let recentCommits = recentOut
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean)
@@ -902,6 +914,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
           return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
         });
+
+      if (isDetachedHead || recentCommits.length === 0) {
+        recentCommits = await fetchRecentCommitsFromGitHub(30);
+        if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
+        if (branch === "unknown" && recentCommits.length > 0) branch = "main";
+      }
 
       let pendingCount = 0;
       let pendingCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> = [];
@@ -1017,6 +1035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const promotedBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
       const headSha = req.body?.headSha?.trim() || "";
+      const isRollback = !!req.body?.isRollback;
 
       // Preferred in Docker staging: proxy to production webhook that runs host-side script.
       if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
@@ -1026,7 +1045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             "Content-Type": "application/json",
             "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
           },
-          body: JSON.stringify({ promotedBy, headSha: headSha || undefined }),
+          body: JSON.stringify({ promotedBy, headSha: headSha || undefined, isRollback }),
         });
 
         const body = await response.json().catch(() => ({}));
@@ -1049,9 +1068,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (fs.existsSync(lockFile)) {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
-      fs.writeFileSync(lockFile, JSON.stringify({ startedAt: new Date().toISOString(), by: promotedBy }, null, 2));
-
       const promotedSha = String(req.body?.headSha || "").trim();
+      fs.writeFileSync(
+        lockFile,
+        JSON.stringify(
+          { startedAt: new Date().toISOString(), by: promotedBy, targetSha: promotedSha || undefined, isRollback },
+          null,
+          2
+        )
+      );
       const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
       exec(cmd, {
         cwd: appDir,
