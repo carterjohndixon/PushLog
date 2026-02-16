@@ -44,6 +44,7 @@ import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook"
 import {
   ingestIncidentEvent,
   onIncidentSummary,
+  getIncidentEngineStatus,
   type IncidentEventInput,
   type IncidentSummaryOutput,
 } from "./incidentEngine";
@@ -359,7 +360,30 @@ async function getIncidentNotificationTargets(isTestNotification: boolean = fals
     return configuredIds;
   }
 
-  // 2. For test notifications, only notify users with active repositories/integrations
+  // 2. For test notifications in staging: only notify staging admins (from STAGING_ADMIN_EMAILS/USERNAMES)
+  if (isTestNotification && APP_ENV === "staging" && process.env.SENTRY_TEST_NOTIFY_ALL !== "true") {
+    const allUsers = await storage.getAllUserIds();
+    const stagingAdmins: string[] = [];
+
+    for (const userId of allUsers) {
+      const user = await storage.getUser(userId);
+      if (!user) continue;
+
+      const email = String(user.email || "").toLowerCase();
+      const username = String(user.username || "").toLowerCase();
+      const isAdmin = (email && STAGING_ADMIN_EMAILS.includes(email)) ||
+                      (username && STAGING_ADMIN_USERNAMES.includes(username));
+
+      if (isAdmin) {
+        stagingAdmins.push(userId);
+      }
+    }
+
+    console.log(`[incident-notify] Staging test mode: notifying ${stagingAdmins.length} admin(s) only`);
+    return stagingAdmins;
+  }
+
+  // 3. For test notifications in production, notify users with active repositories
   if (isTestNotification && process.env.SENTRY_TEST_NOTIFY_ALL !== "true") {
     const allUsers = await storage.getAllUserIds();
     const usersWithRepos: string[] = [];
@@ -375,7 +399,7 @@ async function getIncidentNotificationTargets(isTestNotification: boolean = fals
     return usersWithRepos;
   }
 
-  // 3. For production incidents, notify all users (monitoring tool behavior)
+  // 4. For production incidents, notify all users (monitoring tool behavior)
   // This is correct: incidents are service-wide alerts, not repo-specific
   const allUserIds = await storage.getAllUserIds();
   return allUserIds;
@@ -1363,7 +1387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Check database connection
       const dbCheck = await databaseStorage.getDatabaseHealth();
-      
+
       // Check external services
       const services = {
         database: dbCheck,
@@ -1373,7 +1397,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const isHealthy = dbCheck === "healthy";
-      
+
       res.status(isHealthy ? 200 : 503).json({
         status: isHealthy ? "healthy" : "unhealthy",
         timestamp: new Date().toISOString(),
@@ -1385,6 +1409,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Incident engine health check (useful for monitoring and debugging)
+  app.get("/api/health/incident-engine", (req, res) => {
+    try {
+      const status = getIncidentEngineStatus();
+      const queueUtilization = (status.queuedEvents / status.maxQueueSize * 100).toFixed(1);
+      const isHealthy = status.running && status.queuedEvents < status.maxQueueSize * 0.9; // Warn if queue >90% full
+
+      res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? "healthy" : "degraded",
+        timestamp: new Date().toISOString(),
+        engine: {
+          running: status.running,
+          queuedEvents: status.queuedEvents,
+          queueCapacity: status.maxQueueSize,
+          queueUtilization: `${queueUtilization}%`,
+        },
+        message: !status.running
+          ? "Incident engine is not running"
+          : status.queuedEvents >= status.maxQueueSize * 0.9
+          ? "Queue utilization is high - incident engine may be struggling"
+          : "Incident engine is healthy"
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: "unhealthy",
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : "Failed to check incident engine status"
       });
     }
   });

@@ -30,10 +30,8 @@ export default defineConfig({
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
-            // Split large deps so no chunk exceeds chunkSizeWarningLimit.
-            // Keep React in vendor (don't split) to avoid "Cannot set properties of undefined (setting 'Children')" on staging.
-            // Note: React dedupe (see resolve.dedupe above) fixed the staging error. If vendor.js exceeds 800KB,
-            // consider re-enabling React split: if (id.includes("react-dom") || id.includes("scheduler")) return "vendor-react";
+            // Do NOT split React into vendor-react. Keep react/react-dom/scheduler in "vendor"
+            // so there is exactly one React instance. Otherwise: "Cannot set properties of undefined (setting 'Children')".
             if (id.includes("recharts")) return "vendor-recharts";
             if (id.includes("@tanstack")) return "vendor-tanstack";
             return "vendor";
