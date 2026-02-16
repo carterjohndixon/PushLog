@@ -16,6 +16,8 @@ export default defineConfig({
         "@shared": path.resolve(__dirname, "shared"),
         "@assets": path.resolve(__dirname, "attached_assets"),
       },
+      // Single React instance for app and all deps (avoids "Cannot set properties of undefined (setting 'Children')")
+      dedupe: ["react", "react-dom", "react/jsx-runtime", "scheduler"],
     },
     root: path.resolve(__dirname, "client"),
     build: {
@@ -28,10 +30,12 @@ export default defineConfig({
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
-            // Split large deps so no chunk exceeds chunkSizeWarningLimit
+            // Split large deps so no chunk exceeds chunkSizeWarningLimit.
+            // Keep React in vendor (don't split) to avoid "Cannot set properties of undefined (setting 'Children')" on staging.
+            // Note: React dedupe (see resolve.dedupe above) fixed the staging error. If vendor.js exceeds 800KB,
+            // consider re-enabling React split: if (id.includes("react-dom") || id.includes("scheduler")) return "vendor-react";
             if (id.includes("recharts")) return "vendor-recharts";
             if (id.includes("@tanstack")) return "vendor-tanstack";
-            if (id.includes("react-dom") || id.includes("react/") || id.includes("scheduler")) return "vendor-react";
             return "vendor";
           },
           chunkFileNames: "js/[name]-[hash].js",

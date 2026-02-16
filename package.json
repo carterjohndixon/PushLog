@@ -11,6 +11,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "start:dev": "NODE_ENV=development tsx server/index.ts",
     "check": "tsc",
+    "check:bundle-size": "npm run build && ls -lh dist/public/js/*.js | awk '{print $5, $9}' && echo '\nVendor chunk should be under 800KB'",
     "db:backup": "node scripts/backup-db.js",
     "db:push": "drizzle-kit push",
     "health": "curl -f http://localhost:5001/health || exit 1",

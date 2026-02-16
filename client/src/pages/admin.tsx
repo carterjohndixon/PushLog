@@ -332,7 +332,7 @@ export default function AdminPage() {
                             return res.json();
                           },
                         });
-                        const sha = fresh?.headSha ?? fresh?.recentCommits?.[0]?.sha ?? data?.headSha ?? "";
+                        const sha = fresh?.headSha ?? fresh?.recentCommits?.[0]?.sha ?? data?.headSha ?? ""
                         if (!sha) {
                           toast({ title: "Cannot deploy", description: "No branch tip available. Refresh the page.", variant: "destructive" });
                           return;

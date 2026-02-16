@@ -135,9 +135,22 @@ echo "$DEPLOYED_AT" > "${APP_DIR}/.prod_deployed_at" || true
 
 log "Restarting production PM2 app..."
 
+# Find PM2 binary (handles different installation locations: global, nvm, etc.)
+PM2_BIN="$(command -v pm2 || echo /usr/bin/pm2)"
+if [ ! -x "$PM2_BIN" ] && [ -f "/usr/local/bin/pm2" ]; then
+  PM2_BIN="/usr/local/bin/pm2"
+fi
+
+if [ ! -x "$PM2_BIN" ]; then
+  log "ERROR: pm2 binary not found. Install with: npm install -g pm2"
+  exit 1
+fi
+
+log "Using PM2: $PM2_BIN"
+
 # PM2 restart can hang when called from a child of the process being restarted.
 # Fire-and-forget: background the restart, sleep to let it take effect, then verify.
-nohup /usr/bin/pm2 restart pushlog-prod --update-env </dev/null >/dev/null 2>&1 &
+nohup "$PM2_BIN" restart pushlog-prod --update-env </dev/null >/dev/null 2>&1 &
 PM2_PID=$!
 
 # Wait up to 15 seconds for PM2 restart to finish
@@ -149,12 +162,12 @@ for i in $(seq 1 15); do
 done
 
 # Check if app is running
-if /usr/bin/pm2 pid pushlog-prod >/dev/null 2>&1; then
+if "$PM2_BIN" pid pushlog-prod >/dev/null 2>&1; then
   log "PM2 restart succeeded."
 else
   log "PM2 restart may have failed. Attempting fresh start..."
-  /usr/bin/pm2 delete pushlog-prod >/dev/null 2>&1 || true
-  nohup /usr/bin/pm2 start dist/index.js --name pushlog-prod -i 1 --update-env </dev/null >/dev/null 2>&1 &
+  "$PM2_BIN" delete pushlog-prod >/dev/null 2>&1 || true
+  nohup "$PM2_BIN" start dist/index.js --name pushlog-prod -i 1 --update-env </dev/null >/dev/null 2>&1 &
   sleep 5
 fi
 

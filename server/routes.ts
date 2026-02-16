@@ -347,6 +347,40 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
 }
 
 /** Sentry webhook handler. Expects req.body to be already parsed (signature verified in index with raw body). */
+/** Get user IDs that should receive incident notifications. */
+async function getIncidentNotificationTargets(isTestNotification: boolean = false): Promise<string[]> {
+  // 1. If explicit user IDs are configured, use those
+  const configuredIds = (process.env.INCIDENT_NOTIFY_USER_IDS || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (configuredIds.length > 0) {
+    return configuredIds;
+  }
+
+  // 2. For test notifications, only notify users with active repositories/integrations
+  if (isTestNotification && process.env.SENTRY_TEST_NOTIFY_ALL !== "true") {
+    const allUsers = await storage.getAllUserIds();
+    const usersWithRepos: string[] = [];
+
+    for (const userId of allUsers) {
+      const repos = await storage.getRepositoriesByUserId(userId);
+      if (repos.length > 0) {
+        usersWithRepos.push(userId);
+      }
+    }
+
+    console.log(`[incident-notify] Test mode: notifying ${usersWithRepos.length}/${allUsers.length} users (those with repos)`);
+    return usersWithRepos;
+  }
+
+  // 3. For production incidents, notify all users (monitoring tool behavior)
+  // This is correct: incidents are service-wide alerts, not repo-specific
+  const allUserIds = await storage.getAllUserIds();
+  return allUserIds;
+}
+
 export async function sentryWebhookHandler(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const bodyKeys = body ? Object.keys(body) : [];
@@ -361,8 +395,8 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
     if (!ev && !issue) {
       const action = String(body?.action ?? "test").trim() || "test";
       console.log("[webhooks/sentry] Test/minimal payload (no event/issue), sending test notification");
-      const allUserIds = await storage.getAllUserIds();
-      const targetUsers = new Set<string>(allUserIds);
+      const targetUserIds = await getIncidentNotificationTargets(true);
+      const targetUsers = new Set<string>(targetUserIds);
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
       const directTitle = "Sentry test notification";
       const directMessage = `Webhook received (action: ${action}). If you see this, the Sentry → PushLog integration is working. [${appEnv}]`;
@@ -471,9 +505,9 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
 
     // Always send a direct notification so the user sees the alert immediately. The incident-engine
     // may also emit a summary later (spike/new_issue); without this, event-level payloads would
-    // show nothing until/unless the engine decides to emit. Notify all users.
-    const allUserIds = await storage.getAllUserIds();
-    const targetUsers = new Set<string>(allUserIds);
+    // show nothing until/unless the engine decides to emit.
+    const targetUserIds = await getIncidentNotificationTargets(false);
+    const targetUsers = new Set<string>(targetUserIds);
 
     const directTitle = `Sentry: ${event.exception_type} in ${service}/${environment}`;
     const directMessage = ev
@@ -534,15 +568,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
 
     // Route incidents to one user when payload includes links.pushlog_user_id.
-    // Otherwise fan out to INCIDENT_NOTIFY_USER_IDS; if unset, notify all users.
+    // Otherwise use the incident notification targets (respects INCIDENT_NOTIFY_USER_IDS config).
     const targetUsers = new Set<string>();
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
     for (const id of getDefaultIncidentNotifyUserIds()) targetUsers.add(id);
 
     if (targetUsers.size === 0) {
-      const allUserIds = await storage.getAllUserIds();
-      for (const id of allUserIds) targetUsers.add(id);
+      const defaultTargets = await getIncidentNotificationTargets(false);
+      for (const id of defaultTargets) targetUsers.add(id);
     }
 
     if (targetUsers.size === 0) return;

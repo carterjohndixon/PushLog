@@ -95,3 +95,8 @@ MEMORY.md
 
 /shannon_res/*
 .playwright-mcp
+
+.next/
+out/
+.cache/
+.aider*

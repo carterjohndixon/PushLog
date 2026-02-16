@@ -61,6 +61,8 @@ let child: ChildProcessWithoutNullStreams | null = null;
 let started = false;
 let listeners: IncidentListener[] = [];
 let restarting = false;
+let eventQueue: IncidentEventInput[] = [];
+const MAX_QUEUE_SIZE = 100; // Prevent memory leak from unbounded queue
 
 function getBinaryPath(): string {
   if (process.env.INCIDENT_ENGINE_BIN) return process.env.INCIDENT_ENGINE_BIN;
@@ -128,6 +130,8 @@ function spawnEngine(): void {
       setTimeout(() => {
         try {
           ensureIncidentEngineStarted();
+          // Flush queue after restart
+          flushEventQueue();
         } catch (e) {
           restarting = false;
           console.warn("[incident-engine] restart failed:", e);
@@ -135,6 +139,37 @@ function spawnEngine(): void {
       }, 500);
     }
   });
+}
+
+/** Flush queued events to the engine (called after engine becomes ready). */
+function flushEventQueue(): void {
+  if (eventQueue.length === 0) return;
+
+  const flushedCount = eventQueue.length;
+  console.log(`[incident-engine] flushing ${flushedCount} queued event(s)...`);
+
+  while (eventQueue.length > 0) {
+    if (!child || child.killed || !child.stdin.writable) {
+      console.warn(`[incident-engine] engine not ready during flush, ${eventQueue.length} events remain queued`);
+      break;
+    }
+
+    const event = eventQueue.shift();
+    if (event) {
+      try {
+        child.stdin.write(`${JSON.stringify(event)}\n`);
+      } catch (err) {
+        console.warn("[incident-engine] flush write failed:", err);
+        // Re-queue at front if write failed
+        eventQueue.unshift(event);
+        break;
+      }
+    }
+  }
+
+  if (eventQueue.length === 0) {
+    console.log(`[incident-engine] successfully flushed ${flushedCount} event(s)`);
+  }
 }
 
 export function ensureIncidentEngineStarted(): void {
@@ -152,13 +187,30 @@ export function onIncidentSummary(listener: IncidentListener): () => void {
 export function ingestIncidentEvent(event: IncidentEventInput): void {
   try {
     ensureIncidentEngineStarted();
+
+    // If engine not ready, queue the event instead of dropping it
     if (!child || child.killed || !child.stdin.writable) {
-      console.warn("[incident-engine] child not writable; event dropped");
+      if (eventQueue.length >= MAX_QUEUE_SIZE) {
+        console.warn(`[incident-engine] queue full (${MAX_QUEUE_SIZE}), dropping oldest event`);
+        eventQueue.shift(); // Drop oldest to prevent unbounded growth
+      }
+      eventQueue.push(event);
+      console.warn(`[incident-engine] engine not ready, queued event (${eventQueue.length} pending)`);
       return;
     }
+
+    // Flush any queued events first (FIFO order)
+    flushEventQueue();
+
+    // Write the new event
     child.stdin.write(`${JSON.stringify(event)}\n`);
   } catch (err) {
     console.warn("[incident-engine] ingest failed:", err);
+    // On write error, queue the event for retry
+    if (eventQueue.length < MAX_QUEUE_SIZE) {
+      eventQueue.push(event);
+      console.warn(`[incident-engine] write error, queued event for retry (${eventQueue.length} pending)`);
+    }
   }
 }
 
@@ -172,5 +224,18 @@ export function stopIncidentEngine(): void {
     started = false;
     child = null;
   }
+}
+
+/** Get current engine status and queue metrics (for monitoring/debugging). */
+export function getIncidentEngineStatus(): {
+  running: boolean;
+  queuedEvents: number;
+  maxQueueSize: number;
+} {
+  return {
+    running: started && !!child && !child.killed,
+    queuedEvents: eventQueue.length,
+    maxQueueSize: MAX_QUEUE_SIZE,
+  };
 }
 
