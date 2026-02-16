@@ -1420,7 +1420,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const queueUtilization = (status.queuedEvents / status.maxQueueSize * 100).toFixed(1);
       const isHealthy = status.running && status.queuedEvents < status.maxQueueSize * 0.9; // Warn if queue >90% full
 
-      res.status(isHealthy ? 200 : 503).json({
+      const payload = {
         status: isHealthy ? "healthy" : "degraded",
         timestamp: new Date().toISOString(),
         engine: {
@@ -1434,13 +1434,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : status.queuedEvents >= status.maxQueueSize * 0.9
           ? "Queue utilization is high - incident engine may be struggling"
           : "Incident engine is healthy"
-      });
+      };
+      res.setHeader("Content-Type", "application/json");
+      res.status(isHealthy ? 200 : 503).send(JSON.stringify(payload) + "\n");
     } catch (error) {
-      res.status(503).json({
+      const payload = {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : "Failed to check incident engine status"
-      });
+      };
+      res.setHeader("Content-Type", "application/json");
+      res.status(503).send(JSON.stringify(payload) + "\n");
     }
   });
 
