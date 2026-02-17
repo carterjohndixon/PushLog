@@ -1643,7 +1643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("GitHub OAuth token exchange - redirect_uri:", redirectUriForExchange, "(from Host:", req.get("host") + ")");
         let token: string;
         try {
-          token = await exchangeCodeForToken(code, redirectUriForExchange);
+          token = await exchangeCodeForToken(code, redirectUriForExchange, req.get("host") || undefined);
           console.log("Successfully exchanged code for token");
         } catch (tokenError) {
           console.error("Failed to exchange code for token:", tokenError);

@@ -41,17 +41,32 @@ interface GitHubWebhook {
 /**
  * Exchange OAuth code for access token.
  * redirect_uri must match the callback URL used in the authorization request (required by GitHub when app has multiple callbacks or in strict mode).
+ * When requestHost is set, use host-specific credentials so production (pushlog.ai) uses the production OAuth app even if server env has staging credentials.
  */
-export async function exchangeCodeForToken(code: string, redirectUri?: string): Promise<string> {
-  // Use OAuth App credentials for user authentication
-  const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
-  const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+export async function exchangeCodeForToken(code: string, redirectUri?: string, requestHost?: string): Promise<string> {
+  const host = (requestHost || "").split(":")[0];
+  const isProductionHost = host === "pushlog.ai";
+  const isStagingHost = host === "staging.pushlog.ai";
+
+  let clientId: string;
+  let clientSecret: string | undefined;
+  if (isProductionHost) {
+    // Production OAuth app only (callback https://pushlog.ai/api/auth/user). Do not use generic env — server may have staging creds loaded.
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID_PROD || "Ov23li5UgB18JcaZHnxk";
+    clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET_PROD || process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+  } else if (isStagingHost) {
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID_STAGING || process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv";
+    clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET_STAGING || process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+  } else {
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
+    clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
+  }
 
   const effectiveRedirectUri =
     redirectUri ||
     (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined);
 
-  console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...");
+  console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...", isProductionHost ? "(production host)" : isStagingHost ? "(staging host)" : "");
   console.log("GitHub OAuth token exchange - Client Secret present:", !!clientSecret);
 
   if (!clientId || !clientSecret) {
@@ -85,7 +100,7 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string): 
   const data = await response.json();
   
   if (data.error) {
-    console.error("GitHub OAuth token exchange error:", {
+    console.error("GitHub OAuth error from callback:", {
       error: data.error,
       error_description: data.error_description,
       error_uri: data.error_uri
