@@ -104,7 +104,9 @@ export default function Login() {
   const githubClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv")
     : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk");
-  const githubRedirectUri = origin ? `${origin}/api/auth/user` : "";
+  const githubRedirectURL = isStaging
+    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || "https://staging.pushlog.ai/api/auth/user")
+    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user")
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
@@ -114,7 +116,7 @@ export default function Login() {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
     const clientId = githubClientId;
-    const redirectUri = `${window.location.origin}/api/auth/user`;
+    const redirectUri = githubRedirectURL
     const scope = "repo user:email admin:org_hook";
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, "0"))
