@@ -275,7 +275,7 @@ app.post(
       }
       const rawBody = raw.toString("utf8");
       if (!verifyWebhookSignature(rawBody, sig, secret)) {
-        console.error("❌ Invalid webhook signature (GITHUB_WEBHOOK_SECRET must exactly match the secret in GitHub repo → Settings → Webhooks; check for extra spaces/newlines)");
+        console.error("❌ Invalid webhook signature (body length:", rawBody.length, "). Check: GITHUB_WEBHOOK_SECRET exactly matches the secret in GitHub repo → Settings → Webhooks; no extra quotes/spaces in .env.");
         res.status(401).json({ error: "Invalid signature" });
         return;
       }
