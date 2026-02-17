@@ -723,7 +723,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const providedSecret = String(req.headers["x-promote-secret"] || "");
-      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
       if (!expectedSecret || providedSecret !== expectedSecret) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -792,7 +792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const providedSecret = String(req.headers["x-promote-secret"] || "");
-      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
       if (!expectedSecret || providedSecret !== expectedSecret) {
         return res.status(401).json({ error: "Unauthorized" });
       }
@@ -835,7 +835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const providedSecret = String(req.headers["x-promote-secret"] || "");
-      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+      const expectedSecret = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
       if (!expectedSecret || providedSecret !== expectedSecret) {
         return res.status(401).json({ error: "Unauthorized" });
       }

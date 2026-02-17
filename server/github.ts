@@ -266,9 +266,16 @@ export async function createWebhook(
   repo: string,
   webhookUrl: string
 ): Promise<GitHubWebhook> {
-  // Debug: Check if PAT is available
+  const webhookSecret = (process.env.GITHUB_WEBHOOK_SECRET || "").trim();
+  const config: { url: string; content_type: string; secret?: string } = {
+    url: webhookUrl,
+    content_type: "json",
+  };
+  if (webhookSecret) {
+    config.secret = webhookSecret;
+  }
+
   const pat = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
-  // Try with OAuth token first
   try {
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks`, {
       method: "POST",
@@ -281,10 +288,7 @@ export async function createWebhook(
         name: "web",
         active: true,
         events: ["push"],
-        config: {
-          url: webhookUrl,
-          content_type: "json",
-        },
+        config,
       }),
     });
 
@@ -319,10 +323,7 @@ export async function createWebhook(
             name: "web",
             active: true,
             events: ["push"],
-            config: {
-              url: webhookUrl,
-              content_type: "json",
-            },
+            config,
           }),
         });
 
@@ -408,17 +409,27 @@ export async function getCommit(
 }
 
 /**
- * Verify webhook signature
+ * Verify webhook signature (GitHub sends X-Hub-Signature-256: sha256=<hex>).
+ * Trims secret/signature so env vars with trailing newlines work.
  */
 export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  // const crypto = require('crypto'); // Changed to import at top of file
-  const expectedSignature = 'sha256=' + crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
-  
-  return crypto.timingSafeEqual(
-    Buffer.from(expectedSignature),
-    Buffer.from(signature)
-  );
+  const trimmedSecret = (secret || "").trim();
+  const trimmedSig = (signature || "").trim();
+  if (!trimmedSecret || !trimmedSig || !trimmedSig.startsWith("sha256=")) return false;
+
+  const expectedSignature =
+    "sha256=" +
+    crypto
+      .createHmac("sha256", trimmedSecret)
+      .update(payload)
+      .digest("hex");
+
+  const a = Buffer.from(expectedSignature, "utf8");
+  const b = Buffer.from(trimmedSig, "utf8");
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
