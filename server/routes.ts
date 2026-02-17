@@ -1636,7 +1636,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (code) {
         console.log("GitHub OAuth callback received, exchanging code for token...");
-        const redirectUriForExchange = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined;
+        // Use the request's host so redirect_uri exactly matches what GitHub used when redirecting here (required by GitHub).
+        const host = req.get("host") || "";
+        const protocol = req.protocol || "https";
+        const redirectUriForExchange = host ? `${protocol}://${host.replace(/\/$/, "")}/api/auth/user` : (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined);
+        console.log("GitHub OAuth token exchange - redirect_uri:", redirectUriForExchange);
         let token: string;
         try {
           token = await exchangeCodeForToken(code, redirectUriForExchange);
