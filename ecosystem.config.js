@@ -9,7 +9,8 @@ export default {
       env: {
         NODE_ENV: "production",
         APP_ENV: "production",
-        PORT: 3000,
+        // Must not be 3001 (staging). Use 3000 so nginx can proxy pushlog.ai to this port.
+        PORT: "3000",
       },
       error_file: "./logs/prod-err.log",
       out_file: "./logs/prod-out.log",
