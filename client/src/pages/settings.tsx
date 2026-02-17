@@ -278,6 +278,50 @@ export default function Settings() {
     },
   });
 
+  const simulateSentryAlertMutation = useMutation({
+    mutationFn: async (fullPipeline: boolean) => {
+      const res = await apiRequest("POST", "/api/test/simulate-incident", {
+        fullPipeline,
+      });
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
+      toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Simulate failed", description: error.message, variant: "destructive" });
+    },
+  })
+
+  // try {
+  //   new Notification("PushLog test", {
+  //     body: "If you see this, browser notifications are working. You'll get these when incidents occur.",
+  //     icon: "/images/PushLog-06p_njbF.png",
+  //     tag: "pushlog-test",
+  //   });
+  //   toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
+  // } catch (e) {
+  //   toast({ title: "Could not send test notification", variant: "destructive", description: String(e) });
+  // }
+
+  const sentTestBrowserNotificationMutation = useMutation({
+    mutationFn: async () => {
+      new Notification("PushLog test", {
+        body: "If you see this, browser notifications are working. You'll get these when incidents occur.",
+        icon: "/images/PushLog-06p_njbF.png",
+        tag: "pushlog-test",
+      });
+      toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
+    },
+    onSuccess: () => {
+      toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Could not send test notification", variant: "destructive", description: error.message });
+    },
+  });
+
   return (
     <div className="min-h-screen flex flex-col bg-forest-gradient">
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
@@ -655,18 +699,7 @@ export default function Settings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        try {
-                          new Notification("PushLog test", {
-                            body: "If you see this, browser notifications are working. You'll get these when incidents occur.",
-                            icon: "/images/PushLog-06p_njbF.png",
-                            tag: "pushlog-test",
-                          });
-                          toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
-                        } catch (e) {
-                          toast({ title: "Could not send test notification", variant: "destructive", description: String(e) });
-                        }
-                      }}
+                      onClick={() => sentTestBrowserNotificationMutation.mutate()}
                     >
                       Send test notification
                     </Button>
@@ -700,56 +733,14 @@ export default function Settings() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={async () => {
-                          try {
-                            const res = await fetch("/api/test/simulate-incident", {
-                              method: "POST",
-                              credentials: "include",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({}),
-                            });
-                            const data = await res.json().catch(() => ({}));
-                            if (!res.ok) {
-                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
-                              return;
-                            }
-                            if (data.notification) {
-                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
-                            } else {
-                              toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
-                            }
-                          } catch (e) {
-                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
-                          }
-                        }}
+                        onClick={() => simulateSentryAlertMutation.mutate(false)}
                       >
                         Simulate Sentry alert
                       </Button>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={async () => {
-                          try {
-                            const res = await fetch("/api/test/simulate-incident", {
-                              method: "POST",
-                              credentials: "include",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ fullPipeline: true }),
-                            });
-                            const data = await res.json().catch(() => ({}));
-                            if (!res.ok) {
-                              toast({ title: "Simulate failed", description: data.error || "Check that ENABLE_TEST_ROUTES=true or run in dev.", variant: "destructive" });
-                              return;
-                            }
-                            if (data.notification) {
-                              window.dispatchEvent(new CustomEvent("incident-notification", { detail: data.notification }));
-                            } else {
-                              toast({ title: "Incident sent", description: "Check your notifications (bell icon). You may see 2 (Sentry + incident engine)." });
-                            }
-                          } catch (e) {
-                            toast({ title: "Request failed", description: String(e), variant: "destructive" });
-                          }
-                        }}
+                        onClick={() => simulateSentryAlertMutation.mutate(true)}
                       >
                         Simulate full pipeline
                       </Button>
