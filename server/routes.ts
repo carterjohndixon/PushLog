@@ -719,20 +719,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Verify GitHub webhook signature (primary security)
       const signature = req.headers['x-hub-signature-256'] as string;
-      const deploySecret = process.env.DEPLOY_SECRET || '';
       const githubWebhookSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
-      const webhookSecret = deploySecret || githubWebhookSecret;
+
       
-      if (signature && webhookSecret) {
+      if (signature && githubWebhookSecret) {
         const payload = JSON.stringify(req.body);
-        if (!verifyWebhookSignature(payload, signature, webhookSecret)) {
+        if (!verifyWebhookSignature(payload, signature, githubWebhookSecret)) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       } else if (!signature) {
         // Fallback: Check for custom header if no GitHub signature
         const providedSecret = req.headers['x-deploy-secret'] as string;
         
-        if (!deploySecret || providedSecret !== deploySecret) {
+        if (!githubWebhookSecret || providedSecret !== githubWebhookSecret) {
           return res.status(401).json({ error: 'Unauthorized' });
         }
       } else {
