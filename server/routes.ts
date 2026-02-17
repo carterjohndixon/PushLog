@@ -1688,10 +1688,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (code) {
         console.log("GitHub OAuth callback received, exchanging code for token...");
-        // Handle GitHub OAuth
+        const redirectUriForExchange = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined;
         let token: string;
         try {
-          token = await exchangeCodeForToken(code);
+          token = await exchangeCodeForToken(code, redirectUriForExchange);
           console.log("Successfully exchanged code for token");
         } catch (tokenError) {
           console.error("Failed to exchange code for token:", tokenError);

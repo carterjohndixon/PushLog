@@ -39,13 +39,18 @@ interface GitHubWebhook {
 }
 
 /**
- * Exchange OAuth code for access token
+ * Exchange OAuth code for access token.
+ * redirect_uri must match the callback URL used in the authorization request (required by GitHub when app has multiple callbacks or in strict mode).
  */
-export async function exchangeCodeForToken(code: string): Promise<string> {
+export async function exchangeCodeForToken(code: string, redirectUri?: string): Promise<string> {
   // Use OAuth App credentials for user authentication
   const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || process.env.VITE_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
   const clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
-  
+
+  const effectiveRedirectUri =
+    redirectUri ||
+    (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined);
+
   console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...");
   console.log("GitHub OAuth token exchange - Client Secret present:", !!clientSecret);
 
@@ -61,17 +66,20 @@ export async function exchangeCodeForToken(code: string): Promise<string> {
     throw new Error("GitHub OAuth credentials not configured. Please check GITHUB_OAUTH_CLIENT_ID and GITHUB_OAUTH_CLIENT_SECRET environment variables.");
   }
 
+  const body: Record<string, string> = {
+    client_id: clientId,
+    client_secret: clientSecret,
+    code,
+  };
+  if (effectiveRedirectUri) body.redirect_uri = effectiveRedirectUri;
+
   const response = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-    }),
+    body: JSON.stringify(body),
   });
 
   const data = await response.json();
