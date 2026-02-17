@@ -83,8 +83,17 @@ npm install --include=dev || {
     exit 1
 }
 
-# Build the application
+# Build the application (staging deploy: embed staging OAuth client ID so frontend uses staging GitHub app)
 log_info "Building application..."
+if [ -f ".env.staging" ]; then
+    log_info "Sourcing VITE_* from .env.staging for frontend build..."
+    set -a
+    # shellcheck source=/dev/null
+    source .env.staging 2>/dev/null || true
+    set +a
+    export VITE_STAGE_GITHUB_CLIENT_ID
+    export VITE_STAGE_GITHUB_REDIRECT_URI
+fi
 npm run build || {
     log_error "Build failed"
     exit 1
