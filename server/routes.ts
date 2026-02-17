@@ -1636,10 +1636,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (code) {
         console.log("GitHub OAuth callback received, exchanging code for token...");
-        // Use the request's host so redirect_uri exactly matches what GitHub used when redirecting here (required by GitHub).
-        const host = req.get("host") || "";
-        const protocol = req.protocol || "https";
-        const redirectUriForExchange = host ? `${protocol}://${host.replace(/\/$/, "")}/api/auth/user` : (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined);
+        // GitHub requires redirect_uri to match the app's registered callback URL exactly (including https).
+        // Prefer APP_URL so we always send the canonical HTTPS URL; req.protocol can be "http" if nginx doesn't set X-Forwarded-Proto.
+        const appUrl = (process.env.APP_URL || "").replace(/\/$/, "");
+        const redirectUriForExchange = appUrl ? `${appUrl}/api/auth/user` : (() => {
+          const host = req.get("host") || "";
+          const protocol = req.protocol || "https";
+          return host ? `${protocol}://${host}/api/auth/user` : undefined;
+        })();
         console.log("GitHub OAuth token exchange - redirect_uri:", redirectUriForExchange);
         let token: string;
         try {
