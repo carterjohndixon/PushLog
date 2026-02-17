@@ -54,6 +54,7 @@ mod tests {
       tags: HashMap::new(),
       links: HashMap::new(),
       change_window: None,
+      correlation_hints: crate::types::CorrelationHints::default(),
     }
   }
 

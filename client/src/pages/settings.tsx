@@ -294,16 +294,6 @@ export default function Settings() {
     },
   })
 
-  // try {
-  //   new Notification("PushLog test", {
-  //     body: "If you see this, browser notifications are working. You'll get these when incidents occur.",
-  //     icon: "/images/PushLog-06p_njbF.png",
-  //     tag: "pushlog-test",
-  //   });
-  //   toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
-  // } catch (e) {
-  //   toast({ title: "Could not send test notification", variant: "destructive", description: String(e) });
-  // }
 
   const sentTestBrowserNotificationMutation = useMutation({
     mutationFn: async () => {

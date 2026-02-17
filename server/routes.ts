@@ -2233,6 +2233,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isConnected: true,
           private: false,
           integrationCount: integrationCountByRepoId.get(repo.id) ?? 0,
+          criticalPaths: (repo as any).criticalPaths ?? null,
+          incidentServiceName: (repo as any).incidentServiceName ?? null,
         }));
         res.setHeader("Cache-Control", "private, max-age=15");
         res.setHeader("X-Requires-GitHub-Reconnect", "true");
@@ -2293,6 +2295,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             isActive: connectedRepo?.isActive ?? true,
             monitorAllBranches: connectedRepo?.monitorAllBranches ?? false,
             integrationCount,
+            criticalPaths: (connectedRepo as any)?.criticalPaths ?? null,
+            incidentServiceName: (connectedRepo as any)?.incidentServiceName ?? null,
           };
         });
 
@@ -2540,7 +2544,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update repository
   app.patch("/api/repositories/:id", [
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
-    body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
+    body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean'),
+    body('criticalPaths').optional().isArray().withMessage('criticalPaths must be an array'),
+    body('criticalPaths.*').optional().isString().trim().isLength({ max: 256 }).withMessage('each critical path must be a string'),
+    body('incidentServiceName').optional().isString().trim().isLength({ max: 128 }).withMessage('incidentServiceName must be a string up to 128 chars')
   ], authenticateToken, async (req: any, res: any) => {
     try {
       // Validate input
@@ -2556,8 +2563,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!repositoryId) {
         return res.status(400).json({ error: "Invalid repository ID" });
       }
-      
-      const updates = req.body;
+
+      const allowed = ['isActive', 'monitorAllBranches', 'criticalPaths', 'incidentServiceName'];
+      const updates: Partial<{ isActive: boolean; monitorAllBranches: boolean; criticalPaths: string[]; incidentServiceName: string | null }> = {};
+      for (const key of allowed) {
+        if (req.body[key] !== undefined) {
+          if (key === 'criticalPaths' && Array.isArray(req.body[key])) {
+            updates.criticalPaths = req.body[key].filter((p: unknown) => typeof p === 'string' && p.trim().length > 0);
+          } else if (key === 'incidentServiceName') {
+            const v = req.body[key];
+            updates.incidentServiceName = typeof v === 'string' ? v.trim() || null : null;
+          } else if (key === 'isActive' || key === 'monitorAllBranches') {
+            (updates as Record<string, unknown>)[key] = req.body[key];
+          }
+        }
+      }
       
       // First verify user owns this repository
       const existingRepository = await storage.getRepository(repositoryId);
@@ -2575,18 +2595,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Repository not found" });
       }
 
-      // If repository isActive status is being updated, also update related integrations
-      if (updates.hasOwnProperty('isActive')) {
-        // Get all integrations for this user and filter by repository ID
+      if (updates.isActive !== undefined) {
         const userId = req.user?.userId;
         if (userId) {
           const userIntegrations = await storage.getIntegrationsByUserId(userId);
           const relatedIntegrations = userIntegrations.filter(integration => integration.repositoryId === repositoryId);
-          
-          // Update all integrations for this repository to match the repository's active status
           for (const integration of relatedIntegrations) {
             await storage.updateIntegration(integration.id, {
-              isActive: updates.isActive
+              isActive: updates.isActive as boolean,
             });
           }
         }
@@ -2996,6 +3012,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isConnected: true,
           private: false,
           integrationCount: integrationCountByRepoId.get(repo.id) ?? 0,
+          criticalPaths: (repo as any).criticalPaths ?? null,
+          incidentServiceName: (repo as any).incidentServiceName ?? null,
         }));
         const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
         const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
@@ -3047,6 +3065,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           isActive: connectedRepo?.isActive ?? true,
           monitorAllBranches: connectedRepo?.monitorAllBranches ?? false,
           integrationCount: connectedRepo ? (integrationCountByRepoId.get(connectedRepo.id) ?? 0) : 0,
+          criticalPaths: (connectedRepo as any)?.criticalPaths ?? null,
+          incidentServiceName: (connectedRepo as any)?.incidentServiceName ?? null,
         };
       });
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));

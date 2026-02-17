@@ -25,6 +25,19 @@ pub struct InboundEvent {
   pub links: HashMap<String, String>,
   #[serde(default)]
   pub change_window: Option<InboundChangeWindow>,
+  /// Optional hints for correlation: critical paths (boost), low-priority paths (downweight docs/tests-only).
+  #[serde(default)]
+  pub correlation_hints: Option<InboundCorrelationHints>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct InboundCorrelationHints {
+  /// Path prefixes or segment names that indicate high-impact areas (e.g. ["src/auth", "src/payments", "migrations"]).
+  #[serde(default)]
+  pub critical_paths: Vec<String>,
+  /// Path prefixes/segments for docs/tests; commits touching ONLY these get downweighted.
+  #[serde(default)]
+  pub low_priority_paths: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,6 +62,9 @@ pub struct InboundCommit {
   pub timestamp: Option<String>,
   #[serde(default)]
   pub files: Vec<String>,
+  /// Optional 0–100 impact/risk score for this commit (from risk engine). Used in correlation when set.
+  #[serde(default)]
+  pub risk_score: Option<u8>,
 }
 
 // ---------------------------------------------------------------------------
@@ -93,6 +109,13 @@ pub struct Frame {
   pub function: String,
 }
 
+/// Hints for correlation scoring (boost critical paths, downweight docs/tests-only).
+#[derive(Debug, Clone, Default)]
+pub struct CorrelationHints {
+  pub critical_paths: Vec<String>,
+  pub low_priority_paths: Vec<String>,
+}
+
 /// Canonical internal event after normalization + validation.
 #[derive(Debug, Clone)]
 pub struct Event {
@@ -107,6 +130,7 @@ pub struct Event {
   pub tags: HashMap<String, String>,
   pub links: HashMap<String, String>,
   pub change_window: Option<ChangeWindow>,
+  pub correlation_hints: CorrelationHints,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +144,8 @@ pub struct CommitInfo {
   pub id: String,
   pub timestamp: Option<DateTime<Utc>>,
   pub files: Vec<String>,
+  /// Optional 0–100 risk/impact score for correlation weighting.
+  pub risk_score: Option<u8>,
 }
 
 // ---------------------------------------------------------------------------

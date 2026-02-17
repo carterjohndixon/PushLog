@@ -6,6 +6,7 @@
 //!
 //! Events that are valid but don't trigger an incident produce no output line.
 
+use incident_engine::config::Config;
 use incident_engine::{Engine, InboundEvent};
 use incident_engine::types::ErrorOutput;
 use std::io::{self, BufRead, Write};
@@ -14,7 +15,8 @@ fn main() {
   let stdin = io::stdin();
   let stdout = io::stdout();
   let mut out = io::BufWriter::new(stdout.lock());
-  let mut engine = Engine::with_defaults();
+  let config = Config::from_env();
+  let mut engine = Engine::new(config);
 
   for line in stdin.lock().lines() {
     let line = match line {

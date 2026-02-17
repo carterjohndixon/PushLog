@@ -47,6 +47,10 @@ export const repositories = pgTable("repositories", {
   isActive: boolean("is_active").default(true),
   monitorAllBranches: boolean("monitor_all_branches").default(false),
   webhookId: text("webhook_id"),
+  /** Path prefixes/segments that matter for incident correlation (e.g. ["src/auth", "src/payments", "migrations"]). Boosts commits touching these. */
+  criticalPaths: jsonb("critical_paths").$type<string[]>(),
+  /** Optional Sentry/service name for mapping external incidents to this repo (e.g. "api"). */
+  incidentServiceName: text("incident_service_name"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 

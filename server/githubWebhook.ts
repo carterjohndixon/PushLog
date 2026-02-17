@@ -392,6 +392,12 @@ export async function persistPushAndNotifications(
       .map((f: string) => ({ file: f, function: "changed" }));
     if (stacktrace.length === 0) stacktrace.push({ file: pushData.repositoryName, function: "deploy" });
     const severity = (riskResult.impact_score ?? 0) >= 60 ? "critical" : (riskResult.impact_score ?? 0) >= 30 ? "error" : "warning";
+    const criticalPaths = (storedRepo as { criticalPaths?: string[] } | null)?.criticalPaths ?? undefined;
+    const correlationHints =
+      criticalPaths && criticalPaths.length > 0
+        ? { critical_paths: criticalPaths }
+        : undefined;
+    const impactScore = riskResult.impact_score != null ? Math.min(100, Math.max(0, riskResult.impact_score)) : undefined;
     try {
       ingestIncidentEvent({
         source: "pushlog",
@@ -405,8 +411,16 @@ export async function persistPushAndNotifications(
         links: { pushlog_user_id: integration.userId },
         change_window: {
           deploy_time: pushedAtStr,
-          commits: [{ id: pushData.commitSha, timestamp: commit?.timestamp, files: files }],
+          commits: [
+            {
+              id: pushData.commitSha,
+              timestamp: commit?.timestamp,
+              files: files,
+              ...(impactScore != null && { risk_score: impactScore }),
+            },
+          ],
         },
+        ...(correlationHints && { correlation_hints: correlationHints }),
       });
     } catch (e) {
       console.warn("⚠️ [Webhook] Failed to ingest push into incident-engine (non-fatal):", e instanceof Error ? e.message : e);

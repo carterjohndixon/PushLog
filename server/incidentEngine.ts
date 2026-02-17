@@ -21,11 +21,18 @@ export interface IncidentCommitInput {
   id: string;
   timestamp?: string;
   files: string[];
+  /** Optional 0–100 impact/risk score for correlation weighting. */
+  risk_score?: number;
 }
 
 export interface IncidentChangeWindowInput {
   deploy_time: string;
   commits: IncidentCommitInput[];
+}
+
+export interface IncidentCorrelationHintsInput {
+  critical_paths?: string[];
+  low_priority_paths?: string[];
 }
 
 export interface IncidentEventInput {
@@ -40,6 +47,8 @@ export interface IncidentEventInput {
   tags?: Record<string, string>;
   links?: Record<string, string>;
   change_window?: IncidentChangeWindowInput;
+  /** Optional: boost commits touching critical_paths, downweight docs/tests-only. */
+  correlation_hints?: IncidentCorrelationHintsInput;
 }
 
 export interface IncidentSummaryOutput {

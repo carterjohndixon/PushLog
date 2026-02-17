@@ -85,6 +85,7 @@ pub fn normalize(raw: &InboundEvent) -> Result<Event, EngineError> {
             id: c.id.clone(),
             timestamp: ts,
             files: c.files.iter().map(|f| normalize_path(f)).collect(),
+            risk_score: c.risk_score.filter(|&s| s <= 100),
           })
         })
         .collect::<Result<Vec<_>, EngineError>>()?;
@@ -96,6 +97,27 @@ pub fn normalize(raw: &InboundEvent) -> Result<Event, EngineError> {
     }
     None => None,
   };
+
+  let correlation_hints = raw
+    .correlation_hints
+    .as_ref()
+    .map(|h| CorrelationHints {
+      critical_paths: h.critical_paths.iter().map(|p| p.to_ascii_lowercase()).collect(),
+      low_priority_paths: if h.low_priority_paths.is_empty() {
+        vec![
+          "docs/".into(),
+          "doc/".into(),
+          "tests/".into(),
+          "test/".into(),
+          "spec/".into(),
+          "__tests__/".into(),
+          ".md".into(),
+        ]
+      } else {
+        h.low_priority_paths.iter().map(|p| p.to_ascii_lowercase()).collect()
+      },
+    })
+    .unwrap_or_default();
 
   Ok(Event {
     source: raw.source.to_ascii_lowercase(),
@@ -109,6 +131,7 @@ pub fn normalize(raw: &InboundEvent) -> Result<Event, EngineError> {
     tags: raw.tags.clone(),
     links: raw.links.clone(),
     change_window,
+    correlation_hints,
   })
 }
 
@@ -165,6 +188,7 @@ mod tests {
       tags: Default::default(),
       links: Default::default(),
       change_window: None,
+      correlation_hints: None,
     };
     let err = normalize(&raw).unwrap_err();
     assert!(err.to_string().contains("source"));
@@ -188,6 +212,7 @@ mod tests {
       tags: Default::default(),
       links: Default::default(),
       change_window: None,
+      correlation_hints: None,
     };
     let event = normalize(&raw).unwrap();
     assert_eq!(event.service, "api");

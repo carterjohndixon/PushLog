@@ -25,8 +25,11 @@ interface RepositoryCardData {
   pushEvents?: number;
   lastPush?: string;
   private: boolean;
-  monitorAllBranches?: boolean; // Added monitorAllBranches to the interface
-  // Add other GitHub API fields that might be present
+  monitorAllBranches?: boolean;
+  /** Path prefixes for incident correlation (e.g. ["src/auth", "src/payments"]). */
+  criticalPaths?: string[] | null;
+  /** Optional Sentry/service name mapping for multi-repo correlation. */
+  incidentServiceName?: string | null;
   [key: string]: any;
 }
 
@@ -43,26 +46,39 @@ export function RepositorySettingsModal({
   repository,
   updateRepositoryMutation,
 }: RepositorySettingsModalProps) {
-  // Initialize state from repository data when it changes
   const [isActive, setIsActive] = useState(repository?.isActive ?? true);
   const [monitorAllBranches, setMonitorAllBranches] = useState(repository?.monitorAllBranches ?? false);
+  const [criticalPathsText, setCriticalPathsText] = useState(
+    (repository?.criticalPaths ?? []).filter(Boolean).join("\n")
+  );
+  const [incidentServiceName, setIncidentServiceName] = useState(
+    repository?.incidentServiceName ?? ""
+  );
 
-  // Update local state when repository prop changes
   React.useEffect(() => {
     if (repository) {
       setIsActive(repository.isActive ?? true);
       setMonitorAllBranches(repository.monitorAllBranches ?? false);
+      setCriticalPathsText((repository.criticalPaths ?? []).filter(Boolean).join("\n"));
+      setIncidentServiceName(repository.incidentServiceName ?? "");
     }
   }, [repository]);
 
   const handleSave = () => {
     if (!repository?.id) return;
 
-    const updates = {
-      isActive: isActive,
-      monitorAllBranches: monitorAllBranches,
+    const criticalPaths = criticalPathsText
+      .split(/[\n,]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+
+    const updates: Record<string, unknown> = {
+      isActive,
+      monitorAllBranches,
+      criticalPaths,
+      incidentServiceName: incidentServiceName.trim() || null,
     };
-    
+
     updateRepositoryMutation.mutate({
       id: repository.id,
       updates,
@@ -70,12 +86,11 @@ export function RepositorySettingsModal({
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen) {
-      // Reset form when closing
-      if (repository) {
-        setIsActive(repository.isActive ?? true);
-        setMonitorAllBranches(repository.monitorAllBranches ?? false);
-      }
+    if (!newOpen && repository) {
+      setIsActive(repository.isActive ?? true);
+      setMonitorAllBranches(repository.monitorAllBranches ?? false);
+      setCriticalPathsText((repository.criticalPaths ?? []).filter(Boolean).join("\n"));
+      setIncidentServiceName(repository.incidentServiceName ?? "");
     }
     onOpenChange(newOpen);
   };
@@ -164,6 +179,38 @@ export function RepositorySettingsModal({
                 id="monitor-all-branches"
                 checked={monitorAllBranches}
                 onCheckedChange={setMonitorAllBranches}
+              />
+            </div>
+
+            {/* Critical paths for incident correlation */}
+            <div className="space-y-2">
+              <Label htmlFor="critical-paths">Critical paths (incident correlation)</Label>
+              <p className="text-xs text-muted-foreground">
+                Path prefixes or folder names that matter most (e.g. src/auth, src/payments, migrations). One per line or comma-separated. Commits touching these get boosted when correlating incidents.
+              </p>
+              <textarea
+                id="critical-paths"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="src/auth&#10;src/payments&#10;migrations"
+                value={criticalPathsText}
+                onChange={(e) => setCriticalPathsText(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            {/* Incident service name (optional service mapping) */}
+            <div className="space-y-2">
+              <Label htmlFor="incident-service-name">Incident service name</Label>
+              <p className="text-xs text-muted-foreground">
+                Optional. If you use Sentry or another tool, set the service name that matches this repo (e.g. &quot;api&quot;) for better multi-repo correlation.
+              </p>
+              <input
+                id="incident-service-name"
+                type="text"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="e.g. api"
+                value={incidentServiceName}
+                onChange={(e) => setIncidentServiceName(e.target.value)}
               />
             </div>
 

@@ -137,9 +137,13 @@ impl Engine {
 
     // Correlation: rank suspects if change_window provided.
     let suspected_causes = match &event.change_window {
-      Some(cw) => {
-        correlation::rank_suspects(&event.frames, cw, &event.timestamp, &self.config)
-      }
+      Some(cw) => correlation::rank_suspects(
+        &event.frames,
+        cw,
+        &event.timestamp,
+        &event.correlation_hints,
+        &self.config,
+      ),
       None => Vec::new(),
     };
 
@@ -232,6 +236,7 @@ mod tests {
       tags: Default::default(),
       links: Default::default(),
       change_window: None,
+      correlation_hints: None,
     }
   }
 
@@ -306,6 +311,7 @@ mod tests {
         id: "abc123".into(),
         timestamp: Some("2025-01-15T09:50:00Z".into()),
         files: vec!["src/handler.ts".into()],
+        risk_score: None,
       }],
     });
 
