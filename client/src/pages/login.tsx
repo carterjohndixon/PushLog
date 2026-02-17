@@ -101,8 +101,8 @@ export default function Login() {
   // OAuth env: use VITE_STAGE_* on staging.pushlog.ai, else VITE_PROD_* (from .env.local), with fallbacks.
   const isStaging = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
   const githubClientId = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID)
-    : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID);
+    ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv")
+    : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk");
   const githubRedirectUri = isStaging
     ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`)
     : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`);
@@ -116,7 +116,7 @@ export default function Login() {
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
-    const clientId = githubClientId || "Ov23li5UgB18JcaZHnxk";
+    const clientId = githubClientId;
     const redirectUri = githubRedirectUri || `${window.location.origin}/api/auth/user`;
     const scope = "repo user:email admin:org_hook";
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
