@@ -116,16 +116,6 @@ cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-e
 cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare build skipped (cargo/rust not available)"
 
 log "Building production bundle..."
-# When run on staging server (.env.staging present), embed staging OAuth client ID so frontend uses staging GitHub app
-if [ -f ".env.staging" ]; then
-  log "Sourcing VITE_* from .env.staging for frontend build (staging server)..."
-  set -a
-  # shellcheck source=/dev/null
-  source .env.staging 2>/dev/null || true
-  set +a
-  export VITE_STAGE_GITHUB_CLIENT_ID
-  export VITE_STAGE_GITHUB_REDIRECT_URI
-fi
 npm run build:production
 
 # Write deployed metadata BEFORE PM2 restart so the new Node process sees it immediately
