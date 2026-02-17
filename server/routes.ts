@@ -10,6 +10,12 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 import { authenticateToken, requireEmailVerification } from './middleware/auth';
+import {
+  isProductionDeployConfigured,
+  requestProductionPromote,
+  requestProductionCancel,
+  getProductionPromotionStatus,
+} from './productionDeployClient';
 import { 
   exchangeCodeForToken, 
   getGitHubUser, 
@@ -116,30 +122,6 @@ function readLastLines(filePath: string, maxLines = 40): string[] {
       .slice(-maxLines);
   } catch {
     return [];
-  }
-}
-
-function getProdPromotionStatusUrl(): string | null {
-  if (!PROMOTE_PROD_WEBHOOK_URL) return null;
-  try {
-    const statusUrl = new URL(PROMOTE_PROD_WEBHOOK_URL);
-    statusUrl.pathname = "/api/webhooks/promote-production/status";
-    statusUrl.search = "";
-    return statusUrl.toString();
-  } catch {
-    return null;
-  }
-}
-
-function getProdPromotionCancelUrl(): string | null {
-  if (!PROMOTE_PROD_WEBHOOK_URL) return null;
-  try {
-    const cancelUrl = new URL(PROMOTE_PROD_WEBHOOK_URL);
-    cancelUrl.pathname = "/api/webhooks/promote-production/cancel";
-    cancelUrl.search = "";
-    return cancelUrl.toString();
-  } catch {
-    return null;
   }
 }
 
@@ -871,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/webhooks/promote-production/cancel", async (req, res) => {
     try {
       if (APP_ENV !== "production") {
-        return res.status(404).json({ error: "Not found" });
+        return res.status(404).json({ error: "Production webhook not enabled (set APP_ENV=production on production server)" });
       }
 
       const providedSecret = String(req.headers["x-promote-secret"] || "");
@@ -1074,7 +1056,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const prodShaFile = path.join(appDir, ".prod_deployed_sha");
       const prodAtFile = path.join(appDir, ".prod_deployed_at");
       const promoteScript = path.join(appDir, "deploy-production.sh");
-      const promoteViaWebhook = APP_ENV === "staging" && !!PROMOTE_PROD_WEBHOOK_URL && !!PROMOTE_PROD_WEBHOOK_SECRET;
+      const promoteViaWebhook = APP_ENV === "staging" && isProductionDeployConfigured();
 
       let branch = "unknown";
       let headSha = "";
@@ -1178,32 +1160,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const lockFile = path.join(appDir, ".promote-production.lock");
       const promoteInProgress = fs.existsSync(lockFile);
-      const promoteStatusUrl = promoteViaWebhook ? getProdPromotionStatusUrl() : null;
-
       let promoteRemoteStatus: any = null;
-      if (promoteStatusUrl && PROMOTE_PROD_WEBHOOK_SECRET) {
-        try {
-          const response = await fetch(promoteStatusUrl, {
-            headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
-          });
-          const contentType = response.headers.get("content-type") || "";
-
-          if (contentType.includes("application/json")) {
-            const body = await response.json().catch(() => ({}));
-            if (response.ok) {
-              promoteRemoteStatus = body;
-            } else {
-              promoteRemoteStatus = { error: body.error || `Status API failed (${response.status})` };
-            }
-          } else {
-            const text = await response.text().catch(() => "");
-            const snippet = text.slice(0, 120).replace(/\s+/g, " ").trim();
-            promoteRemoteStatus = {
-              error: `Status API returned non-JSON (${response.status}, ${contentType || "unknown content-type"}). ${snippet}`,
-            };
-          }
-        } catch (error: any) {
-          promoteRemoteStatus = { error: error?.message || "Status API unavailable" };
+      if (promoteViaWebhook) {
+        const statusResult = await getProductionPromotionStatus();
+        if (statusResult.ok) {
+          promoteRemoteStatus = statusResult.data;
+        } else {
+          promoteRemoteStatus = { error: statusResult.error };
         }
       }
 
@@ -1274,20 +1237,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headSha = req.body?.headSha?.trim() || "";
       const isRollback = !!req.body?.isRollback;
 
-      // Preferred in Docker staging: proxy to production webhook that runs host-side script.
-      if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
-        const response = await fetch(PROMOTE_PROD_WEBHOOK_URL, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
-          },
-          body: JSON.stringify({ promotedBy, headSha: headSha || undefined, isRollback }),
-        });
-
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          return res.status(response.status).json({ error: body.error || "Production webhook failed" });
+      // When configured, ask the production server to start the deploy (staging doesn't run the script).
+      if (isProductionDeployConfigured()) {
+        const result = await requestProductionPromote({ promotedBy, headSha: headSha || undefined, isRollback });
+        if (!result.ok) {
+          return res.status(result.status).json({ error: result.error });
         }
         return res.json({
           message: "Production promotion started via webhook",
@@ -1341,25 +1295,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const cancelledBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
 
-      if (PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET) {
-        // Proxy cancel to production
-        const cancelUrl = getProdPromotionCancelUrl() || "";
-        if (!cancelUrl) {
-          return res.status(500).json({ error: "Could not determine production cancel URL" });
+      // When configured, ask the production server to cancel (the running deploy is on production).
+      if (isProductionDeployConfigured()) {
+        const result = await requestProductionCancel({ cancelledBy });
+        if (!result.ok) {
+          if (result.status >= 500) {
+            console.error("Cancel-promote: production returned error:", result.error);
+          }
+          return res.status(result.status).json({ error: result.error });
         }
-        const response = await fetch(cancelUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
-          },
-          body: JSON.stringify({ cancelledBy }),
-        });
-        const body = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          return res.status(response.status).json({ error: body.error || "Cancel failed" });
-        }
-        return res.json(body);
+        return res.json(result.data);
       }
 
       // Fallback: local cancel

@@ -193,11 +193,13 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/staging/cancel-promote", {
         method: "POST",
         credentials: "include",
-        headers: { Accept: "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({}),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to cancel promotion");
+        const msg = body?.error || (res.status === 401 ? "Not signed in or session expired" : res.status === 404 ? "Admin not available" : `Failed to cancel (${res.status})`);
+        throw new Error(msg);
       }
       return res.json();
     },
