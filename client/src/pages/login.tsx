@@ -98,26 +98,23 @@ export default function Login() {
     });
   };
 
-  // OAuth env: use VITE_STAGE_* on staging.pushlog.ai, else VITE_PROD_* (from .env.local), with fallbacks.
+  // OAuth: client IDs from env (staging vs prod app); redirect URIs always from current origin so we never send wrong domain.
   const isStaging = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
   const githubClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv")
     : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk");
-  const githubRedirectUri = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`)
-    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`);
+  const githubRedirectUri = origin ? `${origin}/api/auth/user` : "";
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
-  const googleRedirectUri = isStaging
-    ? (import.meta.env.VITE_STAGE_GOOGLE_REDIRECT_URI || `${window.location.origin}/api/google/user`)
-    : (import.meta.env.VITE_PROD_GOOGLE_REDIRECT_URI || import.meta.env.VITE_GOOGLE_REDIRECT_URI || `${window.location.origin}/api/google/user`);
+  const googleRedirectUri = origin ? `${origin}/api/google/user` : "";
 
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
     const clientId = githubClientId;
-    const redirectUri = githubRedirectUri || `${window.location.origin}/api/auth/user`;
+    const redirectUri = `${window.location.origin}/api/auth/user`;
     const scope = "repo user:email admin:org_hook";
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, "0"))
