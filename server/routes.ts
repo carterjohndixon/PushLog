@@ -1816,8 +1816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emailVerified: true
         };
 
-        // Redirect to dashboard; if they were connecting GitHub from Settings, add param so client refetches repos
-        const redirectUrl = currentUserId ? `/dashboard?github_connected=1` : `/dashboard`;
+        // Redirect to dashboard; use APP_URL when set so cookie domain and frontend origin match (important behind proxy e.g. staging).
+        const base = (process.env.APP_URL || "").replace(/\/$/, "") || undefined;
+        const path = currentUserId ? "/dashboard?github_connected=1" : "/dashboard";
+        const redirectUrl = base ? `${base}${path}` : path;
         console.log(`Redirecting to dashboard for user ${user.id} (session-based auth)`);
         return res.redirect(redirectUrl);
       }
