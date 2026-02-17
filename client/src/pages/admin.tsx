@@ -93,7 +93,8 @@ export default function AdminPage() {
       const current = query.state.data;
       const remoteRunning = current?.promoteRemoteStatus?.inProgress;
       const localRunning = localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL;
-      return remoteRunning || localRunning ? 3000 : 10000;
+      // When a promotion is running, poll every 5s; otherwise every 30s to reduce load
+      return remoteRunning || localRunning ? 5000 : 30000;
     },
   });
 

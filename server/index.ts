@@ -266,11 +266,18 @@ app.post(
       return;
     }
     const sig = req.headers["x-hub-signature-256"] as string | undefined;
-    const secret = process.env.GITHUB_WEBHOOK_SECRET || "default_secret";
-    if (sig && !verifyWebhookSignature(raw.toString("utf8"), sig, secret)) {
-      console.error("❌ Invalid webhook signature");
-      res.status(401).json({ error: "Invalid signature" });
-      return;
+    const secret = process.env.GITHUB_WEBHOOK_SECRET || process.env.DEPLOY_SECRET || "";
+    if (sig) {
+      if (!secret) {
+        console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET (or DEPLOY_SECRET) not set");
+        res.status(500).json({ error: "Webhook secret not configured" });
+        return;
+      }
+      if (!verifyWebhookSignature(raw.toString("utf8"), sig, secret)) {
+        console.error("❌ Invalid webhook signature (GITHUB_WEBHOOK_SECRET must match the secret in GitHub repo → Settings → Webhooks)");
+        res.status(401).json({ error: "Invalid signature" });
+        return;
+      }
     }
     try {
       (req as any).body = JSON.parse(raw.toString("utf8"));
