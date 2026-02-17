@@ -1241,6 +1241,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (isProductionDeployConfigured()) {
         const result = await requestProductionPromote({ promotedBy, headSha: headSha || undefined, isRollback });
         if (!result.ok) {
+          if (result.status === 502) {
+            console.error("[staging/promote] Production webhook unreachable:", result.error);
+          }
           return res.status(result.status).json({ error: result.error });
         }
         return res.json({

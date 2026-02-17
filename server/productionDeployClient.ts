@@ -53,7 +53,14 @@ export async function requestProductionPromote(params: {
       }),
     });
   } catch (err: any) {
-    return { ok: false, status: 502, error: err?.message || "Could not reach production server" };
+    const msg = err?.message || "Could not reach production server";
+    const code = err?.code ?? "";
+    console.error("[productionDeployClient] promote fetch failed:", { target: url + "/api/webhooks/promote-production", error: msg, code });
+    // If production runs on same host as staging Docker, use host.docker.internal or host IP, not localhost
+    const hint = code === "ECONNREFUSED" || code === "ENOTFOUND"
+      ? " (From Docker, use https://pushlog.ai or host.docker.internal if production is on this host)"
+      : "";
+    return { ok: false, status: 502, error: msg + hint };
   }
 
   const body = await res.json().catch(() => ({}));
