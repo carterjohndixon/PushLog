@@ -413,9 +413,17 @@ export async function getCommit(
  * Trims secret/signature so env vars with trailing newlines work.
  */
 export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  const trimmedSecret = (secret || "").trim();
+  const trimmedSecret = (secret || "").trim().replace(/\r\n|\r|\n/g, "");
   const trimmedSig = (signature || "").trim();
-  if (!trimmedSecret || !trimmedSig || !trimmedSig.startsWith("sha256=")) return false;
+
+  if (!trimmedSecret || !trimmedSig || !trimmedSig.startsWith("sha256=")) {
+    console.warn("[webhook verify] missing or invalid inputs:", {
+      secretLength: trimmedSecret.length,
+      sigLength: trimmedSig.length,
+      sigPrefix: trimmedSig.slice(0, 12) + (trimmedSig.length > 12 ? "…" : ""),
+    });
+    return false;
+  }
 
   const expectedSignature =
     "sha256=" +
@@ -426,10 +434,30 @@ export function verifyWebhookSignature(payload: string, signature: string, secre
 
   const a = Buffer.from(expectedSignature, "utf8");
   const b = Buffer.from(trimmedSig, "utf8");
-  if (a.length !== b.length) return false;
+
+  if (a.length !== b.length) {
+    console.warn("[webhook verify] signature length mismatch:", {
+      expectedLen: a.length,
+      receivedLen: b.length,
+      payloadLength: payload.length,
+      secretLength: trimmedSecret.length,
+    });
+    return false;
+  }
+
   try {
-    return crypto.timingSafeEqual(a, b);
-  } catch {
+    const ok = crypto.timingSafeEqual(a, b);
+    if (!ok) {
+      console.warn("[webhook verify] signature mismatch (same length):", {
+        payloadLength: payload.length,
+        secretLength: trimmedSecret.length,
+        receivedPrefix: trimmedSig.slice(0, 18) + "…",
+        expectedPrefix: expectedSignature.slice(0, 18) + "…",
+      });
+    }
+    return ok;
+  } catch (e) {
+    console.warn("[webhook verify] timingSafeEqual error:", e);
     return false;
   }
 }
