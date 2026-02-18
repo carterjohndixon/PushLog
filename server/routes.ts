@@ -1559,6 +1559,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get current user info or handle GitHub OAuth
   app.get("/api/auth/user", async (req, res) => {
+    // Prevent caching — OAuth callback must hit origin; cached JSON causes users to see raw API response instead of redirect
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
     try {
       // Check if this is a GitHub OAuth callback
       const code = req.query.code as string;
@@ -1755,6 +1758,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Add Google OAuth callback route
   app.get("/api/google/user", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
     try {
       const code = req.query.code as string;
       const token = await exchangeGoogleCodeForToken(code);
