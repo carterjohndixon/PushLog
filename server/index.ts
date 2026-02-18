@@ -278,26 +278,18 @@ app.post(
       return;
     }
     const sig = req.headers["x-hub-signature-256"] as string | undefined;
-    let secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
-      .split(/\r\n|\r|\n/)[0]
-      .trim()
-      .replace(/^["']|["']$/g, "");
-    // If secret is too long (e.g. 64-hex + next line merged in .env), use first 64 hex chars
-    if (secret.length > 64 && /^[a-fA-F0-9]{64}/.test(secret)) {
-      secret = secret.slice(0, 64);
-    }
+    const secret = process.env.GITHUB_WEBHOOK_SECRET ?? "";
     if (sig) {
       if (!secret) {
         console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET not set");
         res.status(500).json({ error: "Webhook secret not configured" });
         return;
       }
-      const rawBody = raw.toString("utf8");
       const skipVerify = skipGitHubVerify;
       if (skipVerify) {
         console.warn("⚠️ GitHub webhook signature verification SKIPPED (SKIP_GITHUB_WEBHOOK_VERIFY is set). Remove in production.");
-      } else if (!verifyWebhookSignature(rawBody, sig, secret)) {
-        console.error("❌ Invalid webhook signature. bodyLength=" + rawBody.length + " secretLength=" + secret.length + " (see: GitHub repo → Settings → Webhooks → [your webhook] → Secret must match GITHUB_WEBHOOK_SECRET exactly)");
+      } else if (!verifyWebhookSignature(raw, sig, secret)) {
+        console.error("❌ Invalid webhook signature (body length:", raw.length, ")");
         res.status(401).json({ error: "Invalid signature" });
         return;
       }

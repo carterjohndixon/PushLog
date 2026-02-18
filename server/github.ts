@@ -409,58 +409,23 @@ export async function getCommit(
 }
 
 /**
- * Verify webhook signature (GitHub sends X-Hub-Signature-256: sha256=<hex>).
- * Trims secret/signature so env vars with trailing newlines work.
+ * Verify webhook signature using the raw body buffer and exact header value.
+ * GitHub sends X-Hub-Signature-256: sha256=<hex> (HMAC-SHA256 of the raw request body).
+ * No mutation of secret; payload must be the exact Buffer received.
  */
-export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  let trimmedSecret = (secret || "").split(/\r\n|\r|\n/)[0].trim().replace(/^["']|["']$/g, "");
-  if (trimmedSecret.length > 64 && /^[a-fA-F0-9]{64}/.test(trimmedSecret)) {
-    trimmedSecret = trimmedSecret.slice(0, 64);
-  }
-  const trimmedSig = (signature || "").trim();
+export function verifyWebhookSignature(payload: Buffer, signature: string, secret: string): boolean {
+  if (!payload || !Buffer.isBuffer(payload)) return false;
+  if (!secret || typeof secret !== "string") return false;
+  const sig = signature != null ? String(signature).trim() : "";
+  if (!sig || !sig.startsWith("sha256=")) return false;
 
-  if (!trimmedSecret || !trimmedSig || !trimmedSig.startsWith("sha256=")) {
-    console.warn("[webhook verify] missing or invalid inputs:", {
-      secretLength: trimmedSecret.length,
-      sigLength: trimmedSig.length,
-      sigPrefix: trimmedSig.slice(0, 12) + (trimmedSig.length > 12 ? "…" : ""),
-    });
-    return false;
-  }
-
-  const expectedSignature =
-    "sha256=" +
-    crypto
-      .createHmac("sha256", trimmedSecret)
-      .update(payload)
-      .digest("hex");
-
-  const a = Buffer.from(expectedSignature, "utf8");
-  const b = Buffer.from(trimmedSig, "utf8");
-
-  if (a.length !== b.length) {
-    console.warn("[webhook verify] signature length mismatch:", {
-      expectedLen: a.length,
-      receivedLen: b.length,
-      payloadLength: payload.length,
-      secretLength: trimmedSecret.length,
-    });
-    return false;
-  }
-
+  const expected = "sha256=" + crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(sig, "utf8");
+  if (a.length !== b.length) return false;
   try {
-    const ok = crypto.timingSafeEqual(a, b);
-    if (!ok) {
-      console.warn("[webhook verify] signature mismatch (same length):", {
-        payloadLength: payload.length,
-        secretLength: trimmedSecret.length,
-        receivedPrefix: trimmedSig.slice(0, 18) + "…",
-        expectedPrefix: expectedSignature.slice(0, 18) + "…",
-      });
-    }
-    return ok;
-  } catch (e) {
-    console.warn("[webhook verify] timingSafeEqual error:", e);
+    return crypto.timingSafeEqual(a, b);
+  } catch {
     return false;
   }
 }
