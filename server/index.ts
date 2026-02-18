@@ -32,13 +32,18 @@ const root = path.join(__dirname, '..');
 const appEnv = process.env.APP_ENV || process.env.NODE_ENV || '';
 
 if (appEnv === 'production' || appEnv === 'staging') {
-  dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+  const envPath = path.join(root, `.env.${appEnv}`);
+  const result = dotenv.config({ path: envPath, override: true });
+  console.log(`[env] APP_ENV=${appEnv} → loaded ${envPath} (error: ${result.error?.message || 'none'})`);
 } else {
   dotenv.config({ path: path.join(root, '.env') });
   if (appEnv && appEnv !== 'development') {
     dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
   }
 }
+
+const _whSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
+console.log(`[env] GITHUB_WEBHOOK_SECRET: length=${_whSecret.length}, first6=${_whSecret.slice(0, 6)}, last6=${_whSecret.slice(-6)}`);
 
 const skipGitHubVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
 if (skipGitHubVerify) {
@@ -290,7 +295,7 @@ app.post(
       if (skipVerify) {
         console.warn("⚠️ GitHub webhook signature verification SKIPPED (SKIP_GITHUB_WEBHOOK_VERIFY is set). Remove in production.");
       } else if (!verifyWebhookSignature(raw, sig, secret)) {
-        console.error("❌ Invalid webhook signature (body length:", raw.length, ")");
+        console.error(`❌ Invalid webhook signature | bodyLength=${raw.length} secretLength=${secret.length} first6=${secret.slice(0, 6)} sigPrefix=${(sig || '').slice(0, 20)}`);
         res.status(401).json({ error: "Invalid signature" });
         return;
       }
