@@ -128,10 +128,33 @@ export function IntegrationSetupModal({
 
       return response.json();
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: (data, variables) => {
+      // Immediately add the new integration to the repositories-and-integrations cache so it shows on dashboard without reload
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (prev: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!prev) return prev;
+          const repositoryName =
+            repositories.find((r) => r.id?.toString() === variables.repositoryId)?.name ?? 'Unknown Repository';
+          const { openRouterApiKey: _, ...sanitized } = data;
+          const newIntegration = {
+            ...sanitized,
+            repositoryName,
+            lastUsed: data.createdAt ?? null,
+            status: data.isActive ? 'active' : 'paused',
+            notificationLevel: data.notificationLevel ?? 'all',
+            includeCommitSummaries: data.includeCommitSummaries ?? true,
+          };
+          return {
+            ...prev,
+            integrations: [...(prev.integrations ?? []), newIntegration],
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] }); // Also refresh repositories
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] }); // Refetch to stay in sync
       onOpenChange(false);
       const channelName = channels?.find(c => c.id === variables.slackChannelId)?.name ?? '';
       toast({
