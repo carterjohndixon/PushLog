@@ -328,7 +328,7 @@ export function NotificationDetailsModal() {
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Top symptoms</h5>
                       {metadata.topSymptoms.map((s: { exception_type?: string; message?: string; count?: number; spike_factor?: number; fingerprint?: string }, i: number) => (
-                        <div key={i} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1">
+                        <div key={s.fingerprint ?? `symptom-${i}`} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1">
                           <div><span className="font-medium text-foreground">Type:</span> {s.exception_type}</div>
                           {s.message && <div><span className="font-medium text-foreground">Message:</span> {s.message}</div>}
                           {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}
@@ -343,12 +343,12 @@ export function NotificationDetailsModal() {
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Suspected causes</h5>
                       {metadata.suspectedCauses.map((c: { commit_id?: string; score?: number; evidence?: string[] }, i: number) => (
-                        <div key={i} className="text-sm pl-3 border-l-2 border-amber-500/50 space-y-1">
+                        <div key={c.commit_id ?? `cause-${i}`} className="text-sm pl-3 border-l-2 border-amber-500/50 space-y-1">
                           <div><span className="font-medium text-foreground">Commit:</span> <code className="text-xs bg-muted px-1 rounded">{c.commit_id}</code></div>
                           {c.score != null && <div><span className="font-medium text-foreground">Score:</span> {c.score}</div>}
                           {Array.isArray(c.evidence) && c.evidence.length > 0 && (
                             <ul className="list-disc list-inside text-muted-foreground text-xs">
-                              {c.evidence.map((e: string, j: number) => <li key={j}>{e}</li>)}
+                              {c.evidence.map((e: string, j: number) => <li key={`${e}-${j}`}>{e}</li>)}
                             </ul>
                           )}
                         </div>
@@ -360,7 +360,7 @@ export function NotificationDetailsModal() {
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Recommended actions</h5>
                       <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
-                        {metadata.recommendedFirstActions.map((a: string, i: number) => <li key={i}>{a}</li>)}
+                        {metadata.recommendedFirstActions.map((a: string, i: number) => <li key={`${a}-${i}`}>{a}</li>)}
                       </ol>
                     </div>
                   )}
@@ -370,7 +370,7 @@ export function NotificationDetailsModal() {
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto">
                         {metadata.stacktrace.map((f: { file?: string; function?: string }, i: number) => (
-                          <div key={i} className="pl-3 border-l-2 border-amber-500/30 truncate" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
+                          <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 truncate" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
                             <span className="text-muted-foreground">at</span> {f.file}{f.function ? ` (${f.function})` : ''}
                           </div>
                         ))}

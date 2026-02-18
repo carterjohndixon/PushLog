@@ -2479,7 +2479,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // First verify user owns this repository
+      // First veprify user owns this repository
       const existingRepository = await storage.getRepository(repositoryId);
       if (!existingRepository) {
         return res.status(404).json({ error: "Repository not found" });

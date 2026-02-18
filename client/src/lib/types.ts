@@ -41,6 +41,11 @@ export interface RepositoryCardData {
   totalPushes?: number;
   slackChannel?: string;
   integrationCount?: number;
+  monitorAllBranches?: boolean;
+  /** Path prefixes for incident correlation (e.g. ["src/auth", "src/payments"]). */
+  criticalPaths?: string[] | null;
+  /** Optional Sentry/service name for multi-repo correlation. */
+  incidentServiceName?: string | null;
 }
 
 export interface SlackChannel {

@@ -26,8 +26,6 @@ import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
 
-
-
 interface RepositoryCardData {
   id?: string;
   githubId: string;
@@ -1039,8 +1037,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                         </div>
                         
                         <div className="space-y-3">
-                          {events.map((event: any, index: number) => (
-                            <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          {events.map((event: any) => (
+                            <div key={event.id} className="border border-gray-200 rounded-lg p-4">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center space-x-2">
                                   <div className="w-2 h-2 bg-log-green rounded-full"></div>

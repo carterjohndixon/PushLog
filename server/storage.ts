@@ -185,7 +185,9 @@ export class MemStorage implements IStorage {
       isActive: repository.isActive ?? null,
       monitorAllBranches: repository.monitorAllBranches ?? null,
       webhookId: repository.webhookId || null,
-      createdAt: new Date().toISOString()
+      criticalPaths: repository.criticalPaths ?? null,
+      incidentServiceName: repository.incidentServiceName ?? null,
+      createdAt: new Date().toISOString(),
     };
     this.repositories.set(id, newRepository);
     return newRepository;

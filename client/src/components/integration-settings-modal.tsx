@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -163,7 +163,9 @@ export function IntegrationSettingsModal({
     });
   };
 
-  useEffect(() => {
+  const [prevIntegrationId, setPrevIntegrationId] = useState(integration?.id);
+  if (integration?.id !== prevIntegrationId) {
+    setPrevIntegrationId(integration?.id);
     if (integration) {
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
@@ -173,7 +175,7 @@ export function IntegrationSettingsModal({
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
-  }, [integration]);
+  }
 
   const baseUseOpenRouter = !!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey);
   const baseAiModel = integration?.aiModel || "gpt-4o";

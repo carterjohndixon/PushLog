@@ -1244,6 +1244,8 @@ export default function Dashboard() {
           monitorAllBranches: (selectedRepository as any).monitorAllBranches,
           pushEvents: (selectedRepository as any).totalPushes ?? (selectedRepository as any).pushEvents,
           lastPush: selectedRepository.lastPush,
+          criticalPaths: selectedRepository.criticalPaths ?? null,
+          incidentServiceName: selectedRepository.incidentServiceName ?? null,
         } : null}
         updateRepositoryMutation={updateRepositoryMutation}
       />

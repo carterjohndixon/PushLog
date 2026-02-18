@@ -540,7 +540,7 @@ export default function Search() {
                       </h4>
                       <ul className="text-sm text-muted-foreground space-y-1.5 list-none">
                         {pushEventDetail.riskMetadata.explanations.map((e, i) => (
-                          <li key={i} className="flex gap-2">
+                          <li key={`${e}-${i}`} className="flex gap-2">
                             <span className="text-log-green">•</span>
                             <span>{e}</span>
                           </li>
