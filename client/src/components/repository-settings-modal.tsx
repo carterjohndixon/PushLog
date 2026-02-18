@@ -40,43 +40,40 @@ interface RepositorySettingsModalProps {
   updateRepositoryMutation: UseMutationResult<any, Error, { id: string; updates: any }, unknown>;
 }
 
+function getFormState(repo: RepositoryCardData | null) {
+  return {
+    isActive: repo?.isActive ?? true,
+    monitorAllBranches: repo?.monitorAllBranches ?? false,
+    criticalPathsText: (repo?.criticalPaths ?? []).filter(Boolean).join("\n"),
+    incidentServiceName: repo?.incidentServiceName ?? "",
+  };
+}
+
 export function RepositorySettingsModal({
   open,
   onOpenChange,
   repository,
   updateRepositoryMutation,
 }: RepositorySettingsModalProps) {
-  const [isActive, setIsActive] = useState(repository?.isActive ?? true);
-  const [monitorAllBranches, setMonitorAllBranches] = useState(repository?.monitorAllBranches ?? false);
-  const [criticalPathsText, setCriticalPathsText] = useState(
-    () => (repository?.criticalPaths ?? []).filter(Boolean).join("\n")
-  );
-  const [incidentServiceName, setIncidentServiceName] = useState(
-    repository?.incidentServiceName ?? ""
-  );
+  const [form, setForm] = useState(() => getFormState(repository));
 
   useEffect(() => {
-    if (repository) {
-      setIsActive(repository.isActive ?? true);
-      setMonitorAllBranches(repository.monitorAllBranches ?? false);
-      setCriticalPathsText((repository.criticalPaths ?? []).filter(Boolean).join("\n"));
-      setIncidentServiceName(repository.incidentServiceName ?? "");
-    }
+    if (repository) setForm(getFormState(repository));
   }, [repository]);
 
   const handleSave = () => {
     if (!repository?.id) return;
 
-    const criticalPaths = criticalPathsText
+    const criticalPaths = form.criticalPathsText
       .split(/[\n,]+/)
       .map((p) => p.trim())
       .filter(Boolean);
 
     const updates: Record<string, unknown> = {
-      isActive,
-      monitorAllBranches,
+      isActive: form.isActive,
+      monitorAllBranches: form.monitorAllBranches,
       criticalPaths,
-      incidentServiceName: incidentServiceName.trim() || null,
+      incidentServiceName: form.incidentServiceName.trim() || null,
     };
 
     updateRepositoryMutation.mutate({
@@ -87,10 +84,7 @@ export function RepositorySettingsModal({
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen && repository) {
-      setIsActive(repository.isActive ?? true);
-      setMonitorAllBranches(repository.monitorAllBranches ?? false);
-      setCriticalPathsText((repository.criticalPaths ?? []).filter(Boolean).join("\n"));
-      setIncidentServiceName(repository.incidentServiceName ?? "");
+      setForm(getFormState(repository));
     }
     onOpenChange(newOpen);
   };
@@ -162,8 +156,8 @@ export function RepositorySettingsModal({
               </div>
               <Switch
                 id="repository-active"
-                checked={isActive}
-                onCheckedChange={setIsActive}
+                checked={form.isActive}
+                onCheckedChange={(v) => setForm(s => ({ ...s, isActive: v }))}
               />
             </div>
 
@@ -177,8 +171,8 @@ export function RepositorySettingsModal({
               </div>
               <Switch
                 id="monitor-all-branches"
-                checked={monitorAllBranches}
-                onCheckedChange={setMonitorAllBranches}
+                checked={form.monitorAllBranches}
+                onCheckedChange={(v) => setForm(s => ({ ...s, monitorAllBranches: v }))}
               />
             </div>
 
@@ -192,8 +186,8 @@ export function RepositorySettingsModal({
                 id="critical-paths"
                 className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="src/auth&#10;src/payments&#10;migrations"
-                value={criticalPathsText}
-                onChange={(e) => setCriticalPathsText(e.target.value)}
+                value={form.criticalPathsText}
+                onChange={(e) => setForm(s => ({ ...s, criticalPathsText: e.target.value }))}
                 rows={3}
               />
             </div>
@@ -209,8 +203,8 @@ export function RepositorySettingsModal({
                 type="text"
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 placeholder="e.g. api"
-                value={incidentServiceName}
-                onChange={(e) => setIncidentServiceName(e.target.value)}
+                value={form.incidentServiceName}
+                onChange={(e) => setForm(s => ({ ...s, incidentServiceName: e.target.value }))}
               />
             </div>
 

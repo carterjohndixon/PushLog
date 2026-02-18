@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -239,19 +239,19 @@ export function IntegrationSetupModal({
     createIntegrationMutation.mutate(integrationData);
   };
 
-  // Reset form when modal closes
-  useEffect(() => {
-    if (!open) {
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) {
       setSelectedRepository("");
       setSelectedWorkspace("");
       setSelectedChannel("");
       setNotificationLevel("all");
       setIncludeCommitSummaries(true);
     }
-  }, [open]);
+    onOpenChange(newOpen);
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Create Integration</DialogTitle>

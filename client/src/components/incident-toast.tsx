@@ -18,10 +18,16 @@ interface IncidentNotification {
 const AUTO_DISMISS_MS = 12_000;
 const EXIT_DURATION_MS = 300;
 
+interface ToastState {
+  incident: IncidentNotification | null;
+  visible: boolean;
+  exiting: boolean;
+}
+
+const INITIAL_STATE: ToastState = { incident: null, visible: false, exiting: false };
+
 export function IncidentToast() {
-  const [incident, setIncident] = useState<IncidentNotification | null>(null);
-  const [visible, setVisible] = useState(false);
-  const [exiting, setExiting] = useState(false);
+  const [state, setState] = useState<ToastState>(INITIAL_STATE);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastShownId = useRef<string | null>(null);
@@ -45,20 +51,16 @@ export function IncidentToast() {
 
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
-      setIncident(payload);
-      setExiting(false);
-      setVisible(false); // Start off-screen for slide-in
+      setState({ incident: payload, visible: false, exiting: false });
 
-      // Trigger slide-in after a frame so transition runs
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => setVisible(true));
+        requestAnimationFrame(() => setState(s => ({ ...s, visible: true })));
       });
 
       dismissTimer.current = setTimeout(() => {
-        setExiting(true);
+        setState(s => ({ ...s, exiting: true }));
         exitTimer.current = setTimeout(() => {
-          setVisible(false);
-          setIncident(null);
+          setState(INITIAL_STATE);
           lastShownId.current = null;
           dismissTimer.current = null;
           exitTimer.current = null;
@@ -75,29 +77,28 @@ export function IncidentToast() {
   }, []);
 
   const dismiss = () => {
-    setExiting(true);
+    setState(s => ({ ...s, exiting: true }));
     setTimeout(() => {
-      setVisible(false);
-      setIncident(null);
+      setState(INITIAL_STATE);
     }, EXIT_DURATION_MS);
   };
 
   const viewDetails = () => {
-    if (!incident) return;
+    if (!state.incident) return;
     window.dispatchEvent(
-      new CustomEvent("show-notification-modal", { detail: { id: incident.id, notification: incident } })
+      new CustomEvent("show-notification-modal", { detail: { id: state.incident.id, notification: state.incident } })
     );
     dismiss();
   };
 
-  if (!incident) return null;
+  if (!state.incident) return null;
 
   return (
     <div
       className={cn(
         "fixed bottom-6 right-6 z-[9999] w-[360px] max-w-[calc(100vw-2rem)]",
         "transition-all duration-300 ease-out",
-        visible && !exiting
+        state.visible && !state.exiting
           ? "translate-x-0 opacity-100"
           : "translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none"
       )}
@@ -110,9 +111,9 @@ export function IncidentToast() {
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground">{incident.title}</p>
+            <p className="font-semibold text-foreground">{state.incident.title}</p>
             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-              {incident.message}
+              {state.incident.message}
             </p>
             <div className="mt-3 flex gap-2">
               <Button
