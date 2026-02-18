@@ -202,6 +202,9 @@ const AUTH_NO_CACHE_PATHS = [
   '/api/forgot-password',
   '/api/reset-password',
   '/api/change-password',
+  '/api/auth/user',       // OAuth callback — must never be cached or users see JSON instead of redirect
+  '/api/auth/github/exchange',  // POST exchange — same purpose
+  '/api/google/user',    // Google OAuth callback
 ];
 app.use((req, res, next) => {
   if (AUTH_NO_CACHE_PATHS.includes(req.path)) {

@@ -126,8 +126,8 @@ export default function Signup() {
     ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID);
   const githubRedirectUri = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`)
-    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/api/auth/user`);
+    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/github/callback`)
+    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/github/callback`);
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
@@ -139,7 +139,7 @@ export default function Signup() {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
     const clientId = githubClientId || "Ov23li5UgB18JcaZHnxk";
-    const redirectUri = githubRedirectUri || `${window.location.origin}/api/auth/user`;
+    const redirectUri = githubRedirectUri || `${window.location.origin}/auth/github/callback`;
     const scope = "repo user:email admin:org_hook";
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, "0"))

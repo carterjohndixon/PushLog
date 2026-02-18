@@ -1505,7 +1505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build the GitHub OAuth URL (use OAuth App, not GitHub App)
       const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
-      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : "https://pushlog.ai/api/auth/user";
+      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : "https://pushlog.ai/auth/github/callback";
       const scope = "repo user:email admin:org_hook";
       
       console.log("GitHub OAuth connect - Client ID:", clientId.substring(0, 10) + "...");
@@ -1555,6 +1555,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Debug: "env" = using own OAuth app; "default" = prod client id (check GITHUB_OAUTH_CLIENT_ID in .env.staging)
       githubClientIdSource: fromEnv ? "env" : "default",
     });
+  });
+
+  // POST GitHub OAuth exchange — avoids GET caching (CDN/proxy returning cached JSON instead of redirect).
+  // Client lands on /auth/github/callback?code=...&state=..., then POSTs here. Redirect URI must match the authorize request.
+  app.post("/api/auth/github/exchange", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    try {
+      const { code, state, redirectUri: clientRedirectUri } = req.body || {};
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ success: false, error: "Missing authorization code" });
+      }
+      const redirectUri = typeof clientRedirectUri === "string" && clientRedirectUri.startsWith("https://")
+        ? clientRedirectUri
+        : (req.get("host") ? `${req.protocol || "https"}://${req.get("host")}/auth/github/callback` : undefined);
+      const host = (req.get("host") || "").split(":")[0];
+      console.log("GitHub OAuth POST exchange - redirect_uri:", redirectUri, "host:", host);
+      let token: string;
+      try {
+        token = await exchangeCodeForToken(code, redirectUri, req.get("host") || undefined);
+      } catch (tokenError) {
+        console.error("Failed to exchange code for token:", tokenError);
+        return res.status(400).json({ success: false, error: tokenError instanceof Error ? tokenError.message : "Token exchange failed" });
+      }
+      let githubUser;
+      try {
+        githubUser = await getGitHubUser(token);
+      } catch (userError) {
+        console.error("Failed to get GitHub user:", userError);
+        return res.status(400).json({ success: false, error: "Failed to fetch GitHub user" });
+      }
+      const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
+      let user;
+      if (currentUserId) {
+        const currentUser = await databaseStorage.getUserById(currentUserId);
+        if (currentUser) {
+          const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+          if (existingUser && existingUser.id !== currentUser.id) {
+            return res.status(400).json({ success: false, error: "This GitHub account is already connected to another PushLog account." });
+          }
+          user = await databaseStorage.updateUser(currentUser.id, {
+            githubId: githubUser.id.toString(), githubToken: token,
+            email: githubUser.email || currentUser.email, emailVerified: true
+          });
+        }
+      } else {
+        const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+        if (existingUser) {
+          user = await databaseStorage.updateUser(existingUser.id, {
+            githubToken: token, email: githubUser.email || existingUser.email, emailVerified: true
+          });
+        } else {
+          const existingUserByUsername = await databaseStorage.getUserByUsername(githubUser.login);
+          if (existingUserByUsername) {
+            user = await databaseStorage.updateUser(existingUserByUsername.id, {
+              githubId: githubUser.id.toString(), githubToken: token,
+              email: githubUser.email || existingUserByUsername.email, emailVerified: true
+            });
+          } else {
+            try {
+              user = await databaseStorage.createUser({
+                username: githubUser.login, email: githubUser.email,
+                githubId: githubUser.id.toString(), githubToken: token, emailVerified: true
+              });
+            } catch (createError: any) {
+              if (createError.message?.includes("users_username_key") || createError.message?.includes("duplicate key")) {
+                const conflictUser = await databaseStorage.getUserByUsername(githubUser.login);
+                if (conflictUser) {
+                  user = await databaseStorage.updateUser(conflictUser.id, {
+                    githubId: githubUser.id.toString(), githubToken: token,
+                    email: githubUser.email || conflictUser.email, emailVerified: true
+                  });
+                } else throw createError;
+              } else throw createError;
+            }
+          }
+        }
+      }
+      if (!user?.id) {
+        return res.status(500).json({ success: false, error: "Failed to create or update user" });
+      }
+      req.session!.userId = user.id;
+      req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
+      req.session!.save((err) => {
+        if (err) {
+          console.error("❌ GitHub OAuth: session save failed:", err);
+          return res.status(500).json({ success: false, error: "Session save failed" });
+        }
+        return res.status(200).json({ success: true });
+      });
+    } catch (error) {
+      console.error("GitHub OAuth exchange error:", error);
+      return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Exchange failed" });
+    }
   });
 
   // Get current user info or handle GitHub OAuth

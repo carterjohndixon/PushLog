@@ -3,6 +3,12 @@ import { useLocation } from "wouter";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
+/**
+ * GitHub OAuth callback page.
+ * User lands here after authorizing on GitHub (redirect_uri = /auth/github/callback).
+ * We POST the code to the API instead of using GET — avoids CDN/proxy caching the API response
+ * which can cause users to see raw JSON instead of being redirected.
+ */
 export default function GitHubCallback() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -10,15 +16,18 @@ export default function GitHubCallback() {
   const calledRef = useRef(false);
 
   const mutation = useMutation({
-    mutationFn: async (code: string) => {
-      const response = await fetch(`/api/auth/user?code=${code}`, {
-        headers: { "Accept": "application/json" },
+    mutationFn: async ({ code, state }: { code: string; state: string | null }) => {
+      const redirectUri = `${window.location.origin}/auth/github/callback`;
+      const response = await fetch("/api/auth/github/exchange", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ code, state, redirectUri }),
       });
-      if (response.redirected || response.status === 302 || response.status === 301) {
-        return { success: true };
-      }
       const data = await response.json();
-      if (!data.success) throw new Error(data.error || "Authentication failed");
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Authentication failed");
+      }
       return data;
     },
     onSuccess: () => {
@@ -27,7 +36,9 @@ export default function GitHubCallback() {
         title: "GitHub Connected",
         description: "Your GitHub account has been successfully connected.",
       });
-      setLocation("/dashboard");
+      const returnPath = localStorage.getItem("returnPath");
+      localStorage.removeItem("returnPath");
+      setLocation(returnPath && returnPath.startsWith("/") ? returnPath : "/dashboard");
     },
     onError: (error: Error) => {
       console.error("GitHub authentication error:", error);
@@ -47,9 +58,20 @@ export default function GitHubCallback() {
     const query = new URLSearchParams(window.location.search);
     const code = query.get("code");
     const state = query.get("state");
+    const error = query.get("error");
     const storedState = localStorage.getItem("github_oauth_state");
 
     localStorage.removeItem("github_oauth_state");
+
+    if (error) {
+      toast({
+        title: "GitHub Authorization Failed",
+        description: query.get("error_description") || error,
+        variant: "destructive",
+      });
+      setLocation("/login");
+      return;
+    }
 
     if (!code) {
       toast({
@@ -71,7 +93,7 @@ export default function GitHubCallback() {
       return;
     }
 
-    mutation.mutate(code);
+    mutation.mutate({ code, state });
   }, []);
 
   return (

@@ -105,8 +105,8 @@ export default function Login() {
     ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv")
     : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk");
   const githubRedirectURL = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || "https://staging.pushlog.ai/api/auth/user")
-    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || "https://pushlog.ai/api/auth/user")
+    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || "https://staging.pushlog.ai/auth/github/callback")
+    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || "https://pushlog.ai/auth/github/callback")
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
