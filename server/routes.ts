@@ -18,6 +18,7 @@ import {
 } from './productionDeployClient';
 import { 
   exchangeCodeForToken, 
+  getGitHubOAuthConfig,
   getGitHubUser, 
   getUserRepositories, 
   createWebhook,
@@ -1557,7 +1558,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // POST GitHub OAuth exchange — avoids GET caching (CDN/proxy returning cached JSON instead of redirect).
+  // Init GitHub OAuth for login — stores state server-side, redirects to GitHub. User returns to GET /auth/github/callback.
+  app.get("/api/auth/github/init", (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    const rawReturn = (req.query.returnPath as string) || "/dashboard";
+    const safeReturn = rawReturn.startsWith("/") && !rawReturn.includes("..") ? rawReturn : "/dashboard";
+    const { clientId, redirectUri } = getGitHubOAuthConfig(req.get("host") || undefined);
+    const stateHex = crypto.randomBytes(32).toString("hex");
+    const state = `${stateHex}:${Buffer.from(safeReturn, "utf8").toString("base64url")}`;
+    databaseStorage.storeOAuthSession({
+      token: crypto.randomBytes(16).toString("hex"),
+      state,
+      userId: "__login__",
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    });
+    const scope = "repo user:email admin:org_hook";
+    const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}`;
+    res.redirect(302, url);
+  });
+
+  // GET GitHub OAuth callback — server-side handling. GitHub redirects here; we exchange, set session, redirect to dashboard.
+  // Single round-trip, Set-Cookie in navigation response = reliable cookie acceptance (works behind Cloudflare).
+  app.get("/auth/github/callback", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    const code = req.query.code as string;
+    const stateRaw = req.query.state as string;
+    const error = req.query.error as string;
+
+    if (error) {
+      return res.redirect(`/login?error=${encodeURIComponent(error)}`);
+    }
+    if (!code || !stateRaw) {
+      return res.redirect("/login?error=missing_code_or_state");
+    }
+
+    const currentUserId = await getUserIdFromOAuthState(stateRaw);
+    if (!currentUserId) {
+      return res.redirect("/login?error=invalid_state");
+    }
+    await databaseStorage.deleteOAuthSession(stateRaw);
+
+    let returnPath = "/dashboard";
+    const colonIdx = stateRaw.indexOf(":");
+    if (colonIdx > 0) {
+      try {
+        const decoded = Buffer.from(stateRaw.slice(colonIdx + 1), "base64url").toString("utf8");
+        if (decoded.startsWith("/")) returnPath = decoded;
+      } catch (_) { /* ignore */ }
+    }
+
+    const redirectUri = req.get("host")
+      ? `${req.protocol || "https"}://${req.get("host")}/auth/github/callback`
+      : (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : undefined);
+
+    let token: string;
+    try {
+      token = await exchangeCodeForToken(code, redirectUri, req.get("host") || undefined);
+    } catch (err) {
+      console.error("GitHub OAuth exchange failed:", err);
+      return res.redirect(`/login?error=${encodeURIComponent(err instanceof Error ? err.message : "exchange_failed")}`);
+    }
+
+    let githubUser: { id: number; login: string; email: string | null };
+    try {
+      githubUser = await getGitHubUser(token);
+    } catch (err) {
+      console.error("GitHub user fetch failed:", err);
+      return res.redirect("/login?error=user_fetch_failed");
+    }
+
+    const isLoginFlow = currentUserId === "__login__";
+    let user: { id: string; username?: string | null; email?: string | null; githubId?: string | null; googleId?: string | null } | undefined;
+
+    if (isLoginFlow) {
+      const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+      if (existingUser) {
+        user = await databaseStorage.updateUser(existingUser.id, {
+          githubToken: token,
+          email: githubUser.email || existingUser.email,
+          emailVerified: true,
+        });
+      } else {
+        const existingByUsername = await databaseStorage.getUserByUsername(githubUser.login);
+        if (existingByUsername) {
+          user = await databaseStorage.updateUser(existingByUsername.id, {
+            githubId: githubUser.id.toString(),
+            githubToken: token,
+            email: githubUser.email || existingByUsername.email,
+            emailVerified: true,
+          });
+        } else {
+          try {
+            user = await databaseStorage.createUser({
+              username: githubUser.login,
+              email: githubUser.email,
+              githubId: githubUser.id.toString(),
+              githubToken: token,
+              emailVerified: true,
+            });
+          } catch (createErr: any) {
+            if (createErr.message?.includes("users_username_key") || createErr.message?.includes("duplicate key")) {
+              const conflict = await databaseStorage.getUserByUsername(githubUser.login);
+              if (conflict) {
+                user = await databaseStorage.updateUser(conflict.id, {
+                  githubId: githubUser.id.toString(),
+                  githubToken: token,
+                  email: githubUser.email || conflict.email,
+                  emailVerified: true,
+                });
+              } else throw createErr;
+            } else throw createErr;
+          }
+        }
+      }
+    } else {
+      const currentUser = await databaseStorage.getUserById(currentUserId);
+      if (!currentUser) {
+        return res.redirect("/login?error=session_expired");
+      }
+      const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
+      if (existingUser && existingUser.id !== currentUser.id) {
+        return res.redirect(`/dashboard?error=github_already_connected`);
+      }
+      user = await databaseStorage.updateUser(currentUser.id, {
+        githubId: githubUser.id.toString(),
+        githubToken: token,
+        email: githubUser.email || currentUser.email,
+        emailVerified: true,
+      });
+    }
+
+    if (!user?.id) {
+      return res.redirect("/login?error=user_creation_failed");
+    }
+
+    req.session!.regenerate((regErr) => {
+      if (regErr) {
+        console.error("GitHub OAuth session regenerate failed:", regErr);
+        return res.redirect("/login?error=session_failed");
+      }
+      req.session!.userId = user!.id;
+      req.session!.user = { userId: user!.id, username: user!.username || "", email: user!.email ?? null, githubConnected: true, googleConnected: !!user!.googleId, emailVerified: true };
+      req.session!.save((err) => {
+        if (err) {
+          console.error("GitHub OAuth session save failed:", err);
+          return res.redirect("/login?error=session_save_failed");
+        }
+        const targetPath = returnPath;
+        const host = (req.get("host") || "").split(":")[0];
+        const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
+        const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+        res.redirect(302, base ? `${base}${targetPath}` : targetPath);
+      });
+    });
+  });
+
+  // POST GitHub OAuth exchange — fallback when form POST is used (client callback page).
   // Client lands on /auth/github/callback?code=...&state=..., then POSTs here. Redirect URI must match the authorize request.
   app.post("/api/auth/github/exchange", async (req, res) => {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");

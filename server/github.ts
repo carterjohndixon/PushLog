@@ -44,6 +44,30 @@ interface GitHubWebhook {
   };
 }
 
+/** Get client ID and redirect URI for GitHub OAuth based on host (for login/init flow). */
+export function getGitHubOAuthConfig(requestHost?: string): { clientId: string; redirectUri: string } {
+  const host = (requestHost || "").split(":")[0];
+  const isProductionHost = host === "pushlog.ai";
+  const isStagingHost = host === "staging.pushlog.ai";
+
+  let clientId: string;
+  if (isProductionHost) {
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID_PROD || "Ov23li5UgB18JcaZHnxk";
+  } else if (isStagingHost) {
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID_STAGING || process.env.GITHUB_OAUTH_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv";
+  } else {
+    clientId = process.env.GITHUB_OAUTH_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
+  }
+
+  const redirectUri = process.env.APP_URL
+    ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback`
+    : host
+      ? `https://${host}/auth/github/callback`
+      : "https://pushlog.ai/auth/github/callback";
+
+  return { clientId, redirectUri };
+}
+
 /**
  * Exchange OAuth code for access token.
  * redirect_uri must match the callback URL used in the authorization request (required by GitHub when app has multiple callbacks or in strict mode).

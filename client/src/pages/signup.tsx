@@ -120,14 +120,8 @@ export default function Signup() {
     });
   };
 
-  // OAuth env: use VITE_STAGE_* on staging.pushlog.ai, else VITE_PROD_* (from .env.local), with fallbacks.
+  // OAuth: GitHub uses server-side init (/api/auth/github/init). Google uses env.
   const isStaging = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
-  const githubClientId = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID)
-    : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || import.meta.env.VITE_GITHUB_CLIENT_ID);
-  const githubRedirectUri = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/github/callback`)
-    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || import.meta.env.VITE_GITHUB_REDIRECT_URI || `${window.location.origin}/auth/github/callback`);
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
@@ -138,16 +132,7 @@ export default function Signup() {
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
-    const clientId = githubClientId || "Ov23li5UgB18JcaZHnxk";
-    const redirectUri = githubRedirectUri || `${window.location.origin}/auth/github/callback`;
-    const scope = "repo user:email admin:org_hook";
-    const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-    localStorage.setItem("github_oauth_state", state);
-    setTimeout(() => {
-      window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`;
-    }, 500);
+    window.location.href = "/api/auth/github/init?returnPath=/dashboard";
   };
 
   const handleGoogleConnect = () => {

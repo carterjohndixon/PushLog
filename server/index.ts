@@ -203,7 +203,9 @@ const AUTH_NO_CACHE_PATHS = [
   '/api/reset-password',
   '/api/change-password',
   '/api/auth/user',       // OAuth callback — must never be cached or users see JSON instead of redirect
-  '/api/auth/github/exchange',  // POST exchange — same purpose
+  '/api/auth/github/init',     // GitHub OAuth init — redirects to GitHub
+  '/api/auth/github/exchange',  // POST exchange — fallback
+  '/auth/github/callback',     // Server-side callback — Set-Cookie must reach browser
   '/api/google/user',    // Google OAuth callback
 ];
 app.use((req, res, next) => {

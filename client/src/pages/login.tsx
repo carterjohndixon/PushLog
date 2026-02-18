@@ -98,15 +98,9 @@ export default function Login() {
     });
   };
 
-  // OAuth: client IDs from env (staging vs prod app); redirect URIs always from current origin so we never send wrong domain.
+  // OAuth: GitHub uses server-side init (/api/auth/github/init). Google uses client ID from env.
   const isStaging = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const githubClientId = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_CLIENT_ID || "Ov23liXZqMTCvDM4tDHv")
-    : (import.meta.env.VITE_PROD_GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk");
-  const githubRedirectURL = isStaging
-    ? (import.meta.env.VITE_STAGE_GITHUB_REDIRECT_URI || "https://staging.pushlog.ai/auth/github/callback")
-    : (import.meta.env.VITE_PROD_GITHUB_REDIRECT_URI || "https://pushlog.ai/auth/github/callback")
   const googleClientId = isStaging
     ? (import.meta.env.VITE_STAGE_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID)
     : (import.meta.env.VITE_PROD_GOOGLE_CLIENT_ID || import.meta.env.VITE_GOOGLE_CLIENT_ID);
@@ -115,16 +109,7 @@ export default function Login() {
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
-    const clientId = githubClientId;
-    const redirectUri = githubRedirectURL
-    const scope = "repo user:email admin:org_hook";
-    const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-    localStorage.setItem("github_oauth_state", state);
-    setTimeout(() => {
-      window.location.href = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${state}`;
-    }, 500);
+    window.location.href = "/api/auth/github/init?returnPath=/dashboard";
   };
 
   const handleGoogleConnect = () => {
