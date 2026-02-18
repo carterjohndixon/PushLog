@@ -420,10 +420,21 @@ export default function Dashboard() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, integrationId) => {
       setIsDeleteConfirmationOpen(false);
       setIntegrationToDelete(null);
       setSelectedIntegration(null);
+      // Immediately remove from cache so it disappears from UI without reload
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (prev: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            integrations: (prev.integrations ?? []).filter((i) => i.id !== integrationId),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
@@ -1210,6 +1221,29 @@ export default function Dashboard() {
           isConnected: repo.isConnected,
           private: repo.private
         }))}
+        onIntegrationCreated={(data, variables) => {
+          queryClient.setQueryData(
+            ['/api/repositories-and-integrations'],
+            (prev: { repositories: any[]; integrations: any[] } | undefined) => {
+              if (!prev) return prev;
+              const repositoryName =
+                repositories.find((r) => r.id?.toString() === variables.repositoryId)?.name ?? 'Unknown Repository';
+              const { openRouterApiKey: _, ...sanitized } = data;
+              const newIntegration = {
+                ...sanitized,
+                repositoryName,
+                lastUsed: data.createdAt ?? null,
+                status: data.isActive ? 'active' : 'paused',
+                notificationLevel: data.notificationLevel ?? 'all',
+                includeCommitSummaries: data.includeCommitSummaries ?? true,
+              };
+              return {
+                ...prev,
+                integrations: [...(prev.integrations ?? []), newIntegration],
+              };
+            }
+          );
+        }}
       />
 
       <ConfirmRepositoryDeletionModal 
