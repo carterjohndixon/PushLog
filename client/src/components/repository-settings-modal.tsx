@@ -58,8 +58,8 @@ export function RepositorySettingsModal({
   const [form, setForm] = useState(() => getFormState(repository));
 
   useEffect(() => {
-    if (repository) setForm(getFormState(repository));
-  }, [repository]);
+    if (open && repository) setForm(getFormState(repository));
+  }, [open, repository?.id]);
 
   const handleSave = () => {
     if (!repository?.id) return;
