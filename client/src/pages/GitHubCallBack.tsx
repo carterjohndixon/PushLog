@@ -18,28 +18,34 @@ export default function GitHubCallback() {
   const mutation = useMutation({
     mutationFn: async ({ code, state }: { code: string; state: string | null }) => {
       const redirectUri = `${window.location.origin}/auth/github/callback`;
+      const returnPath = localStorage.getItem("returnPath");
+      localStorage.removeItem("returnPath");
       const response = await fetch("/api/auth/github/exchange", {
         method: "POST",
         credentials: "include",
+        redirect: "manual",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ code, state, redirectUri }),
+        body: JSON.stringify({ code, state, redirectUri, returnPath }),
       });
+      if (response.type === "opaqueredirect" || response.status === 302 || response.redirected) {
+        const target = (returnPath && returnPath.startsWith("/") ? returnPath : null) || "/dashboard";
+        window.location.href = target;
+        return { redirected: true };
+      }
       const data = await response.json();
       if (!response.ok || !data.success) {
         throw new Error(data.error || "Authentication failed");
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      if (data?.redirected) return;
       queryClient.invalidateQueries();
       toast({
         title: "GitHub Connected",
         description: "Your GitHub account has been successfully connected.",
       });
-      const returnPath = localStorage.getItem("returnPath");
-      localStorage.removeItem("returnPath");
-      const target = returnPath && returnPath.startsWith("/") ? returnPath : "/dashboard";
-      window.location.href = target; // Full page nav so browser sends session cookie (client-side setLocation can run before cookie is committed)
+      window.location.href = "/dashboard";
     },
     onError: (error: Error) => {
       console.error("GitHub authentication error:", error);

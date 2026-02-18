@@ -1563,7 +1563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
     res.setHeader("Pragma", "no-cache");
     try {
-      const { code, state, redirectUri: clientRedirectUri } = req.body || {};
+      const { code, state, redirectUri: clientRedirectUri, returnPath } = req.body || {};
       if (!code || typeof code !== "string") {
         return res.status(400).json({ success: false, error: "Missing authorization code" });
       }
@@ -1648,7 +1648,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("❌ GitHub OAuth: session save failed:", err);
             return res.status(500).json({ success: false, error: "Session save failed" });
           }
-          return res.status(200).json({ success: true });
+          const targetPath = (typeof returnPath === "string" && returnPath.startsWith("/")) ? returnPath : "/dashboard";
+          const host = (req.get("host") || "").split(":")[0];
+          const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
+          const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+          const redirectUrl = base ? `${base}${targetPath}` : targetPath;
+          return res.redirect(302, redirectUrl);
         });
       });
     } catch (error) {
