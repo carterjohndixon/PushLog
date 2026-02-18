@@ -270,8 +270,11 @@ app.post(
       res.status(400).json({ error: "Invalid body" });
       return;
     }
-    const sig = req.headers["x-hub-signature"] as string | undefined;
+    const sig = req.headers["x-hub-signature-256"] as string | undefined;
     const secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/\r\n|\r|\n/g, "");
     if (sig) {
       if (!secret) {
         console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET not set");
