@@ -256,9 +256,10 @@ if (sentryIngestUrl) {
 }
 
 // GitHub webhook: must receive raw body for signature verification (before body parsers)
+// type: () => true so we always get raw body even if proxy changes Content-Type
 app.post(
   "/api/webhooks/github",
-  express.raw({ type: "application/json", limit: "1mb" }),
+  express.raw({ type: () => true, limit: "1mb" }),
   (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const raw = req.body;
     if (!raw || !Buffer.isBuffer(raw)) {
@@ -266,7 +267,10 @@ app.post(
       return;
     }
     const sig = req.headers["x-hub-signature-256"] as string | undefined;
-    const secret = (process.env.GITHUB_WEBHOOK_SECRET || "").trim();
+    const secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .replace(/\r\n|\r|\n/g, "");
     if (sig) {
       if (!secret) {
         console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET not set");
@@ -274,8 +278,11 @@ app.post(
         return;
       }
       const rawBody = raw.toString("utf8");
-      if (!verifyWebhookSignature(rawBody, sig, secret)) {
-        console.error("❌ Invalid webhook signature (body length:", rawBody.length, "). Check: GITHUB_WEBHOOK_SECRET exactly matches the secret in GitHub repo → Settings → Webhooks; no extra quotes/spaces in .env.");
+      const skipVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
+      if (skipVerify) {
+        console.warn("⚠️ GitHub webhook signature verification SKIPPED (SKIP_GITHUB_WEBHOOK_VERIFY is set). Remove in production.");
+      } else if (!verifyWebhookSignature(rawBody, sig, secret)) {
+        console.error("❌ Invalid webhook signature. bodyLength=" + rawBody.length + " secretLength=" + secret.length + " (see: GitHub repo → Settings → Webhooks → [your webhook] → Secret must match GITHUB_WEBHOOK_SECRET exactly)");
         res.status(401).json({ error: "Invalid signature" });
         return;
       }
