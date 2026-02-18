@@ -454,13 +454,33 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       if (!response.ok) throw new Error('Failed to update repository');
       return response.json();
     },
-    onSuccess: () => {
-      setIsRepositorySettingsOpen(false);
-      setSelectedRepository(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+    onSuccess: (data, variables) => {
+      // Update cache immediately so changes show without refresh
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (old: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            repositories: old.repositories.map((r) =>
+              r.id === variables.id
+                ? {
+                    ...r,
+                    criticalPaths: data.criticalPaths ?? null,
+                    incidentServiceName: data.incidentServiceName ?? null,
+                    isActive: data.isActive ?? r.isActive,
+                    monitorAllBranches: data.monitorAllBranches ?? r.monitorAllBranches,
+                  }
+                : r
+            ),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
+      setIsRepositorySettingsOpen(false);
+      setSelectedRepository(null);
       toast({
         title: "Settings Updated",
         description: "Repository settings have been successfully updated.",

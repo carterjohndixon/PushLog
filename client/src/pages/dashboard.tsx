@@ -478,13 +478,32 @@ export default function Dashboard() {
       return result;
     },
     onSuccess: (data, variables) => {
-      setIsRepositorySettingsOpen(false);
-      setSelectedRepository(null);
-      // Force refetch of all related queries
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+      // Update cache immediately so changes show without refresh
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (old: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            repositories: old.repositories.map((r) =>
+              r.id === variables.id
+                ? {
+                    ...r,
+                    criticalPaths: data.criticalPaths ?? null,
+                    incidentServiceName: data.incidentServiceName ?? null,
+                    isActive: data.isActive ?? r.isActive,
+                    monitorAllBranches: data.monitorAllBranches ?? r.monitorAllBranches,
+                  }
+                : r
+            ),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
+      setIsRepositorySettingsOpen(false);
+      setSelectedRepository(null);
       toast({
         title: "Settings Updated",
         description: "Repository settings have been successfully updated.",
