@@ -6,8 +6,13 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env from project root (same as server/index.ts) so ENCRYPTION_KEY is available
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+// Load .env then .env.{APP_ENV} from project root (same order as server/index.ts) so ENCRYPTION_KEY matches
+const root = path.join(__dirname, '..');
+dotenv.config({ path: path.join(root, '.env') });
+const appEnv = process.env.APP_ENV || '';
+if (appEnv && appEnv !== 'development') {
+  dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
+}
 
 // Encryption key must be 32 bytes (64 hex chars) and STABLE across restarts.
 // Without it, encrypted data (e.g. OpenRouter API key) cannot be decrypted after restart.
