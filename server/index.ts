@@ -32,6 +32,10 @@ const appEnv = process.env.APP_ENV || '';
 if (appEnv && appEnv !== 'development') {
   dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
 }
+const skipGitHubVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
+if (skipGitHubVerify) {
+  console.warn("⚠️ SKIP_GITHUB_WEBHOOK_VERIFY is set - GitHub webhook signature verification is DISABLED.");
+}
 
 // Initialize Sentry for error tracking
 if (process.env.SENTRY_DSN) {
@@ -266,11 +270,8 @@ app.post(
       res.status(400).json({ error: "Invalid body" });
       return;
     }
-    const sig = req.headers["x-hub-signature-256"] as string | undefined;
+    const sig = req.headers["x-hub-signature"] as string | undefined;
     const secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
-      .trim()
-      .replace(/^["']|["']$/g, "")
-      .replace(/\r\n|\r|\n/g, "");
     if (sig) {
       if (!secret) {
         console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET not set");
@@ -278,7 +279,7 @@ app.post(
         return;
       }
       const rawBody = raw.toString("utf8");
-      const skipVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
+      const skipVerify = skipGitHubVerify;
       if (skipVerify) {
         console.warn("⚠️ GitHub webhook signature verification SKIPPED (SKIP_GITHUB_WEBHOOK_VERIFY is set). Remove in production.");
       } else if (!verifyWebhookSignature(rawBody, sig, secret)) {
