@@ -1,1 +1,3 @@
 Resetting test file
+
+test
