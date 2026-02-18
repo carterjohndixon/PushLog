@@ -392,8 +392,24 @@ export default function Dashboard() {
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+    onSuccess: (_data, { integrationId, isActive }) => {
+      const newStatus = isActive ? 'active' : 'paused';
+      // Immediately update cache so color/view changes without reload
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (prev: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            integrations: (prev.integrations ?? []).map((i) =>
+              String(i.id) === String(integrationId)
+                ? { ...i, isActive, status: newStatus }
+                : i
+            ),
+          };
+        }
+      );
+      // Defer invalidation so UI paints first; our setQueryData is already correct
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
@@ -429,13 +445,23 @@ export default function Dashboard() {
         ['/api/repositories-and-integrations'],
         (prev: { repositories: any[]; integrations: any[] } | undefined) => {
           if (!prev) return prev;
+          const idToRemove = String(integrationId);
+          const deletedIntegration = (prev.integrations ?? []).find((i) => String(i.id) === idToRemove);
+          const repoIdToDecrement = deletedIntegration?.repositoryId;
           return {
             ...prev,
-            integrations: (prev.integrations ?? []).filter((i) => i.id !== integrationId),
+            integrations: (prev.integrations ?? []).filter((i) => String(i.id) !== idToRemove),
+            repositories: repoIdToDecrement
+              ? (prev.repositories ?? []).map((r) =>
+                  String(r.id) === String(repoIdToDecrement)
+                    ? { ...r, integrationCount: Math.max(0, (r.integrationCount ?? 1) - 1) }
+                    : r
+                )
+              : prev.repositories,
           };
         }
       );
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+      // Skip invalidating repositories-and-integrations — we've already updated it
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       toast({
