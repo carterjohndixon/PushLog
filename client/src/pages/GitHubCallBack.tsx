@@ -1,66 +1,25 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 /**
  * GitHub OAuth callback page.
  * User lands here after authorizing on GitHub (redirect_uri = /auth/github/callback).
- * We POST the code to the API instead of using GET — avoids CDN/proxy caching the API response
- * which can cause users to see raw JSON instead of being redirected.
+ * We use a form POST (not fetch) so the server's 302 + Set-Cookie is a full-page navigation
+ * response — browsers reliably process Set-Cookie from navigation, unlike fetch responses.
+ * This also avoids CDN/proxy caching the API (which caused users to see raw JSON).
  */
 export default function GitHubCallback() {
   const [, setLocation] = useLocation();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const calledRef = useRef(false);
-
-  const mutation = useMutation({
-    mutationFn: async ({ code, state }: { code: string; state: string | null }) => {
-      const redirectUri = `${window.location.origin}/auth/github/callback`;
-      const returnPath = localStorage.getItem("returnPath");
-      localStorage.removeItem("returnPath");
-      const response = await fetch("/api/auth/github/exchange", {
-        method: "POST",
-        credentials: "include",
-        redirect: "manual",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ code, state, redirectUri, returnPath }),
-      });
-      if (response.type === "opaqueredirect" || response.status === 302 || response.redirected) {
-        const target = (returnPath && returnPath.startsWith("/") ? returnPath : null) || "/dashboard";
-        window.location.href = target;
-        return { redirected: true };
-      }
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Authentication failed");
-      }
-      return data;
-    },
-    onSuccess: (data) => {
-      if (data?.redirected) return;
-      queryClient.invalidateQueries();
-      toast({
-        title: "GitHub Connected",
-        description: "Your GitHub account has been successfully connected.",
-      });
-      window.location.href = "/dashboard";
-    },
-    onError: (error: Error) => {
-      console.error("GitHub authentication error:", error);
-      toast({
-        title: "Connection Failed",
-        description: error.message || "Failed to connect GitHub account. Please try again.",
-        variant: "destructive",
-      });
-      setLocation("/login");
-    },
-  });
+  const formRef = useRef<HTMLFormElement>(null);
+  const submittedRef = useRef(false);
+  const [returnPath] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("returnPath") || "" : ""
+  );
 
   useEffect(() => {
-    if (calledRef.current) return;
-    calledRef.current = true;
+    if (submittedRef.current) return;
 
     const query = new URLSearchParams(window.location.search);
     const code = query.get("code");
@@ -69,6 +28,7 @@ export default function GitHubCallback() {
     const storedState = localStorage.getItem("github_oauth_state");
 
     localStorage.removeItem("github_oauth_state");
+    localStorage.removeItem("returnPath");
 
     if (error) {
       toast({
@@ -100,11 +60,27 @@ export default function GitHubCallback() {
       return;
     }
 
-    mutation.mutate({ code, state });
+    submittedRef.current = true;
+    formRef.current?.submit();
   }, []);
+
+  const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const code = query?.get("code") ?? "";
+  const state = query?.get("state") ?? "";
 
   return (
     <div className="flex h-screen justify-center items-center">
+      <form
+        ref={formRef}
+        method="POST"
+        action="/api/auth/github/exchange"
+        className="hidden"
+      >
+        <input type="hidden" name="code" value={code} />
+        <input type="hidden" name="state" value={state} />
+        <input type="hidden" name="redirectUri" value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/github/callback`} />
+        {returnPath && <input type="hidden" name="returnPath" value={returnPath} />}
+      </form>
       <p className="text-lg">Connecting to GitHub...</p>
     </div>
   );

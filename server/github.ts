@@ -57,7 +57,7 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string, r
   let clientId: string;
   let clientSecret: string | undefined;
   if (isProductionHost) {
-    // Production OAuth app only (callback https://pushlog.ai/api/auth/user). Do not use generic env — server may have staging creds loaded.
+    // Production OAuth app only (callback https://pushlog.ai/auth/github/callback). Do not use generic env — server may have staging creds loaded.
     clientId = process.env.GITHUB_OAUTH_CLIENT_ID_PROD || "Ov23li5UgB18JcaZHnxk";
     clientSecret = process.env.GITHUB_OAUTH_CLIENT_SECRET_PROD || process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET;
   } else if (isStagingHost) {
@@ -70,7 +70,7 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string, r
 
   const effectiveRedirectUri =
     redirectUri ||
-    (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : undefined);
+    (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : undefined);
 
   console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...", isProductionHost ? "(production host)" : isStagingHost ? "(staging host)" : "");
   console.log("GitHub OAuth token exchange - Client Secret present:", !!clientSecret);
