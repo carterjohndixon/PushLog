@@ -278,10 +278,14 @@ app.post(
       return;
     }
     const sig = req.headers["x-hub-signature-256"] as string | undefined;
-    const secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
+    let secret = (process.env.GITHUB_WEBHOOK_SECRET || "")
       .split(/\r\n|\r|\n/)[0]
       .trim()
       .replace(/^["']|["']$/g, "");
+    // If secret is too long (e.g. 64-hex + next line merged in .env), use first 64 hex chars
+    if (secret.length > 64 && /^[a-fA-F0-9]{64}/.test(secret)) {
+      secret = secret.slice(0, 64);
+    }
     if (sig) {
       if (!secret) {
         console.error("❌ GitHub webhook: GITHUB_WEBHOOK_SECRET not set");

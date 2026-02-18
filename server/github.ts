@@ -413,7 +413,10 @@ export async function getCommit(
  * Trims secret/signature so env vars with trailing newlines work.
  */
 export function verifyWebhookSignature(payload: string, signature: string, secret: string): boolean {
-  const trimmedSecret = (secret || "").split(/\r\n|\r|\n/)[0].trim().replace(/^["']|["']$/g, "");
+  let trimmedSecret = (secret || "").split(/\r\n|\r|\n/)[0].trim().replace(/^["']|["']$/g, "");
+  if (trimmedSecret.length > 64 && /^[a-fA-F0-9]{64}/.test(trimmedSecret)) {
+    trimmedSecret = trimmedSecret.slice(0, 64);
+  }
   const trimmedSig = (signature || "").trim();
 
   if (!trimmedSecret || !trimmedSig || !trimmedSig.startsWith("sha256=")) {
