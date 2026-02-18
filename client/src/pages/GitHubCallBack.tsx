@@ -38,7 +38,8 @@ export default function GitHubCallback() {
       });
       const returnPath = localStorage.getItem("returnPath");
       localStorage.removeItem("returnPath");
-      setLocation(returnPath && returnPath.startsWith("/") ? returnPath : "/dashboard");
+      const target = returnPath && returnPath.startsWith("/") ? returnPath : "/dashboard";
+      window.location.href = target; // Full page nav so browser sends session cookie (client-side setLocation can run before cookie is committed)
     },
     onError: (error: Error) => {
       console.error("GitHub authentication error:", error);

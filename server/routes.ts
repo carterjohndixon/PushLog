@@ -1636,14 +1636,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user?.id) {
         return res.status(500).json({ success: false, error: "Failed to create or update user" });
       }
-      req.session!.userId = user.id;
-      req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
-      req.session!.save((err) => {
-        if (err) {
-          console.error("❌ GitHub OAuth: session save failed:", err);
-          return res.status(500).json({ success: false, error: "Session save failed" });
+      req.session!.regenerate((regErr) => {
+        if (regErr) {
+          console.error("❌ GitHub OAuth: session regenerate failed:", regErr);
+          return res.status(500).json({ success: false, error: "Session failed" });
         }
-        return res.status(200).json({ success: true });
+        req.session!.userId = user.id;
+        req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
+        req.session!.save((err) => {
+          if (err) {
+            console.error("❌ GitHub OAuth: session save failed:", err);
+            return res.status(500).json({ success: false, error: "Session save failed" });
+          }
+          return res.status(200).json({ success: true });
+        });
       });
     } catch (error) {
       console.error("GitHub OAuth exchange error:", error);
