@@ -24,23 +24,20 @@ const { Pool } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env file from the project root (one level up from server directory)
-// Load .env.{APP_ENV} (e.g. .env.production, .env.staging) when set so env vars are applied regardless of PM2/Docker
+// Load env files from the project root (one level up from server directory).
+// In production/staging: load ONLY .env.{APP_ENV} with override so the correct
+// secrets are used deterministically (dotenv does not override by default).
+// In development: load .env first, then .env.{APP_ENV} with override if set.
 const root = path.join(__dirname, '..');
-dotenv.config({ path: path.join(root, '.env') });
-const appEnv = process.env.APP_ENV || '';
-if (appEnv && appEnv !== 'development') {
-  dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
-} else if (process.env.APP_ENV === 'production') {
-  // Fallback: so production always gets .env.production (e.g. correct GITHUB_WEBHOOK_SECRET) even if APP_ENV not in .env
-  dotenv.config({ path: path.join(root, '.env.production') });
-}
+const appEnv = process.env.APP_ENV || process.env.NODE_ENV || '';
 
-const webhookSecretRaw = process.env.GITHUB_WEBHOOK_SECRET || "";
-if (process.env.APP_ENV === 'production' && webhookSecretRaw) {
-  console.log("[startup] GITHUB_WEBHOOK_SECRET length:", webhookSecretRaw.length);
-  console.log("[startup] APP_ENV=", process.env.APP_ENV, "APP_ENV=", process.env.APP_ENV);
-  console.log("[startup] GITHUB_WEBHOOK_SECRET length:", (process.env.GITHUB_WEBHOOK_SECRET || "").length);
+if (appEnv === 'production' || appEnv === 'staging') {
+  dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+} else {
+  dotenv.config({ path: path.join(root, '.env') });
+  if (appEnv && appEnv !== 'development') {
+    dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+  }
 }
 
 const skipGitHubVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";

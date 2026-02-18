@@ -6,12 +6,16 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env then .env.{APP_ENV} from project root (same order as server/index.ts) so ENCRYPTION_KEY matches
+// Same env loading as index.ts: production/staging load ONLY their env file with override.
 const root = path.join(__dirname, '..');
-dotenv.config({ path: path.join(root, '.env') });
-const appEnv = process.env.APP_ENV || '';
-if (appEnv && appEnv !== 'development') {
-  dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
+const appEnv = process.env.APP_ENV || process.env.NODE_ENV || '';
+if (appEnv === 'production' || appEnv === 'staging') {
+  dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+} else {
+  dotenv.config({ path: path.join(root, '.env') });
+  if (appEnv && appEnv !== 'development') {
+    dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+  }
 }
 
 // Encryption key must be 32 bytes (64 hex chars) and STABLE across restarts.

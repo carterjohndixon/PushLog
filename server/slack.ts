@@ -1,7 +1,17 @@
 import { WebClient, type ChatPostMessageArguments } from "@slack/web-api";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const root = path.join(__dirname, '..');
+const appEnvSlack = process.env.APP_ENV || process.env.NODE_ENV || '';
+if (appEnvSlack === 'production' || appEnvSlack === 'staging') {
+  dotenv.config({ path: path.join(root, `.env.${appEnvSlack}`), override: true });
+} else {
+  dotenv.config({ path: path.join(root, '.env') });
+}
 
 function isSlackNotificationsEnabled(): boolean {
   return process.env.SLACK_NOTIFICATIONS_ENABLED !== "false";

@@ -6,8 +6,14 @@ import dotenv from "dotenv";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env file from the project root (one level up from server directory)
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
+// Same env loading as index.ts: production/staging load ONLY their env file with override.
+const root = path.join(__dirname, '..');
+const appEnv = process.env.APP_ENV || '';
+if (appEnv === 'production' || appEnv === 'staging') {
+  dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
+} else {
+  dotenv.config({ path: path.join(root, '.env') });
+}
 
 interface GitHubUser {
   id: number;

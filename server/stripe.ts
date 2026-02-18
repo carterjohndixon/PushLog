@@ -1,7 +1,17 @@
 import Stripe from 'stripe';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filenameStripe = fileURLToPath(import.meta.url);
+const __dirnameStripe = path.dirname(__filenameStripe);
+const rootStripe = path.join(__dirnameStripe, '..');
+const appEnvStripe = process.env.APP_ENV || process.env.NODE_ENV || '';
+if (appEnvStripe === 'production' || appEnvStripe === 'staging') {
+  dotenv.config({ path: path.join(rootStripe, `.env.${appEnvStripe}`), override: true });
+} else {
+  dotenv.config({ path: path.join(rootStripe, '.env') });
+}
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('STRIPE_SECRET_KEY is required');

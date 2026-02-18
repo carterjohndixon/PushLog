@@ -1,10 +1,20 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { calculateTokenCost } from './stripe';
 import broadcastNotification from './helper/broadcastNotification';
 import { storage } from './storage';
 
-dotenv.config();
+const __filenameAi = fileURLToPath(import.meta.url);
+const __dirnameAi = path.dirname(__filenameAi);
+const rootAi = path.join(__dirnameAi, '..');
+const appEnvAi = process.env.APP_ENV || process.env.NODE_ENV || '';
+if (appEnvAi === 'production' || appEnvAi === 'staging') {
+  dotenv.config({ path: path.join(rootAi, `.env.${appEnvAi}`), override: true });
+} else {
+  dotenv.config({ path: path.join(rootAi, '.env') });
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
