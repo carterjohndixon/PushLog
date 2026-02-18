@@ -197,8 +197,22 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+    onSuccess: (data, variables) => {
+      const newStatus = variables.isActive ? 'active' : 'paused';
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (old: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            integrations: old.integrations.map((i) =>
+              i.id === variables.integrationId
+                ? { ...i, isActive: variables.isActive, status: newStatus }
+                : i
+            ),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
@@ -226,8 +240,28 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
+    onSuccess: (data, variables) => {
+      const newStatus = data.isActive ? 'active' : 'paused';
+      queryClient.setQueryData(
+        ['/api/repositories-and-integrations'],
+        (old: { repositories: any[]; integrations: any[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            integrations: old.integrations.map((i) =>
+              i.id === variables.id
+                ? {
+                    ...i,
+                    ...data,
+                    status: newStatus,
+                    repositoryName: i.repositoryName,
+                    lastUsed: i.lastUsed,
+                  }
+                : i
+            ),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
