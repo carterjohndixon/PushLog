@@ -31,14 +31,18 @@ dotenv.config({ path: path.join(root, '.env') });
 const appEnv = process.env.APP_ENV || '';
 if (appEnv && appEnv !== 'development') {
   dotenv.config({ path: path.join(root, `.env.${appEnv}`) });
-} else if (process.env.NODE_ENV === 'production') {
+} else if (process.env.APP_ENV === 'production') {
   // Fallback: so production always gets .env.production (e.g. correct GITHUB_WEBHOOK_SECRET) even if APP_ENV not in .env
   dotenv.config({ path: path.join(root, '.env.production') });
 }
+
 const webhookSecretRaw = process.env.GITHUB_WEBHOOK_SECRET || "";
-if (process.env.NODE_ENV === 'production' && webhookSecretRaw) {
+if (process.env.APP_ENV === 'production' && webhookSecretRaw) {
   console.log("[startup] GITHUB_WEBHOOK_SECRET length:", webhookSecretRaw.length);
+  console.log("[startup] APP_ENV=", process.env.APP_ENV, "APP_ENV=", process.env.APP_ENV);
+  console.log("[startup] GITHUB_WEBHOOK_SECRET length:", (process.env.GITHUB_WEBHOOK_SECRET || "").length);
 }
+
 const skipGitHubVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
 if (skipGitHubVerify) {
   console.warn("⚠️ SKIP_GITHUB_WEBHOOK_VERIFY is set - GitHub webhook signature verification is DISABLED.");
