@@ -38,7 +38,10 @@ EXPOSE 3001
 CMD ["node", "dist/index.js"]
 DOCKERFILE
 
+echo ""
 echo "Done. This script did not modify ./dist — production is unchanged until you promote from Admin."
+echo ""
 echo "On EC2:"
 echo "  1. rsync .docker-build/prebuilt (or git pull if committed)"
 echo "  2. docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build"
+echo ""
