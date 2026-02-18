@@ -1249,7 +1249,10 @@ export default function Dashboard() {
 
       <RepositorySettingsModal
         open={isRepositorySettingsOpen}
-        onOpenChange={setIsRepositorySettingsOpen}
+        onOpenChange={(open) => {
+          setIsRepositorySettingsOpen(open);
+          if (!open) setSelectedRepository(null);
+        }}
         repository={selectedRepository ? {
           id: selectedRepository.id,
           githubId: selectedRepository.githubId,

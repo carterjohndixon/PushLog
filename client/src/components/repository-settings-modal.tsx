@@ -83,9 +83,9 @@ export function RepositorySettingsModal({
   };
 
   const handleOpenChange = (newOpen: boolean) => {
-    if (!newOpen && repository) {
-      setForm(getFormState(repository));
-    }
+    // Don't reset form on close: it causes a visible "revert" during the close animation
+    // when the parent's repository prop hasn't updated yet (e.g. right after save). On reopen,
+    // useEffect will set the form from the fresh repository.
     onOpenChange(newOpen);
   };
 

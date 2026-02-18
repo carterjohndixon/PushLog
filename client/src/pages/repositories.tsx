@@ -997,7 +997,10 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
 
       <RepositorySettingsModal
         open={isRepositorySettingsOpen}
-        onOpenChange={setIsRepositorySettingsOpen}
+        onOpenChange={(open) => {
+          setIsRepositorySettingsOpen(open);
+          if (!open) setSelectedRepository(null);
+        }}
         repository={selectedRepository}
         updateRepositoryMutation={updateRepositoryMutation}
       />
