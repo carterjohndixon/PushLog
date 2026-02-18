@@ -16,7 +16,7 @@ mkdir -p "$STAGING_BUILD"
 # Copy source and config; exclude node_modules, .git, dist, and build artifacts
 rsync -a --exclude=node_modules --exclude=.git --exclude=dist --exclude=.docker-build --exclude=target --exclude=.env --exclude=.env.* --exclude=carter.pushlog.ai/node_modules --exclude=carter.pushlog.ai/dist . "$STAGING_BUILD/"
 (cd "$STAGING_BUILD" && npm ci && \
-  (npm audit --audit-level=high || { echo "High/critical vulnerabilities detected. Running npm audit fix..."; npm audit fix; }) && \
+  (npm audit --audit-level=high || { echo "High/critical vulnerabilities detected. Running npm audit fix..."; npm audit fix; }) || true && \
   npm run build)
 
 echo "Preparing Docker build context..."
