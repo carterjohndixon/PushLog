@@ -368,7 +368,12 @@ if (!sessionSecret) {
 // When behind a proxy (e.g. staging), the app may see Host as 127.0.0.1 so the
 // session cookie would be set for that host and never sent to staging.pushlog.ai.
 // Set COOKIE_DOMAIN (e.g. staging.pushlog.ai) so the cookie is sent on every request.
-const cookieDomain = process.env.COOKIE_DOMAIN || undefined;
+// Production (APP_ENV=production) must never use a staging cookie domain: use pushlog.ai or no domain.
+const appEnvForCookie = process.env.APP_ENV || process.env.NODE_ENV || "";
+const cookieDomain =
+  appEnvForCookie === "production"
+    ? (process.env.COOKIE_DOMAIN === "pushlog.ai" ? "pushlog.ai" : undefined)
+    : (process.env.COOKIE_DOMAIN || undefined);
 
 app.use(session({
   store: sessionStore,
@@ -468,4 +473,3 @@ app.use((req, res, next) => {
     stopIncidentEngine();
   });
 })();
-

@@ -1505,7 +1505,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Build the GitHub OAuth URL (use OAuth App, not GitHub App)
       const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
-      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL}/api/auth/user` : "https://pushlog.ai/api/auth/user";
+      const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/api/auth/user` : "https://pushlog.ai/api/auth/user";
       const scope = "repo user:email admin:org_hook";
       
       console.log("GitHub OAuth connect - Client ID:", clientId.substring(0, 10) + "...");
@@ -1703,11 +1703,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           emailVerified: true
         };
 
-        // Redirect to dashboard; use APP_URL when set so cookie domain and frontend origin match (important behind proxy e.g. staging).
-        const base = (process.env.APP_URL || "").replace(/\/$/, "") || undefined;
+        // Redirect to dashboard on the same host the user used (ignore APP_URL so prod never sends staging).
+        const redirectHost = (req.get("host") || "").split(":")[0];
+        const redirectProtocol = redirectHost === "pushlog.ai" ? "https" : (req.protocol || "https");
+        const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
         const path = currentUserId ? "/dashboard?github_connected=1" : "/dashboard";
         const redirectUrl = base ? `${base}${path}` : path;
-        console.log(`Redirecting to dashboard for user ${user.id} (session-based auth)`);
+        console.log(`Redirecting to dashboard for user ${user.id} (session-based auth) -> ${redirectUrl}`);
         return res.redirect(redirectUrl);
       }
 
