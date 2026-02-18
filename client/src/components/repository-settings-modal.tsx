@@ -49,7 +49,7 @@ export function RepositorySettingsModal({
   const [isActive, setIsActive] = useState(repository?.isActive ?? true);
   const [monitorAllBranches, setMonitorAllBranches] = useState(repository?.monitorAllBranches ?? false);
   const [criticalPathsText, setCriticalPathsText] = useState(
-    (repository?.criticalPaths ?? []).filter(Boolean).join("\n")
+    () => (repository?.criticalPaths ?? []).filter(Boolean).join("\n")
   );
   const [incidentServiceName, setIncidentServiceName] = useState(
     repository?.incidentServiceName ?? ""

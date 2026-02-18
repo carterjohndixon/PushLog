@@ -1,74 +1,71 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "wouter";
 import { Logo } from "@/components/logo";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 
 export default function VerifyEmail() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [verifying, setVerifying] = useState(true);
   const queryClient = useQueryClient();
+  const calledRef = useRef(false);
+
+  const mutation = useMutation({
+    mutationFn: async (token: string) => {
+      const response = await fetch(`/api/verify-email?token=${token}`, {
+        method: "GET",
+        headers: { "Accept": "application/json" },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Verification failed");
+      }
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || "Verification failed");
+      return data;
+    },
+    onSuccess: () => {
+      toast({
+        title: "Email Verified",
+        description: "Your email has been successfully verified.",
+      });
+      setTimeout(() => {
+        queryClient.clear();
+        queryClient.invalidateQueries();
+        setLocation("/dashboard");
+      }, 1000);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Verification Failed",
+        description: error.message || "Failed to verify email address.",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation("/login"), 2000);
+    },
+  });
 
   useEffect(() => {
-    const verifyEmail = async () => {
-      try {
-        const searchParams = new URLSearchParams(window.location.search);
-        const token = searchParams.get("token");
+    if (calledRef.current) return;
+    calledRef.current = true;
 
-        if (!token) {
-          throw new Error("Verification token is missing");
-        }
+    const searchParams = new URLSearchParams(window.location.search);
+    const token = searchParams.get("token");
 
-        // Use fetch directly to avoid apiRequest's error handling
-        const response = await fetch(`/api/verify-email?token=${token}`, {
-          method: "GET",
-          headers: {
-            "Accept": "application/json"
-          }
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Verification failed");
-        }
-        
-        const data = await response.json();
+    if (!token) {
+      toast({
+        title: "Verification Failed",
+        description: "Verification token is missing",
+        variant: "destructive",
+      });
+      setTimeout(() => setLocation("/login"), 2000);
+      return;
+    }
 
-        if (data.success) {   
-          toast({
-            title: "Email Verified",
-            description: "Your email has been successfully verified.",
-          });
-          
-          // Small delay to ensure token is stored, then invalidate cache and redirect
-          setTimeout(() => {
-            // Clear all cached queries and invalidate to force fresh data with new token
-            queryClient.clear();
-            queryClient.invalidateQueries();
-            
-            // Redirect to dashboard
-            setLocation("/dashboard");
-          }, 1000);
-        } else {
-          throw new Error(data.error || "Verification failed");
-        }
-      } catch (error: any) {
-        toast({
-          title: "Verification Failed",
-          description: error.message || "Failed to verify email address.",
-          variant: "destructive",
-        });
-        // Redirect to login after error
-        setTimeout(() => setLocation("/login"), 2000);
-      } finally {
-        setVerifying(false);
-      }
-    };
+    mutation.mutate(token);
+  }, []);
 
-    verifyEmail();
-  }, [queryClient, toast, setLocation]);
+  const verifying = mutation.isPending || mutation.isIdle;
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
@@ -78,11 +75,11 @@ export default function VerifyEmail() {
           {verifying ? "Verifying your email..." : "Email verification complete!"}
         </h1>
         <p className="text-steel-gray">
-          {verifying 
+          {verifying
             ? "Please wait while we verify your email address."
             : "You'll be redirected to the dashboard shortly."}
         </p>
       </div>
     </div>
   );
-} 
+}

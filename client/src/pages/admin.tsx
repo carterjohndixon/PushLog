@@ -518,11 +518,14 @@ export default function AdminPage() {
                                     ? "border-amber-500/40 bg-amber-500/5"
                                     : "border-border bg-transparent opacity-60"
                               }`}
+                              role="button"
+                              tabIndex={0}
                               onClick={() => setSelectedCommit(c)}
+                              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedCommit(c); } }}
                             >
                               <div className="flex items-center gap-2 flex-wrap">
                                 <p className="font-medium flex-1 min-w-0">{c.subject}</p>
-                                <div className="flex items-center gap-1.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1.5 flex-shrink-0" role="group" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
                                   {isHead && (
                                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">HEAD</Badge>
                                   )}

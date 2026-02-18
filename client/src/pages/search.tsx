@@ -231,8 +231,9 @@ export default function Search() {
               {showFilters && (
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Repository</label>
+                    <label htmlFor="filter-repository" className="text-xs text-muted-foreground block mb-1">Repository</label>
                     <select
+                      id="filter-repository"
                       value={repositoryId}
                       onChange={(e) => setRepositoryId(e.target.value)}
                       className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
@@ -246,8 +247,9 @@ export default function Search() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">From (date)</label>
+                    <label htmlFor="filter-from" className="text-xs text-muted-foreground block mb-1">From (date)</label>
                     <Input
+                      id="filter-from"
                       type="date"
                       value={from}
                       onChange={(e) => setFrom(e.target.value)}
@@ -255,8 +257,9 @@ export default function Search() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">To (date)</label>
+                    <label htmlFor="filter-to" className="text-xs text-muted-foreground block mb-1">To (date)</label>
                     <Input
+                      id="filter-to"
                       type="date"
                       value={to}
                       onChange={(e) => setTo(e.target.value)}
@@ -264,8 +267,9 @@ export default function Search() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground block mb-1">Min impact score</label>
+                    <label htmlFor="filter-min-impact" className="text-xs text-muted-foreground block mb-1">Min impact score</label>
                     <Input
+                      id="filter-min-impact"
                       type="number"
                       min={0}
                       max={100}

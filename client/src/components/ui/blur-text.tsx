@@ -1,4 +1,4 @@
-import { motion, useInView } from "framer-motion";
+import { LazyMotion, domAnimation, m, useInView } from "framer-motion";
 import { useRef, useMemo } from "react";
 
 interface BlurTextProps {
@@ -43,28 +43,30 @@ export function BlurText({
   );
 
   return (
-    <span ref={ref} className="inline-flex flex-wrap justify-center">
-      {elements.map((segment, index) => (
-        <motion.span
-          key={index}
-          className={className}
-          initial={defaultFrom}
-          animate={inView ? defaultTo : defaultFrom}
-          transition={{
-            duration: stepDuration,
-            delay: (index * delay) / 1000,
-            ease: "easeOut",
-          }}
-          onAnimationComplete={
-            index === elements.length - 1 ? onAnimationComplete : undefined
-          }
-          style={{ display: "inline-block", willChange: "transform, filter, opacity" }}
-        >
-          {segment === " " ? "\u00A0" : segment}
-          {animateBy === "words" && index < elements.length - 1 && "\u00A0"}
-        </motion.span>
-      ))}
-    </span>
+    <LazyMotion features={domAnimation}>
+      <span ref={ref} className="inline-flex flex-wrap justify-center">
+        {elements.map((segment, index) => (
+          <m.span
+            key={`${segment}-${index}`}
+            className={className}
+            initial={defaultFrom}
+            animate={inView ? defaultTo : defaultFrom}
+            transition={{
+              duration: stepDuration,
+              delay: (index * delay) / 1000,
+              ease: "easeOut",
+            }}
+            onAnimationComplete={
+              index === elements.length - 1 ? onAnimationComplete : undefined
+            }
+            style={{ display: "inline-block" }}
+          >
+            {segment === " " ? "\u00A0" : segment}
+            {animateBy === "words" && index < elements.length - 1 && "\u00A0"}
+          </m.span>
+        ))}
+      </span>
+    </LazyMotion>
   );
 }
 

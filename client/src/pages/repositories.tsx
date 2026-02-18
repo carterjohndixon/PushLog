@@ -63,6 +63,241 @@ interface RepositoriesProps {
   userProfile?: any;
 }
 
+const ownerLogin = (repo: RepositoryCardData) => typeof repo.owner === "string" ? repo.owner : repo.owner?.login ?? "";
+
+interface RepositoryCardProps {
+  repository: RepositoryCardData;
+  onConnectRepository?: (repository: RepositoryCardData) => void;
+  integrations: ActiveIntegration[];
+  connectingRepoId: string | null;
+  setSelectedRepository: (repository: RepositoryCardData) => void;
+  setIsRepoModalOpen: (open: boolean) => void;
+  setSelectedRepositoryForEvents: (repository: RepositoryCardData) => void;
+  setIsEventsModalOpen: (open: boolean) => void;
+  handleToggleRepository: (repository: RepositoryCardData) => void;
+  toggleRepositoryIsPending: boolean;
+  handleRepositorySettings: (repository: RepositoryCardData) => void;
+  handleDeleteRepository: (repository: RepositoryCardData) => void;
+  deleteRepositoryIsPending: boolean;
+  getRepositoryEvents: (repository: RepositoryCardData) => { count: number; events: any[] };
+}
+
+const RepositoryCard = ({
+  repository,
+  onConnectRepository,
+  integrations,
+  connectingRepoId,
+  setSelectedRepository,
+  setIsRepoModalOpen,
+  setSelectedRepositoryForEvents,
+  setIsEventsModalOpen,
+  handleToggleRepository,
+  toggleRepositoryIsPending,
+  handleRepositorySettings,
+  handleDeleteRepository,
+  deleteRepositoryIsPending,
+  getRepositoryEvents,
+}: RepositoryCardProps) => {
+  const repoHasIntegration = integrations?.some(
+    (integration) => integration.repositoryId === repository.id
+  );
+  
+  const repoHasActiveIntegration = integrations?.some(
+    (integration) => integration.repositoryId === repository.id && integration.status === 'active'
+  );
+  
+  const isRepositoryActive = repository.isActive !== false;
+  const isConnected = repository.isConnected;
+  
+  if (!isConnected) {
+    return (
+      <Card className="card-lift hover:shadow-md transition-shadow border-dashed border-2 border-gray-200 dark:border-[hsl(var(--log-green)/0.6)]">
+        <CardHeader className="pb-3">
+          <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+            <div className="flex items-center space-x-3 min-w-0 flex-1">
+              <div className="w-10 h-10 flex-shrink-0 bg-gray-900 rounded-lg flex items-center justify-center">
+                <Github className="text-white w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <CardTitle className="text-lg font-semibold text-foreground truncate">
+                  {repository.name}
+                </CardTitle>
+                <p className="text-sm text-muted-foreground truncate">
+                  {ownerLogin(repository)}/{repository.name}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-2 flex-shrink-0">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <Badge variant="outline" className="text-xs text-red-600 border-red-300 whitespace-nowrap">
+                Unconnected
+              </Badge>
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <GitBranch className="w-4 h-4 text-steel-gray" />
+              <span className="text-steel-gray">Branch:</span>
+              <span className="font-medium text-graphite">{repository.default_branch}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Activity className="w-4 h-4 text-steel-gray" />
+              <span className="text-steel-gray">Type:</span>
+              <span className="font-medium text-graphite">{repository.private ? 'Private' : 'Public'}</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <div className="text-xs text-steel-gray">
+              Available to connect
+            </div>
+            
+            <Button
+              size="sm"
+              variant="glow"
+              onClick={() => {
+                if (onConnectRepository) {
+                  onConnectRepository(repository);
+                } else {
+                  setSelectedRepository(repository);
+                  setIsRepoModalOpen(true);
+                }
+              }}
+              disabled={connectingRepoId === String(repository.githubId)}
+              className="text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              {connectingRepoId === String(repository.githubId) ? "Connecting…" : "Connect Repository"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  let statusText = 'Connected';
+  let statusColor = 'bg-steel-gray';
+  let badgeVariant: "default" | "secondary" | "outline" = "outline";
+  
+  if (repoHasIntegration) {
+    const isActive = isRepositoryActive && repoHasActiveIntegration;
+    statusText = isActive ? 'Active' : 'Paused';
+    statusColor = isActive ? 'bg-log-green' : 'bg-steel-gray';
+    badgeVariant = isActive ? "default" : "secondary";
+  } else {
+    statusText = isRepositoryActive ? 'Connected' : 'Paused';
+    statusColor = isRepositoryActive ? 'bg-sky-blue' : 'bg-steel-gray';
+    badgeVariant = isRepositoryActive ? "outline" : "secondary";
+  }
+
+  return (
+    <Card className="card-lift hover:shadow-md transition-shadow">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
+              <Github className="text-white w-5 h-5" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-semibold text-graphite">
+                {repository.name}
+              </CardTitle>
+              <p className="text-sm text-steel-gray">
+                {ownerLogin(repository)}/{repository.name}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+            <Badge variant={badgeVariant} className="text-xs">
+              {statusText}
+            </Badge>
+          </div>
+        </div>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="flex items-center space-x-2">
+            <GitBranch className="w-4 h-4 text-steel-gray" />
+            <span className="text-steel-gray">Branch:</span>
+            <span className="font-medium text-graphite">{repository.default_branch}</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Activity className="w-4 h-4 text-steel-gray" />
+            <span className="text-steel-gray">Events:</span>
+            <button
+              onClick={() => {
+                setSelectedRepositoryForEvents(repository);
+                setIsEventsModalOpen(true);
+              }}
+              className="font-medium text-graphite hover:text-log-green hover:underline cursor-pointer"
+              disabled={!repository.id}
+            >
+              {getRepositoryEvents(repository).count}
+            </button>
+          </div>
+        </div>
+        
+        {repository.lastPush && (
+          <div className="flex items-center space-x-2 text-sm">
+            <Calendar className="w-4 h-4 text-steel-gray" />
+            <span className="text-steel-gray">Last activity:</span>
+            <span className="font-medium text-graphite">{repository.lastPush}</span>
+          </div>
+        )}
+        
+        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+          <div className="text-xs text-steel-gray">
+            {repoHasIntegration 
+              ? `${repoHasActiveIntegration && isRepositoryActive ? 'Active' : 'Paused'} integration`
+              : 'No integration configured'
+            }
+          </div>
+          
+          <div className="flex items-center space-x-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleToggleRepository(repository)}
+              disabled={toggleRepositoryIsPending}
+              className="text-steel-gray hover:text-graphite"
+            >
+              {isRepositoryActive ? (
+                <Pause className="w-4 h-4" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+            </Button>
+            
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleRepositorySettings(repository)}
+              className="text-steel-gray hover:text-graphite"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleDeleteRepository(repository)}
+              disabled={deleteRepositoryIsPending}
+              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 export default function Repositories({ userProfile }: RepositoriesProps) {
   const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
   const [isRepositorySettingsOpen, setIsRepositorySettingsOpen] = useState(false);
@@ -334,8 +569,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     setIsRepoModalOpen(false);
   };
 
-  const ownerLogin = (repo: RepositoryCardData) => typeof repo.owner === "string" ? repo.owner : repo.owner?.login ?? "";
-
   // Filter repositories based on search and status
   const filteredRepositories = repositories?.filter(repo => {
     const matchesSearch = repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -397,216 +630,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       setActiveTab("all");
       setStatusFilter("all");
     }
-  };
-
-  // Repository Card Component
-  const RepositoryCard = ({
-    repository,
-    onConnectRepository,
-  }: {
-    repository: RepositoryCardData;
-    onConnectRepository?: (repository: RepositoryCardData) => void;
-  }) => {
-    const repoHasIntegration = integrations?.some(
-      (integration) => integration.repositoryId === repository.id
-    );
-    
-    const repoHasActiveIntegration = integrations?.some(
-      (integration) => integration.repositoryId === repository.id && integration.status === 'active'
-    );
-    
-    const isRepositoryActive = repository.isActive !== false;
-    const isConnected = repository.isConnected;
-    
-    // If repository is not connected to our system, show "Connect" option
-    if (!isConnected) {
-      return (
-        <Card className="card-lift hover:shadow-md transition-shadow border-dashed border-2 border-gray-200 dark:border-[hsl(var(--log-green)/0.6)]">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
-              <div className="flex items-center space-x-3 min-w-0 flex-1">
-                <div className="w-10 h-10 flex-shrink-0 bg-gray-900 rounded-lg flex items-center justify-center">
-                  <Github className="text-white w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                  <CardTitle className="text-lg font-semibold text-foreground truncate">
-                    {repository.name}
-                  </CardTitle>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {ownerLogin(repository)}/{repository.name}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2 flex-shrink-0">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
-                <Badge variant="outline" className="text-xs text-red-600 border-red-300 whitespace-nowrap">
-                  Unconnected
-                </Badge>
-              </div>
-            </div>
-          </CardHeader>
-          
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <GitBranch className="w-4 h-4 text-steel-gray" />
-                <span className="text-steel-gray">Branch:</span>
-                <span className="font-medium text-graphite">{repository.default_branch}</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Activity className="w-4 h-4 text-steel-gray" />
-                <span className="text-steel-gray">Type:</span>
-                <span className="font-medium text-graphite">{repository.private ? 'Private' : 'Public'}</span>
-              </div>
-            </div>
-            
-            <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-              <div className="text-xs text-steel-gray">
-                Available to connect
-              </div>
-              
-              <Button
-                size="sm"
-                variant="glow"
-                onClick={() => {
-                  if (onConnectRepository) {
-                    onConnectRepository(repository);
-                  } else {
-                    setSelectedRepository(repository);
-                    setIsRepoModalOpen(true);
-                  }
-                }}
-                disabled={connectingRepoId === String(repository.githubId)}
-                className="text-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                {connectingRepoId === String(repository.githubId) ? "Connecting…" : "Connect Repository"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      );
-    }
-    
-    // Connected repository logic (existing code)
-    let statusText = 'Connected';
-    let statusColor = 'bg-steel-gray';
-    let badgeVariant: "default" | "secondary" | "outline" = "outline";
-    
-    if (repoHasIntegration) {
-      const isActive = isRepositoryActive && repoHasActiveIntegration;
-      statusText = isActive ? 'Active' : 'Paused';
-      statusColor = isActive ? 'bg-log-green' : 'bg-steel-gray';
-      badgeVariant = isActive ? "default" : "secondary";
-    } else {
-      statusText = isRepositoryActive ? 'Connected' : 'Paused';
-      statusColor = isRepositoryActive ? 'bg-sky-blue' : 'bg-steel-gray';
-      badgeVariant = isRepositoryActive ? "outline" : "secondary";
-    }
-
-    return (
-      <Card className="card-lift hover:shadow-md transition-shadow">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center">
-                <Github className="text-white w-5 h-5" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-semibold text-graphite">
-                  {repository.name}
-                </CardTitle>
-                <p className="text-sm text-steel-gray">
-                  {ownerLogin(repository)}/{repository.name}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-              <Badge variant={badgeVariant} className="text-xs">
-                {statusText}
-              </Badge>
-            </div>
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="flex items-center space-x-2">
-              <GitBranch className="w-4 h-4 text-steel-gray" />
-              <span className="text-steel-gray">Branch:</span>
-              <span className="font-medium text-graphite">{repository.default_branch}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Activity className="w-4 h-4 text-steel-gray" />
-              <span className="text-steel-gray">Events:</span>
-              <button
-                onClick={() => {
-                  setSelectedRepositoryForEvents(repository);
-                  setIsEventsModalOpen(true);
-                }}
-                className="font-medium text-graphite hover:text-log-green hover:underline cursor-pointer"
-                disabled={!repository.id}
-              >
-                {getRepositoryEvents(repository).count}
-              </button>
-            </div>
-          </div>
-          
-          {repository.lastPush && (
-            <div className="flex items-center space-x-2 text-sm">
-              <Calendar className="w-4 h-4 text-steel-gray" />
-              <span className="text-steel-gray">Last activity:</span>
-              <span className="font-medium text-graphite">{repository.lastPush}</span>
-            </div>
-          )}
-          
-          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-            <div className="text-xs text-steel-gray">
-              {repoHasIntegration 
-                ? `${repoHasActiveIntegration && isRepositoryActive ? 'Active' : 'Paused'} integration`
-                : 'No integration configured'
-              }
-            </div>
-            
-            <div className="flex items-center space-x-1">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleToggleRepository(repository)}
-                disabled={toggleRepositoryMutation.isPending}
-                className="text-steel-gray hover:text-graphite"
-              >
-                {isRepositoryActive ? (
-                  <Pause className="w-4 h-4" />
-                ) : (
-                  <Play className="w-4 h-4" />
-                )}
-              </Button>
-              
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleRepositorySettings(repository)}
-                className="text-steel-gray hover:text-graphite"
-              >
-                <Settings className="w-4 h-4" />
-              </Button>
-              
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => handleDeleteRepository(repository)}
-                disabled={deleteRepositoryMutation.isPending}
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
   };
 
   return (
@@ -799,7 +822,23 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             ) : filteredRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
+                  <RepositoryCard
+                    key={repository.githubId}
+                    repository={repository}
+                    onConnectRepository={handleConnectRepository}
+                    integrations={integrations}
+                    connectingRepoId={connectingRepoId}
+                    setSelectedRepository={setSelectedRepository}
+                    setIsRepoModalOpen={setIsRepoModalOpen}
+                    setSelectedRepositoryForEvents={setSelectedRepositoryForEvents}
+                    setIsEventsModalOpen={setIsEventsModalOpen}
+                    handleToggleRepository={handleToggleRepository}
+                    toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
+                    handleRepositorySettings={handleRepositorySettings}
+                    handleDeleteRepository={handleDeleteRepository}
+                    deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
+                    getRepositoryEvents={getRepositoryEvents}
+                  />
                 ))}
               </div>
             ) : (
@@ -830,7 +869,23 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedActiveRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedActiveRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
+                  <RepositoryCard
+                    key={repository.githubId}
+                    repository={repository}
+                    onConnectRepository={handleConnectRepository}
+                    integrations={integrations}
+                    connectingRepoId={connectingRepoId}
+                    setSelectedRepository={setSelectedRepository}
+                    setIsRepoModalOpen={setIsRepoModalOpen}
+                    setSelectedRepositoryForEvents={setSelectedRepositoryForEvents}
+                    setIsEventsModalOpen={setIsEventsModalOpen}
+                    handleToggleRepository={handleToggleRepository}
+                    toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
+                    handleRepositorySettings={handleRepositorySettings}
+                    handleDeleteRepository={handleDeleteRepository}
+                    deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
+                    getRepositoryEvents={getRepositoryEvents}
+                  />
                 ))}
               </div>
             ) : (
@@ -848,7 +903,23 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {connectedPausedRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {connectedPausedRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
+                  <RepositoryCard
+                    key={repository.githubId}
+                    repository={repository}
+                    onConnectRepository={handleConnectRepository}
+                    integrations={integrations}
+                    connectingRepoId={connectingRepoId}
+                    setSelectedRepository={setSelectedRepository}
+                    setIsRepoModalOpen={setIsRepoModalOpen}
+                    setSelectedRepositoryForEvents={setSelectedRepositoryForEvents}
+                    setIsEventsModalOpen={setIsEventsModalOpen}
+                    handleToggleRepository={handleToggleRepository}
+                    toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
+                    handleRepositorySettings={handleRepositorySettings}
+                    handleDeleteRepository={handleDeleteRepository}
+                    deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
+                    getRepositoryEvents={getRepositoryEvents}
+                  />
                 ))}
               </div>
             ) : (
@@ -866,7 +937,23 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             {unconnectedRepositories.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {unconnectedRepositories.map((repository) => (
-                  <RepositoryCard key={repository.githubId} repository={repository} onConnectRepository={handleConnectRepository} />
+                  <RepositoryCard
+                    key={repository.githubId}
+                    repository={repository}
+                    onConnectRepository={handleConnectRepository}
+                    integrations={integrations}
+                    connectingRepoId={connectingRepoId}
+                    setSelectedRepository={setSelectedRepository}
+                    setIsRepoModalOpen={setIsRepoModalOpen}
+                    setSelectedRepositoryForEvents={setSelectedRepositoryForEvents}
+                    setIsEventsModalOpen={setIsEventsModalOpen}
+                    handleToggleRepository={handleToggleRepository}
+                    toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
+                    handleRepositorySettings={handleRepositorySettings}
+                    handleDeleteRepository={handleDeleteRepository}
+                    deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
+                    getRepositoryEvents={getRepositoryEvents}
+                  />
                 ))}
               </div>
             ) : (

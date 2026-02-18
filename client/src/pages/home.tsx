@@ -28,7 +28,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
-import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
 interface User {
@@ -40,43 +40,20 @@ interface User {
 
 export default function Home() {
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Try to fetch user profile (optional - home page works without it)
-    fetch("/api/profile", {
-      credentials: "include", // Send cookie if it exists
-      headers: {
-        "Accept": "application/json"
-      }
-    })
-      .then(async (response) => {
-        // If 401, user is not logged in - that's fine for home page
-        if (response.status === 401) {
-          setLoading(false);
-          return; // User stays null, show public home page
-        }
-        
-        // If other error, throw to be caught
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        
-        // Success - user is logged in
-        const data = await response.json();
-        if (data.success) {
-          setUser(data.user);
-        }
-      })
-      .catch(error => {
-        // Silently handle errors - home page works without user data
-        console.log("User not logged in (home page is public)");
-      })
-      .finally(() => {
-        setLoading(false);
+  const { data: user, isLoading: loading } = useQuery<User | null>({
+    queryKey: ["home-profile"],
+    queryFn: async () => {
+      const response = await fetch("/api/profile", {
+        credentials: "include",
+        headers: { "Accept": "application/json" },
       });
-  }, []);
+      if (response.status === 401) return null;
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json();
+      return data.success ? data.user : null;
+    },
+    retry: false,
+  });
 
   const handleGitHubConnect = async () => {
     if (!user) {

@@ -1709,8 +1709,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
         const path = currentUserId ? "/dashboard?github_connected=1" : "/dashboard";
         const redirectUrl = base ? `${base}${path}` : path;
-        console.log(`Redirecting to dashboard for user ${user.id} (session-based auth) -> ${redirectUrl}`);
-        return res.redirect(redirectUrl);
+
+        // Save session before redirect so the cookie + userId are persisted before the browser navigates away.
+        // Without this, the redirect can race with the async session save and the next request may see an empty session.
+        req.session.save((err) => {
+          if (err) {
+            console.error("❌ GitHub OAuth: session save failed:", err);
+            return res.redirect(`/login?error=session_error`);
+          }
+          console.log(`Redirecting to dashboard for user ${user.id} (session-based auth) -> ${redirectUrl}`);
+          return res.redirect(redirectUrl);
+        });
       }
 
       // If no code, this is a regular user info request (uses session auth)
@@ -2438,7 +2447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean'),
     body('criticalPaths').optional().isArray().withMessage('criticalPaths must be an array'),
     body('criticalPaths.*').optional().isString().trim().isLength({ max: 256 }).withMessage('each critical path must be a string'),
-    body('incidentServiceName').optional().isString().trim().isLength({ max: 128 }).withMessage('incidentServiceName must be a string up to 128 chars')
+    body('incidentServiceName').optional({ nullable: true }).custom((v) => v === null || v === undefined || (typeof v === 'string' && v.length <= 128)).withMessage('incidentServiceName must be a string up to 128 chars or null')
   ], authenticateToken, async (req: any, res: any) => {
     try {
       // Validate input
