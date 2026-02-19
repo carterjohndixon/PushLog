@@ -25,6 +25,32 @@ function parseCsvEnv(value: string | undefined): string[] {
 const STAGING_ADMIN_EMAILS = parseCsvEnv(process.env.STAGING_ADMIN_EMAILS);
 const STAGING_ADMIN_USERNAMES = parseCsvEnv(process.env.STAGING_ADMIN_USERNAMES);
 
+/** Dedupe: Sentry sends 2 webhooks per error (event + issue.created). Skip duplicate direct notifications. */
+const recentSentryIssueIds = new Map<string, number>();
+const DEDUPE_WINDOW_MS = 90_000;
+
+function shouldSkipDirectNotification(
+  issueId: string | undefined,
+  action: string | undefined,
+  hasEvent: boolean
+): boolean {
+  const now = Date.now();
+  // Prune stale entries
+  const toDelete: string[] = [];
+  recentSentryIssueIds.forEach((ts, id) => {
+    if (now - ts > DEDUPE_WINDOW_MS) toDelete.push(id);
+  });
+  toDelete.forEach((id) => recentSentryIssueIds.delete(id));
+  if (issueId && recentSentryIssueIds.has(issueId)) return true;
+  // Issue-only webhook (action=created, no event): skip — incident engine will emit "new_issue"
+  if (action === "created" && !hasEvent) return true;
+  return false;
+}
+
+function recordSentNotification(issueId: string | undefined): void {
+  if (issueId) recentSentryIssueIds.set(issueId, Date.now());
+}
+
 /** Get user IDs that should receive incident notifications. */
 export async function getIncidentNotificationTargets(
   isTestNotification: boolean = false
@@ -204,6 +230,14 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
     ingestIncidentEvent(event);
     console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
 
+    const issueId = (issue as any)?.id != null ? String((issue as any).id) : undefined;
+    const action = body?.action != null ? String(body.action) : undefined;
+    if (shouldSkipDirectNotification(issueId, action, !!ev)) {
+      console.log("[webhooks/sentry] Skipping duplicate direct notification", { issueId, action });
+      res.status(202).json({ accepted: true });
+      return;
+    }
+
     const targetUserIds = await getIncidentNotificationTargets(false);
     const targetUsers = new Set<string>(targetUserIds);
 
@@ -227,7 +261,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
           apiRoute = url;
         }
       }
-      const culpritFrame = stacktrace.find((f) => f.file && !String(f.file).includes("node_modules"));
+      const appFrames = stacktrace.filter((f) => f.file && !String(f.file).includes("node_modules"));
+      const culpritFrame = appFrames.length > 0 ? appFrames[appFrames.length - 1] : undefined;
       if (culpritFrame) {
         culprit =
           culpritFrame.line != null
@@ -238,7 +273,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     let culpritSource: string | undefined;
     if (culprit && ev) {
-      const culpritFrame = stacktrace.find((f) => f.file && !String(f.file).includes("node_modules"));
+      const appFrames = stacktrace.filter((f) => f.file && !String(f.file).includes("node_modules"));
+      const culpritFrame = appFrames.length > 0 ? appFrames[appFrames.length - 1] : undefined;
       if (culpritFrame?.file && culpritFrame.line != null) {
         culpritSource =
           (await resolveToSource(culpritFrame.file, culpritFrame.line, culpritFrame.colno ?? 0)) ??
@@ -283,6 +319,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
         }
       })
     );
+    recordSentNotification(issueId);
     console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users`);
 
     res.status(202).json({ accepted: true });
