@@ -51,12 +51,14 @@ export function useNotifications() {
   const [unreadCount, setUnreadCount] = useState(0);
   const queryClient = useQueryClient();
 
-  // Fetch notifications; NotificationSSE invalidates this when real-time events arrive
+  // Fetch notifications; NotificationSSE invalidates when SSE delivers. Poll every 30s as fallback
+  // (SSE can miss when broadcast fails, e.g. multi-tab or session mismatch).
   const { data: initialData, refetch: refetchNotifications } = useQuery<NotificationsResponse>({
     queryKey: ['/api/notifications/all'],
     queryFn: fetchNotifications,
     enabled: true,
-    refetchInterval: false,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {

@@ -61,8 +61,10 @@ export function NotificationSSE() {
       if (!id || id === lastSeenIncidentIdRef.current) return;
       lastSeenIncidentIdRef.current = id;
       dispatchIncidentAlert(newest);
+      // Ensure the notifications dropdown/list refreshes (SSE may have missed)
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
     },
-    [],
+    [queryClient],
   );
 
   // Poll notifications every 15 s as belt-and-suspenders fallback
