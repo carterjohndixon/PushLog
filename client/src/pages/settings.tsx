@@ -764,7 +764,7 @@ export default function Settings() {
                         onClick={() => {
                           toast({
                             title: "Throwing real error...",
-                            description: "A 500 will occur. Check your bell icon for the incident notification.",
+                            description: "Route will 500 (real failure). Sentry captures it → webhook → notification (if alert fires).",
                           });
                           window.open(`/api/test/throw?t=${Date.now()}`, "_blank", "noopener");
                         }}
@@ -773,7 +773,7 @@ export default function Settings() {
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Throws uncaught in server/routes.ts → Sentry captures → alert → webhook → PushLog notification (full real flow).
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). Sentry captures → alert → webhook → notification. Add "issue seen more than 0 times" in Sentry to get a notification every test.
                     </p>
                   </div>
                 </CollapsibleContent>

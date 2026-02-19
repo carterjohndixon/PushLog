@@ -4284,64 +4284,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test route: send a real error to Sentry → alert rule → webhook → PushLog notification.
-  // Also creates a notification directly (Sentry "new issue" only fires once per issue, so we
-  // bypass it for testing — real prod errors still go through Sentry webhook when they're new).
-  app.get("/api/test/throw", authenticateToken, async (req, res) => {
+  // Test route: throws a REAL uncaught error. Sentry captures it via Express integration.
+  // You'll see a 500. Flow: throw → Sentry → (if new issue) alert → webhook → PushLog notification.
+  // To get a notification every time: add "issue seen more than 0 times" to your Sentry alert, or
+  // resolve the issue in Sentry before each test so it counts as a new issue.
+  app.get("/api/test/throw", authenticateToken, (req, res) => {
     if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
     }
-    const err = new Error(`[PushLog test] Real error from server/routes.ts — verify Sentry → webhook (${Date.now()})`);
-    Sentry.captureException(err);
-    await Sentry.flush(2000);
-
-    // Create notification directly so "Throw real error" always works for testing
-    try {
-      const targetUserIds = await getIncidentNotificationTargets(false);
-      const targetUsers = new Set<string>(targetUserIds);
-      const title = "Sentry: Error in api/prod (test)";
-      const message = err.message;
-      const metadata = JSON.stringify({ source: "sentry_throw_test", service: "api", environment: "prod", severity: "error" });
-      await Promise.all(
-        Array.from(targetUsers).map(async (userId) => {
-          try {
-            const notif = await storage.createNotification({
-              userId,
-              type: "incident_alert",
-              title,
-              message,
-              metadata,
-            });
-            broadcastNotification(userId, {
-              id: notif.id,
-              type: notif.type,
-              title: notif.title,
-              message: notif.message,
-              metadata: notif.metadata,
-              createdAt: notif.createdAt,
-              isRead: false,
-            });
-          } catch (e) {
-            console.warn("[test/throw] failed notify:", e);
-          }
-        })
-      );
-      console.log(`[test/throw] Direct notification sent to ${targetUsers.size} users`);
-    } catch (e) {
-      console.warn("[test/throw] notify failed:", e);
-    }
-
-    res.status(200)
-      .setHeader("Content-Type", "text/html")
-      .setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-      .setHeader("Pragma", "no-cache")
-      .send(
-      `<!DOCTYPE html><html><head><title>PushLog test</title></head><body style="font-family:system-ui;max-width:480px;margin:48px auto;padding:24px;text-align:center">
-        <h1>✓ Test error sent</h1>
-        <p>Sentry has received the error. If your alert rule and webhook are set up, check your PushLog notification bell.</p>
-        <p><a href="/settings">← Back to Settings</a></p>
-      </body></html>`
-    );
+    throw new Error(`[PushLog test] Real uncaught error from server/routes.ts — Sentry captures this (${Date.now()})`);
   });
 
   // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
