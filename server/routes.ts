@@ -4285,14 +4285,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test route: send a real error to Sentry → alert rule → webhook → PushLog notification.
-  // Returns 200 with a friendly page so the user doesn't see a 500.
+  // Returns 200 with a friendly page. No cache so CDN/browser always hits the server.
   app.get("/api/test/throw", authenticateToken, (req, res) => {
     if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
     }
     const err = new Error(`[PushLog test] Real error from server/routes.ts — verify Sentry → webhook (${Date.now()})`);
     Sentry.captureException(err);
-    res.status(200).setHeader("Content-Type", "text/html").send(
+    res.status(200)
+      .setHeader("Content-Type", "text/html")
+      .setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+      .setHeader("Pragma", "no-cache")
+      .send(
       `<!DOCTYPE html><html><head><title>PushLog test</title></head><body style="font-family:system-ui;max-width:480px;margin:48px auto;padding:24px;text-align:center">
         <h1>✓ Test error sent</h1>
         <p>Sentry has received the error. If your alert rule and webhook are set up, check your PushLog notification bell.</p>

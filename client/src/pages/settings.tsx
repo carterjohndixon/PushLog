@@ -766,7 +766,7 @@ export default function Settings() {
                             title: "Throwing real error...",
                             description: "A 500 will occur. Check your bell icon for the incident notification.",
                           });
-                          window.open("/api/test/throw", "_blank", "noopener");
+                          window.open(`/api/test/throw?t=${Date.now()}`, "_blank", "noopener");
                         }}
                       >
                         Throw real error
