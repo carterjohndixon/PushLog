@@ -48,7 +48,7 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
-import { handleSentryWebhook, getIncidentNotificationTargets } from "./sentryWebhook";
+import { handleSentryWebhook, getIncidentNotificationTargets, wasRecentSentryNotification } from "./sentryWebhook";
 import {
   ingestIncidentEvent,
   onIncidentSummary,
@@ -348,6 +348,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
+
+    // Skip "new_issue" if we just sent a Sentry webhook notification for this service/env (avoids duplicate).
+    if (summary.trigger === "new_issue" && wasRecentSentryNotification(summary.service, summary.environment)) {
+      console.log("[incident-engine] Skipping new_issue notification (recent Sentry webhook already sent)");
+      return;
+    }
 
     // Route incidents to one user when payload includes links.pushlog_user_id.
     // Otherwise use the incident notification targets (respects INCIDENT_NOTIFY_USER_IDS config).

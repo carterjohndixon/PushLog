@@ -25,30 +25,65 @@ function parseCsvEnv(value: string | undefined): string[] {
 const STAGING_ADMIN_EMAILS = parseCsvEnv(process.env.STAGING_ADMIN_EMAILS);
 const STAGING_ADMIN_USERNAMES = parseCsvEnv(process.env.STAGING_ADMIN_USERNAMES);
 
-/** Dedupe: Sentry sends 2 webhooks per error (event + issue.created). Skip duplicate direct notifications. */
-const recentSentryIssueIds = new Map<string, number>();
+/** Dedupe: Sentry sends 2+ webhooks per error (event alert + issue.created). Skip duplicate direct notifications. */
+const recentSentryDedupeKeys = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 90_000;
 
+/** Build a dedupe key from issue id, event id, or both. Prefer issue_id (same across webhooks for same error). */
+function getDedupeKey(issue: any, ev: any): string | undefined {
+  const issueId = issue?.id != null ? String(issue.id) : undefined;
+  const eventId = ev?.event_id ?? ev?.id;
+  const eventIdStr = eventId != null ? String(eventId) : undefined;
+  if (issueId) return `issue:${issueId}`;
+  if (eventIdStr) return `event:${eventIdStr}`;
+  return undefined;
+}
+
 function shouldSkipDirectNotification(
-  issueId: string | undefined,
+  dedupeKey: string | undefined,
   action: string | undefined,
   hasEvent: boolean
 ): boolean {
   const now = Date.now();
   // Prune stale entries
   const toDelete: string[] = [];
-  recentSentryIssueIds.forEach((ts, id) => {
+  recentSentryDedupeKeys.forEach((ts, id) => {
     if (now - ts > DEDUPE_WINDOW_MS) toDelete.push(id);
   });
-  toDelete.forEach((id) => recentSentryIssueIds.delete(id));
-  if (issueId && recentSentryIssueIds.has(issueId)) return true;
+  toDelete.forEach((id) => recentSentryDedupeKeys.delete(id));
+  if (dedupeKey && recentSentryDedupeKeys.has(dedupeKey)) return true;
   // Issue-only webhook (action=created, no event): skip — incident engine will emit "new_issue"
   if (action === "created" && !hasEvent) return true;
   return false;
 }
 
-function recordSentNotification(issueId: string | undefined): void {
-  if (issueId) recentSentryIssueIds.set(issueId, Date.now());
+function recordSentNotification(issue: any, ev: any): void {
+  const now = Date.now();
+  const issueId = issue?.id != null ? String(issue.id) : undefined;
+  const eventId = ev?.event_id ?? ev?.id;
+  const eventIdStr = eventId != null ? String(eventId) : undefined;
+  if (issueId) recentSentryDedupeKeys.set(`issue:${issueId}`, now);
+  if (eventIdStr) recentSentryDedupeKeys.set(`event:${eventIdStr}`, now);
+}
+
+/** Used by routes to skip incident-engine "new_issue" when we just sent from Sentry webhook. */
+const recentSentryByServiceEnv = new Map<string, number>();
+const SENTRY_SUPPRESS_INCIDENT_WINDOW_MS = 45_000;
+
+export function recordRecentSentryNotification(service: string, environment: string): void {
+  const key = `${service}:${environment}`;
+  recentSentryByServiceEnv.set(key, Date.now());
+}
+
+export function wasRecentSentryNotification(service: string, environment: string): boolean {
+  const key = `${service}:${environment}`;
+  const ts = recentSentryByServiceEnv.get(key);
+  if (!ts) return false;
+  if (Date.now() - ts > SENTRY_SUPPRESS_INCIDENT_WINDOW_MS) {
+    recentSentryByServiceEnv.delete(key);
+    return false;
+  }
+  return true;
 }
 
 /** Get user IDs that should receive incident notifications. */
@@ -230,10 +265,10 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
     ingestIncidentEvent(event);
     console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
 
-    const issueId = (issue as any)?.id != null ? String((issue as any).id) : undefined;
+    const dedupeKey = getDedupeKey(issue as any, ev as any);
     const action = body?.action != null ? String(body.action) : undefined;
-    if (shouldSkipDirectNotification(issueId, action, !!ev)) {
-      console.log("[webhooks/sentry] Skipping duplicate direct notification", { issueId, action });
+    if (shouldSkipDirectNotification(dedupeKey, action, !!ev)) {
+      console.log("[webhooks/sentry] Skipping duplicate direct notification", { dedupeKey, action });
       res.status(202).json({ accepted: true });
       return;
     }
@@ -319,7 +354,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
         }
       })
     );
-    recordSentNotification(issueId);
+    recordSentNotification(issue as any, ev as any);
+    recordRecentSentryNotification(service, environment);
     console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users`);
 
     res.status(202).json({ accepted: true });
