@@ -107,6 +107,18 @@ export default function Home() {
     }
 
     try {
+      const workspacesRes = await fetch("/api/slack/workspaces", { credentials: "include", headers: { Accept: "application/json" } });
+      if (workspacesRes.ok) {
+        const workspaces = await workspacesRes.json();
+        if (Array.isArray(workspaces) && workspaces.length > 0) {
+          toast({
+            title: "Already Connected",
+            description: "Your Slack workspace is already connected. Go to Integrations to set up notifications.",
+          });
+          return;
+        }
+      }
+
       const response = await fetch("/api/slack/connect?popup=true", {
         credentials: "include",
         headers: { Accept: "application/json" },

@@ -9,7 +9,11 @@ let slackConnectedHtml: string | null = null;
 let slackErrorHtml: string | null = null;
 
 function loadTemplate(name: string): string {
-  const filePath = path.join(__dirname, name);
+  const templatesDir =
+    path.basename(__dirname) === "dist"
+      ? path.join(__dirname, "templates")
+      : __dirname;
+  const filePath = path.join(templatesDir, name);
   return fs.readFileSync(filePath, "utf-8");
 }
 
