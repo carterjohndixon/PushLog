@@ -392,6 +392,8 @@ const cookieDomain =
     ? (process.env.COOKIE_DOMAIN === "pushlog.ai" ? "pushlog.ai" : undefined)
     : (process.env.COOKIE_DOMAIN || undefined);
 
+// SameSite=None required for OAuth callback: user is redirected from github.com (cross-site), so Lax
+// can block the cookie from being stored. None allows it; Secure is required with None.
 app.use(session({
   store: sessionStore,
   secret: sessionSecret,
@@ -403,7 +405,7 @@ app.use(session({
     secure: true,
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax',
+    sameSite: 'none', // Required for OAuth callback from external IdP (GitHub); Lax blocks cross-site redirect cookie
     ...(cookieDomain && { domain: cookieDomain }),
   }
 }));

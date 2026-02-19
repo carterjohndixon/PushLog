@@ -2349,15 +2349,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   /**
    * Clear the session cookie with options that MUST match the cookie set at login
-   * (server/index.ts session config). Mismatch (e.g. sameSite/strict vs lax, or
-   * missing path/domain) can prevent the browser from clearing the cookie (AUTH-VULN-03).
+   * (server/index.ts session config). Mismatch (e.g. sameSite) can prevent the browser
+   * from clearing the cookie (AUTH-VULN-03). Uses sameSite: "none" to match session config.
    */
   function clearLogoutCookie(res: Response): void {
     const opts: Parameters<Response["clearCookie"]>[1] = {
       path: "/",
       httpOnly: true,
       secure: true,
-      sameSite: "lax",
+      sameSite: "none",
     };
     if (process.env.COOKIE_DOMAIN) opts.domain = process.env.COOKIE_DOMAIN;
     res.clearCookie("connect.sid", opts);
