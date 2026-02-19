@@ -4348,7 +4348,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Optionally send to incident engine (full pipeline) — creates a second notification
-      // when the engine emits a summary (e.g. spike detection).
+      // when the engine emits a summary. Includes correlation_hints.critical_paths so you can
+      // verify commits touching critical paths get "touches critical path" in suspected_causes.
       if (fullPipeline) {
         const event = {
           source: "sentry",
@@ -4369,6 +4370,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               { id: "abc123" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/handler.ts"] },
               { id: "def456" + Date.now().toString(36), timestamp: ts5MinAgo, files: ["src/middleware/auth.ts"] },
             ],
+          },
+          correlation_hints: {
+            critical_paths: ["src/auth", "src/handler", "src/middleware"],
           },
         };
         ingestIncidentEvent(event);

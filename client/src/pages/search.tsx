@@ -439,7 +439,7 @@ export default function Search() {
                     </Badge>
                     {pushEventDetail.impactScore != null && (
                       <Badge variant="secondary" className="font-normal bg-muted/80">
-                        Impact {pushEventDetail.impactScore}
+                        Impact: {pushEventDetail.impactScore}
                       </Badge>
                     )}
                     {(pushEventDetail.aiImpact || pushEventDetail.aiCategory) && (
