@@ -4290,7 +4290,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
     }
-    const err = new Error("[PushLog test] Real error from server/routes.ts — verify Sentry → webhook → PushLog notification");
+    const err = new Error(`[PushLog test] Real error from server/routes.ts — verify Sentry → webhook (${Date.now()})`);
     Sentry.captureException(err);
     res.status(200).setHeader("Content-Type", "text/html").send(
       `<!DOCTYPE html><html><head><title>PushLog test</title></head><body style="font-family:system-ui;max-width:480px;margin:48px auto;padding:24px;text-align:center">
