@@ -4285,15 +4285,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test route: send a real error to Sentry → alert rule → webhook → PushLog notification.
-  // Returns 200 with a friendly page. No cache so CDN/browser always hits the server.
+  // Also creates a notification directly (Sentry "new issue" only fires once per issue, so we
+  // bypass it for testing — real prod errors still go through Sentry webhook when they're new).
   app.get("/api/test/throw", authenticateToken, async (req, res) => {
     if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
     }
     const err = new Error(`[PushLog test] Real error from server/routes.ts — verify Sentry → webhook (${Date.now()})`);
     Sentry.captureException(err);
-
     await Sentry.flush(2000);
+
+    // Create notification directly so "Throw real error" always works for testing
+    try {
+      const targetUserIds = await getIncidentNotificationTargets(false);
+      const targetUsers = new Set<string>(targetUserIds);
+      const title = "Sentry: Error in api/prod (test)";
+      const message = err.message;
+      const metadata = JSON.stringify({ source: "sentry_throw_test", service: "api", environment: "prod", severity: "error" });
+      await Promise.all(
+        Array.from(targetUsers).map(async (userId) => {
+          try {
+            const notif = await storage.createNotification({
+              userId,
+              type: "incident_alert",
+              title,
+              message,
+              metadata,
+            });
+            broadcastNotification(userId, {
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              metadata: notif.metadata,
+              createdAt: notif.createdAt,
+              isRead: false,
+            });
+          } catch (e) {
+            console.warn("[test/throw] failed notify:", e);
+          }
+        })
+      );
+      console.log(`[test/throw] Direct notification sent to ${targetUsers.size} users`);
+    } catch (e) {
+      console.warn("[test/throw] notify failed:", e);
+    }
 
     res.status(200)
       .setHeader("Content-Type", "text/html")
