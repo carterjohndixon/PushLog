@@ -92,10 +92,78 @@ export default function Home() {
     }
   };
 
-  // TODO: Implement Slack OAuth flow
-  const handleSlackConnect = () => {
-    // Slack OAuth flow would be implemented here
-    return;
+  const handleSlackConnect = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in or sign up to connect your Slack workspace.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/slack/connect?popup=true", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        const msg = data.error || "Failed to connect Slack";
+        if (msg.includes("Email verification")) {
+          toast({
+            title: "Email Verification Required",
+            description: "Please verify your email in Settings before connecting Slack.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(msg);
+      }
+
+      if (data.url) {
+        const width = 600;
+        const height = 700;
+        const left = Math.max(0, (window.screen.width - width) / 2);
+        const top = Math.max(0, (window.screen.height - height) / 2);
+
+        const popup = window.open(
+          data.url,
+          "slack-oauth",
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+
+        const onMessage = (event: MessageEvent) => {
+          if (event.data === "slack-connected") {
+            window.removeEventListener("message", onMessage);
+            if (popup) popup.close();
+            toast({
+              title: "Slack Connected",
+              description: "Your Slack workspace is now connected. Go to Integrations to set up notifications.",
+            });
+            scrollToDashboard();
+          }
+        };
+        window.addEventListener("message", onMessage);
+
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed);
+            window.removeEventListener("message", onMessage);
+          }
+        }, 500);
+      } else {
+        throw new Error("No OAuth URL received from server");
+      }
+    } catch (error) {
+      console.error("Slack connection error:", error);
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Failed to connect Slack. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const scrollToDashboard = () => {
