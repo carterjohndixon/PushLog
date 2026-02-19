@@ -490,6 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(202).json({ accepted: true });
     } catch (error) {
       console.error("Incident webhook error:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: "Failed to ingest incident event" });
     }
   });
@@ -562,6 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Failed to start production promotion webhook:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: error?.message || "Failed to start promotion" });
     }
   });
@@ -605,6 +607,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Promotion cancelled", cancelledAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Failed to cancel production promotion:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: error?.message || "Failed to cancel promotion" });
     }
   });
@@ -759,6 +762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Failed to load promotion webhook status:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: error?.message || "Failed to load promotion status" });
     }
   });
@@ -940,6 +944,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Failed to load staging admin status:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: error?.message || "Failed to load status" });
     }
   });
@@ -1003,6 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Failed to start production promotion:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: error?.message || "Failed to start promotion" });
     }
   });
@@ -1044,6 +1050,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ message: "Promotion cancelled", cancelledAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Failed to cancel promotion:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: error?.message || "Failed to cancel" });
     }
   });
@@ -1070,6 +1077,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         services
       });
     } catch (error) {
+      Sentry.captureException(error);
       res.status(503).json({
         status: "unhealthy",
         timestamp: new Date().toISOString(),
@@ -1103,6 +1111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader("Content-Type", "application/json");
       res.status(isHealthy ? 200 : 503).send(JSON.stringify(payload) + "\n");
     } catch (error) {
+      Sentry.captureException(error);
       const payload = {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
@@ -1182,6 +1191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.save((err) => {
         if (err) {
           console.error('❌ Error saving session:', err);
+          Sentry.captureException(err);
           return res.status(500).json({ error: 'Failed to create session' });
         }
 
@@ -1216,6 +1226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       });
     } catch (error) {
+      Sentry.captureException(error);
       res.status(500).send("An error occurred while trying to log in");
     }
   });
@@ -1299,6 +1310,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ url, state });
     } catch (error) {
       console.error('GitHub connection initiation failed:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to initiate GitHub connection' });
     }
   });
@@ -1322,6 +1334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true, message: "GitHub account disconnected successfully" });
     } catch (error) {
       console.error('Failed to disconnect GitHub:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to disconnect GitHub account' });
     }
   });
@@ -1578,6 +1591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session!.regenerate((regErr) => {
         if (regErr) {
           console.error("❌ GitHub OAuth: session regenerate failed:", regErr);
+          Sentry.captureException(regErr);
           return res.status(500).json({ success: false, error: "Session failed" });
         }
         req.session!.userId = user.id;
@@ -1585,6 +1599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session!.save((err) => {
           if (err) {
             console.error("❌ GitHub OAuth: session save failed:", err);
+            Sentry.captureException(err);
             return res.status(500).json({ success: false, error: "Session save failed" });
           }
           const targetPath = (typeof returnPath === "string" && returnPath.startsWith("/")) ? returnPath : "/dashboard";
@@ -1597,6 +1612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("GitHub OAuth exchange error:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Exchange failed" });
     }
   });
@@ -1897,6 +1913,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.redirect(`/dashboard`);
     } catch (error) {
       console.error("Google auth error:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Authentication failed" });
     }
   });
@@ -1975,6 +1992,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error) {
+      Sentry.captureException(error);
       res.status(500).send("Failed to create account");
     }
   });
@@ -2037,6 +2055,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Email verification error:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to verify email" });
     }
   });
@@ -2085,6 +2104,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         notification = await storage.createNotification(notificationData);
       } catch (error) {
         console.error('Error creating notification:', error);
+        Sentry.captureException(error);
         return res.status(500).json({ error: "Failed to create notification" });
       }
 
@@ -2097,6 +2117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Resend verification error:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to send verification email" });
     }
   });
@@ -2266,6 +2287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Failed to fetch repositories:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch repositories" });
     }
   });
@@ -2296,6 +2318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(formattedEvents);
     } catch (error) {
       console.error("Failed to fetch push events:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch push events" });
     }
   });
@@ -2337,6 +2360,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("Get push event failed:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load push event" });
     }
   });
@@ -2375,6 +2399,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(formatted);
     } catch (error) {
       console.error("Search failed:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Search failed" });
     }
   });
@@ -2560,6 +2585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(repository);
     } catch (error) {
       console.error("Error updating repository:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to update repository" });
     }
   });
@@ -2604,6 +2630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error disconnecting repository:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to disconnect repository" });
     }
   });
@@ -2616,6 +2643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ connected: isConfigured });
     } catch (error) {
       console.error("Error testing Slack connection:", error);
+      Sentry.captureException(error);
       res.status(500).json({ connected: false, error: "Connection test failed" });
     }
   });
@@ -2667,6 +2695,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ url, state });
     } catch (error) {
       console.error('Slack connection initiation failed:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to initiate Slack connection' });
     }
   });
@@ -2747,6 +2776,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(workspaces);
     } catch (error) {
       console.error('Error fetching Slack workspaces:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to fetch Slack workspaces' });
     }
   });
@@ -2771,6 +2801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(channels);
     } catch (error) {
       console.error('Error fetching Slack channels:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to fetch Slack channels' });
     }
   });
@@ -2878,6 +2909,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(stats);
     } catch (error) {
       console.error("Error fetching stats:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
@@ -2918,6 +2950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(enrichedIntegrations);
     } catch (error) {
       console.error("Error fetching integrations:", error);
+      Sentry.captureException(error);
       const message = error instanceof Error ? error.message : "Unknown error";
       res.status(500).json({
         error: "Failed to fetch integrations",
@@ -3036,6 +3069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ repositories, integrations: enrichedIntegrations });
     } catch (error) {
       console.error("Error fetching repositories and integrations:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch data" });
     }
   });
@@ -3099,6 +3133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(sanitizeIntegrationForClient(integration));
     } catch (error) {
       console.error("Error updating integration:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to update integration" });
     }
   });
@@ -3128,6 +3163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ valid: true });
     } catch (err) {
       console.error("OpenRouter verify error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ valid: false, error: "Verification failed. Try again." });
     }
   });
@@ -3157,6 +3193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (err: any) {
       console.error("OpenRouter save key error:", err);
+      Sentry.captureException(err);
       const msg = err?.message ?? String(err);
       const code = err?.code ?? err?.cause?.code;
       if (code === "42703" || msg.includes("open_router_api_key")) {
@@ -3179,6 +3216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(usage);
     } catch (error) {
       console.error('❌ OpenRouter update usage error:', error);
+      Sentry.captureException(error);
       res.status(500).json({ error: 'Failed to update OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
     }
   });
@@ -3190,6 +3228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (err) {
       console.error("OpenRouter remove key error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to remove API key" });
     }
   });
@@ -3234,6 +3273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("OpenRouter credits error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to fetch OpenRouter credits." });
     }
   });
@@ -3306,6 +3346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("OpenRouter usage per gen error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to fetch OpenRouter usage per gen." });
     }
   });
@@ -3414,6 +3455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("OpenRouter usage error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load usage" });
     }
   });
@@ -3438,6 +3480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(daily);
     } catch (err) {
       console.error("OpenRouter daily usage error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load daily usage" });
     }
   });
@@ -3452,6 +3495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true, monthlyBudget: budgetUnits });
     } catch (err) {
       console.error("Budget update error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to update budget" });
     }
   });
@@ -3466,6 +3510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount });
     } catch (err) {
       console.error("Monthly spend error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load monthly spend" });
     }
   });
@@ -3477,6 +3522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(favorites);
     } catch (err) {
       console.error("Favorites list error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load favorites" });
     }
   });
@@ -3490,6 +3536,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       if (err?.code === "23505") return res.status(409).json({ error: "Already favorited" });
       console.error("Favorite add error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to add favorite" });
     }
   });
@@ -3501,6 +3548,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: removed });
     } catch (err) {
       console.error("Favorite remove error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to remove favorite" });
     }
   });
@@ -3530,6 +3578,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ models });
     } catch (err) {
       console.error("OpenRouter models fetch error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to fetch OpenRouter models" });
     }
   });
@@ -3568,6 +3617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const ch = integration?.slackChannelName ?? "your-channel";
         return res.status(400).json({ error: `PushLog isn't in that channel. In Slack, run: /invite @PushLog in #${ch}.` });
       }
+      Sentry.captureException(err);
       res.status(500).json({ error: msg || "Failed to send test message to Slack." });
     }
   });
@@ -3597,6 +3647,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error deleting integration:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to delete integration" });
     }
   });
@@ -3641,6 +3692,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("Analytics: error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load analytics" });
     }
   });
@@ -3676,6 +3728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("Analytics repo detail:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load repo analytics" });
     }
   });
@@ -3699,6 +3752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ latest, trend, history });
     } catch (err) {
       console.error("Analytics stats error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load analytics stats" });
     }
   });
@@ -3734,6 +3788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("Analytics cost error:", err);
+      Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load cost analytics" });
     }
   });
@@ -3759,6 +3814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(pushEvents);
     } catch (error) {
       console.error("Error fetching push events:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch push events" });
     }
   });
@@ -3896,6 +3952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
     } catch (error) {
       console.error("Error testing AI summary:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to test AI summary" });
     }
   });
@@ -3959,6 +4016,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
       } catch (aiErr) {
         console.error("🧪 [TEST] AI failed:", aiErr);
+        Sentry.captureException(aiErr);
         return res.status(500).json({ error: "AI summary failed", details: aiErr instanceof Error ? aiErr.message : String(aiErr) });
       }
 
@@ -4058,6 +4116,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("🧪 [TEST] Error:", err);
+      Sentry.captureException(err);
       res.status(500).json({
         error: err instanceof Error ? err.message : "Simulate push failed",
         stack: process.env.NODE_ENV === "development" ? (err instanceof Error ? err.stack : undefined) : undefined,
@@ -4186,6 +4245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err) {
       console.error("🧪 [TEST] simulate-incident error:", err);
+      Sentry.captureException(err);
       res.status(500).json({
         error: err instanceof Error ? err.message : "Simulate incident failed",
         stack: process.env.NODE_ENV === "development" ? (err instanceof Error ? err.stack : undefined) : undefined,
@@ -4297,6 +4357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(payload);
     } catch (error: any) {
       console.error("Profile error:", error?.message ?? error);
+      Sentry.captureException(error);
       if (error?.message?.includes("open_router_api_key") || error?.code === "42703") {
         console.error("Profile failed: users table is missing open_router_api_key. Run: migrations/add-openrouter-api-key-users.sql");
       }
@@ -4331,6 +4392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to update user" });
     }
   });
@@ -4356,6 +4418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error replacing integrations model:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to update integrations" });
     }
   });
@@ -4432,6 +4495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error fetching unread notifications:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch unread notifications" });
     }
   });
@@ -4526,6 +4590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error fetching all notifications:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to fetch all notifications" });
     }
   });
@@ -4538,6 +4603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("Error marking notifications as read:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to mark notifications as read" });
     }
   });
@@ -4573,6 +4639,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ success: true });
     } catch (error) {
       console.error("❌ Error marking notification as read:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to mark notification as read" });
     }
   });
@@ -4593,6 +4660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ error: "Notification not found" });
     } catch (error) {
       console.error("Error deleting notification:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: "Failed to delete notification" });
     }
   });
@@ -4606,6 +4674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(200).json({ success: true, deletedCount });
     } catch (error) {
       console.error("❌ [SERVER] Error clearing notifications:", error);
+      Sentry.captureException(error);
       return res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
@@ -4717,6 +4786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Forgot password error:", error);
+      Sentry.captureException(error);
       res.status(500).json("Failed to process request");
     }
   });
@@ -4775,6 +4845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Reset password error:", error);
+      Sentry.captureException(error);
       res.status(500).json("Failed to reset password");
     }
   });
@@ -4827,6 +4898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Change password error:", error);
+      Sentry.captureException(error);
       res.status(500).json({ error: "Failed to change password" });
     }
   });

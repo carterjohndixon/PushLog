@@ -231,7 +231,6 @@ export default function Dashboard() {
         // Show specific notification for the repository that was just connected
         if (data.warning) {
           toast({
-            // TODO: 
             title: "Repository Connected with Warning",
             description: data.warning,
             variant: "default",
