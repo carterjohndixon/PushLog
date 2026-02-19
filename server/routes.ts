@@ -4286,12 +4286,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Test route: send a real error to Sentry → alert rule → webhook → PushLog notification.
   // Returns 200 with a friendly page. No cache so CDN/browser always hits the server.
-  app.get("/api/test/throw", authenticateToken, (req, res) => {
+  app.get("/api/test/throw", authenticateToken, async (req, res) => {
     if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
     }
     const err = new Error(`[PushLog test] Real error from server/routes.ts — verify Sentry → webhook (${Date.now()})`);
     Sentry.captureException(err);
+
+    await Sentry.flush(2000);
+
     res.status(200)
       .setHeader("Content-Type", "text/html")
       .setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
