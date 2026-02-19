@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "npx vite build && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --define:__APP_ENV__='\"production\"'",
+    "build": "npx vite build && npx esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --sourcemap --define:__APP_ENV__='\"production\"'",
     "build:carter": "cd carter.pushlog.ai && npm install && npm run build",
     "build:production": "NODE_ENV=production npm run build && npm run build:carter",
     "start": "NODE_ENV=production node dist/index.js",
@@ -103,6 +103,7 @@
     "react-icons": "^5.5.0",
     "react-resizable-panels": "^2.1.7",
     "recharts": "^2.15.2",
+    "source-map": "^0.7.6",
     "stripe": "^18.5.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",

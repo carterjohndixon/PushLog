@@ -282,7 +282,7 @@ export function NotificationDetailsModal() {
                   </p>
 
                   {/* API route and file:line — shown when available (Sentry webhook) */}
-                  {(metadata?.apiRoute || metadata?.culprit) && (
+                  {(metadata?.apiRoute || metadata?.culprit || metadata?.culpritSource) && (
                     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 text-sm">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Location</h5>
                       {metadata?.apiRoute && (
@@ -293,12 +293,15 @@ export function NotificationDetailsModal() {
                           </code>
                         </div>
                       )}
-                      {metadata?.culprit && (
+                      {(metadata?.culpritSource || metadata?.culprit) && (
                         <div>
-                          <span className="font-medium text-foreground">File:line:</span>{' '}
+                          <span className="font-medium text-foreground">Stack frame:</span>{' '}
                           <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono break-words">
-                            {metadata.culprit}
+                            {metadata.culpritSource ?? metadata.culprit}
                           </code>
+                          {metadata.culprit && !metadata.culpritSource && (
+                            <p className="text-xs text-muted-foreground mt-1">Bundled build — use View in Sentry for source map.</p>
+                          )}
                         </div>
                       )}
                       {metadata?.requestUrl && (
