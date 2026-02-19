@@ -146,6 +146,8 @@ export default function Settings() {
         return;
       }
       if (data.url) {
+        if (data.state) localStorage.setItem("github_oauth_state", data.state);
+        localStorage.setItem("returnPath", "/settings");
         window.location.href = data.url;
       }
     } catch (e) {
