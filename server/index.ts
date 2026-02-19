@@ -50,14 +50,16 @@ if (skipGitHubVerify) {
   console.warn("⚠️ SKIP_GITHUB_WEBHOOK_VERIFY is set - GitHub webhook signature verification is DISABLED.");
 }
 
-// Initialize Sentry for error tracking
-if (process.env.SENTRY_DSN) {
+// Initialize Sentry for error tracking (fallback DSN matches tunnel/client — pushlog project)
+const sentryDsn = process.env.SENTRY_DSN || "https://76dff591029ab7f40572c74af67aa470@o4510881753137152.ingest.us.sentry.io/4510881854521344";
+if (sentryDsn) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV || 'development',
+    dsn: sentryDsn,
+    environment: process.env.NODE_ENV || process.env.APP_ENV || 'development',
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     integrations: [Sentry.expressIntegration()],
   });
+  console.log("[Sentry] initialized");
 }
 
 const app = express();
@@ -242,7 +244,6 @@ app.post(
 );
 
 // Sentry tunnel: proxy client events through our server (avoids ad-blockers blocking ingest.sentry.io)
-const sentryDsn = process.env.SENTRY_DSN || process.env.VITE_SENTRY_DSN || "https://76dff591029ab7f40572c74af67aa470@o4510881753137152.ingest.us.sentry.io/4510881854521344";
 const sentryIngestUrl = (() => {
   try {
     const match = sentryDsn.match(/^https?:\/\/[^@]+@([^/]+)\/(\d+)/);
@@ -447,13 +448,9 @@ app.use((req, res, next) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    // Log error to Sentry
-    if (process.env.SENTRY_DSN) {
-      Sentry.captureException(err);
-    }
+    if (sentryDsn) Sentry.captureException(err);
 
     res.status(status).json({ message });
-    throw err;
   });
 
   // Vite in development only; static when APP_ENV is production/staging. Uses __APP_ENV__ define
