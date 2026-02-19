@@ -1492,13 +1492,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Generate state for CSRF protection
-      const state = crypto.randomBytes(32).toString('hex');
-      
-      // Store the state and user ID in a temporary session
-      const sessionToken = crypto.randomBytes(32).toString('hex');
+      // Generate state for CSRF protection; include /settings as returnPath so user lands back on settings after connecting
+      const stateHex = crypto.randomBytes(32).toString('hex');
+      const state = `${stateHex}:${Buffer.from("/settings", "utf8").toString("base64url")}`;
+
       await databaseStorage.storeOAuthSession({
-        token: sessionToken,
+        token: crypto.randomBytes(16).toString('hex'),
         state,
         userId,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
@@ -1508,11 +1507,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : "https://pushlog.ai/auth/github/callback";
       const scope = "repo user:email admin:org_hook";
-      
+
       console.log("GitHub OAuth connect - Client ID:", clientId.substring(0, 10) + "...");
       console.log("GitHub OAuth connect - Redirect URI:", redirectUri);
-      
-      const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
+
+      const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}&state=${encodeURIComponent(state)}`;
       
       // Instead of redirecting, send the URL and state back to the client
       res.status(200).json({ url, state });
