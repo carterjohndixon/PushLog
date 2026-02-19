@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
-  favoriteModels, loginLockout,
+  favoriteModels, loginLockout, oauthSessions,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -120,12 +120,10 @@ interface OAuthSession {
 export class DatabaseStorage implements IStorage {
   private users: Map<string, User>;
   private analyticsStats: Map<string, AnalyticsStats>;
-  private oauthSessions: Map<string, OAuthSession>;
 
   constructor() {
     this.users = new Map<string, User>();
     this.analyticsStats = new Map<string, AnalyticsStats>();
-    this.oauthSessions = new Map<string, OAuthSession>();
   }
 
   async init(): Promise<void> {
@@ -639,24 +637,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   async storeOAuthSession(session: OAuthSession): Promise<void> {
-    this.oauthSessions.set(session.state, session);
+    await db.insert(oauthSessions).values({
+      state: session.state,
+      userId: session.userId,
+      expiresAt: session.expiresAt,
+    }).onConflictDoUpdate({
+      target: oauthSessions.state,
+      set: { userId: session.userId, expiresAt: session.expiresAt },
+    });
   }
 
   async getOAuthSession(state: string): Promise<OAuthSession | null> {
-    const session = this.oauthSessions.get(state);
-    if (!session) return null;
-
-    // Check if session is expired
-    if (session.expiresAt < new Date()) {
-      this.oauthSessions.delete(state);
+    const [row] = await db.select().from(oauthSessions).where(eq(oauthSessions.state, state)).limit(1);
+    if (!row) return null;
+    if (new Date(row.expiresAt) < new Date()) {
+      await db.delete(oauthSessions).where(eq(oauthSessions.state, state));
       return null;
     }
-
-    return session;
+    return { state: row.state, userId: row.userId, token: "", expiresAt: new Date(row.expiresAt) };
   }
 
   async deleteOAuthSession(state: string): Promise<void> {
-    this.oauthSessions.delete(state);
+    await db.delete(oauthSessions).where(eq(oauthSessions.state, state));
   }
 
   // Notification methods

@@ -175,6 +175,14 @@ export const loginLockout = pgTable("login_lockout", {
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
+/** OAuth state for GitHub login/connect. Shared across instances (fixes multi-process callback lookup). */
+export const oauthSessions = pgTable("oauth_sessions", {
+  state: text("state").primaryKey(),
+  userId: text("user_id").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+});
+
 /** Session store used by connect-pg-simple (express-session). Declared so db:push does not drop it. */
 export const userSessions = pgTable("user_sessions", {
   sid: text("sid").primaryKey(),
