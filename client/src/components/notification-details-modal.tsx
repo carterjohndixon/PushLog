@@ -27,7 +27,7 @@ export function NotificationDetailsModal() {
   return (
     <>
     <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
-      <DialogContent className="sm:max-w-md max-h-[70vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <ErrorBoundary fallback={
           <div className="py-4 text-center text-muted-foreground text-sm">
             <p>Couldn’t load notification details.</p>
@@ -77,12 +77,12 @@ export function NotificationDetailsModal() {
             : null;
 
           return (
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-medium text-foreground text-base">
+            <div className="space-y-4 min-w-0 break-words">
+              <div className="break-words">
+                <h3 className="font-medium text-foreground text-base break-words">
                   {selectedNotification.title || selectedNotification.message}
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1">
+                <p className="text-sm text-muted-foreground mt-1 break-words">
                   {selectedNotification.message}
                 </p>
               </div>
@@ -272,16 +272,16 @@ export function NotificationDetailsModal() {
 
               {/* Incident alert — detailed view from Rust incident engine */}
               {isIncidentAlert && (
-                <div className="border-t border-border pt-4 space-y-4">
+                <div className="border-t border-border pt-4 space-y-4 break-words">
                   <h4 className="font-semibold text-destructive text-sm flex items-center gap-2">
                     <AlertCircle className="w-4 h-4" />
                     Incident details
                   </h4>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground break-words">
                     {selectedNotification.message}
                   </p>
 
-                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm">
+                  <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm break-words">
                     <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Summary</h5>
                     <div className="grid gap-1.5">
                       {metadata?.incidentId && (
@@ -325,15 +325,15 @@ export function NotificationDetailsModal() {
                   </div>
 
                   {Array.isArray(metadata?.topSymptoms) && metadata.topSymptoms.length > 0 && (
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Top symptoms</h5>
                       {metadata.topSymptoms.map((s: { exception_type?: string; message?: string; count?: number; spike_factor?: number; fingerprint?: string }, i: number) => (
-                        <div key={s.fingerprint ?? `symptom-${i}`} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1">
+                        <div key={s.fingerprint ?? `symptom-${i}`} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1 break-words">
                           <div><span className="font-medium text-foreground">Type:</span> {s.exception_type}</div>
-                          {s.message && <div><span className="font-medium text-foreground">Message:</span> {s.message}</div>}
+                          {s.message && <div><span className="font-medium text-foreground">Message:</span> <span className="break-all">{s.message}</span></div>}
                           {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}
                           {s.spike_factor != null && <div><span className="font-medium text-foreground">Spike factor:</span> {s.spike_factor}</div>}
-                          {s.fingerprint && <div className="text-xs font-mono text-muted-foreground truncate" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
+                          {s.fingerprint && <div className="text-xs font-mono text-muted-foreground break-all" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
                         </div>
                       ))}
                     </div>
@@ -357,7 +357,7 @@ export function NotificationDetailsModal() {
                   )}
 
                   {Array.isArray(metadata?.recommendedFirstActions) && metadata.recommendedFirstActions.length > 0 && (
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Recommended actions</h5>
                       <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
                         {metadata.recommendedFirstActions.map((a: string, i: number) => <li key={`${a}-${i}`}>{a}</li>)}
@@ -366,11 +366,11 @@ export function NotificationDetailsModal() {
                   )}
 
                   {Array.isArray(metadata?.stacktrace) && metadata.stacktrace.length > 0 && (
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
-                      <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto">
+                      <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
                         {metadata.stacktrace.map((f: { file?: string; function?: string }, i: number) => (
-                          <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 truncate" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
+                          <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 break-all" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
                             <span className="text-muted-foreground">at</span> {f.file}{f.function ? ` (${f.function})` : ''}
                           </div>
                         ))}
