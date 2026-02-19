@@ -66,29 +66,33 @@ export default function Home() {
     }
 
     try {
-      // Use apiRequest to make an authenticated request
       const response = await apiRequest("GET", "/api/github/connect");
-      
-      // Parse the JSON response to get the URL
       const data = await response.json();
-      
+
       if (data.url) {
-        // Store the state for verification in the callback
         if (data.state) {
-          localStorage.setItem('github_oauth_state', data.state);
+          localStorage.setItem("github_oauth_state", data.state);
         }
-        localStorage.setItem('returnPath', window.location.pathname);
+        localStorage.setItem("returnPath", window.location.pathname);
         window.location.href = data.url;
       } else {
-        throw new Error('No redirect URL received');
+        throw new Error(data.error || "No redirect URL received");
       }
     } catch (error) {
-      console.error('Failed to initiate GitHub connection:', error);
-      toast({
-        title: "Connection Failed",
-        description: "Failed to connect to GitHub. Please try again.",
-        variant: "destructive",
-      });
+      console.error("Failed to initiate GitHub connection:", error);
+      const msg = error instanceof Error ? error.message : "";
+      if (msg.includes("already connected")) {
+        toast({
+          title: "Already Connected",
+          description: "Your GitHub account is already connected. Go to Repositories to add repos.",
+        });
+      } else {
+        toast({
+          title: "Connection Failed",
+          description: msg || "Failed to connect to GitHub. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
