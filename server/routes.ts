@@ -520,12 +520,44 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
     const directMessage = ev
       ? `${event.message} (${severity})`
       : `${String(body?.action || "Alert")} from Sentry`;
+
+    // Extract API route and culprit (file:line) from Sentry event
+    let apiRoute: string | undefined;
+    let requestUrl: string | undefined;
+    let culprit: string | undefined;
+    if (ev) {
+      const req = ev.request as Record<string, unknown> | undefined;
+      const url = req?.url as string | undefined;
+      if (url) {
+        try {
+          const parsed = new URL(url);
+          apiRoute = parsed.pathname || undefined;
+          requestUrl = url;
+        } catch {
+          apiRoute = url;
+        }
+      }
+      // Culprit: first app frame (not node_modules) with file:line
+      const culpritFrame = stacktrace.find(
+        (f) => f.file && !String(f.file).includes("node_modules")
+      );
+      if (culpritFrame) {
+        culprit = culpritFrame.line != null
+          ? `${String(culpritFrame.file).replace(/^.*[\\/]/, "")}:${culpritFrame.line}`
+          : culpritFrame.file;
+      }
+    }
+
     const directMeta = JSON.stringify({
       source: ev ? "sentry_event_alert" : "sentry_issue_alert",
       service,
       environment,
       severity,
       links: event.links || {},
+      apiRoute,
+      requestUrl,
+      culprit,
+      stacktrace,
     });
 
     await Promise.all(

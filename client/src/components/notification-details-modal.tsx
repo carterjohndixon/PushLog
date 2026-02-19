@@ -281,6 +281,34 @@ export function NotificationDetailsModal() {
                     {selectedNotification.message}
                   </p>
 
+                  {/* API route and file:line — shown when available (Sentry webhook) */}
+                  {(metadata?.apiRoute || metadata?.culprit) && (
+                    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 text-sm">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Location</h5>
+                      {metadata?.apiRoute && (
+                        <div>
+                          <span className="font-medium text-foreground">Route:</span>{' '}
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                            {metadata.apiRoute}
+                          </code>
+                        </div>
+                      )}
+                      {metadata?.culprit && (
+                        <div>
+                          <span className="font-medium text-foreground">File:line:</span>{' '}
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono break-words">
+                            {metadata.culprit}
+                          </code>
+                        </div>
+                      )}
+                      {metadata?.requestUrl && (
+                        <div className="text-xs text-muted-foreground break-words" title={metadata.requestUrl}>
+                          {metadata.requestUrl}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm break-words">
                     <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Summary</h5>
                     <div className="grid gap-1.5">
@@ -369,9 +397,11 @@ export function NotificationDetailsModal() {
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
-                        {metadata.stacktrace.map((f: { file?: string; function?: string }, i: number) => (
+                        {metadata.stacktrace.map((f: { file?: string; function?: string; line?: number }, i: number) => (
                           <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 break-words" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
-                            <span className="text-muted-foreground">at</span> {f.file}{f.function ? ` (${f.function})` : ''}
+                            <span className="text-muted-foreground">at</span> {f.file}
+                            {f.line != null && <span className="text-amber-600 dark:text-amber-500">:{f.line}</span>}
+                            {f.function ? ` (${f.function})` : ''}
                           </div>
                         ))}
                       </div>
