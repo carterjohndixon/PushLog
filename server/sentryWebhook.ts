@@ -7,6 +7,7 @@
 import type { Request, Response } from "express";
 import { storage } from "./storage";
 import broadcastNotification from "./helper/broadcastNotification";
+import { sendIncidentAlertEmail } from "./email";
 import { resolveToSource } from "./helper/sourceMapResolve";
 import {
   ingestIncidentEvent,
@@ -180,6 +181,10 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
               createdAt: notif.createdAt,
               isRead: false,
             });
+            const user = await storage.getUser(userId);
+            if (user?.email) {
+              void sendIncidentAlertEmail(user.email, directTitle, directMessage);
+            }
           } catch (err) {
             console.warn("[webhooks/sentry] failed test notify:", err);
           }
@@ -349,6 +354,10 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
             createdAt: notif.createdAt,
             isRead: false,
           });
+          const user = await storage.getUser(userId);
+          if (user?.email) {
+            void sendIncidentAlertEmail(user.email, directTitle, directMessage);
+          }
         } catch (err) {
           console.warn("[webhooks/sentry] failed direct notify:", err);
         }

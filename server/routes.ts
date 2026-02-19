@@ -39,8 +39,8 @@ import {
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
 import { z } from "zod";
 import { databaseStorage } from "./database";
-import { sendVerificationEmail, sendPasswordResetEmail } from './email';
-import { generateCodeSummary, generateSlackMessage, fetchOpenRouterGenerationUsage } from './ai';
+import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail } from './email';
+import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { encrypt, decrypt } from './encryption';
 import { body, validationResult } from "express-validator";
@@ -407,6 +407,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             createdAt: notif.createdAt,
             isRead: false,
           });
+          const user = await storage.getUser(userId);
+          if (user?.email) {
+            void sendIncidentAlertEmail(user.email, summary.title, message);
+          }
         } catch (err) {
           console.warn(`[incident-engine] failed to notify user ${userId}:`, err);
         }
