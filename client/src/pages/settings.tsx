@@ -148,7 +148,7 @@ export default function Settings() {
       if (data.url) {
         if (data.state) localStorage.setItem("github_oauth_state", data.state);
         localStorage.setItem("returnPath", "/settings");
-        window.location.href = data.url || "/settings";
+        window.location.href = "/settings";
       }
     } catch (e) {
       toast({ title: "Connection failed", description: "Could not start GitHub connection.", variant: "destructive" });
