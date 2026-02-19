@@ -330,10 +330,10 @@ export function NotificationDetailsModal() {
                       {metadata.topSymptoms.map((s: { exception_type?: string; message?: string; count?: number; spike_factor?: number; fingerprint?: string }, i: number) => (
                         <div key={s.fingerprint ?? `symptom-${i}`} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1 break-words">
                           <div><span className="font-medium text-foreground">Type:</span> {s.exception_type}</div>
-                          {s.message && <div><span className="font-medium text-foreground">Message:</span> <span className="break-all">{s.message}</span></div>}
+                          {s.message && <div><span className="font-medium text-foreground">Message:</span> <span className="break-words">{s.message}</span></div>}
                           {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}
                           {s.spike_factor != null && <div><span className="font-medium text-foreground">Spike factor:</span> {s.spike_factor}</div>}
-                          {s.fingerprint && <div className="text-xs font-mono text-muted-foreground break-all" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
+                          {s.fingerprint && <div className="text-xs font-mono text-muted-foreground break-words" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
                         </div>
                       ))}
                     </div>
@@ -370,7 +370,7 @@ export function NotificationDetailsModal() {
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
                         {metadata.stacktrace.map((f: { file?: string; function?: string }, i: number) => (
-                          <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 break-all" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
+                          <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 break-words" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
                             <span className="text-muted-foreground">at</span> {f.file}{f.function ? ` (${f.function})` : ''}
                           </div>
                         ))}
