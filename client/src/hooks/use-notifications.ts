@@ -27,7 +27,7 @@ interface NotificationMetadata {
 }
 
 interface Notification {
-  id: number;
+  id: string | number;
   type: 'email_verification' | 'push_event' | 'slack_message_sent' | 'slack_delivery_failed' | 'openrouter_error' | 'budget_alert' | 'low_credits' | 'no_credits' | 'incident_alert';
   title?: string;
   message: string;
@@ -42,7 +42,7 @@ interface NotificationsResponse {
 }
 
 const fetchNotifications = async (): Promise<NotificationsResponse> => {
-  const response = await apiRequest("GET", "/api/notifications/all");
+  const response = await apiRequest("GET", "/api/notifications/all?limit=200");
   return response.json();
 };
 
@@ -86,7 +86,7 @@ export function useNotifications() {
     }
   };
 
-  const readNotification = async (notificationId: number) => {
+  const readNotification = async (notificationId: string | number) => {
     try {
       const response = await apiRequest("POST", `/api/notifications/mark-read/${notificationId}`);
       const result = await response.json();
@@ -109,28 +109,29 @@ export function useNotifications() {
     }
   };
 
-  const removeNotification = async (notificationId: number) => {
+  const removeNotification = async (notificationId: string | number) => {
     try {
-      await apiRequest("DELETE", `/api/notifications/delete/${notificationId}`);
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      const res = await apiRequest("DELETE", `/api/notifications/delete/${notificationId}`);
+      if (!res.ok) throw new Error('Delete failed');
+      setNotifications(prev => prev.filter(n => String(n.id) !== String(notificationId)));
       setUnreadCount(prev => Math.max(0, prev - 1));
+      await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
       console.error('Error removing notification:', error);
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
     }
   };
 
   const clearAllNotifications = async () => {
     try {
-      await apiRequest("DELETE", "/api/notifications/clear-all");
+      const res = await apiRequest("DELETE", "/api/notifications/clear-all");
+      if (!res.ok) throw new Error('Clear all failed');
       setNotifications([]);
       setUnreadCount(0);
-      await queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
-      const verifyResponse = await apiRequest("GET", "/api/notifications/all");
-      const verifyData = await verifyResponse.json();
-      setNotifications(verifyData.notifications || []);
-      setUnreadCount(verifyData.count || 0);
+      await queryClient.refetchQueries({ queryKey: ['/api/notifications/all'] });
     } catch (error) {
       console.error('❌ Error clearing notifications:', error);
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications/all'] });
     }
   };
 

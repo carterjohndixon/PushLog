@@ -4588,15 +4588,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const success = await storage.deleteNotification(notificationId);
       if (success) {
-        res.status(200).json({ success: true });
-      } else {
-        res.status(404).json({ error: "Notification not found" });  
+        return res.status(200).json({ success: true });
       }
+      return res.status(404).json({ error: "Notification not found" });
     } catch (error) {
-        console.error("Error deleting notification:", error);
-        res.status(500).json({ error: "Failed to delete notification" });
-      }
-  })
+      console.error("Error deleting notification:", error);
+      return res.status(500).json({ error: "Failed to delete notification" });
+    }
+  });
 
   // Clear all notifications for a user
   app.delete("/api/notifications/clear-all", authenticateToken, async (req, res) => {
@@ -4604,10 +4603,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.userId;
       const deletedCount = await storage.getNotificationCountForUser(userId);
       await storage.deleteAllNotifications(userId);
-      res.status(200).json({ success: true, deletedCount });
+      return res.status(200).json({ success: true, deletedCount });
     } catch (error) {
       console.error("❌ [SERVER] Error clearing notifications:", error);
-      res.status(500).json({ error: "Failed to clear notifications" });
+      return res.status(500).json({ error: "Failed to clear notifications" });
     }
   });
 
