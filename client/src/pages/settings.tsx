@@ -755,11 +755,25 @@ export default function Settings() {
                           }
                         }}
                       >
-                        Trigger real error (Sentry)
+                        Capture error (Sentry)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-500/50 text-red-700 dark:text-red-400"
+                        onClick={() => {
+                          toast({
+                            title: "Throwing real error...",
+                            description: "A 500 will occur. Check your bell icon for the incident notification.",
+                          });
+                          window.open("/api/test/throw", "_blank", "noopener");
+                        }}
+                      >
+                        Throw real error
                       </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine (may create a second notification e.g. spike). <strong>Trigger real error:</strong> Throws on the server so Sentry captures it → new issue → alert → webhook → incident in app (proves full pipeline).
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Throws uncaught in server/routes.ts → Sentry captures → alert → webhook → PushLog notification (full real flow).
                     </p>
                   </div>
                 </CollapsibleContent>

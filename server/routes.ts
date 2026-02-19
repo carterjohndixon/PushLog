@@ -4284,6 +4284,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test route: throw a REAL uncaught error. Sentry captures it via expressIntegration.
+  // Use this to verify: throw → Sentry → alert rule → webhook → PushLog notification.
+  app.get("/api/test/throw", authenticateToken, (req, res) => {
+    if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
+      return res.status(404).json({ error: "Not found" });
+    }
+    throw new Error("[PushLog test] REAL uncaught error from server/routes.ts — verify Sentry → webhook → PushLog notification");
+  });
+
   // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
   // We capture then return 200 so the UI doesn't see a 500; Sentry still gets the event.
   app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
