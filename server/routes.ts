@@ -47,6 +47,7 @@ import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
+import { resolveToSource } from "./helper/sourceMapResolve";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
 import { handleSentryWebhook, getIncidentNotificationTargets, wasRecentSentryNotification } from "./sentryWebhook";
 import {
@@ -408,14 +409,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const user = await storage.getUser(userId);
           if (user?.email && (user as any).incidentEmailEnabled !== false) {
-            const stacktrace = (summary as any).stacktrace ?? [];
-            const firstFrame = stacktrace[0];
+            const rawStacktrace = (summary as any).stacktrace ?? [];
+            const appFrames = rawStacktrace.filter(
+              (f: any) => f?.file && !String(f.file).includes("node_modules")
+            );
+
+            const resolveFrame = async (f: any): Promise<{ file: string; function?: string; line?: number }> => {
+              const file = String(f?.file || "");
+              const line = f?.line;
+              const col = f?.colno ?? 0;
+              if (line == null || !file) return { file, function: f?.function, line };
+              const resolved = await resolveToSource(file, line, col);
+              if (resolved) {
+                const lastColon = resolved.lastIndexOf(":");
+                if (lastColon > 0) {
+                  const srcFile = resolved.slice(0, lastColon);
+                  const srcLine = parseInt(resolved.slice(lastColon + 1), 10);
+                  if (!isNaN(srcLine)) {
+                    return { file: srcFile, function: f?.function, line: srcLine };
+                  }
+                }
+              }
+              return { file, function: f?.function, line };
+            };
+
+            const resolvedStacktrace = await Promise.all(appFrames.map(resolveFrame));
+            const firstResolved = resolvedStacktrace[0];
             const stackFrame =
-              firstFrame && firstFrame.file
-                ? firstFrame.line != null
-                  ? `${String(firstFrame.file)}:${firstFrame.line}`
-                  : String(firstFrame.file)
+              firstResolved?.file
+                ? firstResolved.line != null
+                  ? `${firstResolved.file}:${firstResolved.line}`
+                  : firstResolved.file
                 : undefined;
+
             void sendIncidentAlertEmail(user.email, summary.title, message, {
               service: summary.service,
               environment: summary.environment,
@@ -423,11 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               route: (summary as any).api_route,
               stackFrame,
               requestUrl: (summary as any).request_url,
-              stacktrace: stacktrace.map((f: any) => ({
-                file: String(f.file || ""),
-                function: f.function,
-                line: f.line,
-              })),
+              stacktrace: resolvedStacktrace,
               sourceUrl: summary.links?.source_url,
               createdAt: summary.last_seen || summary.start_time,
             });

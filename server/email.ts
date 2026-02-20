@@ -31,6 +31,12 @@ function isEmailEnabled(): boolean {
   return process.env.EMAIL_ENABLED !== 'false';
 }
 
+/** Format "from" for display: PushLog <no-reply@pushlog.ai>. Use SMTP_FROM if set (plain email gets "PushLog" prefix). */
+function getFromAddress(): string {
+  const addr = process.env.SMTP_FROM || 'no-reply@pushlog.ai';
+  return addr.includes('<') ? addr : `PushLog <${addr}>`;
+}
+
 export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailEnabled()) {
     console.log("Email disabled by EMAIL_ENABLED=false. Skipping verification email.");
@@ -42,7 +48,7 @@ export async function sendVerificationEmail(email: string, token: string) {
   const { subject, html } = getVerificationEmailTemplate(verificationLink, baseUrl);
   
   const mailOptions = {
-    from: process.env.SMTP_FROM || 'no-reply@pushlog.ai',
+    from: getFromAddress(),
     to: email,
     subject,
     html
@@ -67,7 +73,7 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string) 
   const { subject, html } = getPasswordResetTemplate(resetLink, baseUrl);
 
   const mailOptions = {
-    from: process.env.SMTP_FROM || 'no-reply@pushlog.ai',
+    from: getFromAddress(),
     to: email,
     subject,
     html,
@@ -96,7 +102,7 @@ export async function sendIncidentAlertEmail(
 
   try {
     await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'no-reply@pushlog.ai',
+      from: getFromAddress(),
       to: email,
       subject,
       html,
