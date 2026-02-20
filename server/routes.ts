@@ -3295,6 +3295,114 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenAI: list available models (uses app's OPENAI_API_KEY; no auth required)
+  app.get("/api/openai/models", async (req, res) => {
+    try {
+      const apiKey = process.env.OPENAI_API_KEY?.trim();
+      if (!apiKey) {
+        return res.status(503).json({ error: "OpenAI models list unavailable (OPENAI_API_KEY not configured)." });
+      }
+      const response = await fetch("https://api.openai.com/v1/models", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to fetch OpenAI models" });
+      }
+      const data = (await response.json()) as { data?: Array<{ id: string; created?: number; owned_by?: string }> };
+      const raw = data.data ?? [];
+      // Filter to chat-compatible models (gpt-*, o1-*, o3-*); exclude embedding, whisper, etc.
+      const models = raw
+        .filter((m) => m.id && /^(gpt-|o1-|o3-)/i.test(m.id))
+        .map((m) => ({
+          id: m.id,
+          name: m.id,
+        }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+      res.status(200).json({ models });
+    } catch (err) {
+      console.error("OpenAI models fetch error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to fetch OpenAI models" });
+    }
+  });
+
+  // OpenAI: verify user's API key (lightweight models list call)
+  app.post("/api/openai/verify", authenticateToken, async (req, res) => {
+    try {
+      const apiKey = typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
+      if (!apiKey) {
+        return res.status(400).json({ valid: false, error: "API key is required" });
+      }
+      const response = await fetch("https://api.openai.com/v1/models", {
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+      });
+      if (response.status === 401) {
+        return res.status(401).json({ valid: false, error: "Invalid API key. Check your key at platform.openai.com." });
+      }
+      if (response.status === 429) {
+        return res.status(402).json({ valid: false, error: "Rate limited. Try again later." });
+      }
+      if (!response.ok) {
+        return res.status(response.status).json({ valid: false, error: "Could not verify key. Try again." });
+      }
+      res.status(200).json({ valid: true });
+    } catch (err) {
+      console.error("OpenAI verify error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ valid: false, error: "Verification failed. Try again." });
+    }
+  });
+
+  // OpenAI: save user's API key (encrypted)
+  app.post("/api/openai/key", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const apiKey = typeof req.body?.apiKey === "string" ? req.body.apiKey.trim() : "";
+      if (!apiKey) {
+        return res.status(400).json({ error: "API key is required" });
+      }
+      const encrypted = encrypt(apiKey);
+      await databaseStorage.updateUser(userId, { openaiApiKey: encrypted } as any);
+      const updated = await databaseStorage.getUserById(userId);
+      const stored = (updated as any)?.openaiApiKey;
+      if (!stored || typeof stored !== "string" || stored.length === 0) {
+        return res.status(500).json({
+          error: "Key did not persist. Ensure the database has the openai_api_key column (run migrations/add-openai-api-key-users.sql) and ENCRYPTION_KEY is set.",
+        });
+      }
+      res.status(200).json({ success: true });
+    } catch (err: any) {
+      console.error("OpenAI save key error:", err);
+      Sentry.captureException(err);
+      const msg = err?.message ?? String(err);
+      if (msg.includes("openai_api_key") || err?.code === "42703") {
+        return res.status(500).json({
+          error: "Database missing openai_api_key column. Run: migrations/add-openai-api-key-users.sql",
+        });
+      }
+      if (msg.includes("ENCRYPTION_KEY")) return res.status(500).json({ error: msg });
+      res.status(500).json({ error: "Failed to save API key" });
+    }
+  });
+
+  // OpenAI: remove user's saved key
+  app.delete("/api/openai/key", authenticateToken, async (req, res) => {
+    try {
+      await databaseStorage.updateUser(req.user!.userId, { openaiApiKey: null } as any);
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("OpenAI remove key error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to remove API key" });
+    }
+  });
+
   // OpenRouter credits (total purchased, total used) – requires user's API key; provisioning keys only per OpenRouter docs
   app.get("/api/openrouter/credits", authenticateToken, async (req, res) => {
     try {
@@ -4410,6 +4518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           googleConnected: !!user.googleId,
           aiCredits: user.aiCredits || 0,
           hasOpenRouterKey: !!((user as any).openRouterApiKey),
+          hasOpenAiKey: !!((user as any).openaiApiKey),
           monthlyBudget: user.monthlyBudget ?? null,
           overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai",
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",

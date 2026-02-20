@@ -53,9 +53,15 @@ interface ProfileUser {
   id: number;
   username: string;
   hasOpenRouterKey?: boolean;
+  hasOpenAiKey?: boolean;
   preferredAiModel?: string;
   monthlyBudget?: number | null;
   overBudgetBehavior?: "free_model" | "skip_ai";
+}
+
+interface OpenAiModel {
+  id: string;
+  name?: string;
 }
 
 interface UsageCall {
@@ -112,7 +118,9 @@ interface UsagePerGenResult {
 }
 
 export default function Models() {
+  const [providerTab, setProviderTab] = useState<"openrouter" | "openai">("openrouter");
   const [apiKeyInput, setApiKeyInput] = useState("");
+  const [openaiApiKeyInput, setOpenaiApiKeyInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [contextFilter, setContextFilter] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<OpenRouterModel | null>(null);
@@ -136,6 +144,7 @@ export default function Models() {
     queryFn: fetchProfile,
   });
   const userHasKey = !!profileResponse?.user?.hasOpenRouterKey;
+  const userHasOpenAiKey = !!profileResponse?.user?.hasOpenAiKey;
   const profileUser = profileResponse?.user as ProfileUser | undefined;
   const savedPreferredModel = profileUser?.preferredAiModel ?? "";
 
@@ -148,6 +157,17 @@ export default function Models() {
     },
   });
   const allModels = modelsData?.models ?? [];
+
+  const { data: openaiModelsData, isLoading: openaiModelsLoading } = useQuery<{ models: OpenAiModel[] }>({
+    queryKey: ["/api/openai/models"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/models", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch OpenAI models");
+      return res.json();
+    },
+    enabled: providerTab === "openai",
+  });
+  const openaiModels = openaiModelsData?.models ?? [];
 
   const { data: usageData, isLoading: usageLoading, isError: usageError } = useQuery<OpenRouterUsage>({
     queryKey: ["/api/openrouter/usage"],
@@ -253,7 +273,7 @@ export default function Models() {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: userHasKey,
+    enabled: userHasKey || userHasOpenAiKey,
   });
 
   // Favorite models
@@ -441,6 +461,55 @@ export default function Models() {
     },
   });
 
+  const verifyOpenAiMutation = useMutation({
+    mutationFn: async (key: string) => {
+      const res = await fetch("/api/openai/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: key.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!data.valid) throw new Error(data.error || "Verification failed");
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Key verified", description: "You can save it below." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Verification failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const saveOpenAiKeyMutation = useMutation({
+    mutationFn: async (key: string) => {
+      const res = await apiRequest("POST", "/api/openai/key", { apiKey: key.trim() });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      setOpenaiApiKeyInput("");
+      toast({ title: "API key saved", description: "Your OpenAI key is stored securely." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to save key", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const removeOpenAiKeyMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/openai/key");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({ title: "API key removed", description: "You can add a new key anytime." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to remove key", description: e.message, variant: "destructive" });
+    },
+  });
+
   const handleVerifyAndSave = () => {
     const key = apiKeyInput.trim();
     if (!key) {
@@ -454,10 +523,18 @@ export default function Models() {
     });
   };
 
-  // /api/openrouter/usage: get all usage for the current user
-  // /api/openrouter/usage-per-gen/:id
-  // /api/openrouter/update-usage/:id: update usage for a specific generation
-  // /api/openrouter/delete-usage/:id: delete usage for a specific generation
+  const handleVerifyAndSaveOpenAi = () => {
+    const key = openaiApiKeyInput.trim();
+    if (!key) {
+      toast({ title: "Enter your key", description: "Paste your OpenAI API key first.", variant: "destructive" });
+      return;
+    }
+    verifyOpenAiMutation.mutate(key, {
+      onSuccess: () => {
+        saveOpenAiKeyMutation.mutate(key);
+      },
+    });
+  };
 
   const fetchAllUsageMutation = useMutation({
     mutationFn: async () => {
@@ -586,10 +663,38 @@ export default function Models() {
             AI Models
           </h1>
           <p className="text-muted-foreground mt-1">
-            Manage your OpenRouter API key, explore models, and track usage and cost.
+            Choose a provider, add your API key, and configure models for commit summaries.
           </p>
+          {/* Provider switch */}
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => setProviderTab("openrouter")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                providerTab === "openrouter"
+                  ? "bg-log-green/15 border-log-green text-log-green"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              OpenRouter <span className="text-xs opacity-80">(recommended)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setProviderTab("openai")}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                providerTab === "openai"
+                  ? "bg-log-green/15 border-log-green text-log-green"
+                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+              }`}
+            >
+              OpenAI
+            </button>
+          </div>
         </div>
 
+        {/* OpenRouter section */}
+        {providerTab === "openrouter" && (
+        <>
         {/* API Key section */}
         <Card className="card-lift mb-8 border-border shadow-forest">
           <CardHeader>
@@ -1410,6 +1515,172 @@ export default function Models() {
             )}
           </CardContent>
         </Card>
+        </>
+        )}
+
+        {/* OpenAI section */}
+        {providerTab === "openai" && (
+        <>
+        <Card className="card-lift mb-8 border-border shadow-forest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Key className="w-5 h-5 text-log-green" />
+              OpenAI API Key
+            </CardTitle>
+            <CardDescription>
+              Add your key from{" "}
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-log-green hover:underline"
+              >
+                platform.openai.com/api-keys
+              </a>{" "}
+              to use OpenAI models for commit summaries. Usage is billed to your OpenAI account. Your key is stored encrypted and never shared.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {profileLoading ? (
+              <Skeleton className="h-10 w-full max-w-md" />
+            ) : userHasOpenAiKey ? (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="font-medium">API key saved</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-destructive text-destructive hover:bg-destructive/10"
+                    disabled={removeOpenAiKeyMutation.isPending}
+                    onClick={() => removeOpenAiKeyMutation.mutate()}
+                  >
+                    {removeOpenAiKeyMutation.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Remove key
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Configure which model an integration uses from{" "}
+                  <Link href="/integrations" className="text-log-green hover:underline">Integrations</Link>
+                  {" "}or{" "}
+                  <Link href="/dashboard" className="text-log-green hover:underline">Dashboard</Link>
+                  {" "}— open the <span className="font-medium text-foreground">⋮ menu</span> on an integration and pick an OpenAI model.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2 max-w-xl">
+                <Input
+                  type="password"
+                  placeholder="sk-..."
+                  value={openaiApiKeyInput}
+                  onChange={(e) => setOpenaiApiKeyInput(e.target.value)}
+                  autoComplete="off"
+                  className="font-mono bg-background border-border text-foreground"
+                />
+                <Button
+                  variant="glow"
+                  className="text-white shrink-0"
+                  disabled={!openaiApiKeyInput.trim() || verifyOpenAiMutation.isPending || saveOpenAiKeyMutation.isPending}
+                  onClick={handleVerifyAndSaveOpenAi}
+                >
+                  {(verifyOpenAiMutation.isPending || saveOpenAiKeyMutation.isPending) ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Verify & Save"
+                  )}
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Default model (when OpenAI key is set) */}
+        {userHasOpenAiKey && (
+          <Card className="card-lift mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Sparkles className="w-5 h-5 text-log-green" />
+                Default AI model
+              </CardTitle>
+              <CardDescription>
+                This model is used for new integrations. Pick a model from the dropdown—usage is billed to your OpenAI account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <Select
+                  value={
+                    defaultModelId ||
+                    (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                    ""
+                  }
+                  onValueChange={(v) => setDefaultModelId(v)}
+                >
+                  <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
+                    <SelectValue placeholder={openaiModelsLoading ? "Loading models…" : "Select default model"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openaiModels.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        {getAiModelDisplayName(m.id)}
+                      </SelectItem>
+                    ))}
+                    {!openaiModelsLoading && openaiModels.length === 0 && (
+                      <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
+                    )}
+                  </SelectContent>
+                </Select>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="default"
+                    className="bg-log-green hover:bg-log-green/90"
+                    disabled={
+                      !(defaultModelId || savedPreferredModel) ||
+                      setDefaultModelMutation.isPending ||
+                      !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                    }
+                    onClick={() => {
+                      const val = defaultModelId || savedPreferredModel;
+                      if (val && openaiModels.some((m) => m.id === val)) {
+                        setDefaultModelMutation.mutate(val);
+                      }
+                    }}
+                  >
+                    {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-border"
+                    disabled={
+                      !(defaultModelId || savedPreferredModel) ||
+                      replaceAllIntegrationsMutation.isPending ||
+                      !integrations?.length ||
+                      !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                    }
+                    onClick={() => setReplaceAllConfirmOpen(true)}
+                  >
+                    {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
+                  </Button>
+                </div>
+              </div>
+              {savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) && (
+                <p className="text-sm text-muted-foreground">
+                  Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+        </>
+        )}
 
         {/* Usage per generation modal (View from Recent calls) */}
         <Dialog

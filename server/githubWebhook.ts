@@ -203,12 +203,15 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   effectiveAiModel: string;
   useOpenRouter: boolean;
   openRouterKeyRaw: string | null;
+  useOpenAi: boolean;
+  openAiKeyRaw: string | null;
   overBudgetSkipAi: boolean;
   maxTokens: number;
 }> {
   const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
   const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
   const maxTokens = integration.maxTokens || 350;
+  const modelHasSlash = aiModelStr.includes("/");
   let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
   if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
   if (!openRouterKeyRaw?.trim()) {
@@ -216,7 +219,14 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
     if ((userForKey as any)?.openRouterApiKey) openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
   }
   if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
-  const useOpenRouter = !!openRouterKeyRaw?.trim();
+  const useOpenRouter = !!openRouterKeyRaw?.trim() && modelHasSlash;
+  let openAiKeyRaw: string | null = null;
+  if (!modelHasSlash) {
+    const userForKey = await databaseStorage.getUserById(integration.userId);
+    if ((userForKey as any)?.openaiApiKey) openAiKeyRaw = decrypt((userForKey as any).openaiApiKey);
+    if (!openAiKeyRaw?.trim()) openAiKeyRaw = null;
+  }
+  const useOpenAi = !!openAiKeyRaw?.trim() && !modelHasSlash;
   let effectiveAiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
   let overBudgetSkipAi = false;
@@ -256,7 +266,7 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   } catch (budgetErr) {
     console.warn("Budget pre-check error:", budgetErr);
   }
-  return { effectiveAiModel, useOpenRouter, openRouterKeyRaw, overBudgetSkipAi, maxTokens };
+  return { effectiveAiModel, useOpenRouter, openRouterKeyRaw, useOpenAi, openAiKeyRaw, overBudgetSkipAi, maxTokens };
 }
 
 // --- Phase 6: Run AI summary (optional) ---
@@ -264,18 +274,22 @@ export async function runAiSummary(
   pushData: any,
   integration: any,
   repoDisplayName: string,
-  opts: { effectiveAiModel: string; useOpenRouter: boolean; openRouterKeyRaw: string | null; overBudgetSkipAi: boolean; maxTokens: number }
+  opts: { effectiveAiModel: string; useOpenRouter: boolean; openRouterKeyRaw: string | null; useOpenAi: boolean; openAiKeyRaw: string | null; overBudgetSkipAi: boolean; maxTokens: number }
 ): Promise<{ summary: any; aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null }> {
   let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
   if (!opts.overBudgetSkipAi) {
     try {
+      let aiOpts: { openRouterApiKey?: string; openaiApiKey?: string; notificationContext?: { userId: string; repositoryName: string; integrationId: string; slackChannelName: string } } | undefined;
+      if (opts.useOpenRouter && opts.openRouterKeyRaw) {
+        aiOpts = { openRouterApiKey: opts.openRouterKeyRaw.trim(), notificationContext: { userId: integration.userId, repositoryName: repoDisplayName, integrationId: integration.id, slackChannelName: integration.slackChannelName } };
+      } else if (opts.useOpenAi && opts.openAiKeyRaw) {
+        aiOpts = { openaiApiKey: opts.openAiKeyRaw.trim() };
+      }
       summary = await generateCodeSummary(
         pushData,
         opts.effectiveAiModel,
         opts.maxTokens,
-        opts.useOpenRouter && opts.openRouterKeyRaw
-          ? { openRouterApiKey: opts.openRouterKeyRaw.trim(), notificationContext: { userId: integration.userId, repositoryName: repoDisplayName, integrationId: integration.id, slackChannelName: integration.slackChannelName } }
-          : undefined
+        aiOpts
       );
     } catch (aiErr: any) {
       console.warn("⚠️ [Webhook] AI summary failed, sending plain push notification:", aiErr);

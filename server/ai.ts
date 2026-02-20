@@ -53,6 +53,8 @@ export interface AiUsageResult {
 export interface GenerateCodeSummaryOptions {
   /** When set, use OpenRouter with this API key and treat model as OpenRouter model id (e.g. openai/gpt-4o). No PushLog credit deduction. */
   openRouterApiKey?: string;
+  /** When set, use user's OpenAI API key (user pays OpenAI). No PushLog credit deduction. */
+  openaiApiKey?: string;
   /** When set, OpenRouter errors will create an in-app notification for this user and broadcast it. */
   notificationContext?: {
     userId: string;
@@ -144,6 +146,7 @@ export async function generateCodeSummary(
   options?: GenerateCodeSummaryOptions
 ): Promise<AiUsageResult> {
   const useOpenRouter = !!options?.openRouterApiKey?.trim();
+  const useUserOpenAi = !!options?.openaiApiKey?.trim();
   // Reasoning models (e.g. Kimi K2.5) output reasoning then content; need enough tokens so JSON isn't cut off
   const effectiveMaxTokens = useOpenRouter ? Math.max(maxTokens, 1400) : maxTokens;
   const client = useOpenRouter
@@ -151,7 +154,9 @@ export async function generateCodeSummary(
         apiKey: options!.openRouterApiKey!.trim(),
         baseURL: 'https://openrouter.ai/api/v1',
       })
-    : openai;
+    : useUserOpenAi
+      ? new OpenAI({ apiKey: options!.openaiApiKey!.trim() })
+      : openai;
 
   // For PushLog-only: migrate invalid models to gpt-5.2
   if (!useOpenRouter) {
@@ -189,7 +194,7 @@ Focus on:
 Respond with only valid JSON:
 `;
 
-    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : 'OpenAI'} API Request - Model: ${model}, Max Tokens: ${effectiveMaxTokens}`);
+    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : useUserOpenAi ? 'OpenAI (user key)' : 'OpenAI (PushLog)'} API Request - Model: ${model}, Max Tokens: ${effectiveMaxTokens}`);
     const requestParams: any = {
       model: model,
       messages: [
@@ -494,7 +499,11 @@ Respond with only valid JSON:
     if (useOpenRouter && typeof usage?.cost === 'number' && usage.cost > 0) {
       // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
       cost = Math.round(usage.cost * 10000);
+    } else if (useUserOpenAi) {
+      // User's OpenAI key — they pay OpenAI directly; no PushLog cost/credits
+      cost = 0;
     } else if (!useOpenRouter) {
+      // PushLog credits (default OpenAI client)
       cost = calculateTokenCost(model, tokensUsed);
     } else if (useOpenRouter && options?.openRouterApiKey) {
       // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id
