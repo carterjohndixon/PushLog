@@ -182,7 +182,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
               isRead: false,
             });
             const user = await storage.getUser(userId);
-            if (user?.email) {
+            if (user?.email && (user as any).incidentEmailEnabled !== false) {
               void sendIncidentAlertEmail(user.email, directTitle, directMessage);
             }
           } catch (err) {
@@ -354,10 +354,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
             createdAt: notif.createdAt,
             isRead: false,
           });
-          const user = await storage.getUser(userId);
-          if (user?.email) {
-            void sendIncidentAlertEmail(user.email, directTitle, directMessage);
-          }
+          // No email here — incident engine will send one combined email with Sentry + spike/new_issue/regression info
         } catch (err) {
           console.warn("[webhooks/sentry] failed direct notify:", err);
         }

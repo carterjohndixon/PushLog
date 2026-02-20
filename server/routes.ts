@@ -349,12 +349,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
 
-    // Skip incident engine notification when we just sent from Sentry webhook (avoids duplicate in-app + email).
-    if (wasRecentSentryNotification(summary.service, summary.environment)) {
-      console.log("[incident-engine] Skipping notification (recent Sentry webhook already sent for this service/env)");
-      return;
-    }
-
     // Route incidents to one user when payload includes links.pushlog_user_id.
     // Otherwise use the incident notification targets (respects INCIDENT_NOTIFY_USER_IDS config).
     const targetUsers = new Set<string>();
@@ -387,28 +381,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       links: summary.links || {},
     });
 
+    // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
+    // The incident engine email is the single combined email (Sentry event + spike/new_issue/regression classification).
+    const skipInAppDuplicate = wasRecentSentryNotification(summary.service, summary.environment);
+
     await Promise.all(
       Array.from(targetUsers).map(async (userId) => {
         try {
-          const notif = await storage.createNotification({
-            userId,
-            type: "incident_alert",
-            title: summary.title,
-            message,
-            metadata,
-          });
-
-          broadcastNotification(userId, {
-            id: notif.id,
-            type: notif.type,
-            title: notif.title,
-            message: notif.message,
-            metadata: notif.metadata,
-            createdAt: notif.createdAt,
-            isRead: false,
-          });
+          if (!skipInAppDuplicate) {
+            const notif = await storage.createNotification({
+              userId,
+              type: "incident_alert",
+              title: summary.title,
+              message,
+              metadata,
+            });
+            broadcastNotification(userId, {
+              id: notif.id,
+              type: notif.type,
+              title: notif.title,
+              message: notif.message,
+              metadata: notif.metadata,
+              createdAt: notif.createdAt,
+              isRead: false,
+            });
+          }
           const user = await storage.getUser(userId);
-          if (user?.email) {
+          if (user?.email && (user as any).incidentEmailEnabled !== false) {
             void sendIncidentAlertEmail(user.email, summary.title, message);
           }
         } catch (err) {
@@ -4356,6 +4355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai",
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
           devMode: !!(user as any).devMode,
+          incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
         }
       };
       res.status(200).json(payload);
@@ -4373,7 +4373,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/user", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean };
+      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean };
       const updates: Record<string, unknown> = {};
       if (body.overBudgetBehavior && body.overBudgetBehavior === "free_model" || body.overBudgetBehavior === "skip_ai") {
         updates.overBudgetBehavior = body.overBudgetBehavior;
@@ -4384,15 +4384,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (typeof body.devMode === "boolean") {
         updates.devMode = body.devMode;
       }
+      if (typeof body.incidentEmailEnabled === "boolean") {
+        updates.incidentEmailEnabled = body.incidentEmailEnabled;
+      }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid updates" });
       }
       const user = await databaseStorage.updateUser(userId, updates as any);
       if (!user) return res.status(404).json({ error: "User not found" });
-      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean } = { success: true };
+      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean } = { success: true };
       if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
       if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
       if (updates.devMode !== undefined) resBody.devMode = !!(user as any).devMode;
+      if (updates.incidentEmailEnabled !== undefined) resBody.incidentEmailEnabled = (user as any).incidentEmailEnabled !== false;
       res.status(200).json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);

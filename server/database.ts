@@ -94,6 +94,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     monthlyBudget: (dbUser as any).monthlyBudget ?? null,
     overBudgetBehavior: ((dbUser as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai") as "free_model" | "skip_ai",
     devMode: !!(dbUser as any).devMode,
+    incidentEmailEnabled: (dbUser as any).incidentEmailEnabled !== false,
     createdAt: dbUser.createdAt
   };
 }

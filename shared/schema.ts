@@ -33,6 +33,7 @@ export const users = pgTable("users", {
   monthlyBudget: integer("monthly_budget"), // Monthly AI spend budget in units of $0.0001; nullable = no budget
   overBudgetBehavior: text("over_budget_behavior").default("skip_ai"), // "skip_ai" = send plain push when over budget; "free_model" = use free model
   devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
+  incidentEmailEnabled: boolean("incident_email_enabled").default(true), // Email incident alerts (Sentry, spike, etc.)
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -284,6 +285,7 @@ export type User = {
   monthlyBudget: number | null;
   overBudgetBehavior: "free_model" | "skip_ai";
   devMode?: boolean;
+  incidentEmailEnabled?: boolean;
   createdAt: string;
 };
 

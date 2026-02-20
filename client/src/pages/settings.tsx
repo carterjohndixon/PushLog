@@ -23,7 +23,8 @@ import {
   KeyRound,
   EyeIcon,
   EyeOffIcon,
-  Code2
+  Code2,
+  Mail
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -82,6 +83,7 @@ export default function Settings() {
     queryFn: fetchProfile,
   });
   const devMode = profileResponse?.user?.devMode ?? false;
+  const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
 
   const updateDevModeMutation = useMutation({
     mutationFn: async (checked: boolean) => {
@@ -102,6 +104,32 @@ export default function Settings() {
       toast({
         title: checked ? "Developer mode enabled" : "Developer mode disabled",
         description: checked ? "Incident test features are now visible below." : "Test features are now hidden.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateIncidentEmailMutation = useMutation({
+    mutationFn: async (checked: boolean) => {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ incidentEmailEnabled: checked }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update");
+      }
+      return res.json();
+    },
+    onSuccess: (_, checked) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: checked ? "Incident emails enabled" : "Incident emails disabled",
+        description: checked ? "You'll receive emails when incidents occur." : "Incident emails are now off.",
       });
     },
     onError: (error: Error) => {
@@ -664,6 +692,22 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-muted-foreground" />
+                  <Label htmlFor="incident-email" className="cursor-pointer font-medium">
+                    Email incident alerts
+                  </Label>
+                </div>
+                <Switch
+                  id="incident-email"
+                  checked={incidentEmailEnabled}
+                  onCheckedChange={(checked) => updateIncidentEmailMutation.mutate(checked)}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Receive one email per incident when Sentry or the incident engine detects an error, spike, or regression.
+              </p>
               {typeof Notification !== "undefined" && (
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm text-muted-foreground">

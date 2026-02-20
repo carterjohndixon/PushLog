@@ -24,6 +24,8 @@ export interface ProfileUser {
   overBudgetBehavior?: "free_model" | "skip_ai";
   /** Enable test features (e.g. Simulate incident on Integrations) */
   devMode?: boolean;
+  /** Receive incident alert emails (Sentry, spike, regression, etc.) */
+  incidentEmailEnabled?: boolean;
 }
 
 export interface ProfileResponse {
