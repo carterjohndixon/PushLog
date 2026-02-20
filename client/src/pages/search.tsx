@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -72,6 +72,7 @@ export default function Search() {
   const [recentPage, setRecentPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(20);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const scrollPositionRef = useRef<number | null>(null);
 
   // Search-as-you-type: debounce submitted query when input changes
   useEffect(() => {
@@ -189,7 +190,21 @@ export default function Search() {
   const error = isSearchMode ? searchError : recentError;
   const list = isSearchMode ? (results ?? []) : (recentData ?? []);
 
+  // Preserve scroll position when changing pages (next/previous)
+  useLayoutEffect(() => {
+    if (scrollPositionRef.current != null && !isSearchMode && recentData.length > 0) {
+      const saved = scrollPositionRef.current;
+      scrollPositionRef.current = null;
+      window.scrollTo(0, saved);
+    }
+  }, [isSearchMode, recentPage, recentData]);
+
   const handleSearch = () => setSubmittedQ(q.trim());
+
+  const handlePageChange = (direction: "prev" | "next") => {
+    scrollPositionRef.current = window.scrollY;
+    setRecentPage((p) => (direction === "prev" ? Math.max(0, p - 1) : p + 1));
+  };
 
   // Fetch full push event details when a card is clicked (for modal)
   const { data: pushEventDetail, isLoading: detailLoading } = useQuery<PushEventDetail>({
@@ -443,7 +458,7 @@ export default function Search() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setRecentPage((p) => Math.max(0, p - 1))}
+                  onClick={() => handlePageChange("prev")}
                   disabled={recentPage === 0}
                   className="gap-1"
                 >
@@ -456,7 +471,7 @@ export default function Search() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setRecentPage((p) => p + 1)}
+                  onClick={() => handlePageChange("next")}
                   disabled={(recentPage + 1) * pageSize >= recentTotal}
                   className="gap-1"
                 >
