@@ -39,7 +39,9 @@ function dispatchIncidentAlert(detail: Record<string, unknown>) {
 export function NotificationSSE() {
   const queryClient = useQueryClient();
   const eventSourceRef = useRef<EventSource | null>(null);
-  const lastSeenIncidentIdRef = useRef<string | null>(null);
+  const seenIncidentIdsRef = useRef<Set<string>>(new Set());
+  const hasSeededRef = useRef(false);
+  const TOAST_FRESHNESS_MS = 10 * 60 * 1000; // Only toast from poll if created in last 10 min
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -49,20 +51,36 @@ export function NotificationSSE() {
   });
   const user = profileResponse?.user ?? null;
 
-  // Polling fallback: detect new incident_alert notifications from API
+  // Polling fallback: only toast for NEW incidents (not ones that existed on load)
   const checkForNewIncidents = useCallback(
     (notifications: Array<Record<string, unknown>> | undefined) => {
       if (!notifications || notifications.length === 0) return;
-      const newest = notifications.find(
+      const unreadIncidents = notifications.filter(
         (n) => n.type === "incident_alert" && !n.isRead,
       );
-      if (!newest) return;
-      const id = String(newest.id ?? "");
-      if (!id || id === lastSeenIncidentIdRef.current) return;
-      lastSeenIncidentIdRef.current = id;
-      dispatchIncidentAlert(newest);
-      // Ensure the notifications dropdown/list refreshes (SSE may have missed)
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
+      if (unreadIncidents.length === 0) return;
+
+      // First load: seed "seen" with all current unread incident IDs — do NOT toast
+      if (!hasSeededRef.current) {
+        hasSeededRef.current = true;
+        for (const n of unreadIncidents) {
+          const id = String(n.id ?? "");
+          if (id) seenIncidentIdsRef.current.add(id);
+        }
+        return;
+      }
+
+      // Subsequent polls: only toast for IDs we haven't seen, and only if created recently
+      for (const n of unreadIncidents) {
+        const id = String(n.id ?? "");
+        if (!id || seenIncidentIdsRef.current.has(id)) continue;
+        const createdAt = n.createdAt ? new Date(String(n.createdAt)).getTime() : 0;
+        if (Date.now() - createdAt > TOAST_FRESHNESS_MS) continue;
+        seenIncidentIdsRef.current.add(id);
+        dispatchIncidentAlert(n);
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
+        break;
+      }
     },
     [queryClient],
   );
@@ -108,7 +126,8 @@ export function NotificationSSE() {
           const notifType = data.data?.type;
           if (notifType === "incident_alert") {
             console.log("[NotificationSSE] incident_alert — dispatching toast + browser notif");
-            lastSeenIncidentIdRef.current = String(data.data?.id ?? "");
+            const id = String(data.data?.id ?? "");
+            if (id) seenIncidentIdsRef.current.add(id);
             dispatchIncidentAlert(data.data);
           } else if (notifType === "low_credits" || notifType === "no_credits") {
             window.dispatchEvent(
@@ -138,6 +157,15 @@ export function NotificationSSE() {
       eventSourceRef.current = null;
     };
   }, [user?.id, queryClient]);
+
+  // Reset seen state when user changes so we reseed on next load (avoids toasting
+  // User B's pre-existing notifications after User A logs out, or re-toasting on re-login)
+  const prevUserIdRef = useRef<string | number | null>(null);
+  if (prevUserIdRef.current !== (user?.id ?? null)) {
+    prevUserIdRef.current = user?.id ?? null;
+    seenIncidentIdsRef.current = new Set();
+    hasSeededRef.current = false;
+  }
 
   return null;
 }

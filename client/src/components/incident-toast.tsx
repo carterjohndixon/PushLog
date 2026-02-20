@@ -61,7 +61,6 @@ export function IncidentToast() {
         setState(s => ({ ...s, exiting: true }));
         exitTimer.current = setTimeout(() => {
           setState(INITIAL_STATE);
-          lastShownId.current = null;
           dismissTimer.current = null;
           exitTimer.current = null;
         }, EXIT_DURATION_MS);
