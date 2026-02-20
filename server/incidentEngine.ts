@@ -49,6 +49,10 @@ export interface IncidentEventInput {
   change_window?: IncidentChangeWindowInput;
   /** Optional: boost commits touching critical_paths, downweight docs/tests-only. */
   correlation_hints?: IncidentCorrelationHintsInput;
+  /** Optional: API route path (e.g. /api/test/throw) for incident emails. */
+  api_route?: string;
+  /** Optional: Full request URL for incident emails. */
+  request_url?: string;
 }
 
 export interface IncidentSummaryOutput {

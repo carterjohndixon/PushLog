@@ -28,6 +28,12 @@ pub struct InboundEvent {
   /// Optional hints for correlation: critical paths (boost), low-priority paths (downweight docs/tests-only).
   #[serde(default)]
   pub correlation_hints: Option<InboundCorrelationHints>,
+  /// Optional API route path (e.g. /api/test/throw) for incident emails.
+  #[serde(default)]
+  pub api_route: Option<String>,
+  /// Optional full request URL for incident emails.
+  #[serde(default)]
+  pub request_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -131,6 +137,8 @@ pub struct Event {
   pub links: HashMap<String, String>,
   pub change_window: Option<ChangeWindow>,
   pub correlation_hints: CorrelationHints,
+  pub api_route: Option<String>,
+  pub request_url: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -241,6 +249,8 @@ pub struct StackFrameOutput {
   pub file: String,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub function: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub line: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -263,6 +273,10 @@ pub struct IncidentSummary {
   pub stacktrace: Vec<StackFrameOutput>,
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub links: HashMap<String, String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub api_route: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub request_url: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

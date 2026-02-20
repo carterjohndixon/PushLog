@@ -2,7 +2,10 @@ import nodemailer from 'nodemailer';
 import { z } from 'zod';
 import { getVerificationEmailTemplate } from './templates/verificationEmail';
 import { getPasswordResetTemplate } from './templates/passwordReset';
-import { getIncidentAlertEmailTemplate } from './templates/incidentAlertEmail';
+import {
+  getIncidentAlertEmailTemplate,
+  type IncidentAlertMetadata,
+} from './templates/incidentAlertEmail';
 
 // Email configuration schema
 const emailConfigSchema = z.object({
@@ -82,13 +85,14 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string) 
 export async function sendIncidentAlertEmail(
   email: string,
   title: string,
-  message: string
+  message: string,
+  metadata?: IncidentAlertMetadata
 ): Promise<void> {
   if (!isEmailEnabled()) {
     return;
   }
   const dashboardUrl = (process.env.APP_URL || 'https://pushlog.ai').replace(/\/$/, '') + '/dashboard';
-  const { subject, html } = getIncidentAlertEmailTemplate(title, message, dashboardUrl);
+  const { subject, html } = getIncidentAlertEmailTemplate(title, message, dashboardUrl, metadata);
 
   try {
     await transporter.sendMail({

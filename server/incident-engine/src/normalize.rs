@@ -132,6 +132,8 @@ pub fn normalize(raw: &InboundEvent) -> Result<Event, EngineError> {
     links: raw.links.clone(),
     change_window,
     correlation_hints,
+    api_route: raw.api_route.clone(),
+    request_url: raw.request_url.clone(),
   })
 }
 
@@ -189,6 +191,8 @@ mod tests {
       links: Default::default(),
       change_window: None,
       correlation_hints: None,
+      api_route: None,
+      request_url: None,
     };
     let err = normalize(&raw).unwrap_err();
     assert!(err.to_string().contains("source"));
@@ -213,6 +217,8 @@ mod tests {
       links: Default::default(),
       change_window: None,
       correlation_hints: None,
+      api_route: None,
+      request_url: None,
     };
     let event = normalize(&raw).unwrap();
     assert_eq!(event.service, "api");

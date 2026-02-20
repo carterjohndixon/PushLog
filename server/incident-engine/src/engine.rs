@@ -192,6 +192,7 @@ impl Engine {
         } else {
           Some(f.function.clone())
         },
+        line: f.line,
       })
       .collect();
 
@@ -211,6 +212,8 @@ impl Engine {
       recommended_first_actions: actions,
       stacktrace,
       links: event.links.clone(),
+      api_route: event.api_route.clone(),
+      request_url: event.request_url.clone(),
     }
   }
 }
@@ -237,6 +240,8 @@ mod tests {
       links: Default::default(),
       change_window: None,
       correlation_hints: None,
+      api_route: None,
+      request_url: None,
     }
   }
 

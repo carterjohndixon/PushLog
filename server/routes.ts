@@ -408,7 +408,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const user = await storage.getUser(userId);
           if (user?.email && (user as any).incidentEmailEnabled !== false) {
-            void sendIncidentAlertEmail(user.email, summary.title, message);
+            const stacktrace = (summary as any).stacktrace ?? [];
+            const firstFrame = stacktrace[0];
+            const stackFrame =
+              firstFrame && firstFrame.file
+                ? firstFrame.line != null
+                  ? `${String(firstFrame.file)}:${firstFrame.line}`
+                  : String(firstFrame.file)
+                : undefined;
+            void sendIncidentAlertEmail(user.email, summary.title, message, {
+              service: summary.service,
+              environment: summary.environment,
+              severity: summary.severity,
+              route: (summary as any).api_route,
+              stackFrame,
+              requestUrl: (summary as any).request_url,
+              stacktrace: stacktrace.map((f: any) => ({
+                file: String(f.file || ""),
+                function: f.function,
+                line: f.line,
+              })),
+              sourceUrl: summary.links?.source_url,
+              createdAt: summary.last_seen || summary.start_time,
+            });
           }
         } catch (err) {
           console.warn(`[incident-engine] failed to notify user ${userId}:`, err);

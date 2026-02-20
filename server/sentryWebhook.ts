@@ -183,7 +183,11 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
             });
             const user = await storage.getUser(userId);
             if (user?.email && (user as any).incidentEmailEnabled !== false) {
-              void sendIncidentAlertEmail(user.email, directTitle, directMessage);
+              void sendIncidentAlertEmail(user.email, directTitle, directMessage, {
+                service: "api",
+                environment: appEnv,
+                severity: "info",
+              });
             }
           } catch (err) {
             console.warn("[webhooks/sentry] failed test notify:", err);
@@ -247,6 +251,23 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     const issueMeta = ((issue as any)?.metadata || {}) as Record<string, unknown>;
     const evMeta = ((ev as any)?.metadata || {}) as Record<string, unknown>;
+
+    let apiRoute: string | undefined;
+    let requestUrl: string | undefined;
+    if (ev) {
+      const req = ev.request as Record<string, unknown> | undefined;
+      const url = req?.url as string | undefined;
+      if (url) {
+        try {
+          const parsed = new URL(url);
+          apiRoute = parsed.pathname || undefined;
+          requestUrl = url;
+        } catch {
+          apiRoute = url;
+        }
+      }
+    }
+
     const event: IncidentEventInput = {
       source: "sentry",
       service,
@@ -266,6 +287,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       links: ((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink)
         ? { source_url: String((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink) }
         : undefined,
+      api_route: apiRoute,
+      request_url: requestUrl,
     };
     ingestIncidentEvent(event);
     console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
@@ -286,21 +309,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       ? `${event.message} (${severity})`
       : `${String(body?.action || "Alert")} from Sentry`;
 
-    let apiRoute: string | undefined;
-    let requestUrl: string | undefined;
     let culprit: string | undefined;
     if (ev) {
-      const req = ev.request as Record<string, unknown> | undefined;
-      const url = req?.url as string | undefined;
-      if (url) {
-        try {
-          const parsed = new URL(url);
-          apiRoute = parsed.pathname || undefined;
-          requestUrl = url;
-        } catch {
-          apiRoute = url;
-        }
-      }
       const appFrames = stacktrace.filter((f) => f.file && !String(f.file).includes("node_modules"));
       const culpritFrame = appFrames.length > 0 ? appFrames[appFrames.length - 1] : undefined;
       if (culpritFrame) {
@@ -328,8 +338,8 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       environment,
       severity,
       links: event.links || {},
-      apiRoute,
-      requestUrl,
+      apiRoute: event.api_route,
+      requestUrl: event.request_url,
       culprit,
       culpritSource,
       stacktrace,

@@ -55,6 +55,8 @@ mod tests {
       links: HashMap::new(),
       change_window: None,
       correlation_hints: crate::types::CorrelationHints::default(),
+      api_route: None,
+      request_url: None,
     }
   }
 
