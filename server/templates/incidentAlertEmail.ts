@@ -90,7 +90,7 @@ export function getIncidentAlertEmailTemplate(
         <div style="display: flex; align-items: flex-start; gap: 12px;">
           <div style="flex-shrink: 0;"><table role="presentation" cellpadding="0" cellspacing="0" style="width: 28px; height: 28px; background: #dc3545; border-radius: 50%;"><tr><td align="center" valign="middle" style="color: white; font-size: 14px; font-weight: bold; line-height: 1;">!</td></tr></table></div>
           <div style="flex: 1;">
-            <h1 style="margin: 0; font-size: 20px; font-weight: 600; color: #e8ece9;">Notification Details</h1>
+            <h1 style="margin-right: 4px; font-size: 20px; font-weight: 600; color: #e8ece9;">Notification Details</h1>
             <p style="margin: 8px 0 0; font-size: 16px; font-weight: 600; color: #e8ece9;">${escapedTitle}</p>
             <p style="margin: 6px 0 0; font-size: 14px; color: #9ca3a8;">${escapedMessage}</p>
           </div>
@@ -101,7 +101,7 @@ export function getIncidentAlertEmailTemplate(
       <div style="margin: 0 16px 16px; padding: 20px; background: rgba(45, 61, 53, 0.5); border: 1px solid #2d3d35; border-radius: 8px;">
         <div style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 16px;">
           <div style="flex-shrink: 0;"><table role="presentation" cellpadding="0" cellspacing="0" style="width: 20px; height: 20px; background: #dc3545; border-radius: 50%;"><tr><td align="center" valign="middle" style="color: white; font-size: 11px; font-weight: bold; line-height: 1;">!</td></tr></table></div>
-          <span style="font-size: 14px; font-weight: 600; color: #e8ece9;">Incident details</span>
+          <span style="font-size: 14px; font-weight: 600; color: #e8ece9; margin-right: 4px;">Incident details</span>
         </div>
         <p style="margin: 0 0 16px; font-size: 13px; color: #9ca3a8;">${escapedMessage}</p>
 
