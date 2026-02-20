@@ -1627,7 +1627,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
           const redirectUrl = base ? `${base}${targetPath}` : targetPath;
-          return res.redirect(302, redirectUrl);
+          // Use 200 + HTML meta refresh instead of 302: some proxies (e.g. Cloudflare) strip Set-Cookie from 302
+          // responses. A 200 with Set-Cookie sticks; then meta refresh navigates (cookie is sent).
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.status(200).send(
+            `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head>` +
+            `<body><p>Redirecting...</p><script>location.href=${JSON.stringify(redirectUrl)}</script></body></html>`
+          );
         });
       });
     } catch (error) {

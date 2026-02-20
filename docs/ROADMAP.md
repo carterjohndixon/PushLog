@@ -4,6 +4,12 @@ Future features and plans. Not scheduled—captured for when we're ready.
 
 ---
 
+## Quick TODOs
+
+- [ ] **Error messages / stack traces:** Filter stack traces so only user/application code is shown—strip Node internals (`node:internal/*`, `node:events`, etc.) and compiled/package code.
+
+---
+
 ## Implementation order
 
 **Phase 1: Teams & organization model** (first)  
