@@ -74,8 +74,8 @@ impl Engine {
     // Clone group to release the mutable borrow on self.groups.
     let group_snapshot = group.clone();
 
-    // Assemble incident summary.
-    let summary = self.assemble_summary(&event, &group_snapshot, spike_factor, trigger);
+    // Assemble incident summary (use raw.stacktrace for output — has line numbers; event.frames strips them for fingerprinting).
+    let summary = self.assemble_summary(&event, &group_snapshot, spike_factor, trigger, &raw.stacktrace);
     Ok(Some(summary))
   }
 
@@ -85,6 +85,7 @@ impl Engine {
     group: &IssueGroup,
     spike_factor: f64,
     trigger: TriggerReason,
+    raw_stacktrace: &[crate::types::InboundFrame],
   ) -> IncidentSummary {
     // Stable incident ID: hash of fingerprint + trigger + start_time date.
     let incident_id = {
@@ -182,16 +183,11 @@ impl Engine {
       .max_by_key(|(_, &count)| count)
       .map(|(bucket, _)| format!("{}:00Z", bucket));
 
-    let stacktrace: Vec<_> = event
-      .frames
+    let stacktrace: Vec<_> = raw_stacktrace
       .iter()
       .map(|f| crate::types::StackFrameOutput {
         file: f.file.clone(),
-        function: if f.function.is_empty() {
-          None
-        } else {
-          Some(f.function.clone())
-        },
+        function: f.function.clone(),
         line: f.line,
       })
       .collect();
