@@ -56,7 +56,13 @@ async function throwIfResNotOk(res: Response) {
       try {
         const json = JSON.parse(text);
         if (json.redirectTo && (json.needsMfaSetup || json.needsMfaVerify)) {
-          if (typeof window !== "undefined") window.location.href = json.redirectTo;
+          if (typeof window !== "undefined") {
+            const targetPath = new URL(json.redirectTo, window.location.origin).pathname;
+            // Prevent endless hard-reload loop when background queries keep getting 403 on MFA pages.
+            if (window.location.pathname !== targetPath) {
+              window.location.href = json.redirectTo;
+            }
+          }
           throw new Error("MFA required");
         }
       } catch (e) {
