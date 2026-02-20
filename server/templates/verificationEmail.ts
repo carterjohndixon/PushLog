@@ -1,4 +1,5 @@
-export function getVerificationEmailTemplate(verificationLink: string) {
+export function getVerificationEmailTemplate(verificationLink: string, baseUrl?: string) {
+  const logoUrl = `${(baseUrl || "https://pushlog.ai").replace(/\/$/, "")}/PushLog.png`;
   return {
     subject: 'Verify your PushLog account',
     html: `
@@ -11,6 +12,9 @@ export function getVerificationEmailTemplate(verificationLink: string) {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background-color: #f4f4f4;">
           <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            <div style="text-align: center; margin-bottom: 28px;">
+              <img src="${logoUrl}" alt="PushLog" width="48" height="48" style="display: inline-block; object-fit: contain;" />
+            </div>
             <h1 style="color: #4CAF50; margin-bottom: 20px; text-align: center;">Welcome to PushLog!</h1>
             
             <p style="margin-bottom: 20px; color: #333333;">Thanks for signing up. To get started, please verify your email address by clicking the button below:</p>

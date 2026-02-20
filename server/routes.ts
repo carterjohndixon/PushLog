@@ -349,9 +349,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
 
-    // Skip "new_issue" if we just sent a Sentry webhook notification for this service/env (avoids duplicate).
-    if (summary.trigger === "new_issue" && wasRecentSentryNotification(summary.service, summary.environment)) {
-      console.log("[incident-engine] Skipping new_issue notification (recent Sentry webhook already sent)");
+    // Skip incident engine notification when we just sent from Sentry webhook (avoids duplicate in-app + email).
+    if (wasRecentSentryNotification(summary.service, summary.environment)) {
+      console.log("[incident-engine] Skipping notification (recent Sentry webhook already sent for this service/env)");
       return;
     }
 

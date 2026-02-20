@@ -33,9 +33,10 @@ export async function sendVerificationEmail(email: string, token: string) {
     console.log("Email disabled by EMAIL_ENABLED=false. Skipping verification email.");
     return;
   }
-  const verificationLink = `${process.env.APP_URL}/verify-email?token=${token}`;
+  const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
+  const verificationLink = `${baseUrl}/verify-email?token=${token}`;
   
-  const { subject, html } = getVerificationEmailTemplate(verificationLink);
+  const { subject, html } = getVerificationEmailTemplate(verificationLink, baseUrl);
   
   const mailOptions = {
     from: process.env.SMTP_FROM || 'no-reply@pushlog.ai',
@@ -58,8 +59,9 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string) 
     console.log("Email disabled by EMAIL_ENABLED=false. Skipping password reset email.");
     return;
   }
-  const resetLink = `${process.env.APP_URL}/reset-password?token=${resetToken}`;
-  const { subject, html } = getPasswordResetTemplate(resetLink);
+  const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
+  const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
+  const { subject, html } = getPasswordResetTemplate(resetLink, baseUrl);
 
   const mailOptions = {
     from: process.env.SMTP_FROM || 'no-reply@pushlog.ai',

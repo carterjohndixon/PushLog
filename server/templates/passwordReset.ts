@@ -1,4 +1,5 @@
-export function getPasswordResetTemplate(resetLink: string) {
+export function getPasswordResetTemplate(resetLink: string, baseUrl?: string) {
+  const logoUrl = `${(baseUrl || "https://pushlog.ai").replace(/\/$/, "")}/PushLog.png`;
     return {
       subject: 'Reset your PushLog password',
       html: `
@@ -11,6 +12,9 @@ export function getPasswordResetTemplate(resetLink: string) {
           </head>
           <body style="font-family: Arial, sans-serif; line-height: 1.6; margin: 0; padding: 20px; background-color: #f4f4f4;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+              <div style="text-align: center; margin-bottom: 28px;">
+                <img src="${logoUrl}" alt="PushLog" width="48" height="48" style="display: inline-block; object-fit: contain;" />
+              </div>
               <h1 style="color: #4CAF50; margin-bottom: 20px; text-align: center;">Reset Your PushLog Password</h1>
               
               <p style="margin-bottom: 20px; color: #333333;">You requested to reset your password. Click the button below to set a new password:</p>
@@ -32,7 +36,7 @@ export function getPasswordResetTemplate(resetLink: string) {
               
               <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center; color: #999999;">
                 <p style="margin-bottom: 10px; font-size: 12px;">
-                  PushLog - GitHub ↔ Slack Integration
+                  PushLog - Seamlessly connect GitHub with Slack
                 </p>
               </div>
             </div>
