@@ -365,6 +365,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (targetUsers.size === 0) return;
 
     const message = `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
+    const rawStacktraceForMeta = (summary as any).stacktrace ?? [];
+    const appStacktraceForMeta = rawStacktraceForMeta.filter(
+      (f: any) => f?.file && !String(f.file).includes("node_modules")
+    );
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
       service: summary.service,
@@ -378,7 +382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       topSymptoms: (summary as any).top_symptoms ?? [],
       suspectedCauses: (summary as any).suspected_causes ?? [],
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
-      stacktrace: (summary as any).stacktrace ?? [],
+      stacktrace: appStacktraceForMeta,
       links: summary.links || {},
     });
 

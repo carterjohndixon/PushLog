@@ -332,6 +332,9 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       }
     }
 
+    const appStacktrace = stacktrace.filter(
+      (f) => f.file && !String(f.file).includes("node_modules")
+    );
     const directMeta = JSON.stringify({
       source: ev ? "sentry_event_alert" : "sentry_issue_alert",
       service,
@@ -342,7 +345,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       requestUrl: event.request_url,
       culprit,
       culpritSource,
-      stacktrace,
+      stacktrace: appStacktrace,
     });
 
     await Promise.all(
