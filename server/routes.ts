@@ -369,6 +369,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const appStacktraceForMeta = rawStacktraceForMeta.filter(
       (f: any) => f?.file && !String(f.file).includes("node_modules")
     );
+
+    const resolveFrame = async (f: any): Promise<{ file: string; function?: string; line?: number }> => {
+      const file = String(f?.file || "");
+      const line = f?.line;
+      const col = f?.colno ?? 0;
+      if (line == null || !file) return { file, function: f?.function, line };
+      const resolved = await resolveToSource(file, line, col);
+      if (resolved) {
+        const lastColon = resolved.lastIndexOf(":");
+        if (lastColon > 0) {
+          const srcFile = resolved.slice(0, lastColon);
+          const srcLine = parseInt(resolved.slice(lastColon + 1), 10);
+          if (!isNaN(srcLine)) {
+            return { file: srcFile, function: f?.function, line: srcLine };
+          }
+        }
+      }
+      return { file, function: f?.function, line };
+    };
+    const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
+
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
       service: summary.service,
@@ -382,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       topSymptoms: (summary as any).top_symptoms ?? [],
       suspectedCauses: (summary as any).suspected_causes ?? [],
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
-      stacktrace: appStacktraceForMeta,
+      stacktrace: resolvedStacktraceForMeta,
       links: summary.links || {},
     });
 
@@ -417,26 +438,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const appFrames = rawStacktrace.filter(
               (f: any) => f?.file && !String(f.file).includes("node_modules")
             );
-
-            const resolveFrame = async (f: any): Promise<{ file: string; function?: string; line?: number }> => {
-              const file = String(f?.file || "");
-              const line = f?.line;
-              const col = f?.colno ?? 0;
-              if (line == null || !file) return { file, function: f?.function, line };
-              const resolved = await resolveToSource(file, line, col);
-              if (resolved) {
-                const lastColon = resolved.lastIndexOf(":");
-                if (lastColon > 0) {
-                  const srcFile = resolved.slice(0, lastColon);
-                  const srcLine = parseInt(resolved.slice(lastColon + 1), 10);
-                  if (!isNaN(srcLine)) {
-                    return { file: srcFile, function: f?.function, line: srcLine };
-                  }
-                }
-              }
-              return { file, function: f?.function, line };
-            };
-
             const resolvedStacktrace = await Promise.all(appFrames.map(resolveFrame));
             const firstResolved = resolvedStacktrace[0];
             const stackFrame =

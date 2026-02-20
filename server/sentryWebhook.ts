@@ -335,6 +335,30 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
     const appStacktrace = stacktrace.filter(
       (f) => f.file && !String(f.file).includes("node_modules")
     );
+    const resolveFrame = async (f: {
+      file: string;
+      function?: string;
+      line?: number;
+      colno?: number;
+    }): Promise<{ file: string; function?: string; line?: number }> => {
+      const file = String(f?.file || "");
+      const line = f?.line;
+      const col = f?.colno ?? 0;
+      if (line == null || !file) return { file, function: f?.function, line };
+      const resolved = await resolveToSource(file, line, col);
+      if (resolved) {
+        const lastColon = resolved.lastIndexOf(":");
+        if (lastColon > 0) {
+          const srcFile = resolved.slice(0, lastColon);
+          const srcLine = parseInt(resolved.slice(lastColon + 1), 10);
+          if (!isNaN(srcLine)) {
+            return { file: srcFile, function: f?.function, line: srcLine };
+          }
+        }
+      }
+      return { file, function: f?.function, line };
+    };
+    const resolvedStacktrace = await Promise.all(appStacktrace.map(resolveFrame));
     const directMeta = JSON.stringify({
       source: ev ? "sentry_event_alert" : "sentry_issue_alert",
       service,
@@ -345,7 +369,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       requestUrl: event.request_url,
       culprit,
       culpritSource,
-      stacktrace: appStacktrace,
+      stacktrace: resolvedStacktrace,
     });
 
     await Promise.all(
