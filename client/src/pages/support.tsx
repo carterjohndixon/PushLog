@@ -33,10 +33,10 @@ export default function Support() {
               <div className="bg-muted rounded-lg p-4">
                 <p className="font-medium text-foreground">Email</p>
                 <a 
-                  href="mailto:carter@pushlog.ai" 
+                  href="mailto:contact@pushlog.ai" 
                   className="text-primary hover:underline"
                 >
-                  carter@pushlog.ai
+                  contact@pushlog.ai
                 </a>
               </div>
             </CardContent>

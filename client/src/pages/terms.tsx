@@ -273,8 +273,8 @@ export default function Terms() {
               </p>
               <p>
                 <strong>Email:</strong>{" "}
-                <a href="mailto:carter@pushlog.ai" className="text-primary hover:underline">
-                  carter@pushlog.ai
+                <a href="mailto:contact@pushlog.ai" className="text-primary hover:underline">
+                  contact@pushlog.ai
                 </a>
               </p>
               <p className="mt-4">
