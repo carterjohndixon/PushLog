@@ -1,5 +1,14 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+const PUBLIC_PATHS = [
+  "/",
+  "/login",
+  "/signup",
+  "/auth/github/callback",
+  "/setup-mfa",
+  "/verify-mfa",
+];
+
 function handleAuthenticationFailure() {
   // Clear any cached data (React Query cache)
   // No localStorage cleanup needed - we don't store tokens there
@@ -7,11 +16,10 @@ function handleAuthenticationFailure() {
   // Only redirect if we're on an authenticated route (not public pages)
   // ProtectedRoute component handles route-level redirects, so we only handle API-level 401s
   if (typeof window !== 'undefined') {
-    const publicPaths = ['/', '/login', '/signup'];
     const currentPath = window.location.pathname;
     
     // Don't redirect if already on public pages
-    if (!publicPaths.includes(currentPath)) {
+    if (!PUBLIC_PATHS.includes(currentPath)) {
       // Only redirect if not already being handled by ProtectedRoute
       // ProtectedRoute will handle the redirect, so we can be less aggressive here
       // But for API calls that fail with 401, we should still redirect
@@ -70,8 +78,7 @@ async function throwIfResNotOk(res: Response) {
 
       // Check if we're on public pages - don't redirect (home, login, signup pages are public)
       if (typeof window !== 'undefined') {
-        const publicPaths = ['/', '/login', '/signup'];
-        if (publicPaths.includes(window.location.pathname)) {
+        if (PUBLIC_PATHS.includes(window.location.pathname)) {
           throw new Error('Not authenticated'); // Just throw, don't redirect
         }
       }
