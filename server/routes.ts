@@ -1552,9 +1552,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ success: false, error: "Failed to fetch GitHub user" });
       }
       const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
+      const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow, not linking
       let user;
-      if (currentUserId) {
-        const currentUser = await databaseStorage.getUserById(currentUserId);
+      if (isLinkingFlow) {
+        const currentUser = await databaseStorage.getUserById(currentUserId!);
         if (currentUser) {
           const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
           if (existingUser && existingUser.id !== currentUser.id) {
@@ -1611,15 +1612,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         req.session!.userId = user.id;
         req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
-        (req.session as any).mfaPending = true;
-        (req.session as any).mfaSetupRequired = !hasMfa;
+        if (!isLinkingFlow) {
+          (req.session as any).mfaPending = true;
+          (req.session as any).mfaSetupRequired = !hasMfa;
+        }
         req.session!.save((err) => {
           if (err) {
             console.error("❌ GitHub OAuth: session save failed:", err);
             Sentry.captureException(err);
             return res.status(500).json({ success: false, error: "Session save failed" });
           }
-          const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
+          const targetPath = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
@@ -1677,10 +1680,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Check if there's a current session/user trying to connect
         const state = req.query.state as string;
         const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
+        const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow
         console.log(`OAuth callback - state: ${state}, currentUserId: ${currentUserId}`);
         
         let user;
-        if (currentUserId) {
+        if (isLinkingFlow) {
           // User is already logged in and trying to connect GitHub
           console.log(`User ${currentUserId} is connecting GitHub account`);
           const currentUser = await databaseStorage.getUserById(currentUserId);
@@ -1774,7 +1778,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
         
         const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled;
-        const isLinkingOnly = !!currentUserId;
 
         req.session.userId = user.id;
         req.session.user = {
@@ -1785,7 +1788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           googleConnected: !!user.googleId,
           emailVerified: true
         };
-        if (!isLinkingOnly) {
+        if (!isLinkingFlow) {
           (req.session as any).mfaPending = true;
           (req.session as any).mfaSetupRequired = !hasMfa;
         }
@@ -1793,7 +1796,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const redirectHost = (req.get("host") || "").split(":")[0];
         const redirectProtocol = redirectHost === "pushlog.ai" ? "https" : (req.protocol || "https");
         const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
-        const path = isLinkingOnly ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+        const path = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
         const redirectUrl = base ? `${base}${path}` : path;
 
         // Save session before redirect so the cookie + userId are persisted before the browser navigates away.
