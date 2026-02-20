@@ -23,7 +23,7 @@ function handleAuthenticationFailure() {
       // Only redirect if not already being handled by ProtectedRoute
       // ProtectedRoute will handle the redirect, so we can be less aggressive here
       // But for API calls that fail with 401, we should still redirect
-      window.location.href = '/login';
+      window.location.href = '/login'; 
     }
   }
 }

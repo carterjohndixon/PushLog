@@ -392,6 +392,9 @@ const cookieDomain =
   appEnvForCookie === "production"
     ? (process.env.COOKIE_DOMAIN === "pushlog.ai" ? "pushlog.ai" : undefined)
     : (process.env.COOKIE_DOMAIN || undefined);
+// Avoid prod/staging cookie collisions (both can be sent to staging if domain scopes overlap).
+// Use a distinct cookie name outside production so staging never reuses prod's connect.sid.
+const sessionCookieName = appEnvForCookie === "production" ? "connect.sid" : "connect.sid.staging";
 
 // SameSite=None required for OAuth callback: user is redirected from github.com (cross-site), so Lax
 // can block the cookie from being stored. None allows it; Secure is required with None.
@@ -401,7 +404,7 @@ app.use(session({
   resave: true, // Set to true to ensure session is saved even if not modified (needed for rolling sessions)
   saveUninitialized: false,
   rolling: true, // Reset expiration on every request (keeps session alive during activity)
-  name: 'connect.sid',
+  name: sessionCookieName,
   cookie: {
     secure: true,
     httpOnly: true,
