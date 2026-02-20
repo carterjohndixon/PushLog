@@ -87,22 +87,32 @@ export function getIncidentAlertEmailTemplate(
       </div>
       <!-- Header -->
       <div style="padding: 24px 24px 16px;">
-        <div style="display: flex; align-items: center; gap: 14px;">
-          <div style="flex-shrink: 0;"><table role="presentation" cellpadding="0" cellspacing="0" style="width: 28px; height: 28px; background: #dc3545; border-radius: 50%;"><tr><td align="center" valign="middle" style="color: white; font-size: 14px; font-weight: bold; line-height: 1;">!</td></tr></table></div>
-          <div style="flex: 1;">
-            <h1 style="margin-right: 4px; font-size: 20px; font-weight: 600; color: #e8ece9;">Notification Details</h1>
-            <p style="margin: 8px 0 0; font-size: 16px; font-weight: 600; color: #e8ece9;">${escapedTitle}</p>
-            <p style="margin: 6px 0 0; font-size: 14px; color: #9ca3a8;">${escapedMessage}</p>
-          </div>
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 46px; padding-right: 18px; vertical-align: middle;">
+              <div style="width: 28px; height: 28px; border-radius: 14px; background: #dc3545; text-align: center; line-height: 28px; font-size: 16px; font-weight: bold; color: white;">!</div>
+            </td>
+            <td style="vertical-align: middle;">
+              <h1 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #e8ece9;">Notification Details</h1>
+              <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #e8ece9;">${escapedTitle}</p>
+              <p style="margin: 0; font-size: 14px; color: #9ca3a8;">${escapedMessage}</p>
+            </td>
+          </tr>
+        </table>
       </div>
 
       <!-- Incident details card -->
       <div style="margin: 0 16px 16px; padding: 20px; background: rgba(45, 61, 53, 0.5); border: 1px solid #2d3d35; border-radius: 8px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-          <div style="flex-shrink: 0;"><table role="presentation" cellpadding="0" cellspacing="0" style="width: 20px; height: 20px; background: #dc3545; border-radius: 50%;"><tr><td align="center" valign="middle" style="color: white; font-size: 11px; font-weight: bold; line-height: 1;">!</td></tr></table></div>
-          <span style="font-size: 14px; font-weight: 600; color: #e8ece9;">Incident details</span>
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+          <tr>
+            <td style="width: 36px; padding-right: 14px; vertical-align: middle;">
+              <div style="width: 20px; height: 20px; border-radius: 10px; background: #dc3545; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; color: white;">!</div>
+            </td>
+            <td style="vertical-align: middle;">
+              <span style="font-size: 14px; font-weight: 600; color: #e8ece9;">Incident details</span>
+            </td>
+          </tr>
+        </table>
         <p style="margin: 0 0 16px; font-size: 13px; color: #9ca3a8;">${escapedMessage}</p>
 
         ${hasLocation ? `
