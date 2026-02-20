@@ -92,7 +92,7 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
                 variant="ghost"
                 onClick={() => onToggle(integration)}
                 disabled={togglePending}
-                className="hover:bg-gray-100"
+                className="text-steel-gray hover:text-graphite"
               >
                 {integration.status === 'active' ? (
                   <Pause className="w-4 h-4" />
