@@ -7,7 +7,8 @@ import { useToast } from "@/hooks/use-toast";
  * User lands here after authorizing on GitHub (redirect_uri = /auth/github/callback).
  * We use a form POST (not fetch) so the server's 302 + Set-Cookie is a full-page navigation
  * response — browsers reliably process Set-Cookie from navigation, unlike fetch responses.
- * This also avoids CDN/proxy caching the API (which caused users to see raw JSON).
+ * State is verified server-side (DB lookup); we no longer require localStorage so this works
+ * even when a proxy serves the SPA for /auth/* instead of proxying to the backend.
  */
 export default function GitHubCallback() {
   const [, setLocation] = useLocation();
@@ -25,7 +26,6 @@ export default function GitHubCallback() {
     const code = query.get("code");
     const state = query.get("state");
     const error = query.get("error");
-    const storedState = localStorage.getItem("github_oauth_state");
 
     localStorage.removeItem("github_oauth_state");
     localStorage.removeItem("returnPath");
@@ -50,7 +50,7 @@ export default function GitHubCallback() {
       return;
     }
 
-    if (!state || !storedState || state !== storedState) {
+    if (!state) {
       toast({
         title: "Authentication Failed",
         description: "Invalid state parameter. Please try again.",
