@@ -38,8 +38,12 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const userProfile = profileResponse?.user ?? null;
 
   if (isFetched && !isLoading && !isAuthenticated) {
-    if (error instanceof ProfileError && error.status === 401) {
-      setLocation("/login");
+    if (error instanceof ProfileError) {
+      if (error.redirectTo) {
+        setLocation(error.redirectTo);
+      } else {
+        setLocation("/login");
+      }
       return null;
     }
   }
@@ -66,8 +70,8 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
     );
   }
 
-  if (isError && error instanceof ProfileError && error.status === 401) {
-    setLocation("/login");
+  if (isError && error instanceof ProfileError) {
+    setLocation(error.redirectTo || "/login");
     return null;
   }
 

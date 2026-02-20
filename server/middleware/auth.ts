@@ -22,6 +22,14 @@ declare global {
   }
 }
 
+/** Require session with userId and mfaPending — for MFA setup/verify routes only. */
+export function requireMfaPendingSession(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.userId || !(req.session as any).mfaPending) {
+    return res.status(401).json({ error: "Session expired or invalid. Please log in again." });
+  }
+  next();
+}
+
 export async function authenticateToken(req: Request, res: Response, next: NextFunction) {
   try {
     // Check if cookies are present - if not, session can't be read
@@ -44,6 +52,17 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
         });
       }
       return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // MFA: if first factor passed but MFA not complete, reject with specific code for client redirect
+    if ((req.session as any).mfaPending) {
+      const setupRequired = !!(req.session as any).mfaSetupRequired;
+      return res.status(403).json({
+        error: 'MFA required',
+        needsMfaSetup: setupRequired,
+        needsMfaVerify: !setupRequired,
+        redirectTo: setupRequired ? '/setup-mfa' : '/verify-mfa',
+      });
     }
 
     // Refresh session expiration (rolling sessions - resets expiration on activity)

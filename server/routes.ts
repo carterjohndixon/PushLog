@@ -9,7 +9,7 @@ import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
-import { authenticateToken, requireEmailVerification } from './middleware/auth';
+import { authenticateToken, requireEmailVerification, requireMfaPendingSession } from './middleware/auth';
 import {
   isProductionDeployConfigured,
   requestProductionPromote,
@@ -43,6 +43,8 @@ import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail }
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { encrypt, decrypt } from './encryption';
+import speakeasy from "speakeasy";
+import QRCode from "qrcode";
 import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
@@ -1225,7 +1227,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await databaseStorage.clearLoginAttempts(identifier);
 
-      // Set session data
+      const userWithMfa = user as { mfaEnabled?: boolean };
+      const needsMfa = !!(userWithMfa.mfaEnabled ?? (user as any).mfa_enabled);
+
+      if (needsMfa) {
+        (req.session as any).userId = user.id;
+        (req.session as any).mfaPending = true;
+        (req.session as any).mfaSetupRequired = false;
+        (req.session as any).user = {
+          userId: user.id,
+          username: user.username || '',
+          email: user.email || null,
+          githubConnected: !!user.githubId,
+          googleConnected: !!user.googleId,
+          emailVerified: !!user.emailVerified,
+        };
+        req.session.userId = user.id;
+        req.session.save((err) => {
+          if (err) {
+            console.error("Login session save error:", err);
+            return res.status(500).json({ error: "Failed to create session" });
+          }
+          return res.status(200).json({ success: true, needsMfaVerify: true, redirectTo: "/verify-mfa" });
+        });
+        return;
+      }
+
+      // Set session data (no MFA required)
       req.session.userId = user.id;
       req.session.user = {
         userId: user.id,
@@ -1235,8 +1263,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleConnected: !!user.googleId,
         emailVerified: !!user.emailVerified
       };
-
-      // Set userId in session BEFORE saving
       req.session.userId = user.id;
       
       // Save session explicitly to ensure cookie is set
@@ -1280,6 +1306,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       Sentry.captureException(error);
       res.status(500).send("An error occurred while trying to log in");
+    }
+  });
+
+  // MFA setup (new users) — requires mfaPending + mfaSetupRequired session
+  app.get("/api/mfa/setup", requireMfaPendingSession, async (req: Request, res: Response) => {
+    try {
+      const userId = req.session!.userId!;
+      const user = await databaseStorage.getUserById(userId);
+      if ((user as any)?.mfaEnabled) return res.status(400).json({ error: "MFA already set up." });
+      const secret = speakeasy.generateSecret({ name: `PushLog (${user?.username || userId.slice(0, 8)})`, length: 20 });
+      const label = `PushLog:${user?.username || user?.email || userId}`;
+      const otpauth = `otpauth://totp/${encodeURIComponent(label)}?secret=${secret.base32}&issuer=PushLog`;
+      const qrDataUrl = await QRCode.toDataURL(otpauth, { width: 200, margin: 2 });
+      (req.session as any).mfaSetupSecret = secret.base32;
+      await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
+      res.status(200).json({ qrDataUrl, secretBase32: secret.base32 });
+    } catch (err) {
+      console.error("MFA setup error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to generate MFA setup" });
+    }
+  });
+
+  app.post("/api/mfa/setup", requireMfaPendingSession, body("code").trim().isLength({ min: 6, max: 6 }), async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: "Invalid code" });
+      const code = req.body.code as string;
+      const secret = (req.session as any).mfaSetupSecret;
+      if (!secret) return res.status(400).json({ error: "Setup session expired. Refresh the page." });
+      const valid = speakeasy.totp.verify({ secret, encoding: "base32", token: code, window: 1 });
+      if (!valid) return res.status(401).json({ error: "Invalid code. Please try again." });
+      const userId = req.session!.userId!;
+      const encrypted = encrypt(secret);
+      await databaseStorage.updateUser(userId, { totpSecret: encrypted, mfaEnabled: true } as any);
+      delete (req.session as any).mfaPending;
+      delete (req.session as any).mfaSetupRequired;
+      delete (req.session as any).mfaSetupSecret;
+      await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("MFA setup verify error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to save MFA" });
+    }
+  });
+
+  // MFA verify (login) — requires mfaPending session
+  app.post("/api/mfa/verify", requireMfaPendingSession, body("code").trim().isLength({ min: 6, max: 6 }), async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: "Invalid code" });
+      const code = req.body.code as string;
+      const userId = req.session!.userId!;
+      const user = await databaseStorage.getUserById(userId);
+      const rawSecret = (user as any)?.totpSecret ? decrypt((user as any).totpSecret) : null;
+      if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support." });
+      const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 1 });
+      if (!valid) return res.status(401).json({ error: "Invalid code. Please try again." });
+      delete (req.session as any).mfaPending;
+      delete (req.session as any).mfaSetupRequired;
+      await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("MFA verify error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Verification failed" });
     }
   });
 
@@ -1540,6 +1633,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.redirect("/login?error=user_creation_failed");
     }
 
+    const userForMfa = user as { mfaEnabled?: boolean };
+    const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
+
     req.session!.regenerate((regErr) => {
       if (regErr) {
         console.error("GitHub OAuth session regenerate failed:", regErr);
@@ -1547,15 +1643,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       req.session!.userId = user!.id;
       req.session!.user = { userId: user!.id, username: user!.username || "", email: user!.email ?? null, githubConnected: true, googleConnected: !!user!.googleId, emailVerified: true };
+      if (hasMfa) {
+        (req.session as any).mfaPending = true;
+        (req.session as any).mfaSetupRequired = false;
+      } else {
+        (req.session as any).mfaPending = true;
+        (req.session as any).mfaSetupRequired = true; // New or no MFA yet - require setup
+      }
       req.session!.save((err) => {
         if (err) {
           console.error("GitHub OAuth session save failed:", err);
           return res.redirect("/login?error=session_save_failed");
         }
-        const targetPath = returnPath;
         const host = (req.get("host") || "").split(":")[0];
         const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
         const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+        const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
         res.redirect(302, base ? `${base}${targetPath}` : targetPath);
       });
     });
@@ -1640,6 +1743,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user?.id) {
         return res.status(500).json({ success: false, error: "Failed to create or update user" });
       }
+      const userForMfa = user as { mfaEnabled?: boolean };
+      const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
       req.session!.regenerate((regErr) => {
         if (regErr) {
           console.error("❌ GitHub OAuth: session regenerate failed:", regErr);
@@ -1648,13 +1753,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         req.session!.userId = user.id;
         req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
+        (req.session as any).mfaPending = true;
+        (req.session as any).mfaSetupRequired = !hasMfa;
         req.session!.save((err) => {
           if (err) {
             console.error("❌ GitHub OAuth: session save failed:", err);
             Sentry.captureException(err);
             return res.status(500).json({ success: false, error: "Session save failed" });
           }
-          const targetPath = (typeof returnPath === "string" && returnPath.startsWith("/")) ? returnPath : "/dashboard";
+          const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
@@ -1808,6 +1915,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
         
+        const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled;
+        const isLinkingOnly = !!currentUserId;
+
         req.session.userId = user.id;
         req.session.user = {
           userId: user.id,
@@ -1817,12 +1927,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           googleConnected: !!user.googleId,
           emailVerified: true
         };
+        if (!isLinkingOnly) {
+          (req.session as any).mfaPending = true;
+          (req.session as any).mfaSetupRequired = !hasMfa;
+        }
 
-        // Redirect to dashboard on the same host the user used (ignore APP_URL so prod never sends staging).
         const redirectHost = (req.get("host") || "").split(":")[0];
         const redirectProtocol = redirectHost === "pushlog.ai" ? "https" : (req.protocol || "https");
         const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
-        const path = currentUserId ? "/dashboard?github_connected=1" : "/dashboard";
+        const path = isLinkingOnly ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
         const redirectUrl = base ? `${base}${path}` : path;
 
         // Save session before redirect so the cookie + userId are persisted before the browser navigates away.
@@ -1950,7 +2063,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         throw new Error("Failed to create or update user");
       }
 
-      
+      const userForMfa = user as { mfaEnabled?: boolean };
+      const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
+
       req.session.userId = user.id;
       req.session.user = {
         userId: user.id,
@@ -1960,9 +2075,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         googleConnected: true,
         emailVerified: !!user.emailVerified
       };
+      (req.session as any).mfaPending = true;
+      (req.session as any).mfaSetupRequired = !hasMfa;
 
-      // Redirect to dashboard - no token needed, cookie is set automatically
-      res.redirect(`/dashboard`);
+      // Redirect to MFA setup or verify
+      const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
+      res.redirect(targetPath);
     } catch (error) {
       console.error("Google auth error:", error);
       Sentry.captureException(error);
@@ -2022,6 +2140,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Send verification email
       await sendVerificationEmail(email, verificationToken);
       req.session.userId = user.id;
+      (req.session as any).mfaPending = true;
+      (req.session as any).mfaSetupRequired = true;
       req.session.user = {
         userId: user.id,
         username: user.username || '',
@@ -2033,7 +2153,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(200).json({
         success: true,
-        // No token needed - cookie is set automatically
+        needsMfaSetup: true,
+        redirectTo: "/setup-mfa",
         user: {
           id: user.id,
           username: user.username || '',

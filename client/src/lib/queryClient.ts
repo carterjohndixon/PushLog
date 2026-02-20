@@ -43,6 +43,23 @@ async function throwIfResNotOk(res: Response) {
     const text = await res.text();
     const message = sanitizeErrorMessage(text, res.status, res.statusText);
 
+    // Handle 403 with MFA required - redirect to setup or verify
+    if (res.status === 403) {
+      try {
+        const json = JSON.parse(text);
+        if (json.redirectTo && (json.needsMfaSetup || json.needsMfaVerify)) {
+          if (typeof window !== "undefined") window.location.href = json.redirectTo;
+          throw new Error("MFA required");
+        }
+      } catch (e) {
+        if (e instanceof SyntaxError) {
+          // Not JSON, fall through to generic throw
+        } else {
+          throw e;
+        }
+      }
+    }
+
     // Handle 401 Unauthorized globally, but only for authenticated routes
     if (res.status === 401) {
       // Check if this is a login/signup request - don't redirect for these

@@ -59,6 +59,8 @@ const Settings = lazy(() => import("@/pages/settings"));
 const Admin = lazy(() => import("@/pages/admin"));
 const Support = lazy(() => import("@/pages/support"));
 const GitHubCallback = lazy(() => import("@/pages/GitHubCallBack"));
+const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
+const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -105,6 +107,8 @@ function Router() {
       <Route path="/forgot-password" component={ForgotPassword} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/auth/github/callback" component={GitHubCallback} />
+      <Route path="/setup-mfa" component={SetupMfa} />
+      <Route path="/verify-mfa" component={VerifyMfa} />
       
       <Route path="/dashboard">
         <ProtectedRoute pageName="dashboard">

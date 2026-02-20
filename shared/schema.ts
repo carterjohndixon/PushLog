@@ -31,6 +31,8 @@ export const users = pgTable("users", {
   preferredAiModel: text("preferred_ai_model").default("gpt-5.2"),
   openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, integrations can use OpenRouter with this key
   openaiApiKey: text("openai_api_key"), // Encrypted; when set, integrations use user's OpenAI key (user pays OpenAI)
+  mfaEnabled: boolean("mfa_enabled").default(false),
+  totpSecret: text("totp_secret"), // Encrypted TOTP secret for authenticator app
   monthlyBudget: integer("monthly_budget"), // Monthly AI spend budget in units of $0.0001; nullable = no budget
   overBudgetBehavior: text("over_budget_behavior").default("skip_ai"), // "skip_ai" = send plain push when over budget; "free_model" = use free model
   devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
@@ -284,6 +286,8 @@ export type User = {
   preferredAiModel: string;
   openRouterApiKey: string | null;
   openaiApiKey: string | null;
+  mfaEnabled?: boolean;
+  totpSecret: string | null;
   monthlyBudget: number | null;
   overBudgetBehavior: "free_model" | "skip_ai";
   devMode?: boolean;

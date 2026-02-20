@@ -23,7 +23,7 @@ export default function Login() {
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
 
-  // Check if user is already authenticated - redirect to dashboard if so
+  // Check if user is already authenticated - redirect to dashboard or MFA if needed
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -33,10 +33,16 @@ export default function Login() {
         });
         
         if (response.ok) {
-          // User is already authenticated, redirect to dashboard
           window.location.href = "/dashboard";
+          return;
         }
-      } catch (error) {
+        if (response.status === 403) {
+          const data = await response.json().catch(() => ({}));
+          if (data.redirectTo && (data.needsMfaSetup || data.needsMfaVerify)) {
+            window.location.href = data.redirectTo;
+          }
+        }
+      } catch {
         // Not authenticated or network error - stay on login page
       }
     };
@@ -60,7 +66,11 @@ export default function Login() {
     }
   }, [toast]);
 
-  const loginMutation = useMutation({
+  const loginMutation = useMutation<
+    { success?: boolean; needsMfaVerify?: boolean; redirectTo?: string },
+    Error,
+    { identifier: string; password: string }
+  >({
       mutationFn: async (loginData: any) => {
         const response = await apiRequest("POST", "/api/login", {
           identifier, // Either email or username
@@ -69,7 +79,11 @@ export default function Login() {
 
         return response.json();
       },
-      onSuccess: async () => {
+      onSuccess: async (data) => {
+        if (data?.needsMfaVerify && data?.redirectTo) {
+          setLocation(data.redirectTo);
+          return;
+        }
         await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
         setLocation("/dashboard");
       },

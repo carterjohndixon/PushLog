@@ -35,7 +35,7 @@ export interface ProfileResponse {
 }
 
 export class ProfileError extends Error {
-  constructor(message: string, public status: number) {
+  constructor(message: string, public status: number, public redirectTo?: string) {
     super(message);
     this.name = "ProfileError";
   }
@@ -48,6 +48,16 @@ export async function fetchProfile(): Promise<ProfileResponse> {
   });
   if (!res.ok) {
     if (res.status === 401) throw new ProfileError("Unauthorized", 401);
+    if (res.status === 403) {
+      try {
+        const body = await res.json();
+        if (body.redirectTo && (body.needsMfaSetup || body.needsMfaVerify)) {
+          throw new ProfileError("MFA required", 403, body.redirectTo);
+        }
+      } catch (e) {
+        if (e instanceof ProfileError) throw e;
+      }
+    }
     throw new ProfileError("Failed to load profile", res.status);
   }
   const data = await res.json();
