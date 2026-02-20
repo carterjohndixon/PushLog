@@ -369,7 +369,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
         }
         throw error;
       }
-      return response.json();
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data?.events ?? []);
     },
     refetchInterval: 30000,
   });

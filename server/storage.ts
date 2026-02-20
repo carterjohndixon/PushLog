@@ -22,6 +22,14 @@ export interface SearchPushEventsOptions {
   offset?: number;
 }
 
+/** Optional filters for listing push events (no full-text search). */
+export interface ListPushEventsFilters {
+  repositoryId?: string;
+  from?: string;   // ISO date string (YYYY-MM-DD)
+  to?: string;     // ISO date string (YYYY-MM-DD)
+  minImpact?: number;
+}
+
 export interface IStorage {
   // User methods
   getUser(id: string): Promise<User | undefined>;
@@ -54,8 +62,8 @@ export interface IStorage {
   // Push event methods
   getPushEvent(id: string): Promise<PushEvent | undefined>;
   getPushEventsByRepositoryId(repositoryId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
-  getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]>;
-  getPushEventCountForUser(userId: string): Promise<number>;
+  getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number } & ListPushEventsFilters): Promise<PushEvent[]>;
+  getPushEventCountForUser(userId: string, filters?: ListPushEventsFilters): Promise<number>;
   /** Full-text search over push events (summary, message, author, impact, category). User-scoped to their repos. */
   searchPushEvents(userId: string, options: SearchPushEventsOptions): Promise<PushEvent[]>;
   createPushEvent(pushEvent: InsertPushEvent): Promise<PushEvent>;
@@ -273,20 +281,29 @@ export class MemStorage implements IStorage {
     return list;
   }
 
-  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number } & ListPushEventsFilters): Promise<PushEvent[]> {
     const limit = options?.limit ?? 100;
     const offset = options?.offset ?? 0;
+    const { repositoryId, from, to, minImpact } = options ?? {};
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
-    const list = Array.from(this.pushEvents.values())
-      .filter(event => repoIds.has(event.repositoryId))
-      .sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime())
-      .slice(offset, offset + limit);
-    return list;
+    let list = Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId));
+    if (repositoryId != null) list = list.filter(e => e.repositoryId === repositoryId);
+    if (from) list = list.filter(e => new Date(e.pushedAt).getTime() >= new Date(from).getTime());
+    if (to) list = list.filter(e => new Date(e.pushedAt).getTime() <= new Date(to + "T23:59:59.999Z").getTime());
+    if (minImpact != null) list = list.filter(e => (e.impactScore ?? 0) >= minImpact);
+    list.sort((a, b) => new Date(b.pushedAt).getTime() - new Date(a.pushedAt).getTime());
+    return list.slice(offset, offset + limit);
   }
 
-  async getPushEventCountForUser(userId: string): Promise<number> {
+  async getPushEventCountForUser(userId: string, filters?: ListPushEventsFilters): Promise<number> {
     const repoIds = new Set(Array.from(this.repositories.values()).filter(r => r.userId === userId).map(r => r.id));
-    return Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId)).length;
+    let list = Array.from(this.pushEvents.values()).filter(event => repoIds.has(event.repositoryId));
+    const { repositoryId, from, to, minImpact } = filters ?? {};
+    if (repositoryId != null) list = list.filter(e => e.repositoryId === repositoryId);
+    if (from) list = list.filter(e => new Date(e.pushedAt).getTime() >= new Date(from).getTime());
+    if (to) list = list.filter(e => new Date(e.pushedAt).getTime() <= new Date(to + "T23:59:59.999Z").getTime());
+    if (minImpact != null) list = list.filter(e => (e.impactScore ?? 0) >= minImpact);
+    return list.length;
   }
 
   async searchPushEvents(userId: string, options: SearchPushEventsOptions): Promise<PushEvent[]> {

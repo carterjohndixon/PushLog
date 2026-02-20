@@ -2344,7 +2344,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get push events for repositories (single query, limit 100)
+  // Get push events for repositories. Supports ?limit=&offset=&repositoryId=&from=&to=&minImpact=.
+  // Returns { events: [...], total: number } for pagination; total is filtered count.
   app.get("/api/push-events", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
       const userId = req.user?.userId;
@@ -2354,7 +2355,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const limit = Math.min(Number(req.query.limit) || 100, 500);
       const offset = Number(req.query.offset) || 0;
-      const allPushEvents = await storage.getPushEventsForUser(userId, { limit, offset });
+      const repositoryId = req.query.repositoryId !== undefined && req.query.repositoryId !== "" ? String(req.query.repositoryId) : undefined;
+      const from = (req.query.from as string) || undefined;
+      const to = (req.query.to as string) || undefined;
+      const minImpact = req.query.minImpact !== undefined && req.query.minImpact !== "" ? Number(req.query.minImpact) : undefined;
+      const filters = { repositoryId, from, to, minImpact };
+
+      const [allPushEvents, total] = await Promise.all([
+        storage.getPushEventsForUser(userId, { limit, offset, ...filters }),
+        storage.getPushEventCountForUser(userId, filters),
+      ]);
 
       const formattedEvents = allPushEvents.map((event: any) => ({
         id: event.id,
@@ -2367,7 +2377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         eventType: 'push'
       }));
 
-      res.status(200).json(formattedEvents);
+      res.status(200).json({ events: formattedEvents, total });
     } catch (error) {
       console.error("Failed to fetch push events:", error);
       Sentry.captureException(error);

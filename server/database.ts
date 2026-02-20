@@ -18,7 +18,7 @@ import {
   userDailyStats,
 } from "@shared/schema";
 import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
-import type { IStorage, SearchPushEventsOptions } from "./storage";
+import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
@@ -362,28 +362,45 @@ export class DatabaseStorage implements IStorage {
     return result as PushEvent[];
   }
 
-  /** Push events for all of a user's repos, one query (after resolving repo IDs), bounded (default limit 100). */
-  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number }): Promise<PushEvent[]> {
+  /** Push events for all of a user's repos, one query. Optional filters: repositoryId, from, to, minImpact. */
+  async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number } & ListPushEventsFilters): Promise<PushEvent[]> {
     const limit = options?.limit ?? 100;
     const offset = options?.offset ?? 0;
+    const { repositoryId, from, to, minImpact } = options ?? {};
     const repoRows = await db.select({ id: repositories.id }).from(repositories).where(eq(repositories.userId, userId));
     const repoIds = repoRows.map((r) => r.id);
     if (repoIds.length === 0) return [];
-    const result = await db.select().from(pushEvents)
-      .where(inArray(pushEvents.repositoryId, repoIds))
-      .orderBy(desc(pushEvents.pushedAt))
-      .limit(limit)
-      .offset(offset);
-    return result as PushEvent[];
+    const rows = await db.execute<Record<string, unknown>>(sql`
+      SELECT e.id, e.repository_id, e.integration_id, e.commit_sha, e.commit_message, e.author, e.branch,
+             e.pushed_at, e.notification_sent, e.additions, e.deletions, e.created_at,
+             e.ai_summary, e.ai_impact, e.ai_category, e.ai_details, e.ai_generated,
+             e.impact_score, e.risk_flags, e.risk_metadata
+      FROM push_events e
+      INNER JOIN repositories r ON e.repository_id = r.id
+      WHERE r.user_id = ${userId}
+        AND (${repositoryId ?? null}::uuid IS NULL OR e.repository_id = ${repositoryId ?? null})
+        AND (${from ?? null}::timestamptz IS NULL OR e.pushed_at >= (${from ?? null}::timestamptz))
+        AND (${to ?? null}::date IS NULL OR e.pushed_at::date <= (${to ?? null}::date))
+        AND (${minImpact ?? null}::int IS NULL OR e.impact_score >= ${minImpact ?? null})
+      ORDER BY e.pushed_at DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((row) => mapRowToPushEvent(row)) as PushEvent[];
   }
 
-  /** Total count of push events for a user (all repos), one query. */
-  async getPushEventCountForUser(userId: string): Promise<number> {
+  /** Total count of push events for a user (all repos), with optional filters. */
+  async getPushEventCountForUser(userId: string, filters?: ListPushEventsFilters): Promise<number> {
+    const { repositoryId, from, to, minImpact } = filters ?? {};
     const [row] = await db.execute<{ c: number }>(sql`
       SELECT count(*)::int AS c
       FROM push_events e
       INNER JOIN repositories r ON e.repository_id = r.id
       WHERE r.user_id = ${userId}
+        AND (${repositoryId ?? null}::uuid IS NULL OR e.repository_id = ${repositoryId ?? null})
+        AND (${from ?? null}::timestamptz IS NULL OR e.pushed_at >= (${from ?? null}::timestamptz))
+        AND (${to ?? null}::date IS NULL OR e.pushed_at::date <= (${to ?? null}::date))
+        AND (${minImpact ?? null}::int IS NULL OR e.impact_score >= ${minImpact ?? null})
     `);
     return row?.c ?? 0;
   }

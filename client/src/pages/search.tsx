@@ -10,9 +10,11 @@ import { handleTokenExpiration } from "@/lib/utils";
 import { Search as SearchIcon, GitBranch, User, Calendar, Filter, ChevronDown, ChevronLeft, ChevronRight, ExternalLink, MessageCircle } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const SEARCH_DEBOUNCE_MS = 280;
-const RECENT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
+const MAX_PAGE_SIZE = 100;
 
 interface SearchResult {
   id: number;
@@ -65,8 +67,10 @@ export default function Search() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [minImpact, setMinImpact] = useState("");
+  const hasActiveFilters = !!(repositoryId || from || to || minImpact !== "");
   const [showFilters, setShowFilters] = useState(false);
   const [recentPage, setRecentPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(20);
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
 
   // Search-as-you-type: debounce submitted query when input changes
@@ -77,7 +81,7 @@ export default function Search() {
     return () => clearTimeout(t);
   }, [q]);
 
-  // When switching back to recent view from search, reset to first page
+  // When switching back to recent view from search, or when filters change, reset to first page
   const prevSubmittedQ = useRef(submittedQ);
   useEffect(() => {
     if (prevSubmittedQ.current.trim().length > 0 && submittedQ.trim().length === 0) {
@@ -85,6 +89,10 @@ export default function Search() {
     }
     prevSubmittedQ.current = submittedQ;
   }, [submittedQ]);
+
+  useEffect(() => {
+    setRecentPage(0);
+  }, [repositoryId, from, to, minImpact, pageSize]);
 
   // Repos for filter dropdown and name lookup
   const { data: reposData } = useQuery<{ repositories: RepoOption[] }>({
@@ -101,12 +109,21 @@ export default function Search() {
   const repositories = reposData?.repositories ?? [];
   const repoById = Object.fromEntries(repositories.map((r) => [r.id, r]));
 
-  // Recent pushes (when no search query) – one page at a time
-  const { data: recentData, isLoading: recentLoading, error: recentError } = useQuery<SearchResult[]>({
-    queryKey: ["/api/push-events", "search-page", recentPage],
+  // Build filter params for recent pushes
+  const recentParams = new URLSearchParams();
+  recentParams.set("limit", String(Math.min(pageSize, MAX_PAGE_SIZE)));
+  recentParams.set("offset", String(recentPage * pageSize));
+  if (repositoryId) recentParams.set("repositoryId", repositoryId);
+  if (from) recentParams.set("from", from);
+  if (to) recentParams.set("to", to);
+  if (minImpact !== "") recentParams.set("minImpact", minImpact);
+
+  // Recent pushes (when no search query) – filters apply immediately
+  const { data: recentResponse, isLoading: recentLoading, error: recentError } = useQuery<{ events: SearchResult[]; total: number }>({
+    queryKey: ["/api/push-events", "search-page", recentPage, pageSize, repositoryId, from, to, minImpact],
     queryFn: async () => {
       const res = await fetch(
-        `/api/push-events?limit=${RECENT_PAGE_SIZE}&offset=${recentPage * RECENT_PAGE_SIZE}`,
+        `/api/push-events?${recentParams.toString()}`,
         {
           credentials: "include",
           headers: { Accept: "application/json" },
@@ -115,11 +132,11 @@ export default function Search() {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         const err = new Error(errData.error || "Failed to fetch push events");
-        if (handleTokenExpiration(err, queryClient)) return [];
+        if (handleTokenExpiration(err, queryClient)) return { events: [], total: 0 };
         throw err;
       }
       const raw = await res.json();
-      return raw.map((e: any) => ({
+      const events = (raw.events ?? raw).map((e: any) => ({
         id: e.id,
         repositoryId: e.repositoryId,
         branch: e.branch,
@@ -132,9 +149,13 @@ export default function Search() {
         impactScore: e.impactScore ?? null,
         riskFlags: e.riskFlags ?? null,
       }));
+      return { events, total: raw.total ?? events.length };
     },
     enabled: submittedQ.trim().length === 0,
   });
+
+  const recentData = recentResponse?.events ?? [];
+  const recentTotal = recentResponse?.total ?? 0;
 
   // Search results (when user has typed a query)
   const searchParams = new URLSearchParams();
@@ -225,26 +246,41 @@ export default function Search() {
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
               >
                 <Filter className="h-4 w-4" />
-                Filters
+                Filters{hasActiveFilters && <Badge variant="secondary" className="text-xs ml-1">active</Badge>}
                 <ChevronDown className={`h-4 w-4 transition-transform ${showFilters ? "rotate-180" : ""}`} />
               </button>
               {showFilters && (
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label htmlFor="filter-repository" className="text-xs text-muted-foreground block mb-1">Repository</label>
-                    <select
-                      id="filter-repository"
-                      value={repositoryId}
-                      onChange={(e) => setRepositoryId(e.target.value)}
-                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">All repositories</option>
-                      {repositories.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.fullName || (typeof r.owner === "object" ? r.owner?.login : r.owner) + "/" + r.name}
-                        </option>
-                      ))}
-                    </select>
+                    <Select value={repositoryId || "all"} onValueChange={(v) => setRepositoryId(v === "all" ? "" : v)}>
+                      <SelectTrigger
+                        id="filter-repository"
+                        className="h-9 w-full border-border bg-background focus:ring-2 focus:ring-log-green/50 focus:border-log-green/60 transition-colors"
+                      >
+                        <SelectValue placeholder="All repositories" />
+                      </SelectTrigger>
+                      <SelectContent
+                        className="max-h-[280px] border-border border-l-2 border-l-log-green/60 bg-popover shadow-lg"
+                        position="popper"
+                      >
+                        <SelectItem
+                          value="all"
+                          className="focus:bg-log-green/15 focus:text-log-green data-[highlighted]:bg-log-green/15 data-[highlighted]:text-log-green"
+                        >
+                          All repositories
+                        </SelectItem>
+                        {repositories.map((r) => (
+                          <SelectItem
+                            key={r.id}
+                            value={String(r.id)}
+                            className="focus:bg-log-green/15 focus:text-log-green data-[highlighted]:bg-log-green/15 data-[highlighted]:text-log-green"
+                          >
+                            {r.fullName || (typeof r.owner === "object" ? r.owner?.login : r.owner) + "/" + r.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div>
                     <label htmlFor="filter-from" className="text-xs text-muted-foreground block mb-1">From (date)</label>
@@ -303,14 +339,29 @@ export default function Search() {
 
         {!isLoading && !error && (
           <>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <p className="text-sm text-muted-foreground">
                 {isSearchMode ? (
                   <>"{submittedQ}" — {list.length} result{list.length !== 1 ? "s" : ""}{searchFetching ? " (updating…)" : ""}</>
                 ) : (
-                  <>Recent pushes — page {recentPage + 1} ({list.length} event{list.length !== 1 ? "s" : ""})</>
+                  <>Recent pushes — page {recentPage + 1} of {Math.max(1, Math.ceil(recentTotal / pageSize))} ({list.length} of {recentTotal} event{recentTotal !== 1 ? "s" : ""})</>
                 )}
               </p>
+              {!isSearchMode && (
+                <div className="flex items-center gap-2">
+                  <label htmlFor="page-size" className="text-xs text-muted-foreground">Per page</label>
+                  <select
+                    id="page-size"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Math.min(MAX_PAGE_SIZE, Number(e.target.value)))}
+                    className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {list.length === 0 ? (
@@ -400,13 +451,13 @@ export default function Search() {
                   Previous
                 </Button>
                 <span className="text-sm text-muted-foreground">
-                  Page {recentPage + 1}
+                  Page {recentPage + 1} of {Math.max(1, Math.ceil(recentTotal / pageSize))}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setRecentPage((p) => p + 1)}
-                  disabled={(recentData?.length ?? 0) < RECENT_PAGE_SIZE}
+                  disabled={(recentPage + 1) * pageSize >= recentTotal}
                   className="gap-1"
                 >
                   Next
