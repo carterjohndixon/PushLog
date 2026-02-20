@@ -1525,7 +1525,7 @@ export default function Models() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Key className="w-5 h-5 text-log-green" />
-              OpenAI API Key
+              OpenAI
             </CardTitle>
             <CardDescription>
               Add your key from{" "}
@@ -1540,11 +1540,12 @@ export default function Models() {
               to use OpenAI models for commit summaries. Usage is billed to your OpenAI account. Your key is stored encrypted and never shared.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* API key input/status — always first */}
             {profileLoading ? (
               <Skeleton className="h-10 w-full max-w-md" />
             ) : userHasOpenAiKey ? (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
                     <CheckCircle2 className="w-5 h-5" />
@@ -1599,86 +1600,84 @@ export default function Models() {
                 </Button>
               </div>
             )}
+
+            {/* Default model select — always below API key area */}
+            {userHasOpenAiKey && (
+            <>
+              <Separator className="my-6" />
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-sm font-medium text-foreground">Default AI model</Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    This model is used for new integrations. Usage is billed to your OpenAI account.
+                  </p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                  <Select
+                    value={
+                      defaultModelId ||
+                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                      ""
+                    }
+                    onValueChange={(v) => setDefaultModelId(v)}
+                  >
+                    <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
+                      <SelectValue placeholder={openaiModelsLoading ? "Loading models…" : "Select default model"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {openaiModels.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {getAiModelDisplayName(m.id)}
+                        </SelectItem>
+                      ))}
+                      {!openaiModelsLoading && openaiModels.length === 0 && (
+                        <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="default"
+                      className="bg-log-green hover:bg-log-green/90"
+                      disabled={
+                        !(defaultModelId || savedPreferredModel) ||
+                        setDefaultModelMutation.isPending ||
+                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                      }
+                      onClick={() => {
+                        const val = defaultModelId || savedPreferredModel;
+                        if (val && openaiModels.some((m) => m.id === val)) {
+                          setDefaultModelMutation.mutate(val);
+                        }
+                      }}
+                    >
+                      {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-border"
+                      disabled={
+                        !(defaultModelId || savedPreferredModel) ||
+                        replaceAllIntegrationsMutation.isPending ||
+                        !integrations?.length ||
+                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                      }
+                      onClick={() => setReplaceAllConfirmOpen(true)}
+                    >
+                      {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
+                    </Button>
+                  </div>
+                </div>
+                {savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) && (
+                  <p className="text-sm text-muted-foreground">
+                    Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
+                  </p>
+                )}
+              </div>
+            </>
+            )}
           </CardContent>
         </Card>
-
-        {/* Default model (when OpenAI key is set) */}
-        {userHasOpenAiKey && (
-          <Card className="card-lift mb-8 border-border shadow-forest">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <Sparkles className="w-5 h-5 text-log-green" />
-                Default AI model
-              </CardTitle>
-              <CardDescription>
-                This model is used for new integrations. Pick a model from the dropdown—usage is billed to your OpenAI account.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-                <Select
-                  value={
-                    defaultModelId ||
-                    (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                    ""
-                  }
-                  onValueChange={(v) => setDefaultModelId(v)}
-                >
-                  <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
-                    <SelectValue placeholder={openaiModelsLoading ? "Loading models…" : "Select default model"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openaiModels.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        {getAiModelDisplayName(m.id)}
-                      </SelectItem>
-                    ))}
-                    {!openaiModelsLoading && openaiModels.length === 0 && (
-                      <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
-                    )}
-                  </SelectContent>
-                </Select>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="default"
-                    className="bg-log-green hover:bg-log-green/90"
-                    disabled={
-                      !(defaultModelId || savedPreferredModel) ||
-                      setDefaultModelMutation.isPending ||
-                      !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
-                    }
-                    onClick={() => {
-                      const val = defaultModelId || savedPreferredModel;
-                      if (val && openaiModels.some((m) => m.id === val)) {
-                        setDefaultModelMutation.mutate(val);
-                      }
-                    }}
-                  >
-                    {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="border-border"
-                    disabled={
-                      !(defaultModelId || savedPreferredModel) ||
-                      replaceAllIntegrationsMutation.isPending ||
-                      !integrations?.length ||
-                      !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
-                    }
-                    onClick={() => setReplaceAllConfirmOpen(true)}
-                  >
-                    {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
-                  </Button>
-                </div>
-              </div>
-              {savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) && (
-                <p className="text-sm text-muted-foreground">
-                  Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
         </>
         )}
 
