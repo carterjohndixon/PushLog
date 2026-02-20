@@ -36,12 +36,14 @@ export function getIncidentAlertEmailTemplate(
   title: string,
   message: string,
   dashboardUrl: string,
-  metadata?: IncidentAlertMetadata
+  metadata?: IncidentAlertMetadata,
+  /** When true, use cid:pushlog-logo (embedded). When false, use external URL. */
+  useEmbeddedLogo: boolean = true
 ) {
   const escapedTitle = escapeHtml(title);
   const escapedMessage = escapeHtml(message).replace(/\n/g, "<br>");
   const baseUrl = dashboardUrl.replace(/\/dashboard\/?$/, "") || "https://pushlog.ai";
-  const logoUrl = `${baseUrl}/PushLog.png`;
+  const logoSrc = useEmbeddedLogo ? "cid:pushlog-logo" : `${baseUrl}/PushLog.png`;
 
   const service = metadata?.service ?? "—";
   const environment = metadata?.environment ?? "—";
@@ -81,9 +83,9 @@ export function getIncidentAlertEmailTemplate(
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #1a1d1e;">
   <div style="max-width: 600px; margin: 0 auto; padding: 24px;">
     <div style="background: linear-gradient(145deg, #1e2a24 0%, #1a2520 100%); border-radius: 12px; border: 1px solid #2d3d35; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);">
-      <!-- Logo -->
+      <!-- Logo (embedded via cid: for Outlook compatibility) -->
       <div style="text-align: center; padding: 20px 24px 0;">
-        <img src="${logoUrl}" alt="PushLog" width="48" height="48" style="display: inline-block; object-fit: contain;" />
+        <img src="${logoSrc}" alt="PushLog" width="48" height="48" style="display: block; margin: 0 auto; max-width: 48px; height: auto;" />
       </div>
       <!-- Header -->
       <div style="padding: 24px 24px 16px;">
@@ -157,6 +159,9 @@ export function getIncidentAlertEmailTemplate(
     </div>
     <p style="margin: 16px 0 0; text-align: center; font-size: 12px; color: #6b7c74;">
       PushLog — Seamlessly connect GitHub with Slack
+    </p>
+    <p style="margin: 8px 0 0; text-align: center; font-size: 11px; color: #6b7c74;">
+      Please do not reply to this email. For questions, contact <a href="mailto:contact@pushlog.ai" style="color: #7dd3a0; text-decoration: none;">contact@pushlog.ai</a>.
     </p>
   </div>
 </body>

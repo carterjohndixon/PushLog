@@ -1,5 +1,10 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import { z } from 'zod';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 import { getVerificationEmailTemplate } from './templates/verificationEmail';
 import { getPasswordResetTemplate } from './templates/passwordReset';
 import {
@@ -44,18 +49,21 @@ export async function sendVerificationEmail(email: string, token: string) {
   }
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
   const verificationLink = `${baseUrl}/verify-email?token=${token}`;
-  
-  const { subject, html } = getVerificationEmailTemplate(verificationLink, baseUrl);
-  
-  const mailOptions = {
-    from: getFromAddress(),
-    to: email,
-    subject,
-    html
-  };
+  const logoPath = getLogoPath();
+  const useEmbeddedLogo = !!logoPath;
+  const { subject, html } = getVerificationEmailTemplate(verificationLink, baseUrl, useEmbeddedLogo);
+  const attachments = logoPath
+    ? [{ filename: 'PushLog.png', content: fs.readFileSync(logoPath), cid: 'pushlog-logo' }]
+    : [];
 
   try {
-    await transporter.sendMail(mailOptions);
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: email,
+      subject,
+      html,
+      attachments,
+    });
   } catch (error) {
     console.error('Failed to send verification email:', error);
     throw new Error('Failed to send verification email');
@@ -70,22 +78,40 @@ export const sendPasswordResetEmail = async (email: string, resetToken: string) 
   }
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
   const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
-  const { subject, html } = getPasswordResetTemplate(resetLink, baseUrl);
-
-  const mailOptions = {
-    from: getFromAddress(),
-    to: email,
-    subject,
-    html,
-  };
+  const logoPath = getLogoPath();
+  const useEmbeddedLogo = !!logoPath;
+  const { subject, html } = getPasswordResetTemplate(resetLink, baseUrl, useEmbeddedLogo);
+  const attachments = logoPath
+    ? [{ filename: 'PushLog.png', content: fs.readFileSync(logoPath), cid: 'pushlog-logo' }]
+    : [];
 
   try {
-    await transporter.sendMail(mailOptions);
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: email,
+      subject,
+      html,
+      attachments,
+    });
   } catch (error) {
     console.error('Failed to send reset password email:', error);
     throw new Error('Failed to send reset password  email');
   }
 };
+
+/** Resolve logo path (dist/public in prod, client/public in dev). Returns null if not found. */
+function getLogoPath(): string | null {
+  const root = path.join(__dirname, '..');
+  const candidates = [
+    path.join(root, 'dist', 'public', 'PushLog.png'),
+    path.join(root, 'client', 'public', 'PushLog.png'),
+    path.join(root, 'public', 'PushLog.png'),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
 
 /** Send incident alert email (Sentry webhook, incident-engine). Fire-and-forget; logs on failure. */
 export async function sendIncidentAlertEmail(
@@ -98,7 +124,13 @@ export async function sendIncidentAlertEmail(
     return;
   }
   const dashboardUrl = (process.env.APP_URL || 'https://pushlog.ai').replace(/\/$/, '') + '/dashboard';
-  const { subject, html } = getIncidentAlertEmailTemplate(title, message, dashboardUrl, metadata);
+  const logoPath = getLogoPath();
+  const useEmbeddedLogo = !!logoPath;
+  const { subject, html } = getIncidentAlertEmailTemplate(title, message, dashboardUrl, metadata, useEmbeddedLogo);
+
+  const attachments = logoPath
+    ? [{ filename: 'PushLog.png', content: fs.readFileSync(logoPath), cid: 'pushlog-logo' }]
+    : [];
 
   try {
     await transporter.sendMail({
@@ -106,6 +138,7 @@ export async function sendIncidentAlertEmail(
       to: email,
       subject,
       html,
+      attachments,
     });
   } catch (error) {
     console.error('[email] Failed to send incident alert:', error);
