@@ -29,6 +29,9 @@ export default function SetupMfa() {
       return res.json();
     },
     retry: false,
+    staleTime: Infinity, // One-time setup; don't refetch (avoids refetch-fail loop when session/cookie is flaky)
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const verifyMutation = useMutation({
@@ -68,7 +71,7 @@ export default function SetupMfa() {
     );
   }
 
-  if (setupError || !data?.qrDataUrl) {
+  if (!data?.qrDataUrl) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="bg-card border border-border rounded-2xl shadow-xl p-8 max-w-sm w-full text-center">
