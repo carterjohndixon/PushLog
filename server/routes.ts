@@ -3295,6 +3295,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Recommended models for commit summarization — fetches from APIs, selects best for our use case (coding-aware, short output)
+  app.get("/api/recommended-models", async (req, res) => {
+    try {
+      const result = { openai: null as string | null, openrouter: null as string | null };
+
+      // OpenAI: prefer Codex / latest GPT for coding; fallback order
+      const openaiPreferOrder = [
+        "gpt-5.3-codex", "gpt-5.2-codex", "gpt-5.3-codex-spark",
+        "gpt-5.2", "gpt-5.1", "gpt-4o", "gpt-4o-mini",
+      ];
+      const openaiKey = process.env.OPENAI_API_KEY?.trim();
+      if (openaiKey) {
+        try {
+          const openaiRes = await fetch("https://api.openai.com/v1/models", {
+            headers: { Accept: "application/json", Authorization: `Bearer ${openaiKey}` },
+          });
+          if (openaiRes.ok) {
+            const data = (await openaiRes.json()) as { data?: Array<{ id: string }> };
+            const ids = new Set((data.data ?? []).map((m) => m.id));
+            for (const id of openaiPreferOrder) {
+              if (ids.has(id)) {
+                result.openai = id;
+                break;
+              }
+            }
+            if (!result.openai) {
+              const match = Array.from(ids).find((id) => /^gpt-5|^gpt-4o/i.test(id));
+              if (match) result.openai = match;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+
+      // OpenRouter: prefer programming category, coding models; fallback order
+      const openrouterPreferOrder = [
+        "openai/gpt-5.3-codex", "openai/gpt-5.2-codex", "anthropic/claude-sonnet-4", "anthropic/claude-4-sonnet",
+        "anthropic/claude-3.5-sonnet", "openai/gpt-5.2", "openai/gpt-4o", "anthropic/claude-opus-4.6", "anthropic/claude-opus-4.6=5"
+      ];
+      try {
+        const url = new URL("https://openrouter.ai/api/v1/models");
+        url.searchParams.set("category", "programming");
+        const oaRes = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+        const fullRes = oaRes.ok ? await oaRes.json() : null;
+        let openrouterIds: string[] = [];
+        if (fullRes?.data) {
+          openrouterIds = (fullRes.data as Array<{ id?: string }>).map((m) => m.id ?? "").filter(Boolean);
+        }
+        if (openrouterIds.length === 0) {
+          const fallback = await fetch("https://openrouter.ai/api/v1/models", { headers: { Accept: "application/json" } });
+          if (fallback.ok) {
+            const fb = await fallback.json();
+            openrouterIds = (fb?.data ?? []).map((m: { id?: string }) => m.id ?? "").filter(Boolean);
+          }
+        }
+        const oaSet = new Set(openrouterIds);
+        for (const id of openrouterPreferOrder) {
+          if (oaSet.has(id)) {
+            result.openrouter = id;
+            break;
+          }
+        }
+        if (!result.openrouter && openrouterIds.length > 0) {
+          const m = openrouterIds.find((id) => /gpt-5|claude-sonnet|gpt-4o/i.test(id));
+          if (m) result.openrouter = m;
+        }
+      } catch {
+        /* ignore */
+      }
+
+      res.status(200).json(result);
+    } catch (err) {
+      console.error("Recommended models fetch error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to fetch recommended models" });
+    }
+  });
+
   // OpenAI: list available models (uses app's OPENAI_API_KEY; no auth required)
   app.get("/api/openai/models", async (req, res) => {
     try {

@@ -136,6 +136,7 @@ export default function Models() {
   const [compareOpen, setCompareOpen] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
   const [replaceAllConfirmOpen, setReplaceAllConfirmOpen] = useState(false);
+  const [replaceAllModelId, setReplaceAllModelId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -168,6 +169,17 @@ export default function Models() {
     enabled: providerTab === "openai",
   });
   const openaiModels = openaiModelsData?.models ?? [];
+
+  const { data: recommendedData } = useQuery<{ openai: string | null; openrouter: string | null }>({
+    queryKey: ["/api/recommended-models"],
+    queryFn: async () => {
+      const res = await fetch("/api/recommended-models", { credentials: "include" });
+      if (!res.ok) return { openai: null, openrouter: null };
+      return res.json();
+    },
+  });
+  const recommendedOpenai = recommendedData?.openai ?? null;
+  const recommendedOpenrouter = recommendedData?.openrouter ?? null;
 
   const { data: usageData, isLoading: usageLoading, isError: usageError } = useQuery<OpenRouterUsage>({
     queryKey: ["/api/openrouter/usage"],
@@ -793,7 +805,12 @@ export default function Models() {
             <CardContent className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
                 <Select
-                  value={defaultModelId || savedPreferredModel || ""}
+                  value={
+                    defaultModelId ||
+                    savedPreferredModel ||
+                    (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "") ||
+                    ""
+                  }
                   onValueChange={(v) => setDefaultModelId(v)}
                 >
                   <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
@@ -802,7 +819,12 @@ export default function Models() {
                   <SelectContent>
                     {allModels.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {getAiModelDisplayName(m.id)}
+                        <span className="flex items-center gap-2">
+                          {getAiModelDisplayName(m.id)}
+                          {recommendedOpenrouter === m.id && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -811,16 +833,41 @@ export default function Models() {
                   <Button
                     variant="default"
                     className="bg-log-green hover:bg-log-green/90"
-                    disabled={!(defaultModelId || savedPreferredModel) || setDefaultModelMutation.isPending}
-                    onClick={() => setDefaultModelMutation.mutate(defaultModelId || savedPreferredModel)}
+                    disabled={
+                      !(
+                        defaultModelId ||
+                        savedPreferredModel ||
+                        (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "")
+                      ) || setDefaultModelMutation.isPending
+                    }
+                    onClick={() => {
+                      const val =
+                        defaultModelId ||
+                        savedPreferredModel ||
+                        (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "");
+                      if (val) setDefaultModelMutation.mutate(val);
+                    }}
                   >
                     {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
                   </Button>
                   <Button
                     variant="outline"
                     className="border-border"
-                    disabled={!(defaultModelId || savedPreferredModel) || replaceAllIntegrationsMutation.isPending || !integrations?.length}
-                    onClick={() => setReplaceAllConfirmOpen(true)}
+                    disabled={
+                      !(
+                        defaultModelId ||
+                        savedPreferredModel ||
+                        (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "")
+                      ) || replaceAllIntegrationsMutation.isPending || !integrations?.length
+                    }
+                    onClick={() => {
+                      const val =
+                        defaultModelId ||
+                        savedPreferredModel ||
+                        (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "");
+                      setReplaceAllModelId(val || "");
+                      setReplaceAllConfirmOpen(true);
+                    }}
                   >
                     {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
                   </Button>
@@ -1617,6 +1664,7 @@ export default function Models() {
                     value={
                       defaultModelId ||
                       (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                      (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "") ||
                       ""
                     }
                     onValueChange={(v) => setDefaultModelId(v)}
@@ -1627,7 +1675,12 @@ export default function Models() {
                     <SelectContent>
                       {openaiModels.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
-                          {getAiModelDisplayName(m.id)}
+                          <span className="flex items-center gap-2">
+                            {getAiModelDisplayName(m.id)}
+                            {recommendedOpenai === m.id && (
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                            )}
+                          </span>
                         </SelectItem>
                       ))}
                       {!openaiModelsLoading && openaiModels.length === 0 && (
@@ -1640,12 +1693,19 @@ export default function Models() {
                       variant="default"
                       className="bg-log-green hover:bg-log-green/90"
                       disabled={
-                        !(defaultModelId || savedPreferredModel) ||
+                        !(
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
+                        ) ||
                         setDefaultModelMutation.isPending ||
-                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel || recommendedOpenai || ""))
                       }
                       onClick={() => {
-                        const val = defaultModelId || savedPreferredModel;
+                        const val =
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
                         if (val && openaiModels.some((m) => m.id === val)) {
                           setDefaultModelMutation.mutate(val);
                         }
@@ -1657,12 +1717,23 @@ export default function Models() {
                       variant="outline"
                       className="border-border"
                       disabled={
-                        !(defaultModelId || savedPreferredModel) ||
+                        !(
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
+                        ) ||
                         replaceAllIntegrationsMutation.isPending ||
                         !integrations?.length ||
-                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel))
+                        !openaiModels.some((m) => m.id === (defaultModelId || savedPreferredModel || recommendedOpenai || ""))
                       }
-                      onClick={() => setReplaceAllConfirmOpen(true)}
+                      onClick={() => {
+                        const val =
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
+                        setReplaceAllModelId(val || "");
+                        setReplaceAllConfirmOpen(true);
+                      }}
                     >
                       {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
                     </Button>
@@ -1847,14 +1918,20 @@ export default function Models() {
         </Dialog>
 
         {/* Replace all integrations confirmation */}
-        <Dialog open={replaceAllConfirmOpen} onOpenChange={setReplaceAllConfirmOpen}>
+        <Dialog
+          open={replaceAllConfirmOpen}
+          onOpenChange={(open) => {
+            setReplaceAllConfirmOpen(open);
+            if (!open) setReplaceAllModelId("");
+          }}
+        >
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="text-foreground">Replace all active integrations?</DialogTitle>
               <DialogDescription>
                 Every active integration will use{" "}
                 <span className="font-medium text-foreground">
-                  {getAiModelDisplayName(defaultModelId || savedPreferredModel)}
+                  {getAiModelDisplayName(replaceAllModelId)}
                 </span>
                 {" "}for commit summaries. This will also set it as your default for new integrations.
               </DialogDescription>
@@ -1865,8 +1942,8 @@ export default function Models() {
               </Button>
               <Button
                 className="bg-log-green hover:bg-log-green/90"
-                disabled={replaceAllIntegrationsMutation.isPending}
-                onClick={() => replaceAllIntegrationsMutation.mutate(defaultModelId || savedPreferredModel)}
+                disabled={replaceAllIntegrationsMutation.isPending || !replaceAllModelId}
+                onClick={() => replaceAllIntegrationsMutation.mutate(replaceAllModelId)}
               >
                 {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all"}
               </Button>
