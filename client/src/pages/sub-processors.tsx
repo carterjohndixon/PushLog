@@ -177,11 +177,36 @@ export default function SubProcessors() {
                 </a>
               </div>
 
+              {/* Sentry */}
+              <div className="border-b border-border pb-4">
+                <h3 className="font-semibold text-foreground mb-2">Sentry</h3>
+                <p className="text-sm text-muted-foreground mb-2">
+                  <strong>Purpose:</strong> Error monitoring, performance tracking, and incident detection. When errors occur (client or server), Sentry receives error data to help diagnose issues.
+                </p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  <strong>Data Shared:</strong> Error messages, stack traces, environment metadata (service, environment), and request context. Users can optionally connect their own Sentry project to receive incident alerts via PushLog.
+                </p>
+                <p className="text-sm text-muted-foreground mb-2">
+                  <strong>Location:</strong> United States
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  <strong>Security:</strong> DSN-based authentication, encrypted ingest
+                </p>
+                <a 
+                  href="https://sentry.io/privacy/" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline"
+                >
+                  View Sentry Privacy Policy →
+                </a>
+              </div>
+
               {/* Email Service Provider */}
               <div>
-                <h3 className="font-semibold text-foreground mb-2">Email Service Provider</h3>
+                <h3 className="font-semibold text-foreground mb-2">Email Service Provider (Brevo)</h3>
                 <p className="text-sm text-muted-foreground mb-2">
-                  <strong>Purpose:</strong> Send verification emails, password reset emails, and service notifications
+                  <strong>Purpose:</strong> Send verification emails, password reset emails, incident alert emails, and service notifications
                 </p>
                 <p className="text-sm text-muted-foreground mb-2">
                   <strong>Data Shared:</strong> Email addresses for delivery purposes only
@@ -267,6 +292,8 @@ export default function SubProcessors() {
               </p>
               <p className="mt-4">
                 See also: <Link href="/policy" className="text-primary hover:underline">Privacy Policy</Link>
+                {" · "}
+                <Link href="/policy#cookies-tracking" className="text-primary hover:underline">Cookies</Link>
               </p>
             </CardContent>
           </Card>

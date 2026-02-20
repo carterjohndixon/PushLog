@@ -133,6 +133,12 @@ export default function Support() {
                   {" "}— Learn how your data is handled
                 </li>
                 <li>
+                  <Link href="/policy#cookies-tracking" className="text-primary hover:underline">
+                    Cookies
+                  </Link>
+                  {" "}— Cookies, localStorage, and tracking practices
+                </li>
+                <li>
                   <Link href="/settings" className="text-primary hover:underline">
                     Account Settings
                   </Link>

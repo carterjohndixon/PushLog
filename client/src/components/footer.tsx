@@ -123,6 +123,12 @@ export function Footer() {
                 Privacy Policy
               </Link>
               <Link 
+                href="/policy#cookies-tracking" 
+                className="hover:text-log-green transition-colors text-sm"
+              >
+                Cookies
+              </Link>
+              <Link 
                 href="/sub-processors" 
                 className="hover:text-log-green transition-colors text-sm"
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}

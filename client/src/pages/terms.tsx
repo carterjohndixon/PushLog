@@ -279,6 +279,8 @@ export default function Terms() {
               </p>
               <p className="mt-4">
                 See also: <Link href="/policy" className="text-primary hover:underline">Privacy Policy</Link>
+                {" · "}
+                <Link href="/policy#cookies-tracking" className="text-primary hover:underline">Cookies</Link>
               </p>
             </CardContent>
           </Card>

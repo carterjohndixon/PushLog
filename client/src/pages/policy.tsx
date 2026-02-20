@@ -171,8 +171,17 @@ export default function Policy() {
                     is handled entirely by Stripe and never stored by me.
                   </li>
                   <li>
-                    <strong>Email Service Provider:</strong> I use an email service to send verification emails and password resets. 
+                    <strong>Email Service Provider (Brevo):</strong> I use Brevo to send verification emails, password resets, and incident alert emails. 
                     Your email address is shared with this provider for delivery purposes only.
+                  </li>
+                  <li>
+                    <strong>Sentry:</strong> I use Sentry for error monitoring and performance tracking. When errors occur (client or server), 
+                    Sentry receives error messages, stack traces, and environment metadata to help me diagnose and fix issues. 
+                    Sentry's privacy policy applies. You can optionally connect your own Sentry project to receive incident alerts via PushLog.
+                  </li>
+                  <li>
+                    <strong>Incident Engine:</strong> I run an internal incident engine that processes error events (from Sentry webhooks or direct incident webhooks) 
+                    to detect spikes, regressions, and new issues. This runs on my infrastructure and does not send data to third parties.
                   </li>
                 </ul>
               </div>
@@ -198,7 +207,7 @@ export default function Policy() {
               <ul className="list-disc list-inside space-y-2 ml-4">
                 <li><strong>Password Security:</strong> Passwords are hashed using bcrypt before storage. I never store plaintext passwords.</li>
                 <li><strong>Encryption:</strong> Data is encrypted in transit (HTTPS/TLS) and at rest (database encryption by Supabase).</li>
-                <li><strong>Authentication:</strong> I use JWT tokens for session management. Tokens expire and are validated on each request.</li>
+                <li><strong>Authentication:</strong> I use secure, HTTP-only session cookies for authentication. Sessions expire and are validated on each request.</li>
                 <li><strong>OAuth Tokens:</strong> Stored securely in my database. Access is restricted to authenticated API requests only.</li>
                 <li><strong>Email Verification:</strong> Required before accessing certain features to prevent unauthorized access.</li>
               </ul>
@@ -345,7 +354,7 @@ export default function Policy() {
           </Card>
 
           {/* Cookies & Tracking */}
-          <Card className="border-border bg-card">
+          <Card id="cookies-tracking" className="border-border bg-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <Eye className="w-5 h-5 text-muted-foreground" />
@@ -354,17 +363,40 @@ export default function Policy() {
             </CardHeader>
             <CardContent className="space-y-4 text-muted-foreground">
               <p>
-                I use localStorage to store authentication tokens and user preferences. I do NOT use tracking cookies, 
+                I use a minimal set of cookies and local storage. I do <strong>NOT</strong> use tracking cookies, 
                 analytics cookies, or third-party advertising trackers.
               </p>
-              <p>
-                <strong>LocalStorage Usage:</strong>
-              </p>
-              <ul className="list-disc list-inside space-y-1 ml-4">
-                <li>JWT authentication tokens (for session management)</li>
-                <li>User ID (for API requests)</li>
-                <li>No personal data is stored in cookies</li>
-              </ul>
+              
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Essential Cookies</h3>
+                <ul className="list-disc list-inside space-y-1 ml-4">
+                  <li><strong>Session cookie:</strong> A secure, HTTP-only cookie stores your session for authentication. It is required to stay logged in.</li>
+                  <li>No personal data is stored in cookies beyond the session identifier.</li>
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">LocalStorage (Browser Storage)</h3>
+                <p className="mb-2">
+                  I use localStorage for non-sensitive preferences and temporary OAuth flow state:
+                </p>
+                <ul className="list-disc list-inside space-y-1 ml-4">
+                  <li><strong>Theme preference:</strong> Light, dark, or system (for UI display)</li>
+                  <li><strong>OAuth state:</strong> Temporary values during GitHub/Slack connection flow; cleared after use</li>
+                  <li><strong>Return path:</strong> Where to redirect after OAuth; cleared after use</li>
+                </ul>
+                <p className="mt-2 text-sm">
+                  Authentication is handled by session cookies, not localStorage.
+                </p>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Error Monitoring (Sentry)</h3>
+                <p>
+                  Sentry may set its own cookies or use similar technologies for error tracking when an error occurs. 
+                  This helps me diagnose bugs. Sentry's privacy policy applies to that data.
+                </p>
+              </div>
             </CardContent>
           </Card>
 
