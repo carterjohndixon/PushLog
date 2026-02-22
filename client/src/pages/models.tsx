@@ -64,6 +64,23 @@ interface OpenAiModel {
   name?: string;
 }
 
+/** Fetched from server (parsed from OpenAI pricing page). */
+interface OpenAiModelDetail {
+  id: string;
+  name: string;
+  description?: string;
+  promptPer1M?: number;
+  completionPer1M?: number;
+}
+
+/** Resolved model info for UI (from fetched details). */
+interface OpenAiModelInfo {
+  description?: string;
+  promptPer1M?: number;
+  completionPer1M?: number;
+  contextLength?: number;
+}
+
 interface UsageCall {
   id: number;
   model: string;
@@ -124,6 +141,7 @@ export default function Models() {
   const [searchQuery, setSearchQuery] = useState("");
   const [contextFilter, setContextFilter] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<OpenRouterModel | null>(null);
+  const [selectedOpenAiModel, setSelectedOpenAiModel] = useState<OpenAiModel | null>(null);
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
   const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
@@ -169,6 +187,17 @@ export default function Models() {
     enabled: providerTab === "openai",
   });
   const openaiModels = openaiModelsData?.models ?? [];
+
+  const { data: openaiDetailsData } = useQuery<{ details: OpenAiModelDetail[] }>({
+    queryKey: ["/api/openai/model-details"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/model-details", { credentials: "include" });
+      if (!res.ok) return { details: [] };
+      return res.json();
+    },
+    enabled: providerTab === "openai",
+  });
+  const openaiDetails = openaiDetailsData?.details ?? [];
 
   const { data: recommendedData } = useQuery<{ openai: string | null; openrouter: string | null }>({
     queryKey: ["/api/recommended-models"],
@@ -664,6 +693,32 @@ export default function Models() {
   const formatPrice = (price: number | undefined | null) => {
     if (price == null || price === 0) return "—";
     return `$${(price * 1000).toFixed(4)}/1K`;
+  };
+
+  const formatPricePer1M = (pricePer1M: number | undefined | null) => {
+    if (pricePer1M == null || pricePer1M === 0) return "—";
+    return `$${pricePer1M.toFixed(2)}/1M`;
+  };
+
+  const getOpenAiModelInfo = (id: string): OpenAiModelInfo | undefined => {
+    const details = openaiDetails;
+    const exact = details.find((d) => d.id === id || d.id.toLowerCase() === id.toLowerCase());
+    if (exact)
+      return {
+        description: exact.description,
+        promptPer1M: exact.promptPer1M,
+        completionPer1M: exact.completionPer1M,
+      };
+    const prefixMatch = details
+      .filter((d) => id === d.id || id.startsWith(d.id + "-") || id.toLowerCase().startsWith(d.id.toLowerCase() + "-"))
+      .sort((a, b) => b.id.length - a.id.length)[0];
+    if (prefixMatch)
+      return {
+        description: prefixMatch.description,
+        promptPer1M: prefixMatch.promptPer1M,
+        completionPer1M: prefixMatch.completionPer1M,
+      };
+    return undefined;
   };
 
   return (
@@ -1749,6 +1804,83 @@ export default function Models() {
             )}
           </CardContent>
         </Card>
+
+        {/* Browse OpenAI models — same pattern as OpenRouter */}
+        {userHasOpenAiKey && (
+        <Card className="card-lift mt-8 border-border shadow-forest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Zap className="w-5 h-5 text-log-green" />
+              Browse OpenAI models
+            </CardTitle>
+            <CardDescription>
+              Click a model for details and to set it as default. Pricing is approximate; see{" "}
+              <a
+                href="https://platform.openai.com/docs/pricing"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-log-green hover:underline font-medium"
+              >
+                OpenAI pricing <ExternalLink className="w-3 h-3 inline" />
+              </a>{" "}
+              for current rates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {openaiModelsLoading ? (
+              <Skeleton className="h-64 w-full" />
+            ) : (
+              <div className="rounded-md border border-border overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 border-border">
+                      <TableHead className="text-foreground">Model</TableHead>
+                      <TableHead className="text-foreground">Context</TableHead>
+                      <TableHead className="text-foreground">Prompt (per 1M)</TableHead>
+                      <TableHead className="text-foreground">Completion (per 1M)</TableHead>
+                      <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {openaiModels.map((m) => {
+                      const info = getOpenAiModelInfo(m.id);
+                      return (
+                        <TableRow
+                          key={m.id}
+                          className="border-border cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => setSelectedOpenAiModel(m)}
+                        >
+                          <TableCell>
+                            <div>
+                              <p className="font-medium text-foreground">{getAiModelDisplayName(m.id)}</p>
+                              <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {info?.contextLength != null ? info.contextLength.toLocaleString() : "—"}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {formatPricePer1M(info?.promptPer1M)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {formatPricePer1M(info?.completionPer1M)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
+                            {info?.description ?? "—"}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+                {openaiModels.length === 0 && (
+                  <p className="text-sm text-muted-foreground p-6 text-center">No models available. Add your API key above.</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        )}
         </>
         )}
 
@@ -2067,6 +2199,79 @@ export default function Models() {
                 </div>
               </>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* OpenAI model detail modal */}
+        <Dialog open={!!selectedOpenAiModel} onOpenChange={(open) => !open && setSelectedOpenAiModel(null)}>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+            {selectedOpenAiModel && (() => {
+              const info = getOpenAiModelInfo(selectedOpenAiModel.id);
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="text-xl text-foreground flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-log-green" />
+                      {getAiModelDisplayName(selectedOpenAiModel.id)}
+                    </DialogTitle>
+                    <DialogDescription className="font-mono text-xs text-muted-foreground">
+                      {selectedOpenAiModel.id}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    {info?.description && (
+                      <p className="text-sm text-muted-foreground">{info.description}</p>
+                    )}
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      {info?.contextLength != null && (
+                        <div className="rounded-lg border border-border bg-muted/30 p-3">
+                          <p className="text-xs text-muted-foreground uppercase tracking-wide">Context length</p>
+                          <p className="font-medium text-foreground">{info.contextLength.toLocaleString()}</p>
+                        </div>
+                      )}
+                      <div className="rounded-lg border border-border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Prompt (per 1M)</p>
+                        <p className="font-medium text-foreground">{formatPricePer1M(info?.promptPer1M)}</p>
+                      </div>
+                      <div className="rounded-lg border border-border bg-muted/30 p-3">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Completion (per 1M)</p>
+                        <p className="font-medium text-foreground">{formatPricePer1M(info?.completionPer1M)}</p>
+                      </div>
+                    </div>
+                    <a
+                      href="https://platform.openai.com/docs/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-sm text-log-green hover:underline"
+                    >
+                      View on OpenAI <ExternalLink className="w-4 h-4" />
+                    </a>
+                    <Separator className="my-4" />
+                    {userHasOpenAiKey && (
+                      <div className="space-y-3">
+                        <p className="text-sm font-medium text-foreground">Set as default model</p>
+                        <Button
+                          variant="glow"
+                          className="text-white"
+                          disabled={setDefaultModelMutation.isPending}
+                          onClick={() => {
+                            setDefaultModelMutation.mutate(selectedOpenAiModel.id);
+                            setDefaultModelId(selectedOpenAiModel.id);
+                            setSelectedOpenAiModel(null);
+                          }}
+                        >
+                          {setDefaultModelMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Set as default"
+                          )}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
       </main>

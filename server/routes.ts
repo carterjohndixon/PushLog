@@ -73,6 +73,75 @@ function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
   return !!s?.trim().startsWith("sk-or-");
 }
 
+/** Parse OpenAI pricing page HTML to extract model id, description, and per-1M-token prices. */
+function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> {
+  const details: Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> = [];
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalizedId = (name: string) =>
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-")
+      .replace(/\./g, ".");
+  const priceRe = /\$?\s*([\d,]+(?:\.\d+)?)\s*\/\s*1M/i;
+  const sectionRe = /(?:^|\s)(?:##\s*)?(GPT[- ]?\d+(?:\.\d+)?(?:\s*[- ]?\w+)?|o\d+(?:[- ]?\w+)?|gpt-[\w.-]+)(?:\s|$)/gi;
+  let match: RegExpExecArray | null;
+  const sections: { name: string; start: number }[] = [];
+  while ((match = sectionRe.exec(text)) !== null) {
+    const name = match[1].replace(/\s+/g, " ").trim();
+    if (/^(gpt-|o\d+)/i.test(name) && !sections.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+      sections.push({ name, start: match.index });
+    }
+  }
+  for (let i = 0; i < sections.length; i++) {
+    const start = sections[i].start;
+    const end = i + 1 < sections.length ? sections[i + 1].start : text.length;
+    const block = text.slice(start, end);
+    const name = sections[i].name;
+    const id = normalizedId(name);
+    if (/^(gpt-|o\d+)/i.test(id) === false) continue;
+    let description: string | undefined;
+    const descMatch = block.match(/\s([A-Z][^.$]+(?:\.|$))/);
+    if (descMatch && !/\d+\s*\/\s*1M|\$|price|input|output/i.test(descMatch[1])) {
+      description = descMatch[1].trim().slice(0, 200);
+    }
+    const inputMatch = block.match(/input\s*:\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
+    const outputMatch = block.match(/output\s*:\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
+    const promptPer1M = inputMatch ? parseFloat(inputMatch[1].replace(/,/g, "")) : undefined;
+    const completionPer1M = outputMatch ? parseFloat(outputMatch[1].replace(/,/g, "")) : undefined;
+    if (promptPer1M != null || completionPer1M != null || description) {
+      details.push({
+        id: id.replace(/\s/g, "-"),
+        name,
+        ...(description && { description }),
+        ...(promptPer1M != null && { promptPer1M }),
+        ...(completionPer1M != null && { completionPer1M }),
+      });
+    }
+  }
+  const tableRowRe = /\|\s*(gpt-[\w.-]+|o\d+[-.\w]*)\s*\|\s*\$?([\d.]+)\s*\|\s*\$?([\d.]+|-)\s*\|/gi;
+  let rowMatch: RegExpExecArray | null;
+  while ((rowMatch = tableRowRe.exec(html)) !== null) {
+    const id = rowMatch[1].trim().toLowerCase();
+    const input = parseFloat(rowMatch[2]);
+    const output = rowMatch[3].trim() === "-" ? undefined : parseFloat(rowMatch[3]);
+    if (!details.some((d) => d.id === id)) {
+      details.push({
+        id,
+        name: id,
+        promptPer1M: input,
+        ...(output != null && { completionPer1M: output }),
+      });
+    }
+  }
+  return details;
+}
+
 // Helper function to get user ID from OAuth state
 async function getUserIdFromOAuthState(state: string): Promise<string | null> {
   try {
@@ -3405,6 +3474,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("OpenAI models fetch error:", err);
       Sentry.captureException(err);
       res.status(500).json({ error: "Failed to fetch OpenAI models" });
+    }
+  });
+
+  // OpenAI: fetch model details (description, pricing) from the public pricing page
+  app.get("/api/openai/model-details", async (req, res) => {
+    try {
+      const urls = [
+        "https://openai.com/api/pricing/",
+        "https://platform.openai.com/docs/pricing",
+      ];
+      const allDetails: Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> = [];
+      const seenIds = new Set<string>();
+      for (const url of urls) {
+        try {
+          const response = await fetch(url, {
+            headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "User-Agent": "Mozilla/5.0 (compatible; PushLog/1.0)" },
+          });
+          if (!response.ok) continue;
+          const html = await response.text();
+          const details = parseOpenAiPricingPage(html);
+          for (const d of details) {
+            const key = d.id.toLowerCase();
+            if (!seenIds.has(key)) {
+              seenIds.add(key);
+              allDetails.push(d);
+            }
+          }
+        } catch {
+          continue;
+        }
+      }
+      res.status(200).json({ details: allDetails });
+    } catch (err) {
+      console.error("OpenAI model-details fetch error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to fetch model details", details: [] });
     }
   });
 
