@@ -1362,9 +1362,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.session!.userId!;
       const user = await databaseStorage.getUserById(userId);
       const rawSecret = (user as any)?.totpSecret ? decrypt((user as any).totpSecret) : null;
-      if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support." });
-      const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 1 });
-      if (!valid) return res.status(401).json({ error: "Invalid code. Please try again." });
+      if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support.", code: "mfa_not_configured" });
+      const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 2 });
+      if (!valid) return res.status(401).json({ error: "Invalid code. Please try again.", code: "invalid_code" });
       delete (req.session as any).mfaPending;
       delete (req.session as any).mfaSetupRequired;
       await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));

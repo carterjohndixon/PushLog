@@ -33,12 +33,23 @@ export default function VerifyMfa() {
       setLocation("/dashboard");
     },
     onError: (err: Error) => {
-      toast({
-        title: "Invalid code",
-        description: err.message || "Please enter the correct 6-digit code from your authenticator app.",
-        variant: "destructive",
-      });
-      setCode("");
+      const isSessionExpired =
+        err.message.includes("Session expired") || err.message.includes("log in again");
+      if (isSessionExpired) {
+        toast({
+          title: "Session expired",
+          description: "Please log in again and enter your code right after.",
+          variant: "destructive",
+        });
+        setLocation("/login");
+      } else {
+        toast({
+          title: "Invalid code",
+          description: err.message || "Please enter the correct 6-digit code from your authenticator app.",
+          variant: "destructive",
+        });
+        setCode("");
+      }
     },
   });
 

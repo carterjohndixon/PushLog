@@ -54,11 +54,22 @@ export default function SetupMfa() {
       setLocation("/dashboard");
     },
     onError: (err: Error) => {
-      toast({
-        title: "Invalid code",
-        description: err.message || "Please enter the correct 6-digit code from your authenticator app.",
-        variant: "destructive",
-      });
+      const isSessionExpired =
+        err.message.includes("Session expired") || err.message.includes("log in again");
+      if (isSessionExpired) {
+        toast({
+          title: "Session expired",
+          description: "Please log in again and complete MFA setup.",
+          variant: "destructive",
+        });
+        setLocation("/login");
+      } else {
+        toast({
+          title: "Invalid code",
+          description: err.message || "Please enter the correct 6-digit code from your authenticator app.",
+          variant: "destructive",
+        });
+      }
     },
   });
 

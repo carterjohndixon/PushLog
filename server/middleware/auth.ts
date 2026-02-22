@@ -25,7 +25,10 @@ declare global {
 /** Require session with userId and mfaPending — for MFA setup/verify routes only. */
 export function requireMfaPendingSession(req: Request, res: Response, next: NextFunction) {
   if (!req.session?.userId || !(req.session as any).mfaPending) {
-    return res.status(401).json({ error: "Session expired or invalid. Please log in again." });
+    return res.status(401).json({
+      error: "Session expired or invalid. Please log in again.",
+      code: "session_expired",
+    });
   }
   next();
 }

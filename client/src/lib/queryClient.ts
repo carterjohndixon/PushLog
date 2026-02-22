@@ -76,24 +76,21 @@ async function throwIfResNotOk(res: Response) {
       }
     }
 
-    // Handle 401 Unauthorized globally, but only for authenticated routes
+    // Handle 401 Unauthorized
     if (res.status === 401) {
-      // Check if this is a login/signup request - don't redirect for these
       const url = res.url;
       if (url.includes('/api/login') || url.includes('/api/signup')) {
         throw new Error(message || 'Invalid credentials');
       }
 
-      // Check if we're on public pages - don't redirect (home, login, signup pages are public)
-      if (typeof window !== 'undefined') {
-        if (PUBLIC_PATHS.includes(window.location.pathname)) {
-          throw new Error('Not authenticated'); // Just throw, don't redirect
-        }
+      // On public pages (e.g. verify-mfa, setup-mfa), don't redirect; throw with server message so UI can show "session expired" vs "invalid code"
+      if (typeof window !== 'undefined' && PUBLIC_PATHS.includes(window.location.pathname)) {
+        throw new Error(message || 'Not authenticated');
       }
 
-      // For other authenticated routes, handle session expiration
+      // Other authenticated routes: redirect to login
       handleAuthenticationFailure();
-      throw new Error('Session expired');
+      throw new Error(message || 'Session expired');
     }
 
     throw new Error(message);
