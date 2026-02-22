@@ -44,6 +44,16 @@ const passwordRequirements: PasswordRequirement[] = [
   }
 ];
 
+function PageHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        {children}
+      </div>
+    </header>
+  );
+}
+
 export default function Signup() {
   const {toast} = useToast();
 
@@ -152,17 +162,22 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md space-y-6">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 shrink-0" />
-          Back to home
+    <div className="min-h-screen flex flex-col bg-forest-gradient">
+      <PageHeader>
+        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+          <Logo size="md" />
         </a>
+        <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
+          <a href="/" className="inline-flex items-center justify-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to home
+          </a>
+        </Button>
+      </PageHeader>
+
+      <main className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-6">
         <div className="text-center">
-          <Logo size="lg" className="mx-auto mb-4" />
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Create your account</h1>
           <p className="text-sm text-muted-foreground">Start connecting GitHub with Slack</p>
         </div>
@@ -272,7 +287,8 @@ export default function Signup() {
           Already have an account?{" "}
           <a href="/login" className="text-primary font-medium hover:underline">Log in</a>
         </p>
-      </div>
+        </div>
+      </main>
       
       <LoadingOverlay 
         isVisible={isOAuthLoading} 

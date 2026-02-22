@@ -152,19 +152,25 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md space-y-6">
-        <PageHeader>
-          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-            <Logo size="md" />
+    <div className="min-h-screen flex flex-col bg-forest-gradient">
+      <PageHeader>
+        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+          <Logo size="md" />
+        </a>
+        <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
+          <a href="/" className="inline-flex items-center justify-center gap-2">
+            <ArrowLeft className="w-4 h-4" />
+            Back to home
           </a>
-          <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
-            <a href="/login" className="inline-flex items-center justify-center gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back to login
-            </a>
-          </Button>
-        </PageHeader>
+        </Button>
+      </PageHeader>
+
+      <main className="flex-1 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Log in to PushLog</h1>
+          <p className="text-sm text-muted-foreground">Seamlessly connect GitHub with Slack</p>
+        </div>
 
         <form className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
@@ -246,7 +252,8 @@ export default function Login() {
           Don&apos;t have an account?{" "}
           <a href="/signup" className="text-primary font-medium hover:underline">Sign up</a>
         </p>
-      </div>
+        </div>
+      </main>
       
       <LoadingOverlay 
         isVisible={isOAuthLoading} 
