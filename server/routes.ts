@@ -1522,15 +1522,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The POST flow sets the session cookie in a same-origin response (user is already on our domain),
   // which avoids Set-Cookie being dropped when coming from a cross-site redirect (GitHub → us).
 
+  // GET /api/auth/github/exchange — not used; redirect so users never see raw API/JSON when opening the URL.
+  app.get("/api/auth/github/exchange", (_req, res) => {
+    res.redirect(302, "/login");
+  });
+
   // POST GitHub OAuth exchange — client callback page POSTs here. Sets session, redirects to setup/verify-mfa.
   // Client lands on /auth/github/callback?code=...&state=..., then POSTs here. Redirect URI must match the authorize request.
   app.post("/api/auth/github/exchange", async (req, res) => {
+    const loginRedirectWithError = (message: string) => {
+      const host = (req.get("host") || "").split(":")[0];
+      const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
+      const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+      const url = base ? `${base}/login?error=${encodeURIComponent(message)}` : `/login?error=${encodeURIComponent(message)}`;
+      res.redirect(302, url);
+    };
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
     res.setHeader("Pragma", "no-cache");
     try {
       const { code, state, redirectUri: clientRedirectUri, returnPath } = req.body || {};
       if (!code || typeof code !== "string") {
-        return res.status(400).json({ success: false, error: "Missing authorization code" });
+        return loginRedirectWithError( "Missing authorization code. Please try logging in again.");
       }
       const redirectUri = typeof clientRedirectUri === "string" && clientRedirectUri.startsWith("https://")
         ? clientRedirectUri
@@ -1542,14 +1554,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         token = await exchangeCodeForToken(code, redirectUri, req.get("host") || undefined);
       } catch (tokenError) {
         console.error("Failed to exchange code for token:", tokenError);
-        return res.status(400).json({ success: false, error: tokenError instanceof Error ? tokenError.message : "Token exchange failed" });
+        return loginRedirectWithError( "Token exchange failed. Please try again.");
       }
       let githubUser;
       try {
         githubUser = await getGitHubUser(token);
       } catch (userError) {
         console.error("Failed to get GitHub user:", userError);
-        return res.status(400).json({ success: false, error: "Failed to fetch GitHub user" });
+        return loginRedirectWithError( "Could not load your GitHub account. Please try again.");
       }
       const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
       const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow, not linking
@@ -1559,7 +1571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (currentUser) {
           const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
           if (existingUser && existingUser.id !== currentUser.id) {
-            return res.status(400).json({ success: false, error: "This GitHub account is already connected to another PushLog account." });
+            return loginRedirectWithError( "This GitHub account is already connected to another account.");
           }
           user = await databaseStorage.updateUser(currentUser.id, {
             githubId: githubUser.id.toString(), githubToken: token,
@@ -1600,7 +1612,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       if (!user?.id) {
-        return res.status(500).json({ success: false, error: "Failed to create or update user" });
+        return loginRedirectWithError( "Something went wrong. Please try again.");
       }
       const userForMfa = user as { mfaEnabled?: boolean };
       const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
@@ -1608,7 +1620,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (regErr) {
           console.error("❌ GitHub OAuth: session regenerate failed:", regErr);
           Sentry.captureException(regErr);
-          return res.status(500).json({ success: false, error: "Session failed" });
+          return loginRedirectWithError( "Session error. Please try again.");
         }
         req.session!.userId = user.id;
         req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
@@ -1620,7 +1632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (err) {
             console.error("❌ GitHub OAuth: session save failed:", err);
             Sentry.captureException(err);
-            return res.status(500).json({ success: false, error: "Session save failed" });
+            return loginRedirectWithError( "Session error. Please try again.");
           }
           const targetPath = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
@@ -1639,7 +1651,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("GitHub OAuth exchange error:", error);
       Sentry.captureException(error);
-      return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Exchange failed" });
+      return loginRedirectWithError( "Something went wrong. Please try again.");
     }
   });
 
