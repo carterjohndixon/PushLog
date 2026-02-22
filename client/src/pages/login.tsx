@@ -12,6 +12,16 @@ import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 
+function PageHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        {children}
+      </div>
+    </header>
+  );
+}
+
 export default function Login() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -144,18 +154,17 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4 shrink-0" />
-          Back to home
-        </a>
-        <div className="text-center">
-          <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Log in to PushLog</h1>
-          <p className="text-sm text-muted-foreground">Seamlessly connect GitHub with Slack</p>
-        </div>
+        <PageHeader>
+          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+            <Logo size="md" />
+          </a>
+          <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
+            <a href="/login" className="inline-flex items-center justify-center gap-2">
+              <ArrowLeft className="w-4 h-4" />
+              Back to login
+            </a>
+          </Button>
+        </PageHeader>
 
         <form className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
           <div>
