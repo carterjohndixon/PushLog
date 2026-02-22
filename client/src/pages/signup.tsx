@@ -1,14 +1,14 @@
 import * as React from "react"
-import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
+import { EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
 import { Github } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { AuthLayout } from "@/components/auth-layout";
 
 interface PasswordRequirement {
   name: string;
@@ -43,16 +43,6 @@ const passwordRequirements: PasswordRequirement[] = [
     message: "One special character"
   }
 ];
-
-function PageHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-        {children}
-      </div>
-    </header>
-  );
-}
 
 export default function Signup() {
   const {toast} = useToast();
@@ -162,21 +152,8 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-forest-gradient">
-      <PageHeader>
-        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-          <Logo size="md" />
-        </a>
-        <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
-          <a href="/" className="inline-flex items-center justify-center gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back to home
-          </a>
-        </Button>
-      </PageHeader>
-
-      <main className="flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md space-y-6">
+    <AuthLayout backHref="/" backLabel="Back to home">
+      <div className="mx-auto w-full max-w-md space-y-6">
         <div className="text-center">
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Create your account</h1>
           <p className="text-sm text-muted-foreground">Start connecting GitHub with Slack</p>
@@ -287,14 +264,13 @@ export default function Signup() {
           Already have an account?{" "}
           <a href="/login" className="text-primary font-medium hover:underline">Log in</a>
         </p>
-        </div>
-      </main>
-      
-      <LoadingOverlay 
-        isVisible={isOAuthLoading} 
+      </div>
+
+      <LoadingOverlay
+        isVisible={isOAuthLoading}
         provider={oauthProvider}
         message="Redirecting you to authenticate with your account..."
       />
-    </div>
+    </AuthLayout>
   );
 } 

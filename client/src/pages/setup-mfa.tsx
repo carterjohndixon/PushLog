@@ -1,6 +1,5 @@
 import * as React from "react";
-import { ArrowLeft, Loader2, ShieldCheck, Lock, Smartphone, RefreshCw } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { Loader2, ShieldCheck, Lock, Smartphone, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
@@ -8,28 +7,15 @@ import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { AuthLayout } from "@/components/auth-layout";
 
-function PageHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-        {children}
-      </div>
-    </header>
-  );
-}
-
-function PageFooter() {
-  return (
-    <footer className="w-full py-6 text-center text-sm text-muted-foreground">
-      <a href="/" className="font-medium text-foreground hover:text-primary transition-colors">
-        PushLog
-      </a>
-      <span className="mx-2">·</span>
-      <span>Two-factor authentication</span>
-    </footer>
-  );
-}
+const setupFooter = (
+  <>
+    <a href="/" className="font-medium text-foreground hover:text-primary transition-colors">PushLog</a>
+    <span className="mx-2">·</span>
+    <span>Two-factor authentication</span>
+  </>
+);
 
 export default function SetupMfa() {
   const { toast } = useToast();
@@ -83,86 +69,51 @@ export default function SetupMfa() {
     }
   };
 
-  const backButton = (
-    <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
-      <a href="/login" className="inline-flex items-center justify-center gap-2">
-        <ArrowLeft className="w-4 h-4" />
-        Back to login
-      </a>
-    </Button>
-  );
-
   if (setupLoading) {
     return (
-      <div className="min-h-screen flex flex-col bg-forest-gradient">
-        <PageHeader>
-          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-            <Logo size="md" />
-          </a>
-          {backButton}
-        </PageHeader>
-        <main className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="w-full max-w-md text-center">
-            <div className="bg-card border border-border shadow-xl rounded-2xl p-10 flex flex-col items-center justify-center gap-6">
-              <div className="rounded-full bg-primary/10 p-4">
-                <Loader2 className="w-10 h-10 text-log-green animate-spin" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground mb-1">Preparing your security setup</h2>
-                <p className="text-sm text-muted-foreground">This will only take a moment…</p>
-              </div>
+      <AuthLayout backHref="/login" backLabel="Back to login" footer={setupFooter}>
+        <div className="mx-auto w-full max-w-md text-center">
+          <div className="bg-card border border-border shadow-xl rounded-2xl p-10 flex flex-col items-center justify-center gap-6">
+            <div className="rounded-full bg-primary/10 p-4">
+              <Loader2 className="w-10 h-10 text-log-green animate-spin" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-foreground mb-1">Preparing your security setup</h2>
+              <p className="text-sm text-muted-foreground">This will only take a moment…</p>
             </div>
           </div>
-        </main>
-        <PageFooter />
-      </div>
+        </div>
+      </AuthLayout>
     );
   }
 
   if (!data?.qrDataUrl) {
     return (
-      <div className="min-h-screen flex flex-col bg-forest-gradient">
-        <PageHeader>
-          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-            <Logo size="md" />
-          </a>
-          {backButton}
-        </PageHeader>
-        <main className="flex-1 flex items-center justify-center px-4 py-12">
-          <div className="w-full max-w-md text-center space-y-6">
-            <div className="bg-card border border-border shadow-xl rounded-2xl p-8 space-y-4">
-              <div className="rounded-full bg-destructive/10 p-3 inline-flex">
-                <ShieldCheck className="w-8 h-8 text-destructive" />
-              </div>
-              <h1 className="text-xl font-bold text-foreground">Unable to load setup</h1>
-              <p className="text-sm text-muted-foreground">
-                {setupError instanceof Error ? setupError.message : "Please log in and try again."}
-              </p>
-              <Button variant="glow" className="w-full font-semibold" onClick={() => setLocation("/login")}>
-                Back to login
-              </Button>
+      <AuthLayout backHref="/login" backLabel="Back to login" footer={setupFooter}>
+        <div className="mx-auto w-full max-w-md text-center space-y-6">
+          <div className="bg-card border border-border shadow-xl rounded-2xl p-8 space-y-4">
+            <div className="rounded-full bg-destructive/10 p-3 inline-flex">
+              <ShieldCheck className="w-8 h-8 text-destructive" />
             </div>
+            <h1 className="text-xl font-bold text-foreground">Unable to load setup</h1>
             <p className="text-sm text-muted-foreground">
-              <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
+              {setupError instanceof Error ? setupError.message : "Please log in and try again."}
             </p>
+            <Button variant="glow" className="w-full font-semibold" onClick={() => setLocation("/login")}>
+              Back to login
+            </Button>
           </div>
-        </main>
-        <PageFooter />
-      </div>
+          <p className="text-sm text-muted-foreground">
+            <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
+          </p>
+        </div>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-forest-gradient">
-      <PageHeader>
-        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-          <Logo size="md" />
-        </a>
-        {backButton}
-      </PageHeader>
-
-      <main className="flex-1 px-4 py-8 sm:py-12">
-        <div className="mx-auto max-w-2xl w-full space-y-8">
+    <AuthLayout backHref="/login" backLabel="Back to login" footer={setupFooter}>
+      <div className="mx-auto max-w-2xl w-full space-y-8">
           {/* Hero */}
           <div className="text-center space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
@@ -264,10 +215,7 @@ export default function SetupMfa() {
           <p className="text-center text-sm text-muted-foreground">
             <a href="/login" className="text-primary font-medium hover:underline">Back to login</a>
           </p>
-        </div>
-      </main>
-
-      <PageFooter />
-    </div>
+      </div>
+    </AuthLayout>
   );
 }

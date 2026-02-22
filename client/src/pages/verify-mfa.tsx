@@ -1,35 +1,20 @@
 import * as React from "react";
-import { ArrowLeft, Loader2, Smartphone, ShieldCheck } from "lucide-react";
-import { Logo } from "@/components/logo";
-import { Button } from "@/components/ui/button";
+import { Loader2, Smartphone, ShieldCheck } from "lucide-react";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { AuthLayout } from "@/components/auth-layout";
 
-function PageHeader({ children }: { children: React.ReactNode }) {
-  return (
-    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
-      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
-        {children}
-      </div>
-    </header>
-  );
-}
-
-function PageFooter() {
-  return (
-    <footer className="w-full py-6 text-center text-sm text-muted-foreground">
-      <a href="/" className="font-medium text-foreground hover:text-primary transition-colors">
-        PushLog
-      </a>
-      <span className="mx-2">·</span>
-      <span>Verification</span>
-    </footer>
-  );
-}
+const verifyFooter = (
+  <>
+    <a href="/" className="font-medium text-foreground hover:text-primary transition-colors">PushLog</a>
+    <span className="mx-2">·</span>
+    <span>Verification</span>
+  </>
+);
 
 export default function VerifyMfa() {
   const { toast } = useToast();
@@ -65,21 +50,8 @@ export default function VerifyMfa() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-forest-gradient">
-      <PageHeader>
-        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
-          <Logo size="md" />
-        </a>
-        <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
-          <a href="/login" className="inline-flex items-center justify-center gap-2">
-            <ArrowLeft className="w-4 h-4" />
-            Back to login
-          </a>
-        </Button>
-      </PageHeader>
-
-      <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
-        <div className="mx-auto w-full max-w-lg space-y-8">
+    <AuthLayout backHref="/login" backLabel="Back to login" footer={verifyFooter}>
+      <div className="mx-auto w-full max-w-lg space-y-8">
           {/* Hero */}
           <div className="text-center space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
@@ -139,10 +111,7 @@ export default function VerifyMfa() {
             Use a different account?{" "}
             <a href="/login" className="text-primary font-medium hover:underline">Sign in with email or GitHub</a>
           </p>
-        </div>
-      </main>
-
-      <PageFooter />
-    </div>
+      </div>
+    </AuthLayout>
   );
 }
