@@ -73,6 +73,46 @@ function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
   return !!s?.trim().startsWith("sk-or-");
 }
 
+/** Turn model id into display prefix for stripping from link text (e.g. gpt-5.2-pro -> "GPT-5.2 pro"). */
+function openAiIdToTitle(id: string): string {
+  const parts = id.split("-").filter(Boolean);
+  if (parts.length === 0) return id;
+  const first = parts[0].toLowerCase();
+  const rest = parts.slice(1);
+  const head = first === "gpt" ? "GPT" : first === "o" && rest[0] ? "o" + rest[0] : parts[0];
+  if (rest.length === 0) return head;
+  const tail = rest.length === 1 ? rest[0] : rest.slice(1).map((p) => (/\d/.test(p) ? p : p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())).join(" ");
+  return `${head}-${rest[0]}${rest.length > 1 ? " " + tail : ""}`.trim();
+}
+
+/** Parse OpenAI docs/models page: extract model id + description from links like [NameDescription](.../models/id). */
+function parseOpenAiModelsDocPage(html: string): Array<{ id: string; name: string; description?: string }> {
+  const out: Array<{ id: string; name: string; description?: string }> = [];
+  // Match links to .../models/MODEL_ID (handles both platform and developers domains)
+  const linkRe = /<a\s+href="(?:https?:\/\/[^"]*)?\/models\/([^"#?]+)(?:[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  const seen = new Set<string>();
+  while ((m = linkRe.exec(html)) !== null) {
+    const id = m[1].trim().toLowerCase();
+    let linkText = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    if (!linkText || !/^(gpt-|o\d|sora|gpt-image|chatgpt|whisper|tts|dall·e|omni|computer-use)/i.test(id)) continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    const titlePrefix = openAiIdToTitle(id);
+    let description = linkText
+      .replace(new RegExp(`^\\s*${titlePrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "")
+      .replace(/^\s*New\s*/i, "")
+      .trim();
+    if (!description) description = linkText.slice(0, 200);
+    if (description.length > 10) {
+      out.push({ id, name: id, description: description.slice(0, 400) });
+    } else {
+      out.push({ id, name: id });
+    }
+  }
+  return out;
+}
+
 /** Parse OpenAI pricing page HTML to extract model id, description, and per-1M-token prices. */
 function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> {
   const details: Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> = [];
@@ -88,7 +128,6 @@ function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string;
       .toLowerCase()
       .replace(/\s+/g, "-")
       .replace(/\./g, ".");
-  const priceRe = /\$?\s*([\d,]+(?:\.\d+)?)\s*\/\s*1M/i;
   const sectionRe = /(?:^|\s)(?:##\s*)?(GPT[- ]?\d+(?:\.\d+)?(?:\s*[- ]?\w+)?|o\d+(?:[- ]?\w+)?|gpt-[\w.-]+)(?:\s|$)/gi;
   let match: RegExpExecArray | null;
   const sections: { name: string; start: number }[] = [];
@@ -106,9 +145,12 @@ function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string;
     const id = normalizedId(name);
     if (/^(gpt-|o\d+)/i.test(id) === false) continue;
     let description: string | undefined;
-    const descMatch = block.match(/\s([A-Z][^.$]+(?:\.|$))/);
-    if (descMatch && !/\d+\s*\/\s*1M|\$|price|input|output/i.test(descMatch[1])) {
-      description = descMatch[1].trim().slice(0, 200);
+    const descMatch = block.match(/\s([A-Z][^$]*?)(?=\s*(?:###|Price|Input:|Output:|\$|\d+\s*\/\s*1M))/);
+    if (descMatch) {
+      const raw = descMatch[1].trim();
+      if (raw.length > 15 && !/^\d|price|input|output|\$|\/\s*1M/i.test(raw)) {
+        description = raw.slice(0, 300);
+      }
     }
     const inputMatch = block.match(/input\s*:\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
     const outputMatch = block.match(/output\s*:\s*\$?\s*([\d,]+(?:\.\d+)?)/i);
@@ -3477,35 +3519,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // OpenAI: fetch model details (description, pricing) from the public pricing page
+  // OpenAI: fetch model details (description, pricing) from pricing + docs/models pages
   app.get("/api/openai/model-details", async (req, res) => {
     try {
-      const urls = [
-        "https://openai.com/api/pricing/",
-        "https://platform.openai.com/docs/pricing",
-      ];
-      const allDetails: Array<{ id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }> = [];
-      const seenIds = new Set<string>();
-      for (const url of urls) {
+      const byId = new Map<string, { id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }>();
+      const fetchOpts: RequestInit = {
+        headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "User-Agent": "Mozilla/5.0 (compatible; PushLog/1.0)" },
+      };
+
+      // 1) Pricing pages: get pricing and optional short descriptions
+      for (const url of ["https://openai.com/api/pricing/", "https://platform.openai.com/docs/pricing"]) {
         try {
-          const response = await fetch(url, {
-            headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "User-Agent": "Mozilla/5.0 (compatible; PushLog/1.0)" },
-          });
+          const response = await fetch(url, fetchOpts);
           if (!response.ok) continue;
-          const html = await response.text();
-          const details = parseOpenAiPricingPage(html);
+          const details = parseOpenAiPricingPage(await response.text());
           for (const d of details) {
             const key = d.id.toLowerCase();
-            if (!seenIds.has(key)) {
-              seenIds.add(key);
-              allDetails.push(d);
+            if (!byId.has(key)) {
+              byId.set(key, { id: d.id, name: d.name, description: d.description, promptPer1M: d.promptPer1M, completionPer1M: d.completionPer1M });
+            } else {
+              const cur = byId.get(key)!;
+              if (d.promptPer1M != null) cur.promptPer1M = d.promptPer1M;
+              if (d.completionPer1M != null) cur.completionPer1M = d.completionPer1M;
+              if (d.description && (!cur.description || d.description.length > (cur.description?.length ?? 0)))
+                cur.description = d.description;
             }
           }
         } catch {
-          continue;
+          /* skip */
         }
       }
-      res.status(200).json({ details: allDetails });
+
+      // 2) Docs/models page: rich descriptions (prefer over pricing-page blurbs)
+      try {
+        const docsRes = await fetch("https://platform.openai.com/docs/models", fetchOpts);
+        if (docsRes.ok) {
+          const docDetails = parseOpenAiModelsDocPage(await docsRes.text());
+          for (const d of docDetails) {
+            const key = d.id.toLowerCase();
+            const existing = byId.get(key);
+            if (existing) {
+              if (d.description && (!existing.description || d.description.length > (existing.description?.length ?? 0)))
+                existing.description = d.description;
+            } else {
+              byId.set(key, { id: d.id, name: d.name, description: d.description });
+            }
+          }
+        }
+      } catch {
+        /* skip */
+      }
+
+      const detailsList = Array.from(byId.values());
+      res.status(200).json({ details: detailsList });
     } catch (err) {
       console.error("OpenAI model-details fetch error:", err);
       Sentry.captureException(err);
