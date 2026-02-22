@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2, ShieldCheck, Lock, Smartphone, RefreshCw } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -8,6 +8,28 @@ import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+
+function PageHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <header className="w-full border-b border-border bg-card/80 backdrop-blur-sm">
+      <div className="mx-auto flex h-16 max-w-4xl items-center justify-between px-4 sm:px-6">
+        {children}
+      </div>
+    </header>
+  );
+}
+
+function PageFooter() {
+  return (
+    <footer className="w-full py-6 text-center text-sm text-muted-foreground">
+      <a href="/" className="font-medium text-foreground hover:text-primary transition-colors">
+        PushLog
+      </a>
+      <span className="mx-2">·</span>
+      <span>Two-factor authentication</span>
+    </footer>
+  );
+}
 
 export default function SetupMfa() {
   const { toast } = useToast();
@@ -62,9 +84,9 @@ export default function SetupMfa() {
   };
 
   const backButton = (
-    <Button variant="glow" className="w-full sm:w-auto font-semibold" asChild>
+    <Button variant="glow" size="sm" className="font-semibold shrink-0" asChild>
       <a href="/login" className="inline-flex items-center justify-center gap-2">
-        <ArrowLeft className="w-4 h-4 shrink-0" />
+        <ArrowLeft className="w-4 h-4" />
         Back to login
       </a>
     </Button>
@@ -72,124 +94,180 @@ export default function SetupMfa() {
 
   if (setupLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div className="flex justify-center">{backButton}</div>
-          <Logo size="lg" className="mx-auto mb-4" />
-          <div className="bg-card border border-border shadow-xl rounded-2xl p-8 flex flex-col items-center justify-center gap-4">
-            <Loader2 className="w-10 h-10 text-log-green animate-spin" />
-            <p className="text-muted-foreground">Preparing your security setup…</p>
+      <div className="min-h-screen flex flex-col bg-forest-gradient">
+        <PageHeader>
+          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+            <Logo size="md" />
+          </a>
+          {backButton}
+        </PageHeader>
+        <main className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md text-center">
+            <div className="bg-card border border-border shadow-xl rounded-2xl p-10 flex flex-col items-center justify-center gap-6">
+              <div className="rounded-full bg-primary/10 p-4">
+                <Loader2 className="w-10 h-10 text-log-green animate-spin" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-foreground mb-1">Preparing your security setup</h2>
+                <p className="text-sm text-muted-foreground">This will only take a moment…</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </main>
+        <PageFooter />
       </div>
     );
   }
 
   if (!data?.qrDataUrl) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md space-y-6 text-center">
-          <div className="flex justify-center">{backButton}</div>
-          <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Unable to load setup</h1>
-          <p className="text-sm text-muted-foreground mb-4">
-            {setupError instanceof Error ? setupError.message : "Please log in and try again."}
-          </p>
-          <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8">
-            <Button variant="glow" className="w-full font-semibold" onClick={() => setLocation("/login")}>
-              Back to login
-            </Button>
+      <div className="min-h-screen flex flex-col bg-forest-gradient">
+        <PageHeader>
+          <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+            <Logo size="md" />
+          </a>
+          {backButton}
+        </PageHeader>
+        <main className="flex-1 flex items-center justify-center px-4 py-12">
+          <div className="w-full max-w-md text-center space-y-6">
+            <div className="bg-card border border-border shadow-xl rounded-2xl p-8 space-y-4">
+              <div className="rounded-full bg-destructive/10 p-3 inline-flex">
+                <ShieldCheck className="w-8 h-8 text-destructive" />
+              </div>
+              <h1 className="text-xl font-bold text-foreground">Unable to load setup</h1>
+              <p className="text-sm text-muted-foreground">
+                {setupError instanceof Error ? setupError.message : "Please log in and try again."}
+              </p>
+              <Button variant="glow" className="w-full font-semibold" onClick={() => setLocation("/login")}>
+                Back to login
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
+            </p>
           </div>
-          <p className="text-center text-sm text-muted-foreground">
-            <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
-          </p>
-        </div>
+        </main>
+        <PageFooter />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md space-y-6">
-        <div className="flex justify-center">{backButton}</div>
-        <div className="text-center">
-          <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">
-            Set up two-factor authentication
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Add an extra layer of security to your PushLog account
-          </p>
-        </div>
+    <div className="min-h-screen flex flex-col bg-forest-gradient">
+      <PageHeader>
+        <a href="/" className="flex items-center gap-2 text-foreground hover:opacity-90 transition-opacity">
+          <Logo size="md" />
+        </a>
+        {backButton}
+      </PageHeader>
 
-        <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-8">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-foreground font-medium">
-              <ShieldCheck className="w-5 h-5 text-log-green shrink-0" />
-              <span>Step 1 — Scan with your app</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Open Google Authenticator, Authy, or another authenticator app and scan this QR code.
+      <main className="flex-1 px-4 py-8 sm:py-12">
+        <div className="mx-auto max-w-2xl w-full space-y-8">
+          {/* Hero */}
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+              Set up two-factor authentication
+            </h1>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              Add an extra layer of security to your PushLog account. You’ll use an authenticator app to generate codes when you sign in.
             </p>
-            <div className="flex justify-center">
-              <div className="rounded-xl border-2 border-border bg-muted/30 p-4 inline-flex">
-                <img
-                  src={data.qrDataUrl}
-                  alt="Scan with your authenticator app"
-                  className="rounded-lg"
-                  width={200}
-                  height={200}
-                />
+          </div>
+
+          {/* Why 2FA callout */}
+          <div className="rounded-2xl border border-border bg-card/60 p-5 sm:p-6">
+            <h2 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+              <Lock className="w-4 h-4 text-log-green" />
+              Why use two-factor authentication?
+            </h2>
+            <ul className="grid gap-2 sm:grid-cols-3 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-log-green shrink-0 mt-0.5" />
+                <span>Protects your account even if your password is compromised</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <Smartphone className="w-4 h-4 text-log-green shrink-0 mt-0.5" />
+                <span>Codes are generated on your device and stay with you</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <RefreshCw className="w-4 h-4 text-log-green shrink-0 mt-0.5" />
+                <span>Industry-standard time-based codes (TOTP)</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-8 space-y-5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-log-green text-white text-sm font-bold">
+                  1
+                </span>
+                <h3 className="text-lg font-semibold text-foreground">Scan the QR code with your app</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Open Google Authenticator, Authy, 1Password, or another authenticator app and scan the code below.
+              </p>
+              <div className="flex justify-center">
+                <div className="rounded-xl border-2 border-border bg-muted/30 p-5 inline-flex shadow-inner">
+                  <img
+                    src={data.qrDataUrl}
+                    alt="Scan with your authenticator app"
+                    className="rounded-lg"
+                    width={220}
+                    height={220}
+                  />
+                </div>
               </div>
             </div>
+
+            <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-8 space-y-5">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-log-green text-white text-sm font-bold">
+                  2
+                </span>
+                <h3 className="text-lg font-semibold text-foreground">Enter the 6-digit code</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Enter the code shown in your authenticator app. Codes update every 30 seconds.
+              </p>
+              <div className="flex justify-center pt-2">
+                <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
+                  <InputOTPGroup className="gap-2 sm:gap-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <InputOTPSlot
+                        key={i}
+                        index={i}
+                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
+                      />
+                    ))}
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
+              <Button
+                variant="glow"
+                className="w-full font-semibold mt-2"
+                disabled={code.length !== 6 || verifyMutation.isPending}
+                onClick={() => code.length === 6 && verifyMutation.mutate(code)}
+              >
+                {verifyMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying…
+                  </>
+                ) : (
+                  "Verify and enable two-factor"
+                )}
+              </Button>
+            </div>
           </div>
 
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-foreground font-medium">
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-sm font-semibold">
-                2
-              </span>
-              <span>Step 2 — Enter the 6-digit code</span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Enter the code shown in your authenticator app. It updates every 30 seconds.
-            </p>
-            <div className="flex justify-center">
-              <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
-                <InputOTPGroup className="gap-2 sm:gap-3">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <InputOTPSlot
-                      key={i}
-                      index={i}
-                      className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
-                    />
-                  ))}
-                </InputOTPGroup>
-              </InputOTP>
-            </div>
-          </div>
-
-          <Button
-            variant="glow"
-            className="w-full font-semibold"
-            disabled={code.length !== 6 || verifyMutation.isPending}
-            onClick={() => code.length === 6 && verifyMutation.mutate(code)}
-          >
-            {verifyMutation.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Verifying…
-              </>
-            ) : (
-              "Verify and enable"
-            )}
-          </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            <a href="/login" className="text-primary font-medium hover:underline">Back to login</a>
+          </p>
         </div>
+      </main>
 
-        <p className="text-center text-sm text-muted-foreground">
-          <a href="/login" className="text-primary font-medium hover:underline">Back to login</a>
-        </p>
-      </div>
+      <PageFooter />
     </div>
   );
 }
