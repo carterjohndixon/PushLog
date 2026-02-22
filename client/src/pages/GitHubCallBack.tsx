@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { Logo } from "@/components/logo";
+import { Button } from "@/components/ui/button";
+import { LoadingOverlay } from "@/components/ui/loading-overlay";
+import { Github } from "lucide-react";
 
 /**
  * GitHub OAuth callback page.
  * User lands here after authorizing on GitHub (redirect_uri = /auth/github/callback).
+ * Renders the login page layout with an overlay so it doesn't feel like a blank intermediate page.
  * We use a form POST (not fetch) so the server's 302 + Set-Cookie is a full-page navigation
  * response — browsers reliably process Set-Cookie from navigation, unlike fetch responses.
- * State is verified server-side (DB lookup); we no longer require localStorage so this works
- * even when a proxy serves the SPA for /auth/* instead of proxying to the backend.
  */
 export default function GitHubCallback() {
   const [, setLocation] = useLocation();
@@ -69,7 +72,48 @@ export default function GitHubCallback() {
   const state = query?.get("state") ?? "";
 
   return (
-    <div className="flex h-screen justify-center items-center">
+    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+      <div className="w-full max-w-md space-y-6">
+        <div className="text-center">
+          <Logo size="lg" className="mx-auto mb-4" />
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Log in to PushLog</h1>
+          <p className="text-sm text-muted-foreground">Seamlessly connect GitHub with Slack</p>
+        </div>
+
+        <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="flex-1 border-t border-border" />
+            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">or</span>
+            <span className="flex-1 border-t border-border" />
+          </div>
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              disabled
+              className="w-full h-11 border-2 border-border bg-card text-foreground font-semibold shadow-sm opacity-90"
+            >
+              <Github className="mr-2 w-4 h-4 shrink-0" />
+              Log in with GitHub
+            </Button>
+            <Button
+              variant="outline"
+              disabled
+              className="w-full h-11 border-2 border-border bg-card text-foreground font-semibold shadow-sm opacity-70"
+            >
+              <svg className="mr-2 w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M21.35 11.1h-9.17v2.73h6.51c-.33 3.81-3.5 5.44-6.5 5.44C8.36 19.27 5 16.25 5 12c0-4.1 3.2-7.27 7.2-7.27 3.09 0 4.9 1.97 4.9 1.97L19 4.72S16.56 2 12.1 2C6.42 2 2.03 6.8 2.03 12c0 5.05 4.13 10 10.22 10 5.35 0 9.25-3.67 9.25-9.09 0-1.15-.15-1.81-.15-1.81z"/>
+              </svg>
+              Log in with Google
+            </Button>
+          </div>
+        </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Don&apos;t have an account?{" "}
+          <a href="/signup" className="text-primary font-medium hover:underline">Sign up</a>
+        </p>
+      </div>
+
       <form
         ref={formRef}
         method="POST"
@@ -81,7 +125,12 @@ export default function GitHubCallback() {
         <input type="hidden" name="redirectUri" value={`${typeof window !== "undefined" ? window.location.origin : ""}/auth/github/callback`} />
         {returnPath && <input type="hidden" name="returnPath" value={returnPath} />}
       </form>
-      <p className="text-lg">Connecting to GitHub...</p>
+
+      <LoadingOverlay
+        isVisible={true}
+        provider="GitHub"
+        message="Completing sign in with GitHub..."
+      />
     </div>
   );
 }
