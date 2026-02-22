@@ -3,7 +3,7 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
+import { ArrowLeft, EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
 import { Github } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -154,6 +154,13 @@ export default function Signup() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4 shrink-0" />
+          Back to home
+        </a>
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Create your account</h1>

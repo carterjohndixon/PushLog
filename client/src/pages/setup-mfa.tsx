@@ -61,21 +61,20 @@ export default function SetupMfa() {
     }
   };
 
-  const backLink = (
-    <a
-      href="/login"
-      className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-    >
-      <ArrowLeft className="w-4 h-4 shrink-0" />
-      Back to login
-    </a>
+  const backButton = (
+    <Button variant="glow" className="w-full sm:w-auto font-semibold" asChild>
+      <a href="/login" className="inline-flex items-center justify-center gap-2">
+        <ArrowLeft className="w-4 h-4 shrink-0" />
+        Back to login
+      </a>
+    </Button>
   );
 
   if (setupLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md space-y-6 text-center">
-          <div className="flex justify-center">{backLink}</div>
+          <div className="flex justify-center">{backButton}</div>
           <Logo size="lg" className="mx-auto mb-4" />
           <div className="bg-card border border-border shadow-xl rounded-2xl p-8 flex flex-col items-center justify-center gap-4">
             <Loader2 className="w-10 h-10 text-log-green animate-spin" />
@@ -90,7 +89,7 @@ export default function SetupMfa() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md space-y-6 text-center">
-          <div className="flex justify-center">{backLink}</div>
+          <div className="flex justify-center">{backButton}</div>
           <Logo size="lg" className="mx-auto mb-4" />
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Unable to load setup</h1>
           <p className="text-sm text-muted-foreground mb-4">
@@ -112,7 +111,7 @@ export default function SetupMfa() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex justify-center">{backLink}</div>
+        <div className="flex justify-center">{backButton}</div>
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">
