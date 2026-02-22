@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Loader2, Smartphone } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
@@ -45,31 +46,44 @@ export default function VerifyMfa() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Enter verification code</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">
+            Enter verification code
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Enter the 6-digit code from your authenticator app
+            Enter the 6-digit code from your authenticator app to sign in to PushLog
           </p>
         </div>
 
         <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-6">
+          <div className="flex items-center justify-center gap-2 text-muted-foreground mb-2">
+            <Smartphone className="w-5 h-5 shrink-0" />
+            <span className="text-sm font-medium">Check your authenticator app</span>
+          </div>
           <div className="flex justify-center">
-            <InputOTP
-              maxLength={6}
-              value={code}
-              onChange={handleCodeChange}
-            >
-              <InputOTPGroup className="gap-2">
+            <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
+              <InputOTPGroup className="gap-2 sm:gap-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <InputOTPSlot key={i} index={i} className="h-12 w-12 rounded-lg border-2" />
+                  <InputOTPSlot
+                    key={i}
+                    index={i}
+                    className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
+                  />
                 ))}
               </InputOTPGroup>
             </InputOTP>
           </div>
-
           {verifyMutation.isPending && (
-            <p className="text-sm text-center text-muted-foreground">Verifying…</p>
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Verifying…</span>
+            </div>
           )}
         </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          Use a different account?{" "}
+          <a href="/login" className="text-primary font-medium hover:underline">Sign in with email or GitHub</a>
+        </p>
       </div>
     </div>
   );

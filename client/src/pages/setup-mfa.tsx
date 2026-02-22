@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
@@ -29,7 +30,7 @@ export default function SetupMfa() {
       return res.json();
     },
     retry: false,
-    staleTime: Infinity, // One-time setup; don't refetch (avoids refetch-fail loop when session/cookie is flaky)
+    staleTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });
@@ -62,10 +63,13 @@ export default function SetupMfa() {
 
   if (setupLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-log-green border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-muted-foreground">Loading MFA setup…</p>
+      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-6 text-center">
+          <Logo size="lg" className="mx-auto mb-4" />
+          <div className="bg-card border border-border shadow-xl rounded-2xl p-8 flex flex-col items-center justify-center gap-4">
+            <Loader2 className="w-10 h-10 text-log-green animate-spin" />
+            <p className="text-muted-foreground">Preparing your security setup…</p>
+          </div>
         </div>
       </div>
     );
@@ -73,16 +77,21 @@ export default function SetupMfa() {
 
   if (!data?.qrDataUrl) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="bg-card border border-border rounded-2xl shadow-xl p-8 max-w-sm w-full text-center">
+      <div className="min-h-screen bg-background flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-md space-y-6 text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-xl font-bold text-foreground mb-2">Unable to load MFA setup</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">Unable to load setup</h1>
           <p className="text-sm text-muted-foreground mb-4">
             {setupError instanceof Error ? setupError.message : "Please log in and try again."}
           </p>
-          <Button variant="outline" onClick={() => setLocation("/login")}>
-            Back to Login
-          </Button>
+          <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8">
+            <Button variant="glow" className="w-full font-semibold" onClick={() => setLocation("/login")}>
+              Back to login
+            </Button>
+          </div>
+          <p className="text-center text-sm text-muted-foreground">
+            <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
+          </p>
         </div>
       </div>
     );
@@ -93,28 +102,55 @@ export default function SetupMfa() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <Logo size="lg" className="mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Set up two-factor authentication</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2 tracking-tight">
+            Set up two-factor authentication
+          </h1>
           <p className="text-sm text-muted-foreground">
-            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+            Add an extra layer of security to your PushLog account
           </p>
         </div>
 
-        <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-6">
-          <div className="flex justify-center">
-            <img src={data.qrDataUrl} alt="MFA QR code" className="rounded-lg border border-border" width={200} height={200} />
+        <div className="bg-card border border-border shadow-xl rounded-2xl p-6 sm:p-8 space-y-8">
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-foreground font-medium">
+              <ShieldCheck className="w-5 h-5 text-log-green shrink-0" />
+              <span>Step 1 — Scan with your app</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Open Google Authenticator, Authy, or another authenticator app and scan this QR code.
+            </p>
+            <div className="flex justify-center">
+              <div className="rounded-xl border-2 border-border bg-muted/30 p-4 inline-flex">
+                <img
+                  src={data.qrDataUrl}
+                  alt="Scan with your authenticator app"
+                  className="rounded-lg"
+                  width={200}
+                  height={200}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3">
-            <p className="text-sm text-center text-foreground font-medium">Then enter the 6-digit code from your app</p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 text-foreground font-medium">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/15 text-primary text-sm font-semibold">
+                2
+              </span>
+              <span>Step 2 — Enter the 6-digit code</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Enter the code shown in your authenticator app. It updates every 30 seconds.
+            </p>
             <div className="flex justify-center">
-              <InputOTP
-                maxLength={6}
-                value={code}
-                onChange={handleCodeChange}
-              >
-                <InputOTPGroup className="gap-2">
+              <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
+                <InputOTPGroup className="gap-2 sm:gap-3">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <InputOTPSlot key={i} index={i} className="h-12 w-12 rounded-lg border-2" />
+                    <InputOTPSlot
+                      key={i}
+                      index={i}
+                      className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
+                    />
                   ))}
                 </InputOTPGroup>
               </InputOTP>
@@ -123,13 +159,24 @@ export default function SetupMfa() {
 
           <Button
             variant="glow"
-            className="w-full"
+            className="w-full font-semibold"
             disabled={code.length !== 6 || verifyMutation.isPending}
             onClick={() => code.length === 6 && verifyMutation.mutate(code)}
           >
-            {verifyMutation.isPending ? "Verifying…" : "Verify and continue"}
+            {verifyMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Verifying…
+              </>
+            ) : (
+              "Verify and enable"
+            )}
           </Button>
         </div>
+
+        <p className="text-center text-sm text-muted-foreground">
+          <a href="/login" className="text-primary font-medium hover:underline">Back to login</a>
+        </p>
       </div>
     </div>
   );
