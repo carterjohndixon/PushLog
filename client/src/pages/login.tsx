@@ -23,10 +23,12 @@ export default function Login() {
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
 
-  // Check if user is already authenticated - redirect to dashboard or MFA if needed
+  // Check if user is already authenticated - redirect to dashboard or MFA if needed.
+  // Do NOT redirect to MFA when user is on /login or /signup; they chose to be here (e.g. "use a different account").
   React.useEffect(() => {
     const checkAuth = async () => {
       try {
+        const path = window.location.pathname;
         const response = await fetch("/api/profile", {
           credentials: "include",
           headers: { "Accept": "application/json" }
@@ -39,7 +41,10 @@ export default function Login() {
         if (response.status === 403) {
           const data = await response.json().catch(() => ({}));
           if (data.redirectTo && (data.needsMfaSetup || data.needsMfaVerify)) {
-            window.location.href = data.redirectTo;
+            const isAuthPage = path === "/" || path === "/login" || path === "/signup";
+            if (!isAuthPage) {
+              window.location.href = data.redirectTo;
+            }
           }
         }
       } catch {

@@ -57,9 +57,11 @@ async function throwIfResNotOk(res: Response) {
         const json = JSON.parse(text);
         if (json.redirectTo && (json.needsMfaSetup || json.needsMfaVerify)) {
           if (typeof window !== "undefined") {
+            const currentPath = window.location.pathname;
             const targetPath = new URL(json.redirectTo, window.location.origin).pathname;
-            // Prevent endless hard-reload loop when background queries keep getting 403 on MFA pages.
-            if (window.location.pathname !== targetPath) {
+            const isPublicOrAuthPage = currentPath === "/" || currentPath === "/login" || currentPath === "/signup";
+            // Don't redirect if already on target MFA page, or if user is on home/login/signup (they chose to be there).
+            if (currentPath !== targetPath && !isPublicOrAuthPage) {
               window.location.href = json.redirectTo;
             }
           }
