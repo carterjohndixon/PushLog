@@ -1046,7 +1046,7 @@ export function OpenRouterModels({
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
                                           {(c.createdAt ?? (c as { created_at?: string }).created_at)
-                                            ? formatLocalDateTime((c.createdAt ?? (c as { created_at: string }).created_at) as string)
+                                            ? formatLocalDateTime((c.createdAt ?? (c as unknown as { created_at: string }).created_at) as string)
                                             : "—"}
                                         </TableCell>
                                         <TableCell>
@@ -1348,7 +1348,7 @@ export function OpenRouterModels({
                           />
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
                             {userHasKey && (
                               <Star
                                 className={`w-4 h-4 shrink-0 cursor-pointer transition-colors ${favoriteIds.has(m.id) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground/30 hover:text-yellow-500"}`}
@@ -1358,14 +1358,14 @@ export function OpenRouterModels({
                                 }}
                               />
                             )}
-                            <div>
-                              <p className="font-medium text-foreground flex items-center gap-2 flex-wrap">
-                                {m.name || m.id}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-medium text-foreground truncate">{m.name || m.id}</span>
                                 {recommendedOpenrouter === m.id && (
-                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                                  <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-log-green rounded bg-log-green/15 px-1.5 py-0.5">Recommended</span>
                                 )}
-                              </p>
-                              <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
+                              </div>
+                              <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{m.id}</p>
                             </div>
                           </div>
                         </TableCell>
