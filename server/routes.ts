@@ -85,13 +85,28 @@ function openAiIdToTitle(id: string): string {
   return `${head}-${rest[0]}${rest.length > 1 ? " " + tail : ""}`.trim();
 }
 
-/** Parse OpenAI docs/models page: extract model id + description from links like [NameDescription](.../models/id). */
-function parseOpenAiModelsDocPage(html: string): Array<{ id: string; name: string; description?: string }> {
-  const out: Array<{ id: string; name: string; description?: string }> = [];
-  // Match links to .../models/MODEL_ID (handles both platform and developers domains)
+/** Parse OpenAI docs/models page: extract model id, description, and category (from section heading) from links. */
+function parseOpenAiModelsDocPage(html: string): Array<{ id: string; name: string; description?: string; category?: string }> {
+  const out: Array<{ id: string; name: string; description?: string; category?: string }> = [];
+  const headingRe = /<h[23][^>]*>([^<]+)<\/h[23]>/gi;
   const linkRe = /<a\s+href="(?:https?:\/\/[^"]*)?\/models\/([^"#?]+)(?:[^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
+  const headings: { index: number; text: string }[] = [];
+  let hm: RegExpExecArray | null;
+  while ((hm = headingRe.exec(html)) !== null) {
+    const text = hm[1].replace(/\s+/g, " ").trim();
+    if (text.length > 0 && text.length < 80) headings.push({ index: hm.index, text });
+  }
+  const getSectionBefore = (index: number): string | undefined => {
+    let last: string | undefined;
+    for (const h of headings) {
+      if (h.index >= index) break;
+      last = h.text;
+    }
+    return last;
+  };
   let m: RegExpExecArray | null;
   const seen = new Set<string>();
+  linkRe.lastIndex = 0;
   while ((m = linkRe.exec(html)) !== null) {
     const id = m[1].trim().toLowerCase();
     let linkText = m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -104,11 +119,11 @@ function parseOpenAiModelsDocPage(html: string): Array<{ id: string; name: strin
       .replace(/^\s*New\s*/i, "")
       .trim();
     if (!description) description = linkText.slice(0, 200);
-    if (description.length > 10) {
-      out.push({ id, name: id, description: description.slice(0, 400) });
-    } else {
-      out.push({ id, name: id });
-    }
+    const category = getSectionBefore(m.index);
+    const entry: { id: string; name: string; description?: string; category?: string } = { id, name: id };
+    if (description.length > 10) entry.description = description.slice(0, 400);
+    if (category) entry.category = category;
+    out.push(entry);
   }
   return out;
 }
@@ -3522,7 +3537,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // OpenAI: fetch model details (description, pricing) from pricing + docs/models pages
   app.get("/api/openai/model-details", async (req, res) => {
     try {
-      const byId = new Map<string, { id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number }>();
+      type Detail = { id: string; name: string; description?: string; promptPer1M?: number; completionPer1M?: number; tags?: string[] };
+      const byId = new Map<string, Detail>();
       const fetchOpts: RequestInit = {
         headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "User-Agent": "Mozilla/5.0 (compatible; PushLog/1.0)" },
       };
@@ -3558,11 +3574,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const d of docDetails) {
             const key = d.id.toLowerCase();
             const existing = byId.get(key);
+            const tags = d.category ? [d.category] : undefined;
             if (existing) {
               if (d.description && (!existing.description || d.description.length > (existing.description?.length ?? 0)))
                 existing.description = d.description;
+              if (tags) existing.tags = tags;
             } else {
-              byId.set(key, { id: d.id, name: d.name, description: d.description });
+              byId.set(key, { id: d.id, name: d.name, description: d.description, tags });
             }
           }
         }

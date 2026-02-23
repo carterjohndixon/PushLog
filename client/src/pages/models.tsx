@@ -126,6 +126,8 @@ interface OpenAiModelDetail {
   promptPer1M?: number;
   completionPer1M?: number;
   contextLength?: number;
+  /** From docs page section headings (e.g. "Frontier models") — not hardcoded */
+  tags?: string[];
 }
 
 /** Resolved model info for UI (from fetched details). */
@@ -134,6 +136,7 @@ interface OpenAiModelInfo {
   promptPer1M?: number;
   completionPer1M?: number;
   contextLength?: number;
+  tags?: string[];
 }
 
 interface UsageCall {
@@ -457,6 +460,7 @@ export default function Models() {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       setSelectedModel(null);
+      setSelectedOpenAiModel(null);
       setApplyToIntegrationId("");
       toast({
         title: "Model applied",
@@ -764,6 +768,7 @@ export default function Models() {
         promptPer1M: exact.promptPer1M,
         completionPer1M: exact.completionPer1M,
         contextLength: exact.contextLength,
+        tags: exact.tags,
       };
     const prefixMatch = details
       .filter((d) => id === d.id || id.startsWith(d.id + "-") || id.toLowerCase().startsWith(d.id.toLowerCase() + "-"))
@@ -774,6 +779,7 @@ export default function Models() {
         promptPer1M: prefixMatch.promptPer1M,
         completionPer1M: prefixMatch.completionPer1M,
         contextLength: prefixMatch.contextLength,
+        tags: prefixMatch.tags,
       };
     return undefined;
   };
@@ -1907,6 +1913,7 @@ export default function Models() {
                           </Tooltip>
                         </TooltipProvider>
                       </TableHead>
+                      <TableHead className="text-foreground hidden lg:table-cell">Tags</TableHead>
                       <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1915,6 +1922,7 @@ export default function Models() {
                       const info = getOpenAiModelInfo(m.id);
                       const hasPricing = !!getOpenAiPricing(m.id);
                       const summaryCost = estimateSummaryCost(m.id);
+                      const tags = info?.tags ?? [];
                       return (
                         <TableRow
                           key={m.id}
@@ -1935,6 +1943,22 @@ export default function Models() {
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
                             {hasPricing ? `~${formatUsd(summaryCost)}` : "—"}
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            {tags.length > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {tags.map((t) => (
+                                  <span
+                                    key={t}
+                                    className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
                             {info?.description ?? "—"}
@@ -2292,6 +2316,18 @@ export default function Models() {
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 pt-2">
+                    {info?.tags && info.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {info.tags.map((t) => (
+                          <span
+                            key={t}
+                            className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     {info?.description && (
                       <p className="text-sm text-muted-foreground">{info.description}</p>
                     )}
@@ -2328,24 +2364,70 @@ export default function Models() {
                     </a>
                     <Separator className="my-4" />
                     {userHasOpenAiKey && (
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium text-foreground">Set as default model</p>
-                        <Button
-                          variant="glow"
-                          className="text-white"
-                          disabled={setDefaultModelMutation.isPending}
-                          onClick={() => {
-                            setDefaultModelMutation.mutate(selectedOpenAiModel.id);
-                            setDefaultModelId(selectedOpenAiModel.id);
-                            setSelectedOpenAiModel(null);
-                          }}
-                        >
-                          {setDefaultModelMutation.isPending ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            "Set as default"
+                      <div className="space-y-4">
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium text-foreground">Use this model for a repo</p>
+                          <div className="flex flex-wrap items-end gap-2">
+                            <div className="flex-1 min-w-[200px]">
+                              <Select value={applyToIntegrationId} onValueChange={setApplyToIntegrationId}>
+                                <SelectTrigger className="bg-background border-border text-foreground">
+                                  <SelectValue placeholder="Choose integration..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {(integrations ?? []).map((int) => (
+                                    <SelectItem key={int.id} value={String(int.id)} className="text-foreground">
+                                      {int.repositoryName} → #{int.slackChannelName}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              variant="glow"
+                              className="text-white shrink-0"
+                              disabled={!applyToIntegrationId || applyToIntegrationMutation.isPending}
+                              onClick={() => {
+                                if (!applyToIntegrationId) return;
+                                applyToIntegrationMutation.mutate({
+                                  integrationId: Number(applyToIntegrationId),
+                                  modelId: selectedOpenAiModel.id,
+                                });
+                              }}
+                            >
+                              {applyToIntegrationMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                "Apply"
+                              )}
+                            </Button>
+                          </div>
+                          {integrations?.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              No integrations yet. Create one from <Link href="/dashboard" className="text-log-green hover:underline">Dashboard</Link> or{" "}
+                              <Link href="/integrations" className="text-log-green hover:underline">Integrations</Link>.
+                            </p>
                           )}
-                        </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium text-foreground">Set as default model</p>
+                          <p className="text-xs text-muted-foreground">New integrations will use this model by default.</p>
+                          <Button
+                            variant="outline"
+                            className="border-border"
+                            disabled={setDefaultModelMutation.isPending}
+                            onClick={() => {
+                              setDefaultModelMutation.mutate(selectedOpenAiModel.id);
+                              setDefaultModelId(selectedOpenAiModel.id);
+                              setSelectedOpenAiModel(null);
+                            }}
+                          >
+                            {setDefaultModelMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              "Set as default"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>
