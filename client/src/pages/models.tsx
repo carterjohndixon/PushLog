@@ -1729,7 +1729,12 @@ export default function Models() {
                               />
                             )}
                             <div>
-                              <p className="font-medium text-foreground">{m.name || m.id}</p>
+                              <p className="font-medium text-foreground flex items-center gap-2 flex-wrap">
+                                {m.name || m.id}
+                                {recommendedOpenrouter === m.id && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                                )}
+                              </p>
                               <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
                             </div>
                           </div>
@@ -2016,7 +2021,12 @@ export default function Models() {
                           onClick={() => setSelectedOpenAiModel(m)}
                         >
                           <TableCell className="text-foreground font-medium">
-                            {getAiModelDisplayName(m.id)}
+                            <span className="inline-flex items-center gap-2 flex-wrap">
+                              {getAiModelDisplayName(m.id)}
+                              {recommendedOpenai === m.id && (
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                              )}
+                            </span>
                           </TableCell>
                           <TableCell>
                             {tier ? (
