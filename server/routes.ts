@@ -181,6 +181,7 @@ function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string;
       });
     }
   }
+  // Markdown-style table: | model | input | output |
   const tableRowRe = /\|\s*(gpt-[\w.-]+|o\d+[-.\w]*)\s*\|\s*\$?([\d.]+)\s*\|\s*\$?([\d.]+|-)\s*\|/gi;
   let rowMatch: RegExpExecArray | null;
   while ((rowMatch = tableRowRe.exec(html)) !== null) {
@@ -194,6 +195,22 @@ function parseOpenAiPricingPage(html: string): Array<{ id: string; name: string;
         promptPer1M: input,
         ...(output != null && { completionPer1M: output }),
       });
+    }
+  }
+  // developers.openai.com: HTML table with Model, Input, Cached Input, Output columns
+  const htmlTableRowRe = /<tr[^>]*>[\s\S]*?<td[^>]*>\s*(gpt-[\w.-]+|o\d+[-.\w]*)\s*<\/td>[\s\S]*?<td[^>]*>\s*\$?([\d.,]+)\s*<\/td>[\s\S]*?<td[^>]*>[\s\S]*?<\/td>[\s\S]*?<td[^>]*>\s*\$?([\d.,]+)\s*<\/td>/gi;
+  let htmlMatch: RegExpExecArray | null;
+  while ((htmlMatch = htmlTableRowRe.exec(html)) !== null) {
+    const id = htmlMatch[1].trim().toLowerCase();
+    const input = parseFloat(htmlMatch[2].replace(/,/g, ""));
+    const output = parseFloat(htmlMatch[3].replace(/,/g, ""));
+    if (!/^(gpt-|o\d)/i.test(id)) continue;
+    const existing = details.find((d) => d.id === id);
+    if (existing) {
+      if (existing.promptPer1M == null) existing.promptPer1M = input;
+      if (existing.completionPer1M == null) existing.completionPer1M = output;
+    } else {
+      details.push({ id, name: id, promptPer1M: input, completionPer1M: output });
     }
   }
   return details;
@@ -3550,8 +3567,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         headers: { "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "User-Agent": "Mozilla/5.0 (compatible; PushLog/1.0)" },
       };
 
-      // 1) Pricing pages: get pricing and optional short descriptions
-      for (const url of ["https://openai.com/api/pricing/", "https://platform.openai.com/docs/pricing"]) {
+      // 1) Pricing: developers.openai.com has the canonical table (Model, Input, Cached Input, Output per 1M)
+      for (const url of [
+        "https://developers.openai.com/api/docs/pricing",
+        "https://openai.com/api/pricing/",
+        "https://platform.openai.com/docs/pricing",
+      ]) {
         try {
           const response = await fetch(url, fetchOpts);
           if (!response.ok) continue;
@@ -3588,6 +3609,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (tags) existing.tags = tags;
             } else {
               byId.set(key, { id: d.id, name: d.name, description: d.description, tags });
+            }
+          }
+        }
+      } catch {
+        /* skip */
+      }
+
+      // 3) OpenRouter as third-party source: structured API has OpenAI models with pricing (per-token -> we convert to per-1M)
+      try {
+        const orRes = await fetch("https://openrouter.ai/api/v1/models", { headers: { Accept: "application/json" } });
+        if (orRes.ok) {
+          const orData = (await orRes.json()) as { data?: Array<{ id?: string; name?: string; description?: string; context_length?: number; pricing?: { prompt?: number; completion?: number } }> };
+          const orModels = orData.data ?? [];
+          for (const m of orModels) {
+            const id = m.id?.trim();
+            if (!id || !id.startsWith("openai/")) continue;
+            const openaiId = id.replace(/^openai\/\s*/i, "").toLowerCase();
+            if (!/^gpt-|^o\d/i.test(openaiId)) continue;
+            const promptToken = typeof m.pricing?.prompt === "number" ? m.pricing.prompt : undefined;
+            const completionToken = typeof m.pricing?.completion === "number" ? m.pricing.completion : undefined;
+            const promptPer1M = promptToken != null ? promptToken * 1_000_000 : undefined;
+            const completionPer1M = completionToken != null ? completionToken * 1_000_000 : undefined;
+            const existing = byId.get(openaiId);
+            if (existing) {
+              if (promptPer1M != null && existing.promptPer1M == null) existing.promptPer1M = promptPer1M;
+              if (completionPer1M != null && existing.completionPer1M == null) existing.completionPer1M = completionPer1M;
+              if (m.description && (!existing.description || existing.description.length < (m.description?.length ?? 0))) existing.description = m.description;
+            } else {
+              byId.set(openaiId, {
+                id: openaiId,
+                name: m.name ?? openaiId,
+                description: m.description ?? undefined,
+                promptPer1M,
+                completionPer1M,
+              });
             }
           }
         }
