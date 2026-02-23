@@ -59,21 +59,14 @@ const OPENAI_PRICING: Record<string, { inputPer1MUsd: number; outputPer1MUsd: nu
 };
 
 type OpenAiTier = "premium" | "balanced" | "budget";
-const OPENAI_TIERS: Record<string, OpenAiTier> = {
-  "gpt-3.5-turbo": "budget",
-  "gpt-4": "premium",
-  "gpt-4-turbo": "premium",
-  "o1": "premium",
-  "o3": "premium",
-  "gpt-4o": "balanced",
-  "gpt-4o-mini": "balanced",
-  "gpt-4.1": "balanced",
-  "gpt-4.1-mini": "balanced",
-  "gpt-4.1-nano": "budget",
-  "o1-mini": "balanced",
-  "o3-mini": "balanced",
-  "o4-mini": "balanced",
-};
+
+/** Derive tier from pricing (no hardcoded model list). Uses avg $/1M: high = Premium, mid = Balanced, low = Budget. */
+function deriveTierFromPricing(inputPer1M: number, outputPer1M: number): OpenAiTier {
+  const avg = (inputPer1M + outputPer1M) / 2;
+  if (avg >= 15) return "premium";
+  if (avg >= 1) return "balanced";
+  return "budget";
+}
 
 function formatUsd(n: number): string {
   if (n === 0) return "$0.00";
@@ -98,13 +91,14 @@ function getOpenAiPricing(modelId: string): { inputPer1MUsd: number; outputPer1M
   return prefixMatch ? OPENAI_PRICING[prefixMatch] : undefined;
 }
 
-function getOpenAiTier(modelId: string): OpenAiTier | undefined {
-  const id = modelId.toLowerCase();
-  if (OPENAI_TIERS[id]) return OPENAI_TIERS[id];
-  const prefixMatch = Object.keys(OPENAI_TIERS)
-    .filter((k) => id === k || id.startsWith(k + "-"))
-    .sort((a, b) => b.length - a.length)[0];
-  return prefixMatch ? OPENAI_TIERS[prefixMatch] : undefined;
+/** Prefer server/fetched pricing (info), fall back to client OPENAI_PRICING. Used so models from API (e.g. gpt-5) get cost when server has data. */
+function getEffectiveOpenAiPricing(
+  modelId: string,
+  info: { promptPer1M?: number; completionPer1M?: number } | undefined
+): { inputPer1MUsd: number; outputPer1MUsd: number } | undefined {
+  if (info?.promptPer1M != null && info?.completionPer1M != null)
+    return { inputPer1MUsd: info.promptPer1M, outputPer1MUsd: info.completionPer1M };
+  return getOpenAiPricing(modelId);
 }
 
 function costPer1M(modelId: string): string {
@@ -114,9 +108,7 @@ function costPer1M(modelId: string): string {
 }
 
 /** "$30 / $60" style for 1M tokens column. */
-function costPer1MShort(modelId: string): string {
-  const p = getOpenAiPricing(modelId);
-  if (!p) return "—";
+function costPer1MShort(p: { inputPer1MUsd: number; outputPer1MUsd: number }): string {
   return `$${p.inputPer1MUsd.toFixed(2)} / $${p.outputPer1MUsd.toFixed(2)}`;
 }
 
@@ -134,6 +126,14 @@ function estimateSummaryCost(
 ): number {
   const p = getOpenAiPricing(modelId);
   if (!p) return 0;
+  return (inTokens / 1_000_000) * p.inputPer1MUsd + (outTokens / 1_000_000) * p.outputPer1MUsd;
+}
+
+function summaryCostFromPricing(
+  p: { inputPer1MUsd: number; outputPer1MUsd: number },
+  inTokens: number = DEFAULT_SUMMARY_INPUT_TOKENS,
+  outTokens: number = DEFAULT_SUMMARY_OUTPUT_TOKENS
+): number {
   return (inTokens / 1_000_000) * p.inputPer1MUsd + (outTokens / 1_000_000) * p.outputPer1MUsd;
 }
 
@@ -1964,9 +1964,11 @@ export default function Models() {
                   </TableHeader>
                   <TableBody>
                     {openaiModels.map((m) => {
-                      const hasPricing = !!getOpenAiPricing(m.id);
-                      const summaryCost = estimateSummaryCost(m.id);
-                      const tier = getOpenAiTier(m.id);
+                      const info = getOpenAiModelInfo(m.id);
+                      const effectivePricing = getEffectiveOpenAiPricing(m.id, info);
+                      const hasPricing = !!effectivePricing;
+                      const summaryCost = hasPricing ? summaryCostFromPricing(effectivePricing) : 0;
+                      const tier = hasPricing ? deriveTierFromPricing(effectivePricing.inputPer1MUsd, effectivePricing.outputPer1MUsd) : null;
                       return (
                         <TableRow
                           key={m.id}
@@ -1990,7 +1992,7 @@ export default function Models() {
                             {hasPricing ? `~${formatSummaryUsd(summaryCost)}` : "—"}
                           </TableCell>
                           <TableCell className="text-foreground">
-                            {hasPricing ? costPer1MShort(m.id) : "—"}
+                            {hasPricing ? costPer1MShort(effectivePricing) : "—"}
                           </TableCell>
                         </TableRow>
                       );
@@ -2331,8 +2333,8 @@ export default function Models() {
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             {selectedOpenAiModel && (() => {
               const info = getOpenAiModelInfo(selectedOpenAiModel.id);
-              const pricing = getOpenAiPricing(selectedOpenAiModel.id);
-              const summaryCost = estimateSummaryCost(selectedOpenAiModel.id);
+              const effectivePricing = getEffectiveOpenAiPricing(selectedOpenAiModel.id, info);
+              const summaryCost = effectivePricing ? summaryCostFromPricing(effectivePricing) : 0;
               return (
                 <>
                   <DialogHeader>
@@ -2367,15 +2369,15 @@ export default function Models() {
                           <p className="font-medium text-foreground">{info.contextLength.toLocaleString()}</p>
                         </div>
                       )}
-                      {pricing && (
+                      {effectivePricing && (
                         <>
                           <div className="rounded-lg border border-border bg-muted/30 p-3">
                             <p className="text-xs text-muted-foreground uppercase tracking-wide">Est. cost / 1M</p>
-                            <p className="font-medium text-foreground">{costPer1M(selectedOpenAiModel.id)}</p>
+                            <p className="font-medium text-foreground">{costPer1MShort(effectivePricing)}</p>
                           </div>
                           <div className="rounded-lg border border-border bg-muted/30 p-3">
                             <p className="text-xs text-muted-foreground uppercase tracking-wide">Est. / summary</p>
-                            <p className="font-medium text-foreground">~{formatUsd(summaryCost)}</p>
+                            <p className="font-medium text-foreground">~{formatSummaryUsd(summaryCost)}</p>
                             <p className="text-xs text-muted-foreground mt-1">
                               {DEFAULT_SUMMARY_INPUT_TOKENS.toLocaleString()} in + {DEFAULT_SUMMARY_OUTPUT_TOKENS.toLocaleString()} out tokens
                             </p>

@@ -3518,9 +3518,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const data = (await response.json()) as { data?: Array<{ id: string; created?: number; owned_by?: string }> };
       const raw = data.data ?? [];
-      // Filter to chat-compatible models (gpt-*, o1-*, o3-*); exclude embedding, whisper, etc.
+      // Only text-generation (chat/completion) models — exclude transcribe, TTS, realtime, image, embedding, etc.
+      const isTextGenOnly = (id: string) => {
+        const lower = id.toLowerCase();
+        if (!/^(gpt-|o1-|o3-|o4-)/i.test(id)) return false;
+        if (/transcribe|tts|realtime|whisper|embed|audio|image|vision-only/i.test(lower)) return false;
+        if (/-image-|dall-e|dall·e/i.test(lower)) return false;
+        return true;
+      };
       const models = raw
-        .filter((m) => m.id && /^(gpt-|o1-|o3-)/i.test(m.id))
+        .filter((m) => m.id && isTextGenOnly(m.id))
         .map((m) => ({
           id: m.id,
           name: m.id,
