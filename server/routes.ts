@@ -4166,7 +4166,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(response.status).json({ error: "Failed to fetch OpenRouter models" });
       }
       const data = await response.json();
-      const models = (data.data || []).map((m: any) => ({
+      const raw = data.data || [];
+      // Only include text-generation models (exclude image-only, audio-only, etc.)
+      const textGen = raw.filter((m: any) => {
+        const out = m.architecture?.output_modalities;
+        if (!out || !Array.isArray(out)) return true; // no architecture info → include to avoid breaking
+        return out.includes("text");
+      });
+      const models = textGen.map((m: any) => ({
         id: m.id,
         name: m.name || m.id,
         description: m.description || "",
