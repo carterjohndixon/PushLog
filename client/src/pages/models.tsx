@@ -808,7 +808,8 @@ export default function Models() {
 
   const getOpenAiModelInfo = (id: string): OpenAiModelInfo | undefined => {
     const details = openaiDetails;
-    const exact = details.find((d) => d.id === id || d.id.toLowerCase() === id.toLowerCase());
+    const lid = id.toLowerCase();
+    const exact = details.find((d) => d.id === id || d.id.toLowerCase() === lid);
     if (exact)
       return {
         description: exact.description,
@@ -817,8 +818,18 @@ export default function Models() {
         contextLength: exact.contextLength,
         tags: exact.tags,
       };
+    // Match when API id is prefix of detail id (e.g. gpt-5 -> gpt-5.2, gpt-5-mini) or vice versa (gpt-5.2-xxx -> gpt-5.2)
     const prefixMatch = details
-      .filter((d) => id === d.id || id.startsWith(d.id + "-") || id.toLowerCase().startsWith(d.id.toLowerCase() + "-"))
+      .filter(
+        (d) =>
+          id === d.id ||
+          id.startsWith(d.id + "-") ||
+          lid.startsWith(d.id.toLowerCase() + "-") ||
+          d.id.startsWith(id + "-") ||
+          d.id.startsWith(id + ".") ||
+          d.id.toLowerCase().startsWith(lid + "-") ||
+          d.id.toLowerCase().startsWith(lid + ".")
+      )
       .sort((a, b) => b.id.length - a.id.length)[0];
     if (prefixMatch)
       return {
