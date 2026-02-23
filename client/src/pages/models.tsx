@@ -58,10 +58,34 @@ const OPENAI_PRICING: Record<string, { inputPer1MUsd: number; outputPer1MUsd: nu
   "o4-mini": { inputPer1MUsd: 1.1, outputPer1MUsd: 4.4 },
 };
 
+type OpenAiTier = "premium" | "balanced" | "budget";
+const OPENAI_TIERS: Record<string, OpenAiTier> = {
+  "gpt-3.5-turbo": "budget",
+  "gpt-4": "premium",
+  "gpt-4-turbo": "premium",
+  "o1": "premium",
+  "o3": "premium",
+  "gpt-4o": "balanced",
+  "gpt-4o-mini": "balanced",
+  "gpt-4.1": "balanced",
+  "gpt-4.1-mini": "balanced",
+  "gpt-4.1-nano": "budget",
+  "o1-mini": "balanced",
+  "o3-mini": "balanced",
+  "o4-mini": "balanced",
+};
+
 function formatUsd(n: number): string {
   if (n === 0) return "$0.00";
   if (n < 0.0001) return "$0.00";
   if (n < 1) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+/** For Est / summary column: 3 decimals when < $1. */
+function formatSummaryUsd(n: number): string {
+  if (n === 0) return "$0.000";
+  if (n < 1) return `$${n.toFixed(3)}`;
   return `$${n.toFixed(2)}`;
 }
 
@@ -74,11 +98,34 @@ function getOpenAiPricing(modelId: string): { inputPer1MUsd: number; outputPer1M
   return prefixMatch ? OPENAI_PRICING[prefixMatch] : undefined;
 }
 
+function getOpenAiTier(modelId: string): OpenAiTier | undefined {
+  const id = modelId.toLowerCase();
+  if (OPENAI_TIERS[id]) return OPENAI_TIERS[id];
+  const prefixMatch = Object.keys(OPENAI_TIERS)
+    .filter((k) => id === k || id.startsWith(k + "-"))
+    .sort((a, b) => b.length - a.length)[0];
+  return prefixMatch ? OPENAI_TIERS[prefixMatch] : undefined;
+}
+
 function costPer1M(modelId: string): string {
   const p = getOpenAiPricing(modelId);
   if (!p) return "—";
   return `$${p.inputPer1MUsd.toFixed(2)} in + $${p.outputPer1MUsd.toFixed(2)} out`;
 }
+
+/** "$30 / $60" style for 1M tokens column. */
+function costPer1MShort(modelId: string): string {
+  const p = getOpenAiPricing(modelId);
+  if (!p) return "—";
+  return `$${p.inputPer1MUsd.toFixed(2)} / $${p.outputPer1MUsd.toFixed(2)}`;
+}
+
+const TIER_LABELS: Record<OpenAiTier, string> = { premium: "Premium", balanced: "Balanced", budget: "Budget" };
+const TIER_DOT_CLASS: Record<OpenAiTier, string> = {
+  premium: "bg-red-500",
+  balanced: "bg-yellow-500",
+  budget: "bg-emerald-500",
+};
 
 function estimateSummaryCost(
   modelId: string,
@@ -1896,15 +1943,14 @@ export default function Models() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 border-border">
-                      <TableHead className="text-foreground">Model</TableHead>
-                      <TableHead className="text-foreground">Context</TableHead>
-                      <TableHead className="text-foreground">Est. cost / 1M</TableHead>
-                      <TableHead className="text-foreground">
+                      <TableHead className="text-foreground font-medium">Model</TableHead>
+                      <TableHead className="text-foreground font-medium">Tier</TableHead>
+                      <TableHead className="text-foreground font-medium">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <span className="cursor-help border-b border-dotted border-muted-foreground">
-                                Est. / summary
+                                Est / summary
                               </span>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
@@ -1913,55 +1959,38 @@ export default function Models() {
                           </Tooltip>
                         </TooltipProvider>
                       </TableHead>
-                      <TableHead className="text-foreground hidden lg:table-cell">Tags</TableHead>
-                      <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
+                      <TableHead className="text-foreground font-medium">1M tokens</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {openaiModels.map((m) => {
-                      const info = getOpenAiModelInfo(m.id);
                       const hasPricing = !!getOpenAiPricing(m.id);
                       const summaryCost = estimateSummaryCost(m.id);
-                      const tags = info?.tags ?? [];
+                      const tier = getOpenAiTier(m.id);
                       return (
                         <TableRow
                           key={m.id}
-                          className="border-border cursor-pointer hover:bg-muted/50 transition-colors"
+                          className="border-border cursor-pointer hover:bg-muted/50 transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-border/70"
                           onClick={() => setSelectedOpenAiModel(m)}
                         >
+                          <TableCell className="text-foreground font-medium">
+                            {getAiModelDisplayName(m.id)}
+                          </TableCell>
                           <TableCell>
-                            <div>
-                              <p className="font-medium text-foreground">{getAiModelDisplayName(m.id)}</p>
-                              <p className="text-xs text-muted-foreground font-mono">{m.id}</p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {info?.contextLength != null ? info.contextLength.toLocaleString() : "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {hasPricing ? costPer1M(m.id) : "—"}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
-                            {hasPricing ? `~${formatUsd(summaryCost)}` : "—"}
-                          </TableCell>
-                          <TableCell className="hidden lg:table-cell">
-                            {tags.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {tags.map((t) => (
-                                  <span
-                                    key={t}
-                                    className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
-                                  >
-                                    {t}
-                                  </span>
-                                ))}
-                              </div>
+                            {tier ? (
+                              <span className="inline-flex items-center gap-1.5 text-foreground">
+                                <span className={`h-2 w-2 rounded-full shrink-0 ${TIER_DOT_CLASS[tier]}`} aria-hidden />
+                                {TIER_LABELS[tier]}
+                              </span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
-                            {info?.description ?? "—"}
+                          <TableCell className="text-foreground">
+                            {hasPricing ? `~${formatSummaryUsd(summaryCost)}` : "—"}
+                          </TableCell>
+                          <TableCell className="text-foreground">
+                            {hasPricing ? costPer1MShort(m.id) : "—"}
                           </TableCell>
                         </TableRow>
                       );
