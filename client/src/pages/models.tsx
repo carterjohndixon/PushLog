@@ -31,10 +31,64 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
 import { formatLocalShortDate } from "@/lib/date";
 import { AiUsage } from "@shared/schema";
+
+// ——— OpenAI cost display (internal pricing map) ———
+// TODO: move pricing map to server-configurable source (e.g. admin or env) for easier updates.
+const DEFAULT_SUMMARY_INPUT_TOKENS = 1200;
+const DEFAULT_SUMMARY_OUTPUT_TOKENS = 300;
+
+const OPENAI_PRICING: Record<string, { inputPer1MUsd: number; outputPer1MUsd: number }> = {
+  "gpt-3.5-turbo": { inputPer1MUsd: 0.5, outputPer1MUsd: 1.5 },
+  "gpt-4": { inputPer1MUsd: 30, outputPer1MUsd: 60 },
+  "gpt-4-turbo": { inputPer1MUsd: 10, outputPer1MUsd: 30 },
+  "gpt-4o": { inputPer1MUsd: 2.5, outputPer1MUsd: 10 },
+  "gpt-4o-mini": { inputPer1MUsd: 0.15, outputPer1MUsd: 0.6 },
+  "gpt-4.1": { inputPer1MUsd: 2.5, outputPer1MUsd: 10 },
+  "gpt-4.1-mini": { inputPer1MUsd: 0.4, outputPer1MUsd: 1.6 },
+  "gpt-4.1-nano": { inputPer1MUsd: 0.1, outputPer1MUsd: 0.4 },
+  "o1": { inputPer1MUsd: 15, outputPer1MUsd: 60 },
+  "o1-mini": { inputPer1MUsd: 3, outputPer1MUsd: 12 },
+  "o3": { inputPer1MUsd: 4, outputPer1MUsd: 16 },
+  "o3-mini": { inputPer1MUsd: 1.1, outputPer1MUsd: 4.4 },
+  "o4-mini": { inputPer1MUsd: 1.1, outputPer1MUsd: 4.4 },
+};
+
+function formatUsd(n: number): string {
+  if (n === 0) return "$0.00";
+  if (n < 0.0001) return "$0.00";
+  if (n < 1) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+function getOpenAiPricing(modelId: string): { inputPer1MUsd: number; outputPer1MUsd: number } | undefined {
+  const id = modelId.toLowerCase();
+  if (OPENAI_PRICING[id]) return OPENAI_PRICING[id];
+  const prefixMatch = Object.keys(OPENAI_PRICING)
+    .filter((k) => id === k || id.startsWith(k + "-"))
+    .sort((a, b) => b.length - a.length)[0];
+  return prefixMatch ? OPENAI_PRICING[prefixMatch] : undefined;
+}
+
+function costPer1M(modelId: string): string {
+  const p = getOpenAiPricing(modelId);
+  if (!p) return "—";
+  return `$${p.inputPer1MUsd.toFixed(2)} in + $${p.outputPer1MUsd.toFixed(2)} out`;
+}
+
+function estimateSummaryCost(
+  modelId: string,
+  inTokens: number = DEFAULT_SUMMARY_INPUT_TOKENS,
+  outTokens: number = DEFAULT_SUMMARY_OUTPUT_TOKENS
+): number {
+  const p = getOpenAiPricing(modelId);
+  if (!p) return 0;
+  return (inTokens / 1_000_000) * p.inputPer1MUsd + (outTokens / 1_000_000) * p.outputPer1MUsd;
+}
 
 interface OpenRouterModel {
   id: string;
@@ -64,13 +118,14 @@ interface OpenAiModel {
   name?: string;
 }
 
-/** Fetched from server (parsed from OpenAI pricing page). */
+/** Fetched from server (parsed from OpenAI pricing page + fallbacks). */
 interface OpenAiModelDetail {
   id: string;
   name: string;
   description?: string;
   promptPer1M?: number;
   completionPer1M?: number;
+  contextLength?: number;
 }
 
 /** Resolved model info for UI (from fetched details). */
@@ -708,6 +763,7 @@ export default function Models() {
         description: exact.description,
         promptPer1M: exact.promptPer1M,
         completionPer1M: exact.completionPer1M,
+        contextLength: exact.contextLength,
       };
     const prefixMatch = details
       .filter((d) => id === d.id || id.startsWith(d.id + "-") || id.toLowerCase().startsWith(d.id.toLowerCase() + "-"))
@@ -717,6 +773,7 @@ export default function Models() {
         description: prefixMatch.description,
         promptPer1M: prefixMatch.promptPer1M,
         completionPer1M: prefixMatch.completionPer1M,
+        contextLength: prefixMatch.contextLength,
       };
     return undefined;
   };
@@ -1814,16 +1871,15 @@ export default function Models() {
               Browse OpenAI models
             </CardTitle>
             <CardDescription>
-              Click a model for details and to set it as default. Pricing is approximate; see{" "}
+              Click a model for details and to set it as default.{" "}
               <a
-                href="https://platform.openai.com/docs/pricing"
+                href="https://openai.com/api/pricing/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-log-green hover:underline font-medium"
+                className="text-muted-foreground hover:text-foreground text-xs inline-flex items-center gap-0.5"
               >
-                OpenAI pricing <ExternalLink className="w-3 h-3 inline" />
-              </a>{" "}
-              for current rates.
+                Pricing subject to change <ExternalLink className="w-3 h-3" />
+              </a>
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -1836,14 +1892,29 @@ export default function Models() {
                     <TableRow className="bg-muted/50 border-border">
                       <TableHead className="text-foreground">Model</TableHead>
                       <TableHead className="text-foreground">Context</TableHead>
-                      <TableHead className="text-foreground">Prompt (per 1M)</TableHead>
-                      <TableHead className="text-foreground">Completion (per 1M)</TableHead>
+                      <TableHead className="text-foreground">Est. cost / 1M</TableHead>
+                      <TableHead className="text-foreground">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help border-b border-dotted border-muted-foreground">
+                                Est. / summary
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              Estimated using {DEFAULT_SUMMARY_INPUT_TOKENS.toLocaleString()} input + {DEFAULT_SUMMARY_OUTPUT_TOKENS.toLocaleString()} output tokens per summary.
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
                       <TableHead className="text-foreground hidden md:table-cell">Description</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {openaiModels.map((m) => {
                       const info = getOpenAiModelInfo(m.id);
+                      const hasPricing = !!getOpenAiPricing(m.id);
+                      const summaryCost = estimateSummaryCost(m.id);
                       return (
                         <TableRow
                           key={m.id}
@@ -1860,10 +1931,10 @@ export default function Models() {
                             {info?.contextLength != null ? info.contextLength.toLocaleString() : "—"}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
-                            {formatPricePer1M(info?.promptPer1M)}
+                            {hasPricing ? costPer1M(m.id) : "—"}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm">
-                            {formatPricePer1M(info?.completionPer1M)}
+                            {hasPricing ? `~${formatUsd(summaryCost)}` : "—"}
                           </TableCell>
                           <TableCell className="text-muted-foreground text-sm hidden md:table-cell max-w-xs truncate">
                             {info?.description ?? "—"}
@@ -2207,6 +2278,8 @@ export default function Models() {
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             {selectedOpenAiModel && (() => {
               const info = getOpenAiModelInfo(selectedOpenAiModel.id);
+              const pricing = getOpenAiPricing(selectedOpenAiModel.id);
+              const summaryCost = estimateSummaryCost(selectedOpenAiModel.id);
               return (
                 <>
                   <DialogHeader>
@@ -2229,14 +2302,21 @@ export default function Models() {
                           <p className="font-medium text-foreground">{info.contextLength.toLocaleString()}</p>
                         </div>
                       )}
-                      <div className="rounded-lg border border-border bg-muted/30 p-3">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Prompt (per 1M)</p>
-                        <p className="font-medium text-foreground">{formatPricePer1M(info?.promptPer1M)}</p>
-                      </div>
-                      <div className="rounded-lg border border-border bg-muted/30 p-3">
-                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Completion (per 1M)</p>
-                        <p className="font-medium text-foreground">{formatPricePer1M(info?.completionPer1M)}</p>
-                      </div>
+                      {pricing && (
+                        <>
+                          <div className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Est. cost / 1M</p>
+                            <p className="font-medium text-foreground">{costPer1M(selectedOpenAiModel.id)}</p>
+                          </div>
+                          <div className="rounded-lg border border-border bg-muted/30 p-3">
+                            <p className="text-xs text-muted-foreground uppercase tracking-wide">Est. / summary</p>
+                            <p className="font-medium text-foreground">~{formatUsd(summaryCost)}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {DEFAULT_SUMMARY_INPUT_TOKENS.toLocaleString()} in + {DEFAULT_SUMMARY_OUTPUT_TOKENS.toLocaleString()} out tokens
+                            </p>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <a
                       href="https://platform.openai.com/docs/models"
