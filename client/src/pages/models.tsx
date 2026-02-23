@@ -78,7 +78,7 @@ export default function Models() {
   });
 
   const applyToIntegrationMutation = useMutation({
-    mutationFn: async ({ integrationId, modelId }: { integrationId: number; modelId: string }) => {
+    mutationFn: async ({ integrationId, modelId }: { integrationId: string; modelId: string }) => {
       const res = await apiRequest("PATCH", `/api/integrations/${integrationId}`, { aiModel: modelId });
       return res.json();
     },

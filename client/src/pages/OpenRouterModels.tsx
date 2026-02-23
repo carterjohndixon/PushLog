@@ -132,7 +132,7 @@ interface OpenRouterModelsProps {
   applyToIntegrationMutation: UseMutationResult<
     unknown,
     Error,
-    { integrationId: number; modelId: string }
+    { integrationId: string; modelId: string }
   >;
   setDefaultModelMutation: UseMutationResult<unknown, Error, string>;
   setReplaceAllConfirmOpen: (open: boolean) => void;
@@ -1708,7 +1708,7 @@ export function OpenRouterModels({
                           }
                           applyToIntegrationMutation.mutate(
                             {
-                              integrationId: Number(applyToIntegrationId),
+                              integrationId: applyToIntegrationId,
                               modelId: selectedModel.id,
                             },
                             { onSuccess: () => setSelectedModel(null) }

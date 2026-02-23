@@ -138,7 +138,7 @@ interface OpenAIModelsProps {
   applyToIntegrationMutation: UseMutationResult<
     unknown,
     Error,
-    { integrationId: number; modelId: string }
+    { integrationId: string; modelId: string }
   >;
   setDefaultModelMutation: UseMutationResult<unknown, Error, string>;
   setReplaceAllConfirmOpen: (open: boolean) => void;
@@ -779,7 +779,7 @@ export function OpenAIModels({
                               }
                               applyToIntegrationMutation.mutate(
                                 {
-                                  integrationId: Number(applyToIntegrationId),
+                                  integrationId: applyToIntegrationId,
                                   modelId: selectedOpenAiModel.id,
                                 },
                                 { onSuccess: () => setSelectedOpenAiModel(null) }
