@@ -3961,6 +3961,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenAI usage for current user (calls, tokens, cost from ai_usage where model is OpenAI-style, no "/")
+  app.get("/api/openai/usage", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      let usage: any[];
+      try {
+        usage = await databaseStorage.getAiUsageWithPushDateByUserId(userId);
+      } catch (joinErr) {
+        console.warn("OpenAI usage: join query failed, falling back to simple query:", joinErr);
+        usage = await databaseStorage.getAiUsageByUserId(userId, { limit: 500 });
+      }
+      const openaiRows = usage.filter((u: any) => u.model && !String(u.model).includes("/"));
+      const costFromRow = (u: any) => {
+        const v = u.cost ?? (u as any).cost;
+        return typeof v === "number" ? v : (v != null ? Number(v) : 0);
+      };
+      const createdAtFromRow = (u: any) => {
+        const created = u.createdAt ?? (u as any).created_at;
+        const pushed = u.pushedAt ?? (u as any).pushed_at;
+        if (created != null && String(created).trim()) return created;
+        if (pushed != null && String(pushed).trim()) return pushed;
+        return null;
+      };
+      const toIsoString = (v: unknown): string | null => {
+        if (v == null) return null;
+        if (typeof v === "string") {
+          const d = new Date(v);
+          return Number.isNaN(d.getTime()) ? null : d.toISOString();
+        }
+        if (typeof v === "number" && !Number.isNaN(v)) return new Date(v).toISOString();
+        if (v instanceof Date && !Number.isNaN(v.getTime())) return v.toISOString();
+        return null;
+      };
+      const totalCalls = openaiRows.length;
+      const totalTokens = openaiRows.reduce((sum: number, u: any) => sum + (u.tokensUsed ?? (u as any).tokens_used ?? 0), 0);
+      const totalCostCents = openaiRows.reduce((sum: number, u: any) => sum + costFromRow(u), 0);
+      const costByModelMap = new Map<string, { totalCostCents: number; totalCalls: number; totalTokens: number; lastAt: string | null }>();
+      for (const u of openaiRows) {
+        const m = String(u?.model ?? "").trim() || "unknown";
+        const at = createdAtFromRow(u);
+        if (!costByModelMap.has(m)) {
+          costByModelMap.set(m, { totalCostCents: 0, totalCalls: 0, totalTokens: 0, lastAt: null });
+        }
+        const entry = costByModelMap.get(m)!;
+        entry.totalCostCents += costFromRow(u);
+        entry.totalCalls += 1;
+        entry.totalTokens += u.tokensUsed ?? (u as any).tokens_used ?? 0;
+        if (at && (!entry.lastAt || new Date(at).getTime() > new Date(entry.lastAt).getTime())) entry.lastAt = at;
+      }
+      const costByModel = Array.from(costByModelMap.entries()).map(([model, v]) => ({
+        model,
+        totalCostCents: v.totalCostCents,
+        totalCalls: v.totalCalls,
+        totalTokens: v.totalTokens,
+        lastAt: v.lastAt,
+      }));
+      let lastUsedByModel: Record<string, string> = {};
+      for (const [m, entry] of Array.from(costByModelMap.entries())) {
+        if (entry.lastAt) {
+          const iso = toIsoString(entry.lastAt);
+          if (iso) lastUsedByModel[m] = iso;
+        }
+      }
+      try {
+        const lastUsedRows = await databaseStorage.getLastUsedByModelByUserId(userId);
+        for (const r of lastUsedRows) {
+          if (!r.model || String(r.model).includes("/") || !r.lastUsedAt) continue;
+          const iso = toIsoString(r.lastUsedAt);
+          if (!iso) continue;
+          const prev = lastUsedByModel[r.model] ? new Date(lastUsedByModel[r.model]).getTime() : 0;
+          if (new Date(iso).getTime() > prev) lastUsedByModel[r.model] = iso;
+        }
+      } catch (_) {}
+      res.status(200).json({
+        totalCalls,
+        totalTokens,
+        totalCostCents,
+        totalCostFormatted: totalCostCents > 0 ? `$${(totalCostCents / 10000).toFixed(4)}` : (totalCostCents === 0 ? "$0.00" : null),
+        costByModel,
+        lastUsedByModel,
+        calls: openaiRows.slice(0, 100).map((u: any) => {
+          const c = costFromRow(u);
+          const at = createdAtFromRow(u);
+          const createdAtStr = toIsoString(at) ?? (at != null ? (at instanceof Date ? at.toISOString() : String(at)) : null);
+          return {
+            id: u.id,
+            model: u.model,
+            tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
+            cost: c,
+            costFormatted: c > 0 ? `$${(c / 10000).toFixed(4)}` : (c === 0 ? "$0.00" : null),
+            createdAt: createdAtStr,
+            generationId: u.openrouterGenerationId ?? (u as any).openrouter_generation_id ?? (u as any).openrouterGenerationId ?? null,
+          };
+        }),
+      });
+    } catch (err) {
+      console.error("OpenAI usage error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to load usage" });
+    }
+  });
+
   // OpenRouter: daily usage aggregation for cost-over-time chart on /models page
   app.get("/api/openrouter/usage/daily", authenticateToken, async (req, res) => {
     try {

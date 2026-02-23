@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -105,8 +105,8 @@ export function IntegrationSettingsModal({
   const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
+  const lastOpenRouterModelRef = useRef<string | null>(null);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   const testSlackMutation = useMutation({
     mutationFn: async (integrationId: string) => {
@@ -131,6 +131,7 @@ export function IntegrationSettingsModal({
     enabled: open,
   });
   const userHasOpenRouterKey = !!profileResponse?.user?.hasOpenRouterKey;
+  const preferredAiModel = (profileResponse?.user as { preferredAiModel?: string } | undefined)?.preferredAiModel;
 
   const { data: openRouterData } = useQuery<{ models: OpenRouterModel[] }>({
     queryKey: ["/api/openrouter/models"],
@@ -166,6 +167,7 @@ export function IntegrationSettingsModal({
   const [prevIntegrationId, setPrevIntegrationId] = useState(integration?.id);
   if (integration?.id !== prevIntegrationId) {
     setPrevIntegrationId(integration?.id);
+    lastOpenRouterModelRef.current = null;
     if (integration) {
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
@@ -301,10 +303,19 @@ export function IntegrationSettingsModal({
                   <Switch
                     checked={useOpenRouter}
                     onCheckedChange={(checked) => {
-                      setUseOpenRouter(checked);
-                      if (!checked && aiModel.includes("/")) {
-                        setAiModel("gpt-5.2");
+                      if (!checked) {
+                        if (aiModel.includes("/")) {
+                          lastOpenRouterModelRef.current = aiModel;
+                        }
+                        const fallback = preferredAiModel && !String(preferredAiModel).includes("/") ? preferredAiModel : "gpt-4o";
+                        setAiModel(fallback);
+                      } else {
+                        if (lastOpenRouterModelRef.current) {
+                          setAiModel(lastOpenRouterModelRef.current);
+                          lastOpenRouterModelRef.current = null;
+                        }
                       }
+                      setUseOpenRouter(checked);
                     }}
                   />
                   <span className="text-xs text-muted-foreground flex items-center gap-1">

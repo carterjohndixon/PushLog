@@ -36,7 +36,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 max-h-[50vh] flex flex-col">
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-popover [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-muted [scrollbar-color:hsl(var(--muted))_hsl(var(--popover))]">
           {notifications.map((notification) => (
           <div 
             key={notification.id} 

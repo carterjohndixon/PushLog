@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -241,6 +241,7 @@ interface UsagePerGenResult {
 
 export default function Models() {
   const [providerTab, setProviderTab] = useState<"openrouter" | "openai">("openrouter");
+  const hasSetInitialTab = useRef(false);
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [openaiApiKeyInput, setOpenaiApiKeyInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -315,6 +316,13 @@ export default function Models() {
   const recommendedOpenai = recommendedData?.openai ?? null;
   const recommendedOpenrouter = recommendedData?.openrouter ?? null;
 
+  // When user has OpenAI key, default to OpenAI tab on first visit to Models page
+  useEffect(() => {
+    if (hasSetInitialTab.current || profileLoading) return;
+    hasSetInitialTab.current = true;
+    if (profileResponse?.user?.hasOpenAiKey) setProviderTab("openai");
+  }, [profileLoading, profileResponse?.user?.hasOpenAiKey]);
+
   const { data: usageData, isLoading: usageLoading, isError: usageError } = useQuery<OpenRouterUsage>({
     queryKey: ["/api/openrouter/usage"],
     queryFn: async () => {
@@ -332,6 +340,26 @@ export default function Models() {
       };
     },
     enabled: userHasKey,
+    retry: 1,
+  });
+
+  const { data: openaiUsageData, isLoading: openaiUsageLoading, isError: openaiUsageError } = useQuery<OpenRouterUsage>({
+    queryKey: ["/api/openai/usage"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/usage", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load usage");
+      const data = await res.json();
+      return {
+        totalCalls: data.totalCalls ?? 0,
+        totalTokens: data.totalTokens ?? 0,
+        totalCostCents: data.totalCostCents ?? 0,
+        totalCostFormatted: data.totalCostFormatted ?? null,
+        costByModel: Array.isArray(data.costByModel) ? data.costByModel : undefined,
+        calls: Array.isArray(data.calls) ? data.calls : [],
+        lastUsedByModel: data.lastUsedByModel && typeof data.lastUsedByModel === "object" ? data.lastUsedByModel : undefined,
+      };
+    },
+    enabled: userHasOpenAiKey,
     retry: 1,
   });
 
@@ -506,6 +534,7 @@ export default function Models() {
     onSuccess: (_, { modelId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
+      if (!modelId.includes("/")) queryClient.invalidateQueries({ queryKey: ["/api/openai/usage"] });
       setSelectedModel(null);
       setSelectedOpenAiModel(null);
       setApplyToIntegrationId("");
@@ -2018,6 +2047,89 @@ export default function Models() {
           </CardContent>
         </Card>
         )}
+
+        {/* OpenAI usage (when key is set) */}
+        {userHasOpenAiKey && (
+          <Card className="card-lift mt-8 mb-8 border-border shadow-forest">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <DollarSign className="w-5 h-5 text-log-green" />
+                Usage & cost
+              </CardTitle>
+              <CardDescription>
+                Calls and token usage from PushLog using your OpenAI key. Cost is estimated from our recorded usage when available.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {openaiUsageLoading ? (
+                <Skeleton className="h-24 w-full" />
+              ) : openaiUsageError ? (
+                <p className="text-sm text-muted-foreground">Could not load usage. You can still browse and apply models above.</p>
+              ) : openaiUsageData ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total calls</p>
+                      <p className="text-xl font-semibold text-foreground">{openaiUsageData.totalCalls ?? 0}</p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Total tokens</p>
+                      <p className="text-xl font-semibold text-foreground">
+                        {(openaiUsageData.totalTokens ?? 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimated cost</p>
+                      <p className="text-xl font-semibold text-foreground">
+                        {openaiUsageData.totalCostFormatted ?? "—"}
+                      </p>
+                    </div>
+                  </div>
+                  {openaiUsageData.costByModel && openaiUsageData.costByModel.length > 0 && (
+                    <>
+                      <h4 className="text-sm font-semibold text-foreground mb-2">Cost by model</h4>
+                      <div className="rounded-md border border-border overflow-hidden">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 border-border">
+                              <TableHead className="text-foreground">Model</TableHead>
+                              <TableHead className="text-foreground">Calls</TableHead>
+                              <TableHead className="text-foreground">Tokens</TableHead>
+                              <TableHead className="text-foreground">Cost</TableHead>
+                              <TableHead className="text-foreground">Last used</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {openaiUsageData.costByModel.map((r) => (
+                              <TableRow key={r.model} className="border-border">
+                                <TableCell className="font-medium text-foreground">{getAiModelDisplayName(r.model)}</TableCell>
+                                <TableCell className="text-muted-foreground">{r.totalCalls}</TableCell>
+                                <TableCell className="text-muted-foreground">{(r.totalTokens ?? 0).toLocaleString()}</TableCell>
+                                <TableCell className="text-foreground">
+                                  {r.totalCostCents != null && r.totalCostCents > 0
+                                    ? `$${(r.totalCostCents / 10000).toFixed(4)}`
+                                    : r.totalCostCents === 0
+                                      ? "$0.00"
+                                      : "—"}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm">
+                                  {r.lastAt ? formatLocalDateTime(r.lastAt) : "—"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  )}
+                  {openaiUsageData.totalCalls === 0 && (
+                    <p className="text-sm text-muted-foreground">No usage recorded yet. Usage will appear here after commit summaries are generated with OpenAI.</p>
+                  )}
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
         </>
         )}
 
@@ -2312,6 +2424,15 @@ export default function Models() {
                           disabled={!applyToIntegrationId || applyToIntegrationMutation.isPending}
                           onClick={() => {
                             if (!applyToIntegrationId || !selectedModel) return;
+                            const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
+                            if (int?.aiModel === selectedModel.id) {
+                              toast({
+                                title: "Already using this model",
+                                description: `This integration is already using ${getAiModelDisplayName(selectedModel.id)}.`,
+                                variant: "default",
+                              });
+                              return;
+                            }
                             applyToIntegrationMutation.mutate({
                               integrationId: Number(applyToIntegrationId),
                               modelId: selectedModel.id,
@@ -2430,6 +2551,15 @@ export default function Models() {
                               disabled={!applyToIntegrationId || applyToIntegrationMutation.isPending}
                               onClick={() => {
                                 if (!applyToIntegrationId) return;
+                                const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
+                                if (int?.aiModel === selectedOpenAiModel.id) {
+                                  toast({
+                                    title: "Already using this model",
+                                    description: `This integration is already using ${getAiModelDisplayName(selectedOpenAiModel.id)}.`,
+                                    variant: "default",
+                                  });
+                                  return;
+                                }
                                 applyToIntegrationMutation.mutate({
                                   integrationId: Number(applyToIntegrationId),
                                   modelId: selectedOpenAiModel.id,

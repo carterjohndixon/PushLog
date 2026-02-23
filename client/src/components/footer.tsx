@@ -18,7 +18,7 @@ export function Footer() {
   const status = isSuccess ? (healthy ? "up" : "down") : isError ? "down" : null;
 
   return (
-    <footer className="bg-footer text-white py-16">
+    <footer className="bg-footer text-foreground dark:text-white py-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
@@ -26,11 +26,11 @@ export function Footer() {
               <Logo size="md" />
               <div>
                 <h3 className="text-xl font-bold text-log-green">PushLog</h3>
-                <p className="text-sm text-gray-400">GitHub ↔ Slack Integration</p>
+                <p className="text-sm text-muted-foreground dark:text-gray-400">GitHub ↔ Slack Integration</p>
               </div>
             </div>
             {status !== null && (
-              <p className="text-sm text-gray-400 mb-3 flex items-center gap-2">
+              <p className="text-sm text-muted-foreground dark:text-gray-400 mb-3 flex items-center gap-2">
                 <span
                   className={`inline-block h-2 w-2 rounded-full shrink-0 ${
                     status === "up"
@@ -42,7 +42,7 @@ export function Footer() {
                 {status === "up" ? "All systems operational" : "Service temporarily unavailable"}
               </p>
             )}
-            <p className="text-gray-400 mb-4 max-w-md">
+            <p className="text-muted-foreground dark:text-gray-400 mb-4 max-w-md">
               Streamline your development workflow with intelligent GitHub and Slack integration. 
               Keep your team synchronized with automated notifications and AI-powered code summaries.
             </p>
@@ -51,7 +51,7 @@ export function Footer() {
                 href="https://github.com/carterjohndixon/PushLog" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-log-green transition-colors"
+                className="text-muted-foreground dark:text-gray-400 hover:text-log-green transition-colors"
                 aria-label="View source code on GitHub"
               >
                 <Github className="w-5 h-5" />
@@ -60,7 +60,7 @@ export function Footer() {
                 href="https://carter.pushlog.ai" 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="text-gray-400 hover:text-log-green transition-colors"
+                className="text-muted-foreground dark:text-gray-400 hover:text-log-green transition-colors"
                 aria-label="View profile"
               >
                 <User className="w-5 h-5" />
@@ -97,8 +97,8 @@ export function Footer() {
             </ul>
           </div> */}
         </div>
-        <div className="border-t border-white/10 mt-12 pt-8">
-          <div className="flex flex-col md:flex-row justify-between items-center text-gray-400">
+        <div className="border-t border-border dark:border-white/10 mt-12 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center text-muted-foreground dark:text-gray-400">
             <p>&copy; 2026 PushLog. All rights reserved. Built with ❤️ for developer teams.</p>
             <div className="flex space-x-6 mt-4 md:mt-0">
               <Link 

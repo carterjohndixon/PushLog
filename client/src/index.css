@@ -29,7 +29,7 @@
   --log-green: 122 39% 49%; /* #4CAF50 – kept */
   --sky-blue: 148 35% 42%; /* pine (reused for accent vibe) */
   --graphite: 95 22% 18%; /* bark */
-  --footer-bg: 95 22% 12%; /* dark footer in light mode */
+  --footer-bg: 115 22% 92%; /* light moss green in light mode */
 }
 
 .dark {
