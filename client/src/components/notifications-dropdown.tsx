@@ -27,8 +27,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
         >
           <Bell className="text-muted-foreground hover:text-foreground transition-colors" />
           {hasUnread && (
-            <span className={`absolute -top-1 -right-1 bg-log-green text-white text-xs rounded-full flex items-center justify-center ${
-              count >= 10 ? 'w-5 h-5 px-1' : 'w-4 h-4'
+            <span className={`absolute -top-1 -right-1 bg-log-green text-white rounded-full flex items-center justify-center leading-none font-semibold ${
+              count > 99 ? 'min-w-[26px] h-5 px-1.5 text-[10px]' : count >= 10 ? 'w-5 h-5 text-[10px]' : 'w-4 h-4 text-[10px]'
             }`}>
               {count > 99 ? '99+' : count}
             </span>
