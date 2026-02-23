@@ -1061,7 +1061,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             execAsync(`git rev-list --count ${prodDeployedSha}..${branchRef}`, { cwd: appDir }),
             execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..${branchRef} -n 20`, { cwd: appDir }),
           ]);
-          pendingCount = Number(countOut.trim() || "0");
+          // pendingCount = Number(countOut.trim() || "0");
           pendingCommits = pendingOut
             .split("\n")
             .map((line) => line.trim())
@@ -1070,6 +1070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
               return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
             });
+          pendingCount = Number(pendingCommits.length || "0");
         } catch {
           pendingCount = 0;
           pendingCommits = [];
