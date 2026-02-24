@@ -126,7 +126,7 @@ interface OpenRouterModelsProps {
   profileUser: ProfileUserForModels | undefined;
   savedPreferredModel: string;
   recommendedOpenrouter: string | null;
-  integrations: { id: number; repositoryName: string; slackChannelName: string; aiModel?: string }[] | undefined;
+  integrations: { id: string | number; repositoryName: string; slackChannelName: string; aiModel?: string }[] | undefined;
   applyToIntegrationId: string;
   setApplyToIntegrationId: (id: string) => void;
   applyToIntegrationMutation: UseMutationResult<

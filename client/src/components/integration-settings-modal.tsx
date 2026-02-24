@@ -158,8 +158,17 @@ export function IntegrationSettingsModal({
       updates.openRouterApiKey = "";
     }
 
+    const id = integration?.id != null ? String(integration.id) : "";
+    if (!id || id === "NaN") {
+      toast({
+        title: "Cannot save",
+        description: "Invalid integration. Please close and open the integration again.",
+        variant: "destructive",
+      });
+      return;
+    }
     updateIntegrationMutation.mutate({
-      id: integration.id,
+      id,
       updates,
     });
   };

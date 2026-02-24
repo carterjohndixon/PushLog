@@ -18,7 +18,7 @@ import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
 
 interface IntegrationOption {
-  id: number;
+  id: string | number;
   repositoryName: string;
   slackChannelName: string;
   aiModel?: string;
@@ -79,7 +79,11 @@ export default function Models() {
 
   const applyToIntegrationMutation = useMutation({
     mutationFn: async ({ integrationId, modelId }: { integrationId: string; modelId: string }) => {
-      const res = await apiRequest("PATCH", `/api/integrations/${integrationId}`, { aiModel: modelId });
+      const id = typeof integrationId === "string" ? integrationId : String(integrationId);
+      if (!id || id === "NaN" || id === "undefined") {
+        throw new Error("Invalid integration. Please choose an integration again.");
+      }
+      const res = await apiRequest("PATCH", `/api/integrations/${id}`, { aiModel: modelId });
       return res.json();
     },
     onSuccess: (_, { modelId }) => {

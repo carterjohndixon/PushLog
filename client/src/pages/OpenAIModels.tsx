@@ -132,7 +132,7 @@ interface OpenAIModelsProps {
   profileLoading: boolean;
   savedPreferredModel: string;
   recommendedOpenai: string | null;
-  integrations: { id: number; repositoryName: string; slackChannelName: string; aiModel?: string }[] | undefined;
+  integrations: { id: string | number; repositoryName: string; slackChannelName: string; aiModel?: string }[] | undefined;
   applyToIntegrationId: string;
   setApplyToIntegrationId: (id: string) => void;
   applyToIntegrationMutation: UseMutationResult<

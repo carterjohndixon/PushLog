@@ -480,7 +480,11 @@ export default function Dashboard() {
   // Update integration mutation
   const updateIntegrationMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: any }) => {
-      const response = await apiRequest("PATCH", `/api/integrations/${id}`, updates);
+      const integrationId = typeof id === "string" ? id : String(id);
+      if (!integrationId || integrationId === "NaN" || integrationId === "undefined") {
+        throw new Error("Invalid integration. Please try again.");
+      }
+      const response = await apiRequest("PATCH", `/api/integrations/${integrationId}`, updates);
       const contentType = response.headers.get("content-type") ?? "";
       if (!contentType.includes("application/json")) {
         throw new Error("Server returned an invalid response. Please try again.");
