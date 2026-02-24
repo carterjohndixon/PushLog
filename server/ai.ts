@@ -216,26 +216,33 @@ Respond with only valid JSON:
 
     // Codex (completion-only) models: use v1/completions instead of v1/chat/completions
     if (!useOpenRouter && /codex/i.test(model)) {
-      const promptText = requestParams.messages
-        .map((m: { role: string; content: string }) => `${m.role === 'system' ? 'System' : 'User'}: ${m.content}`)
-        .join('\n\n');
-      const completionRes = await client.completions.create({
-        model,
-        prompt: promptText,
-        max_tokens: effectiveMaxTokens,
-        temperature: 0.3,
-      });
-      const text = completionRes.choices?.[0]?.text ?? '';
-      const usage = completionRes.usage;
-      // Adapt to chat completion shape so the rest of the function (parse, validate, cost) runs unchanged
-      completion = {
-        id: completionRes.id,
-        model: completionRes.model,
-        object: 'chat.completion',
-        created: completionRes.created,
-        choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
-        usage: usage ? { total_tokens: usage.total_tokens, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens } : undefined,
-      } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+      try {
+        const promptText = requestParams.messages
+          .map((m: { role: string; content: string }) => `${m.role === 'system' ? 'System' : 'User'}: ${m.content}`)
+          .join('\n\n');
+        const completionRes = await client.completions.create({
+          model,
+          prompt: promptText,
+          max_tokens: effectiveMaxTokens,
+          temperature: 0.3,
+        });
+        const text = completionRes.choices?.[0]?.text ?? '';
+        const usage = completionRes.usage;
+        // Adapt to chat completion shape so the rest of the function (parse, validate, cost) runs unchanged
+        completion = {
+          id: completionRes.id,
+          model: completionRes.model,
+          object: 'chat.completion',
+          created: completionRes.created,
+          choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+          usage: usage ? { total_tokens: usage.total_tokens, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens } : undefined,
+        } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+      } catch (codexErr: any) {
+        // Codex may be unavailable on completions API (e.g. 500 for gpt-5.3-codex). Fall back to chat so the user still gets a summary.
+        console.warn(`📊 Codex completions failed for ${model} (${codexErr?.status ?? 'error'}), falling back to gpt-5.2 chat:`, codexErr?.message ?? codexErr);
+        requestParams.model = 'gpt-5.2';
+        completion = await client.chat.completions.create(requestParams);
+      }
     } else if (useOpenRouter && options?.openRouterApiKey) {
       // Use fetch so we can read x-openrouter-generation-id header (needed for cost lookup)
       const openRouterMaxRetries = 2; // 503/429: retry up to 2 times (3 attempts total)
