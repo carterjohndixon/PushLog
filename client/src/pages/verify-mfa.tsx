@@ -27,10 +27,24 @@ export default function VerifyMfa() {
       const res = await apiRequest("POST", "/api/mfa/verify", { code });
       return res.json();
     },
-    onSuccess: async () => {
-      await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
+    onSuccess: (data: { success?: boolean; user?: import("@/lib/profile").ProfileUser }) => {
+      // Server returns profile so we can set cache and navigate immediately (no wait for GET /api/profile)
+      if (data?.success && data?.user) {
+        queryClient.setQueryData(PROFILE_QUERY_KEY, { success: true, user: data.user });
+      }
       toast({ title: "Login successful", description: "Welcome back." });
       setLocation("/dashboard");
+      // Prefetch full profile and dashboard data in background so dashboard loads instantly
+      const opts = { credentials: "include" as RequestCredentials, headers: { Accept: "application/json" } };
+      queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile }).catch(() => {});
+      queryClient.prefetchQuery({
+        queryKey: ["/api/repositories-and-integrations"],
+        queryFn: () => fetch("/api/repositories-and-integrations", opts).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to fetch")))),
+      }).catch(() => {});
+      queryClient.prefetchQuery({
+        queryKey: ["/api/stats"],
+        queryFn: () => fetch("/api/stats", opts).then((r) => (r.ok ? r.json() : Promise.reject(new Error("Failed to fetch")))),
+      }).catch(() => {});
     },
     onError: (err: Error) => {
       const isSessionExpired =

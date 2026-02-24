@@ -1610,6 +1610,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const code = req.body.code as string;
       const userId = req.session!.userId!;
       const user = await databaseStorage.getUserById(userId);
+      if (!user) return res.status(404).json({ error: "User not found.", code: "user_not_found" });
       const rawSecret = (user as any)?.totpSecret ? decrypt((user as any).totpSecret) : null;
       if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support.", code: "mfa_not_configured" });
       const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 2 });
@@ -1617,7 +1618,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       delete (req.session as any).mfaPending;
       delete (req.session as any).mfaSetupRequired;
       await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
-      res.status(200).json({ success: true });
+      // Return profile so client can set cache and navigate immediately (no extra GET /api/profile round trip)
+      const profileUser = {
+        id: user.id,
+        username: user.username || "",
+        email: user.email || null,
+        isUsernameSet: !!user.username,
+        emailVerified: !!(user as any).emailVerified,
+        githubConnected: !!user.githubId,
+        googleConnected: !!user.googleId,
+        aiCredits: (user as any).aiCredits ?? 0,
+        hasOpenRouterKey: !!((user as any).openRouterApiKey),
+        hasOpenAiKey: !!((user as any).openaiApiKey),
+        monthlyBudget: (user as any).monthlyBudget ?? null,
+        overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" as const : "skip_ai" as const,
+        preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
+        devMode: !!((user as any).devMode),
+        incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
+      };
+      res.status(200).json({ success: true, user: profileUser });
     } catch (err) {
       console.error("MFA verify error:", err);
       Sentry.captureException(err);
