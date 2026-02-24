@@ -46,7 +46,7 @@ export function IntegrationSettingsModal({
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
   const [useOpenRouter, setUseOpenRouter] = useState(!!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey));
-  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-4o');
+  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
   const lastOpenRouterModelRef = useRef<string | null>(null);
@@ -144,14 +144,14 @@ export function IntegrationSettingsModal({
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
       setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
-      setAiModel(integration.aiModel || 'gpt-4o');
+      setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
   }
 
   const baseUseOpenRouter = !!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey);
-  const baseAiModel = integration?.aiModel || "gpt-4o";
+  const baseAiModel = integration?.aiModel || "gpt-5.2";
   const hasChanges = !!integration && (
     isActive !== (integration.isActive ?? true) ||
     notificationLevel !== (integration.notificationLevel || "all") ||
@@ -167,7 +167,7 @@ export function IntegrationSettingsModal({
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
       setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
-      setAiModel(integration.aiModel || 'gpt-4o');
+      setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
     }
@@ -278,7 +278,7 @@ export function IntegrationSettingsModal({
                         if (aiModel.includes("/")) {
                           lastOpenRouterModelRef.current = aiModel;
                         }
-                        const fallback = preferredAiModel && !String(preferredAiModel).includes("/") ? preferredAiModel : "gpt-4o";
+                        const fallback = preferredAiModel && !String(preferredAiModel).includes("/") ? preferredAiModel : "gpt-5.2";
                         setAiModel(fallback);
                       } else {
                         if (lastOpenRouterModelRef.current) {

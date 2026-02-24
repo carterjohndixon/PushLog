@@ -209,7 +209,7 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   maxTokens: number;
 }> {
   const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
-  const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
+  const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-5.2";
   const maxTokens = integration.maxTokens || 350;
   const modelHasSlash = aiModelStr.includes("/");
   let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
@@ -228,6 +228,10 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   }
   const useOpenAi = !!openAiKeyRaw?.trim() && !modelHasSlash;
   let effectiveAiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+  if (!useOpenRouter && /codex/i.test(effectiveAiModel)) {
+    console.log(`📊 [Webhook] Model ${effectiveAiModel} is completion-only (not chat); using gpt-5.2 for summaries.`);
+    effectiveAiModel = "gpt-5.2";
+  }
 
   let overBudgetSkipAi = false;
   try {

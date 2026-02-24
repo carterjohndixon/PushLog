@@ -3582,16 +3582,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const data = (await response.json()) as { data?: Array<{ id: string; created?: number; owned_by?: string }> };
       const raw = data.data ?? [];
-      // Only text-generation (chat/completion) models — exclude transcribe, TTS, realtime, image, embedding, etc.
-      const isTextGenOnly = (id: string) => {
+      // Only chat models (v1/chat/completions) — exclude completion-only (e.g. codex), transcribe, TTS, etc.
+      const isChatModel = (id: string) => {
         const lower = id.toLowerCase();
         if (!/^(gpt-|o1-|o3-|o4-)/i.test(id)) return false;
+        if (/codex/i.test(lower)) return false; // completion-only, not supported in chat/completions
         if (/transcribe|tts|realtime|whisper|embed|audio|image|vision-only/i.test(lower)) return false;
         if (/-image-|dall-e|dall·e/i.test(lower)) return false;
         return true;
       };
       const models = raw
-        .filter((m) => m.id && isTextGenOnly(m.id))
+        .filter((m) => m.id && isChatModel(m.id))
         .map((m) => ({
           id: m.id,
           name: m.id,
@@ -4635,7 +4636,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate AI summary using the provided model or integration's model settings
-      const aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
+      let aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
+      if (/codex/i.test(aiModel)) aiModel = "gpt-5.2"; // completion-only models not supported in chat/completions
       const maxTokens = testMaxTokens || activeIntegration?.maxTokens || 350;
       
       const summary = await generateCodeSummary(
@@ -4738,7 +4740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`🧪 [TEST] Simulate push: ${repo.fullName} @ ${pushData.branch} → Slack #${integration.slackChannelName}`);
 
       const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
-      const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-4o";
+      const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-5.2";
       const maxTokens = integration.maxTokens || 350;
       let openRouterKeyRaw = (integration as any).openRouterApiKey ? decrypt((integration as any).openRouterApiKey) : null;
       if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
@@ -4750,7 +4752,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
       const useOpenRouter = !!openRouterKeyRaw?.trim();
-      const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+      let aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
+      if (!useOpenRouter && /codex/i.test(aiModel)) aiModel = "gpt-5.2"; // completion-only not supported in chat/completions
 
       let summary;
       try {
