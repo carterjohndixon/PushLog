@@ -929,6 +929,33 @@ export class DatabaseStorage implements IStorage {
     return deleted.length > 0;
   }
 
+  /** Get a single AI usage row by id and userId; returns undefined if not found or not OpenAI model. */
+  async getAiUsageById(userId: string, usageId: string): Promise<AiUsage | undefined> {
+    const [row] = await db.select().from(aiUsage)
+      .where(and(eq(aiUsage.id, usageId), eq(aiUsage.userId, userId)))
+      .limit(1) as any[];
+    if (!row || (row.model && String(row.model).includes("/"))) return undefined;
+    return row as AiUsage;
+  }
+
+  /** Delete a single AI usage row by id and userId; only for OpenAI models (no '/' in model). Returns true if deleted. */
+  async deleteAiUsageById(userId: string, usageId: string): Promise<boolean> {
+    const [row] = await db.select({ model: aiUsage.model }).from(aiUsage)
+      .where(and(eq(aiUsage.id, usageId), eq(aiUsage.userId, userId)))
+      .limit(1) as any[];
+    if (!row || (row.model && String(row.model).includes("/"))) return false;
+    const deleted = await db.delete(aiUsage).where(and(eq(aiUsage.id, usageId), eq(aiUsage.userId, userId))).returning({ id: aiUsage.id });
+    return deleted.length > 0;
+  }
+
+  /** Delete a single AI usage row by OpenRouter generation id and userId. Returns true if deleted. */
+  async deleteAiUsageByOpenRouterGenerationId(userId: string, generationId: string): Promise<boolean> {
+    const deleted = await db.delete(aiUsage)
+      .where(and(eq(aiUsage.userId, userId), eq(aiUsage.openrouterGenerationId, generationId)))
+      .returning({ id: aiUsage.id });
+    return deleted.length > 0;
+  }
+
   /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). Bounded by default (limit 500). */
   async getAiUsageWithPushDateByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<(AiUsage & { pushedAt: string | null })[]> {
     const limit = options?.limit ?? 500;

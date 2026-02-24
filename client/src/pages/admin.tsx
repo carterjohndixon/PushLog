@@ -300,7 +300,7 @@ export default function AdminPage() {
                 <p><strong>Last deployed prod SHA:</strong> <code>{prodSha || "unknown (first run)"}</code></p>
                 <p><strong>Last deployed prod at:</strong> {data.promoteRemoteStatus?.prodDeployedAt || data.prodDeployedAt || "unknown"}</p>
                 <p className="flex items-center gap-2">
-                  <strong>Pending commits:</strong>
+                <strong>Pending commits:</strong>
                   <Badge variant={data.pendingCount > 0 ? "default" : "secondary"}>{data.pendingCount}</Badge>
                 </p>
               </CardContent>

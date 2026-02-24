@@ -227,6 +227,14 @@ export function OpenAIModels({
   const [recentCallsSearch, setRecentCallsSearch] = useState("");
   const [recentCallsPage, setRecentCallsPage] = useState(0);
   const [budgetInput, setBudgetInput] = useState("");
+  const [viewingCall, setViewingCall] = useState<{
+    id: string;
+    model?: string;
+    tokensUsed?: number;
+    cost?: number;
+    costFormatted?: string | null;
+    createdAt?: string | null;
+  } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -331,6 +339,38 @@ export function OpenAIModels({
       toast({ title: "Failed to save", description: e.message, variant: "destructive" });
     },
   });
+
+  const deleteUsageMutation = useMutation({
+    mutationFn: async (usageId: string) => {
+      const res = await apiRequest("DELETE", `/api/openai/usage/${encodeURIComponent(usageId)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error ?? "Failed to delete");
+      }
+      return res.json();
+    },
+    onSuccess: (_, usageId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/openai/usage"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/openai/usage/daily"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/openai/monthly-spend"] });
+      setViewingCall(null);
+      toast({ title: "Deleted", description: "Call removed from history." });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Delete failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const handleViewCall = (call: { id?: string; model?: string; tokensUsed?: number; cost?: number; costFormatted?: string; createdAt?: string }) => {
+    setViewingCall({
+      id: String(call.id ?? ""),
+      model: call.model,
+      tokensUsed: call.tokensUsed,
+      cost: call.cost,
+      costFormatted: call.costFormatted ?? null,
+      createdAt: call.createdAt ?? null,
+    });
+  };
 
   const verifyOpenAiMutation = useMutation({
     mutationFn: async (key: string) => {
@@ -813,7 +853,7 @@ export function OpenAIModels({
                       </div>
                       <CollapsibleContent>
                         {(() => {
-                          const calls = openaiUsageData.calls as { id?: number; model?: string; tokensUsed?: number; cost?: number; costFormatted?: string; createdAt?: string }[];
+                          const calls = openaiUsageData.calls as { id?: string; model?: string; tokensUsed?: number; cost?: number; costFormatted?: string; createdAt?: string }[];
                           const filteredRecentCalls = calls
                             .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
                             .filter((c) => {
@@ -842,6 +882,7 @@ export function OpenAIModels({
                                       <TableHead className="text-foreground">Tokens</TableHead>
                                       <TableHead className="text-foreground">Cost</TableHead>
                                       <TableHead className="text-foreground">Date</TableHead>
+                                      <TableHead className="text-foreground w-[80px]">View</TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -864,6 +905,25 @@ export function OpenAIModels({
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
                                           {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
+                                        </TableCell>
+                                        <TableCell>
+                                          {c.id ? (
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-7 text-xs text-log-green hover:text-log-green/90"
+                                              onClick={() => handleViewCall(c)}
+                                              disabled={deleteUsageMutation.isPending && viewingCall?.id === c.id}
+                                            >
+                                              {deleteUsageMutation.isPending && viewingCall?.id === c.id ? (
+                                                <Loader2 className="w-3 h-3 animate-spin" />
+                                              ) : (
+                                                <>View</>
+                                              )}
+                                            </Button>
+                                          ) : (
+                                            <span className="text-xs text-muted-foreground">—</span>
+                                          )}
                                         </TableCell>
                                       </TableRow>
                                     ))}
@@ -996,6 +1056,76 @@ export function OpenAIModels({
           </CardContent>
         </Card>
       )}
+
+      <Dialog
+        open={!!viewingCall}
+        onOpenChange={(open) => {
+          if (!open) setViewingCall(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">Usage for this call</DialogTitle>
+            <DialogDescription>
+              Recorded for this OpenAI call{viewingCall?.id ? ` (${String(viewingCall.id).slice(0, 8)}…)` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          {viewingCall && (
+            <div className="space-y-3 text-sm">
+              <p>
+                <span className="font-medium text-foreground">Cost:</span>{" "}
+                {viewingCall.costFormatted != null && viewingCall.costFormatted !== ""
+                  ? viewingCall.costFormatted
+                  : typeof viewingCall.cost === "number"
+                    ? viewingCall.cost === 0
+                      ? "$0.00"
+                      : `$${(viewingCall.cost / 10000).toFixed(4)}`
+                    : "—"}
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Tokens (prompt):</span> —
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Tokens (completion):</span> —
+              </p>
+              <p>
+                <span className="font-medium text-foreground">Total tokens:</span>{" "}
+                {(viewingCall.tokensUsed ?? 0).toLocaleString()}
+              </p>
+              <a
+                href="https://platform.openai.com/usage"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-log-green hover:underline text-sm"
+              >
+                Open on OpenAI <ExternalLink className="w-3 h-3" />
+              </a>
+              <div className="flex flex-wrap gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    refetchOpenaiUsage();
+                    toast({ title: "Refreshed", description: "Usage data updated." });
+                  }}
+                >
+                  Refresh
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => viewingCall && deleteUsageMutation.mutate(viewingCall.id)}
+                  disabled={deleteUsageMutation.isPending}
+                >
+                  {deleteUsageMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  Delete from history
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {userHasOpenAiKey && (
         <Card className="card-lift mb-8 border-border shadow-forest">

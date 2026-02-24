@@ -23,7 +23,6 @@ import {
   getUserRepositories, 
   createWebhook,
   deleteWebhook,
-  verifyWebhookSignature,
   validateGitHubToken,
   getGitHubTokenScopes
 } from "./github";
@@ -3448,6 +3447,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenRouter: Deleting a recent AI Usage call on models page
+  app.delete("/api/openrouter/delete-usage/:generationId", authenticateToken, async (req, res) => {
+    try {
+      const generationId = req.params.generationId;
+      const userId = req.user!.userId;
+      if (!generationId?.trim()) {
+        return res.status(400).json({ error: "Generation id required" });
+      }
+      const deleted = await databaseStorage.deleteAiUsageByOpenRouterGenerationId(userId, generationId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Usage not found" });
+      }
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("OpenRouter delete usage error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to delete usage" });
+    }
+  });
+
   // OpenRouter: remove user's saved key
   app.delete("/api/openrouter/key", authenticateToken, async (req, res) => {
     try {
@@ -4082,6 +4101,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("OpenAI usage error:", err);
       Sentry.captureException(err);
       res.status(500).json({ error: "Failed to load usage" });
+    }
+  });
+
+  // OpenAI: get single usage call by id (for "Usage for this call" modal)
+  app.get("/api/openai/usage/call/:id", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usageId = req.params.id;
+      if (!usageId?.trim()) {
+        return res.status(400).json({ error: "Usage id required" });
+      }
+      const row = await databaseStorage.getAiUsageById(userId, usageId);
+      if (!row) {
+        return res.status(404).json({ error: "Usage not found" });
+      }
+      const cost = typeof row.cost === "number" ? row.cost : Number(row.cost) || 0;
+      const createdAt = row.createdAt ?? (row as any).created_at;
+      res.status(200).json({
+        id: row.id,
+        model: row.model,
+        tokensUsed: row.tokensUsed ?? (row as any).tokens_used ?? 0,
+        cost,
+        costFormatted: cost > 0 ? `$${(cost / 10000).toFixed(4)}` : cost === 0 ? "$0.00" : null,
+        createdAt: createdAt != null ? (typeof createdAt === "string" ? createdAt : new Date(createdAt).toISOString()) : null,
+      });
+    } catch (err) {
+      console.error("OpenAI usage call error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to load usage" });
+    }
+  });
+
+  // OpenAI: delete single usage row from history (OpenAI models only)
+  app.delete("/api/openai/usage/:id", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const usageId = req.params.id;
+      if (!usageId?.trim()) {
+        return res.status(400).json({ error: "Usage id required" });
+      }
+      const deleted = await databaseStorage.deleteAiUsageById(userId, usageId);
+      if (!deleted) {
+        return res.status(404).json({ error: "Usage not found or cannot delete" });
+      }
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("OpenAI delete usage error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to delete usage" });
     }
   });
 

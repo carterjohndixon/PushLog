@@ -1045,9 +1045,7 @@ export function OpenRouterModels({
                                               : "—"}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
-                                          {(c.createdAt ?? (c as { created_at?: string }).created_at)
-                                            ? formatLocalDateTime((c.createdAt ?? (c as unknown as { created_at: string }).created_at) as string)
-                                            : "—"}
+                                          {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
                                         </TableCell>
                                         <TableCell>
                                           {c.generationId ? (
