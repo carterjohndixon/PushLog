@@ -56,12 +56,8 @@ export function scheduleDelayedCostUpdate(opts: {
             cost: genUsage.costCents,
             ...(genUsage.tokensUsed > 0 ? { tokensUsed: genUsage.tokensUsed } : {}),
           } as any);
-          console.log(`💰 Delayed cost update succeeded (attempt ${attempt}): push=${pushEventId}, cost=$${(genUsage.costCents / 10000).toFixed(4)}, tokens=${genUsage.tokensUsed}`);
         } else if (attempt < retries) {
-          console.log(`💰 Delayed cost update: still $0 on attempt ${attempt}/${retries}, retrying...`);
           setTimeout(tryUpdate, 0);
-        } else {
-          console.log(`💰 Delayed cost update: cost still $0 after ${attempt} attempts for push=${pushEventId}.`);
         }
       } catch (err) {
         console.warn(`💰 Delayed cost update error (attempt ${attempt}):`, err instanceof Error ? err.message : err);
@@ -76,7 +72,6 @@ export function scheduleDelayedCostUpdate(opts: {
 export function parseWebhookPayload(req: Request, res: Response): { eventType: string; branch: string; commit: any; repository: any } | null {
   const eventType = req.headers["x-github-event"];
   const repoName = req.body?.repository?.full_name || req.body?.repository?.name || "unknown";
-  console.log(`📥 [Webhook] Received ${eventType} for ${repoName}`);
 
   let branch: string, commit: any, repository: any;
   if (eventType === "pull_request") {
@@ -119,13 +114,11 @@ export async function resolveRepoAndIntegration(
 ): Promise<{ storedRepo: any; integration: any } | null> {
   const storedRepo = await storage.getRepositoryByGithubId(repository.id.toString());
   if (!storedRepo || !storedRepo.isActive) {
-    console.log(`⚠️ [Webhook] Repository ${repository.full_name} (GitHub id ${repository.id}) not in DB or not active.`);
     res.status(200).json({ message: "Repository not active" });
     return null;
   }
   const integration = await storage.getIntegrationByRepositoryId(storedRepo.id);
   if (!integration || !integration.isActive) {
-    console.log(`⚠️ [Webhook] No active integration for ${repository.full_name}.`);
     res.status(200).json({ message: "Integration not active" });
     return null;
   }
@@ -229,7 +222,6 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   const useOpenAi = !!openAiKeyRaw?.trim() && !modelHasSlash;
   let effectiveAiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
   if (!useOpenRouter && /codex/i.test(effectiveAiModel)) {
-    console.log(`📊 [Webhook] Model ${effectiveAiModel} is completion-only (not chat); using gpt-5.2 for summaries.`);
     effectiveAiModel = "gpt-5.2";
   }
 
@@ -257,10 +249,8 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
         if (useOpenRouter) {
           if (overBudgetBehavior === "skip_ai") {
             overBudgetSkipAi = true;
-            console.log(`📊 [Webhook] User over budget; skipping AI (user preference: skip_ai).`);
           } else {
             effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
-            console.log(`📊 [Webhook] User over budget; using free model ${effectiveAiModel} for this push.`);
           }
         } else {
           overBudgetSkipAi = true;
@@ -334,10 +324,8 @@ export async function sendSlackForPush(
         text: slackMessage,
         unfurl_links: false,
       });
-      console.log(`✅ [Webhook] AI Slack message sent to #${integration.slackChannelName}`);
     } else {
       await sendPushNotification(workspaceToken, integration.slackChannelId, pushData.repositoryName, pushData.commitMessage, authorName, pushData.branch, pushData.commitSha, Boolean(integration.includeCommitSummaries));
-      console.log(`✅ [Webhook] Push notification sent to #${integration.slackChannelName}`);
     }
     return true;
   } catch (slackErr) {
@@ -364,7 +352,6 @@ export async function persistPushAndNotifications(
     deletions: pushData.deletions ?? 0,
   });
   if (riskResult.impact_score > 0 || riskResult.risk_flags.length > 0) {
-    console.log(`📊 [Webhook] Risk engine: impact=${riskResult.impact_score} flags=${riskResult.risk_flags.join(",")}`);
   }
   const pushEvent = await storage.createPushEvent({
     repositoryId: storedRepo.id,
@@ -523,8 +510,6 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
 
     const workspaceToken = await getSlackWorkspaceToken(integration, res);
     if (!workspaceToken) return;
-
-    console.log(`📤 [Webhook] Processing push: ${repository.full_name} @ ${branch} → Slack #${integration.slackChannelName}`);
 
     const aiConfig = await getAiConfigAndBudget(integration);
     const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;

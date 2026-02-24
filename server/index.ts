@@ -34,7 +34,6 @@ const appEnv = process.env.APP_ENV || process.env.NODE_ENV || '';
 if (appEnv === 'production' || appEnv === 'staging') {
   const envPath = path.join(root, `.env.${appEnv}`);
   const result = dotenv.config({ path: envPath, override: true });
-  console.log(`[env] APP_ENV=${appEnv} → loaded ${envPath} (error: ${result.error?.message || 'none'})`);
 } else {
   dotenv.config({ path: path.join(root, '.env') });
   if (appEnv && appEnv !== 'development') {
@@ -43,7 +42,6 @@ if (appEnv === 'production' || appEnv === 'staging') {
 }
 
 const _whSecret = process.env.GITHUB_WEBHOOK_SECRET || '';
-console.log(`[env] GITHUB_WEBHOOK_SECRET: length=${_whSecret.length}, first6=${_whSecret.slice(0, 6)}, last6=${_whSecret.slice(-6)}`);
 
 const skipGitHubVerify = process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "1" || process.env.SKIP_GITHUB_WEBHOOK_VERIFY === "true";
 if (skipGitHubVerify) {
@@ -59,7 +57,6 @@ if (sentryDsn) {
     tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
     integrations: [Sentry.expressIntegration()],
   });
-  console.log("[Sentry] initialized");
 }
 
 const app = express();

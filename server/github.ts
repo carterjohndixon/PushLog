@@ -96,9 +96,6 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string, r
     redirectUri ||
     (process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : undefined);
 
-  console.log("GitHub OAuth token exchange - using Client ID:", clientId.substring(0, 10) + "...", isProductionHost ? "(production host)" : isStagingHost ? "(staging host)" : "");
-  console.log("GitHub OAuth token exchange - Client Secret present:", !!clientSecret);
-
   if (!clientId || !clientSecret) {
     console.error("GitHub OAuth configuration error:", {
       hasClientId: !!clientId,
@@ -142,10 +139,6 @@ export async function exchangeCodeForToken(code: string, redirectUri?: string, r
     console.error("GitHub OAuth response missing access_token:", data);
     throw new Error("GitHub OAuth response missing access token");
   }
-
-  // Log the scopes returned by GitHub
-  console.log("GitHub OAuth token exchange successful. Scopes granted:", data.scope || "none");
-  console.log("Full GitHub OAuth response:", JSON.stringify(data, null, 2));
   
   return data.access_token;
 }
@@ -240,7 +233,6 @@ export async function validateGitHubToken(accessToken: string): Promise<boolean>
 export async function getUserRepositories(accessToken: string): Promise<GitHubRepository[]> {
   // Check token scopes first
   const scopes = await getGitHubTokenScopes(accessToken);
-  console.log(`GitHub token scopes: ${scopes.join(", ")}`);
   
   const hasRepoScope = scopes.includes("repo");
   if (!hasRepoScope) {

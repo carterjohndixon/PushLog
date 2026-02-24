@@ -44,7 +44,6 @@ function getFromAddress(): string {
 
 export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailEnabled()) {
-    console.log("Email disabled by EMAIL_ENABLED=false. Skipping verification email.");
     return;
   }
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
@@ -73,7 +72,6 @@ export async function sendVerificationEmail(email: string, token: string) {
 // Add sendPasswordResetEmail function
 export const sendPasswordResetEmail = async (email: string, resetToken: string) => {
   if (!isEmailEnabled()) {
-    console.log("Email disabled by EMAIL_ENABLED=false. Skipping password reset email.");
     return;
   }
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");

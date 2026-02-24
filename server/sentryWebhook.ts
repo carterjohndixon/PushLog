@@ -119,7 +119,6 @@ export async function getIncidentNotificationTargets(
       }
     }
 
-    console.log(`[incident-notify] Staging test mode: notifying ${stagingAdmins.length} admin(s) only`);
     return stagingAdmins;
   }
 
@@ -133,10 +132,6 @@ export async function getIncidentNotificationTargets(
         usersWithRepos.push(userId);
       }
     }
-
-    console.log(
-      `[incident-notify] Test mode: notifying ${usersWithRepos.length}/${allUsers.length} users (those with repos)`
-    );
     return usersWithRepos;
   }
 
@@ -147,7 +142,6 @@ export async function getIncidentNotificationTargets(
 export async function handleSentryWebhook(req: Request, res: Response): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const bodyKeys = body ? Object.keys(body) : [];
-  console.log("[webhooks/sentry] Request received", { bodyKeys, hasData: !!body?.data });
   try {
     const data = body?.data as Record<string, unknown> | undefined;
     const ev = data?.event as Record<string, unknown> | undefined;
@@ -155,7 +149,6 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     if (!ev && !issue) {
       const action = String(body?.action ?? "test").trim() || "test";
-      console.log("[webhooks/sentry] Test/minimal payload (no event/issue), sending test notification");
       const targetUserIds = await getIncidentNotificationTargets(true);
       const targetUsers = new Set<string>(targetUserIds);
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
@@ -194,7 +187,6 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
           }
         })
       );
-      console.log(`[webhooks/sentry] Test notification sent to ${targetUsers.size} users`);
       res.status(202).json({ accepted: true });
       return;
     }
@@ -291,12 +283,10 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       request_url: requestUrl,
     };
     ingestIncidentEvent(event);
-    console.log(`[webhooks/sentry] Ingested: ${event.exception_type} in ${service}/${environment}`);
 
     const dedupeKey = getDedupeKey(issue as any, ev as any);
     const action = body?.action != null ? String(body.action) : undefined;
     if (shouldSkipDirectNotification(dedupeKey, action, !!ev)) {
-      console.log("[webhooks/sentry] Skipping duplicate direct notification", { dedupeKey, action });
       res.status(202).json({ accepted: true });
       return;
     }
@@ -399,7 +389,6 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
     );
     recordSentNotification(issue as any, ev as any);
     recordRecentSentryNotification(service, environment);
-    console.log(`[webhooks/sentry] Direct notification sent to ${targetUsers.size} users`);
 
     res.status(202).json({ accepted: true });
   } catch (error) {

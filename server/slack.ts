@@ -173,7 +173,6 @@ export async function sendSlackMessage(
   message: ChatPostMessageArguments
 ): Promise<string | undefined> {
   if (!isSlackNotificationsEnabled()) {
-    console.log("Slack notifications disabled by SLACK_NOTIFICATIONS_ENABLED=false. Skipping send.");
     return undefined;
   }
 

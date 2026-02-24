@@ -315,7 +315,6 @@ export class DatabaseStorage implements IStorage {
     const workspaces = await db.select({ id: slackWorkspaces.id }).from(slackWorkspaces).where(eq(slackWorkspaces.teamId, teamId));
     const workspaceIds = workspaces.map((w) => w.id).filter((id): id is string => id != null);
     if (workspaceIds.length === 0) {
-      console.log("[Slack] No workspace found for team_id=%s (channel_id=%s). Check that this Slack workspace is connected in PushLog.", teamId, channelId);
       return [];
     }
     const rows = await db.select().from(integrations).where(
@@ -323,7 +322,6 @@ export class DatabaseStorage implements IStorage {
     ) as any;
     if (rows.length === 0) {
       const anyInChannel = await db.select({ id: integrations.id, slackChannelId: integrations.slackChannelId }).from(integrations).where(inArray(integrations.slackWorkspaceId, workspaceIds));
-      console.log("[Slack] No integration for channel_id=%s. Workspace has %d integration(s) in other channels: %s", channelId, anyInChannel.length, anyInChannel.map((i: any) => i.slackChannelId).join(", "));
     }
     return rows;
   }
@@ -334,12 +332,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateIntegration(id: string, updates: Partial<Integration>): Promise<Integration | undefined> {
-    console.log(`💾 Database: Updating integration ${id} with:`, JSON.stringify(updates, null, 2));
     const result = await db.update(integrations).set(updates).where(eq(integrations.id, id)).returning();
     const updated = result[0] as any;
-    if (updated) {
-      console.log(`✅ Database: Integration ${id} updated. New ai_model: ${updated.aiModel}`);
-    }
     return updated;
   }
 
@@ -752,7 +746,6 @@ export class DatabaseStorage implements IStorage {
 
   async markNotificationAsRead(id: string): Promise<Notification | undefined> {
     try {
-      console.log(`📝 Database: Marking notification ${id} as read`);
       const result = await db.update(notifications)
         .set({ isRead: true })
         .where(eq(notifications.id, id))
@@ -763,7 +756,6 @@ export class DatabaseStorage implements IStorage {
         return undefined;
       }
       
-      console.log(`✅ Database: Notification ${id} updated. isRead: ${result[0].isRead}`);
       return result[0] as any;
     } catch (error) {
       console.error(`❌ Database: Error marking notification ${id} as read:`, error);
@@ -783,12 +775,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAllNotifications(userId: string): Promise<boolean> {
-    console.log(`🗄️ [DATABASE] Deleting all notifications for user ${userId}`);
     const beforeCount = await this.getNotificationCountForUser(userId);
-    console.log(`📊 [DATABASE] Notifications before deletion:`, beforeCount);
     await db.delete(notifications).where(eq(notifications.userId, userId));
     const afterCount = await this.getNotificationCountForUser(userId);
-    console.log(`🔍 [DATABASE] Notifications after deletion:`, afterCount);
     return true;
   }
 

@@ -102,7 +102,6 @@ export async function fetchOpenRouterGenerationUsage(
   apiKey: string
 ): Promise<{ tokensUsed: number; costCents: number } | null> {
   const idPrefix = generationId.startsWith('gen-') ? 'gen-xxx' : generationId.startsWith('chatcmpl-') ? 'chatcmpl-xxx' : 'other';
-  console.log(`📊 OpenRouter generation lookup: id type=${idPrefix}, id=${generationId.slice(0, 32)}...`);
   try {
     const url = new URL('https://openrouter.ai/api/v1/generation');
     url.searchParams.set('id', generationId);
@@ -131,7 +130,6 @@ export async function fetchOpenRouterGenerationUsage(
     const tokensUsed =
       (typeof tokensPrompt === 'number' ? tokensPrompt : 0) +
       (typeof tokensCompletion === 'number' ? tokensCompletion : 0) || 0;
-    console.log(`📊 OpenRouter generation lookup OK: tokens=${tokensUsed}, costCents=${costCents}`);
     return { tokensUsed, costCents };
   } catch (e) {
     console.warn('📊 OpenRouter generation lookup error:', e);
@@ -193,8 +191,6 @@ Focus on:
 
 Respond with only valid JSON:
 `;
-
-    console.log(`🔍 ${useOpenRouter ? 'OpenRouter' : useUserOpenAi ? 'OpenAI (user key)' : 'OpenAI (PushLog)'} API Request - Model: ${model}, Max Tokens: ${effectiveMaxTokens}`);
     const requestParams: any = {
       model: model,
       messages: [
@@ -225,7 +221,6 @@ Respond with only valid JSON:
         for (let attempt = 0; attempt <= openRouterMaxRetries; attempt++) {
           if (attempt > 0) {
             const delay = retryDelaysMs[attempt - 1] ?? 4000;
-            console.log(`🔄 OpenRouter retry ${attempt}/${openRouterMaxRetries} in ${delay}ms (503/429 server at capacity or rate limit)`);
             await new Promise((r) => setTimeout(r, delay));
           }
           const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -250,7 +245,6 @@ Respond with only valid JSON:
               : [];
             console.warn('📊 OpenRouter: no generation id in response header (CDN may strip it). Headers:', headerNames.join(', ') || '(none)');
           } else if (openRouterGenerationId && res.ok) {
-            console.log('📊 OpenRouter: generation id from header:', openRouterGenerationId.slice(0, 28) + '...');
           }
           if (!res.ok) {
             lastErrBody = await res.text();
@@ -309,7 +303,6 @@ Respond with only valid JSON:
           const fromBody = findGenIdInObject(completionJson);
           if (fromBody) {
             openRouterGenerationId = fromBody;
-            console.log('📊 OpenRouter: generation id from response body:', openRouterGenerationId.slice(0, 28) + '...');
           } else {
             const topKeys = typeof completionJson === 'object' && completionJson !== null ? Object.keys(completionJson as object).join(', ') : '—';
             console.warn('📊 OpenRouter: no gen id in header or body. Response keys:', topKeys, '| completion.id:', (completion as { id?: string })?.id ?? '—');
@@ -510,14 +503,12 @@ Respond with only valid JSON:
       const genId = openRouterGenerationId || completion.id;
       if (genId) {
         if (!openRouterGenerationId && completion.id) {
-          console.log('📊 OpenRouter: using completion.id for cost lookup (header had no gen id):', String(completion.id).slice(0, 24) + '...');
         }
         const genUsage = await fetchOpenRouterGenerationUsage(genId, options.openRouterApiKey);
         if (genUsage) {
           if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
           cost = genUsage.costCents;
           if (cost > 0 || tokensUsed > 0) {
-            console.log(`📊 OpenRouter generation lookup - Id: ${genId.slice(0, 28)}..., Tokens: ${tokensUsed}, Cost: $${(cost / 10000).toFixed(4)}`);
           }
         } else {
           console.warn('📊 OpenRouter: generation lookup returned no usage/cost (id may be chatcmpl-xxx; API expects gen-xxx). Check https://openrouter.ai/activity for actual cost.');
@@ -530,8 +521,6 @@ Respond with only valid JSON:
     } else {
       cost = 0;
     }
-
-    console.log(`✅ AI summary generated - Model: ${actualModel}, Tokens: ${tokensUsed}, Cost: $${(cost / 10000).toFixed(4)}${useOpenRouter && openRouterGenerationId ? `, OpenRouter gen id: ${openRouterGenerationId.slice(0, 20)}...` : ''}`);
     
     return {
       summary,

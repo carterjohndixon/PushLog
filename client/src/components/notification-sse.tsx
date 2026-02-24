@@ -110,10 +110,6 @@ export function NotificationSSE() {
     const eventSource = new EventSource("/api/notifications/stream");
     eventSourceRef.current = eventSource;
 
-    eventSource.onopen = () => {
-      console.log("[NotificationSSE] connected");
-    };
-
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -121,11 +117,9 @@ export function NotificationSSE() {
         if (data.type === "heartbeat" || data.type === "connected") return;
 
         if (data.type === "notification") {
-          console.log("[NotificationSSE] notification received:", data.data?.type, data.data?.title);
           queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
           const notifType = data.data?.type;
           if (notifType === "incident_alert") {
-            console.log("[NotificationSSE] incident_alert — dispatching toast + browser notif");
             const id = String(data.data?.id ?? "");
             if (id) seenIncidentIdsRef.current.add(id);
             dispatchIncidentAlert(data.data);

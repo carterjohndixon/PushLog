@@ -311,7 +311,6 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
         .filter((c) => !!c.sha);
       if (list.length > 0) {
         _ghCommitsCache = { data: list, ts: Date.now() };
-        console.log(`[fetchGitHubCommits] OK: ${list.length} commits fetched (cached)`);
         return list;
       }
       if (attempt < maxAttempts) continue;
@@ -464,7 +463,6 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
     const tid = (teamId || "").trim();
     const cid = (channelId || "").trim();
     const integrations = await databaseStorage.getIntegrationsBySlackTeamAndChannel(tid, cid);
-    console.log("[Slack /pushlog] team_id=%s channel_id=%s channel_name=%s → %d integration(s)", tid, cid, (payload as any).channel_name ?? "", integrations.length);
     const result: { repositoryName: string; slackChannelName: string; aiModel: string | null; isActive: boolean }[] = [];
     for (const i of integrations) {
       const repo = await databaseStorage.getRepository(i.repositoryId);
@@ -1109,8 +1107,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasLocalGit = branch !== "unknown" && headSha !== "";
       const remote = promoteRemoteStatus && !promoteRemoteStatus.error ? promoteRemoteStatus : null;
 
-      console.log(`[staging/status] hasLocalGit=${hasLocalGit}, localCommits=${recentCommits.length}, remoteCommits=${remote?.recentCommits?.length ?? "n/a"}, remoteError=${promoteRemoteStatus?.error || "none"}`);
-
       let finalBranch = hasLocalGit ? branch : (remote?.branch || "unknown");
       let finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
       const finalProdDeployedSha = prodDeployedSha || remote?.prodDeployedSha || null;
@@ -1121,9 +1117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always fetch from GitHub as the canonical source — production may be on old code after rollback
       if (finalRecentCommits.length === 0) {
-        console.log("[staging/status] No commits from local or remote, fetching from GitHub...");
         finalRecentCommits = await fetchRecentCommitsFromGitHub(30);
-        console.log(`[staging/status] GitHub returned ${finalRecentCommits.length} commits`);
       }
       if (!finalHeadSha && finalRecentCommits[0]?.sha) {
         finalHeadSha = finalRecentCommits[0].sha;
@@ -1570,7 +1564,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
             } else {
               // Token is valid but missing repo scope, clear and allow reconnection
-              console.log("GitHub token missing 'repo' scope, clearing connection to allow reconnection");
               await databaseStorage.updateUser(userId, {
                 githubId: null,
                 githubToken: null
@@ -1610,9 +1603,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : "https://pushlog.ai/auth/github/callback";
       const scope = "repo user:email admin:org_hook";
       
-      console.log("GitHub OAuth connect - Client ID:", clientId.substring(0, 10) + "...");
-      console.log("GitHub OAuth connect - Redirect URI:", redirectUri);
-      
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
       
       // Instead of redirecting, send the URL and state back to the client
@@ -1639,7 +1629,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         githubToken: null
       });
 
-      console.log(`GitHub disconnected for user ${userId}`);
       res.status(200).json({ success: true, message: "GitHub account disconnected successfully" });
     } catch (error) {
       console.error('Failed to disconnect GitHub:', error);
@@ -1712,7 +1701,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? clientRedirectUri
         : (req.get("host") ? `${req.protocol || "https"}://${req.get("host")}/auth/github/callback` : undefined);
       const host = (req.get("host") || "").split(":")[0];
-      console.log("GitHub OAuth POST exchange - redirect_uri:", redirectUri, "host:", host);
       let token: string;
       try {
         token = await exchangeCodeForToken(code, redirectUri, req.get("host") || undefined);
@@ -1835,16 +1823,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (code) {
-        console.log("GitHub OAuth callback received, exchanging code for token...");
         // Use the request's Host so redirect_uri always matches where the user was sent (ignore APP_URL which may be wrong on server).
         const host = (req.get("host") || "").split(":")[0];
         const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
         const redirectUriForExchange = host ? `${protocol}://${host}/api/auth/user` : (process.env.APP_URL ? `${(process.env.APP_URL || "").replace(/\/$/, "")}/api/auth/user` : undefined);
-        console.log("GitHub OAuth token exchange - redirect_uri:", redirectUriForExchange, "(from Host:", req.get("host") + ")");
         let token: string;
         try {
           token = await exchangeCodeForToken(code, redirectUriForExchange, req.get("host") || undefined);
-          console.log("Successfully exchanged code for token");
         } catch (tokenError) {
           console.error("Failed to exchange code for token:", tokenError);
           throw new Error(`Failed to exchange GitHub authorization code: ${tokenError instanceof Error ? tokenError.message : 'Unknown error'}`);
@@ -1853,7 +1838,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let githubUser;
         try {
           githubUser = await getGitHubUser(token);
-          console.log("Successfully fetched GitHub user:", githubUser.login);
         } catch (userError) {
           console.error("Failed to get GitHub user:", userError);
           throw new Error(`Failed to fetch GitHub user info: ${userError instanceof Error ? userError.message : 'Unknown error'}`);
@@ -1863,12 +1847,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const state = req.query.state as string;
         const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
         const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow
-        console.log(`OAuth callback - state: ${state}, currentUserId: ${currentUserId}`);
         
         let user;
         if (isLinkingFlow) {
           // User is already logged in and trying to connect GitHub
-          console.log(`User ${currentUserId} is connecting GitHub account`);
           const currentUser = await databaseStorage.getUserById(currentUserId);
           if (currentUser) {
             // Check if GitHub account is already connected to another user
@@ -1884,16 +1866,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
               email: githubUser.email || currentUser.email,
               emailVerified: true
             });
-            console.log(`Updated user ${currentUser.id} with GitHub connection`);
           }
         } else {
           // No current session - this is a login flow
-          console.log(`No current session - checking for existing user with GitHub ID ${githubUser.id}`);
           // No current session - check if user already exists with this GitHub ID
           const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
           if (existingUser) {
             // Log in existing user
-            console.log(`Found existing user ${existingUser.id}, logging in`);
             user = await databaseStorage.updateUser(existingUser.id, {
               githubToken: token, // Update token in case it changed
               email: githubUser.email || existingUser.email,
@@ -1901,21 +1880,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           } else {
             // Check if user exists with this username (from previous signup)
-            console.log(`Checking for existing user with username: ${githubUser.login}`);
             const existingUserByUsername = await databaseStorage.getUserByUsername(githubUser.login);
             if (existingUserByUsername) {
               // User exists with this username but no GitHub connection - update it
-              console.log(`Found existing user ${existingUserByUsername.id} with username ${githubUser.login}, connecting GitHub`);
               user = await databaseStorage.updateUser(existingUserByUsername.id, {
                 githubId: githubUser.id.toString(),
                 githubToken: token,
                 email: githubUser.email || existingUserByUsername.email,
                 emailVerified: true
               });
-              console.log(`Updated user ${existingUserByUsername.id} with GitHub connection`);
             } else {
               // Create new user - but wrap in try-catch to handle race conditions
-              console.log(`No existing user found, creating new user for GitHub user ${githubUser.login}`);
               try {
                 user = await databaseStorage.createUser({
                   username: githubUser.login,
@@ -1924,22 +1899,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   githubToken: token,
                   emailVerified: true
                 });
-                console.log(`Created new user ${user?.id}`);
               } catch (createError: any) {
                 // If username already exists (race condition or check missed it), find and update
                 console.error(`Error creating user:`, createError.message);
                 if (createError.message && (createError.message.includes('users_username_key') || createError.message.includes('duplicate key'))) {
-                  console.log(`Username conflict detected, finding existing user by username: ${githubUser.login}`);
                   const conflictUser = await databaseStorage.getUserByUsername(githubUser.login);
                   if (conflictUser) {
-                    console.log(`Found conflicting user ${conflictUser.id}, updating with GitHub connection`);
                     user = await databaseStorage.updateUser(conflictUser.id, {
                       githubId: githubUser.id.toString(),
                       githubToken: token,
                       email: githubUser.email || conflictUser.email,
                       emailVerified: true
                     });
-                    console.log(`Updated existing user ${conflictUser.id} with GitHub connection`);
                   } else {
                     console.error(`Username conflict but couldn't find user - this shouldn't happen`);
                     throw createError;
@@ -1956,8 +1927,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Failed to create/update user. User object:", user);
           throw new Error('Failed to create or update user properly');
         }
-
-        console.log(`Successfully created/updated user ${user.id} with GitHub ID ${githubUser.id}`);
         
         const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled;
 
@@ -1988,7 +1957,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("❌ GitHub OAuth: session save failed:", err);
             return res.redirect(`/login?error=session_error`);
           }
-          console.log(`Redirecting to dashboard for user ${user.id} (session-based auth) -> ${redirectUrl}`);
           return res.redirect(redirectUrl);
         });
       }
@@ -3120,7 +3088,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const first = error.errors[0];
         const message = first ? `${first.path.join(".")}: ${first.message}` : "Validation failed";
         // return res.status(400).json({ error: "Invalid integration data", details: message });
-        console.log("Validation failed:", message);
         res.status(400).json({ error: "Invalid integration data"});
       }
       res.status(400).json({ error: "Invalid integration data" });
@@ -3323,7 +3290,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : null;
       }
       
-      console.log(`📝 Updating integration ${integrationId} with:`, JSON.stringify({ ...updates, openRouterApiKey: updates.openRouterApiKey ? '[REDACTED]' : updates.openRouterApiKey }, null, 2));
       
       // First verify user owns this integration
       const existingIntegration = await storage.getIntegration(integrationId);
@@ -3334,12 +3300,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingIntegration.userId !== req.user!.userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-      
-      console.log(`📊 Current integration ai_model: ${existingIntegration.aiModel}`);
-      
+          
       const integration = await storage.updateIntegration(integrationId, updates);
-      
-      console.log(`✅ Updated integration ai_model: ${integration?.aiModel}`);
       
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
@@ -3351,7 +3313,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await databaseStorage.updateUser(req.user!.userId, {
           preferredAiModel: updates.aiModel
         });
-        console.log(`📝 Updated user ${req.user!.userId} preferred_ai_model to ${updates.aiModel}`);
       }
 
       // If integration is being activated (unpaused), also activate the repository
@@ -3419,7 +3380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "Key did not persist. Ensure the database has the open_router_api_key column (run migrations/add-openrouter-api-key-users.sql) and ENCRYPTION_KEY is set in .env (64 hex chars).",
         });
       }
-      console.log(`OpenRouter API key saved for user ${userId} (encrypted length ${stored.length})`);
+
       // #region agent log
       // #endregion
       res.status(200).json({ success: true });
@@ -4576,20 +4537,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testModel = req.body?.model;
       const testMaxTokens = req.body?.maxTokens || 350;
       
-      console.log(`🧪 Test AI Summary - Model: ${testModel}, Body:`, JSON.stringify(req.body));
       
       // Get user's first active integration for testing (if not using direct model)
       let activeIntegration = null;
       if (!testModel) {
-        console.log('🔍 No model provided, checking for active integration...');
         const userIntegrations = await storage.getIntegrationsByUserId(userId);
         activeIntegration = userIntegrations.find(integration => integration.isActive);
         
         if (!activeIntegration) {
           return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
         }
-      } else {
-        console.log(`✅ Using direct model parameter: ${testModel}`);
       }
       
       // Create realistic test data for GPT-5.2 testing
@@ -4670,7 +4627,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
               
               slackSent = true;
-              console.log(`✅ Test Slack message sent to channel ${integrationToUse.slackChannelName} using model ${aiModel}`);
             }
           }
         } catch (slackError) {
@@ -4737,7 +4693,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         commitSha: "test-" + Date.now(),
       };
 
-      console.log(`🧪 [TEST] Simulate push: ${repo.fullName} @ ${pushData.branch} → Slack #${integration.slackChannelName}`);
 
       const integrationAiModel = (integration as any).aiModel ?? (integration as any).ai_model;
       const aiModelStr = (typeof integrationAiModel === "string" && integrationAiModel.trim()) ? integrationAiModel.trim() : "gpt-5.2";
@@ -4785,7 +4740,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Slack workspace token not found" });
       }
 
-      console.log(`🧪 [TEST] Sending Slack notification to ${integration.slackChannelName}...`);
       if (aiGenerated && aiSummary) {
         const slackMessage = await generateSlackMessage(pushData, {
           summary: aiSummary,
@@ -4799,7 +4753,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           text: slackMessage,
           unfurl_links: false,
         });
-        console.log(`🧪 [TEST] ✅ AI Slack message sent. Timestamp: ${ts}`);
       } else {
         const ts = await sendPushNotification(
           workspaceToken,
@@ -4811,7 +4764,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pushData.commitSha,
           Boolean(integration.includeCommitSummaries)
         );
-        console.log(`🧪 [TEST] ✅ Regular Slack message sent. Timestamp: ${ts}`);
       }
 
       try {
@@ -4978,7 +4930,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ingestIncidentEvent(event);
       }
 
-      console.log(`🧪 [TEST] Simulate incident: ${exceptionType} → notification${fullPipeline ? " + engine" : ""}`);
       res.status(200).json({
         ok: true,
         message: "Incident sent",
@@ -5369,8 +5320,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notificationId = req.params.id;
       const userId = req.user!.userId;
       
-      console.log(`📖 Marking notification ${notificationId} as read for user ${userId}`);
-      
       // Verify the notification belongs to the user (single row lookup)
       const notification = await storage.getNotificationByIdAndUserId(notificationId, userId);
       
@@ -5379,8 +5328,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Notification not found" });
       }
       
-      console.log(`✅ Found notification ${notificationId}, current isRead: ${notification.isRead}`);
-      
       // Mark as read
       const updated = await storage.markNotificationAsRead(notificationId);
       
@@ -5388,8 +5335,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error(`❌ Failed to update notification ${notificationId}`);
         return res.status(500).json({ error: "Failed to mark notification as read" });
       }
-      
-      console.log(`✅ Notification ${notificationId} marked as read. Updated isRead: ${updated.isRead}`);
       
       res.status(200).json({ success: true });
     } catch (error) {
@@ -5830,8 +5775,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.userId;
       
-      console.log(`📦 [GDPR] User ${userId} requested data export`);
-      
       const exportData = await databaseStorage.exportUserData(userId);
       
       // Log the export for audit purposes
@@ -5864,12 +5807,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
-      console.log(`🗑️ [GDPR] User ${userId} requested account deletion`);
-      
       const result = await databaseStorage.deleteUserAccount(userId);
       
       if (result.success) {
-        console.log(`✅ [GDPR] Account deleted for user ${userId}:`, result.deletedData);
         res.status(200).json({ 
           success: true, 
           message: "Your account and all associated data have been deleted.",

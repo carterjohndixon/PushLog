@@ -159,7 +159,6 @@ function flushEventQueue(): void {
   if (eventQueue.length === 0) return;
 
   const flushedCount = eventQueue.length;
-  console.log(`[incident-engine] flushing ${flushedCount} queued event(s)...`);
 
   while (eventQueue.length > 0) {
     if (!child || child.killed || !child.stdin.writable) {
@@ -178,10 +177,6 @@ function flushEventQueue(): void {
         break;
       }
     }
-  }
-
-  if (eventQueue.length === 0) {
-    console.log(`[incident-engine] successfully flushed ${flushedCount} event(s)`);
   }
 }
 

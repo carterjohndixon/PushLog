@@ -25,9 +25,7 @@ const trimmed = typeof RAW === 'string' ? RAW.trim() : '';
 const ENCRYPTION_KEY = /^[a-fA-F0-9]{64}$/.test(trimmed) ? trimmed : null;
 
 if (process.env.NODE_ENV !== 'test') {
-  if (ENCRYPTION_KEY) {
-    console.log('✓ ENCRYPTION_KEY loaded (64 hex chars) – encrypted data will persist across restarts.');
-  } else if (trimmed.length > 0) {
+  if (trimmed.length > 0) {
     console.warn(
       `⚠️ ENCRYPTION_KEY is invalid: must be exactly 64 hex characters (0-9, a-f). Got ${trimmed.length} chars${trimmed.length === 66 && (trimmed.startsWith('"') || trimmed.startsWith("'")) ? ' (remove quotes around the value in .env)' : ''}. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
     );
