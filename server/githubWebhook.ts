@@ -225,31 +225,28 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   try {
     const userForBudget = await databaseStorage.getUserById(integration.userId);
     const monthlyBudget = (userForBudget as any)?.monthlyBudget;
-    if (monthlyBudget != null && monthlyBudget > 0) {
+    // Only enforce budget when this integration uses OpenRouter. OpenAI-key usage is paid by the user to OpenAI; the budget is for OpenRouter spend.
+    if (monthlyBudget != null && monthlyBudget > 0 && useOpenRouter) {
       const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
       const monthlySpend = await databaseStorage.getMonthlyAiSpend(integration.userId, monthStart);
       if (monthlySpend >= monthlyBudget) {
         const overBudgetBehavior = (userForBudget as any)?.overBudgetBehavior === "skip_ai" ? "skip_ai" : "free_model";
         const urgentMetadata = JSON.stringify({ monthlySpend, monthlyBudget, urgent: true });
-        const useFreeModel = useOpenRouter && overBudgetBehavior === "free_model";
+        const useFreeModel = overBudgetBehavior === "free_model";
         const budgetNotif = await storage.createNotification({
           userId: integration.userId,
           type: "budget_alert",
           title: "Monthly budget exceeded",
           message: useFreeModel
-            ? `Your AI budget is reached. Summaries are now using the free model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
-            : `Your AI spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. ${useOpenRouter ? "AI summaries are paused until you raise your budget or next month (change this in Models → When over budget)." : "Reset your budget on the Models page to get AI summaries again."}`,
+            ? `Your OpenRouter budget is reached. Summaries are now using the free model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
+            : `Your OpenRouter spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. AI summaries via OpenRouter are paused until you raise your budget or next month (Models → When over budget).`,
           metadata: urgentMetadata,
         });
         broadcastNotification(integration.userId, { id: budgetNotif.id, type: "budget_alert", title: budgetNotif.title, message: budgetNotif.message, metadata: budgetNotif.metadata, createdAt: budgetNotif.createdAt, isRead: false });
-        if (useOpenRouter) {
-          if (overBudgetBehavior === "skip_ai") {
-            overBudgetSkipAi = true;
-          } else {
-            effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
-          }
-        } else {
+        if (overBudgetBehavior === "skip_ai") {
           overBudgetSkipAi = true;
+        } else {
+          effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
         }
       }
     }
