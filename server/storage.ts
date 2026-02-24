@@ -472,6 +472,8 @@ export class MemStorage implements IStorage {
       ...aiUsage,
       id,
       openrouterGenerationId: aiUsage.openrouterGenerationId ?? null,
+      tokensPrompt: aiUsage.tokensPrompt ?? null,
+      tokensCompletion: aiUsage.tokensCompletion ?? null,
       createdAt: new Date().toISOString()
     };
     this.aiUsage.set(id, newAiUsage);

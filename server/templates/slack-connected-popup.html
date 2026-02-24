@@ -53,21 +53,46 @@
       <h1>Slack connected</h1>
       <p>Your workspace is linked to PushLog.</p>
       <p class="hint" id="hint">Taking you back to the app…</p>
+      <p class="hint" style="margin-top: 1.25rem;">
+        <a href="/dashboard#slack=connected" id="back-link" style="color: #388E3C; font-weight: 600; text-decoration: underline;">Return to PushLog</a>
+      </p>
     </div>
     <script>
       (function() {
         var opener = window.opener;
         var origin = window.location.origin;
+        var hint = document.getElementById('hint');
+        var backLink = document.getElementById('back-link');
+
+        function goToDashboard() {
+          if (opener) {
+            try { opener.focus(); } catch (e) {}
+            try { opener.postMessage('slack-connected', origin); } catch (e) {}
+          }
+          window.location.href = '/dashboard#slack=connected';
+        }
+
         if (opener) {
-          // Only close when this was opened from the dashboard (opener = PushLog tab). Notify it and close so they can stay on the other tab.
           try {
             opener.postMessage('slack-connected', origin);
           } catch (e) {}
-          document.getElementById('hint').textContent = 'Closing this window…';
-          setTimeout(function() { window.close(); }, 1200);
+          hint.textContent = 'Closing this window…';
+          window.close();
+          setTimeout(function() {
+            window.close();
+            hint.textContent = "If this window didn't close, click \"Return to PushLog\" below.";
+            if (backLink) backLink.style.visibility = 'visible';
+          }, 1500);
         } else {
-          document.getElementById('hint').textContent = 'Redirecting back to the app…';
-          window.location.href = '/dashboard#slack=connected';
+          hint.textContent = 'Redirecting back to the app…';
+          setTimeout(goToDashboard, 800);
+        }
+
+        if (backLink) {
+          backLink.onclick = function(e) {
+            e.preventDefault();
+            goToDashboard();
+          };
         }
       })();
     </script>
