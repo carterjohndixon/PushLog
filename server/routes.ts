@@ -4085,6 +4085,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OpenAI: daily usage for cost-over-time chart (OpenAI models only, no "/" in model)
+  app.get("/api/openai/usage/daily", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const days = 30;
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+      startDate.setHours(0, 0, 0, 0);
+      const dailyFromDb = await databaseStorage.getAiUsageDailyByUserIdOpenAiOnly(userId, startDate);
+      const dateKeys: string[] = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        dateKeys.push(d.toISOString().slice(0, 10));
+      }
+      const byDate = Object.fromEntries(dailyFromDb.map((row) => [row.date, { date: row.date, totalCost: row.totalCost, callCount: row.callCount }]));
+      const daily = dateKeys.map((date) => byDate[date] ?? { date, totalCost: 0, callCount: 0 });
+      res.status(200).json(daily);
+    } catch (err) {
+      console.error("OpenAI daily usage error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to load daily usage" });
+    }
+  });
+
+  // OpenAI: current month spend (OpenAI models only) for budget display
+  app.get("/api/openai/monthly-spend", authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user!.userId;
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const { totalSpend, callCount } = await databaseStorage.getMonthlyAiSummaryOpenAiOnly(userId, monthStart);
+      res.status(200).json({ totalSpend, totalSpendUsd: totalSpend / 10000, callCount });
+    } catch (err) {
+      console.error("OpenAI monthly spend error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to load monthly spend" });
+    }
+  });
+
   // OpenRouter: daily usage aggregation for cost-over-time chart on /models page
   app.get("/api/openrouter/usage/daily", authenticateToken, async (req, res) => {
     try {

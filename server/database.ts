@@ -831,6 +831,39 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  /** Daily AI usage for OpenAI models only (model does not contain '/'). */
+  async getAiUsageDailyByUserIdOpenAiOnly(userId: string, startDate: Date): Promise<{ date: string; totalCost: number; callCount: number }[]> {
+    const startIso = startDate.toISOString().slice(0, 10);
+    const rows = await db.execute<{ day: string; total_cost: string; call_count: number }>(sql`
+      SELECT (date_trunc('day', created_at)::date)::text AS day,
+             COALESCE(SUM(cost), 0)::bigint AS total_cost,
+             count(*)::int AS call_count
+      FROM ai_usage
+      WHERE user_id = ${userId} AND created_at >= ${startIso}
+        AND (model IS NULL OR model NOT LIKE '%/%')
+      GROUP BY date_trunc('day', created_at)::date
+      ORDER BY day
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    return list.map((r) => ({
+      date: r.day,
+      totalCost: Number(r.total_cost ?? 0),
+      callCount: r.call_count ?? 0,
+    }));
+  }
+
+  /** Monthly summary for OpenAI models only (for /api/openai/monthly-spend). */
+  async getMonthlyAiSummaryOpenAiOnly(userId: string, monthStart: Date): Promise<{ totalSpend: number; callCount: number }> {
+    const monthStartIso = monthStart.toISOString().slice(0, 10);
+    const [row] = await db.execute<{ total_spend: string; call_count: number }>(sql`
+      SELECT COALESCE(SUM(cost), 0)::bigint AS total_spend, COUNT(*)::int AS call_count
+      FROM ai_usage
+      WHERE user_id = ${userId} AND created_at >= ${monthStartIso}
+        AND (model IS NULL OR model NOT LIKE '%/%')
+    `);
+    return { totalSpend: Number(row?.total_spend ?? 0), callCount: row?.call_count ?? 0 };
+  }
+
   /** Cost by model (model, cost, calls, tokens) for analytics. One GROUP BY query. */
   async getAiUsageByModelForAnalytics(userId: string, startDate?: Date): Promise<{ model: string; cost: number; calls: number; tokens: number }[]> {
     if (startDate) {

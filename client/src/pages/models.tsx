@@ -196,6 +196,7 @@ export default function Models() {
           <OpenAIModels
             userHasOpenAiKey={userHasOpenAiKey}
             profileLoading={profileLoading}
+            profileUser={profileUser}
             savedPreferredModel={savedPreferredModel}
             recommendedOpenai={recommendedOpenai}
             integrations={integrations}

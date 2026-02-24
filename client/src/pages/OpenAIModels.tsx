@@ -13,13 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Key, Sparkles, CheckCircle2, Loader2, Trash2, DollarSign, Zap, ExternalLink, RefreshCw } from "lucide-react";
+import { Key, Sparkles, CheckCircle2, Loader2, Trash2, DollarSign, Zap, ExternalLink, RefreshCw, Search, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
 import { getAiModelDisplayName } from "@/lib/utils";
-import { formatLocalDateTime } from "@/lib/date";
+import { formatLocalDateTime, formatRelativeOrLocal, formatLocalShortDate } from "@/lib/date";
 import { Link } from "wouter";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid } from "recharts";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -127,9 +130,18 @@ interface OpenAiModelInfo {
   tags?: string[];
 }
 
+const RECENT_CALLS_PAGE_SIZE = 15;
+
+interface ProfileUserForModels {
+  preferredAiModel?: string;
+  monthlyBudget?: number | null;
+  overBudgetBehavior?: "free_model" | "skip_ai";
+}
+
 interface OpenAIModelsProps {
   userHasOpenAiKey: boolean;
   profileLoading: boolean;
+  profileUser?: ProfileUserForModels | undefined;
   savedPreferredModel: string;
   recommendedOpenai: string | null;
   integrations: { id: string | number; repositoryName: string; slackChannelName: string; aiModel?: string }[] | undefined;
@@ -195,6 +207,7 @@ function getOpenAiModelInfo(
 export function OpenAIModels({
   userHasOpenAiKey,
   profileLoading,
+  profileUser,
   savedPreferredModel,
   recommendedOpenai,
   integrations,
@@ -209,6 +222,11 @@ export function OpenAIModels({
   const [openaiApiKeyInput, setOpenaiApiKeyInput] = useState("");
   const [selectedOpenAiModel, setSelectedOpenAiModel] = useState<OpenAiModel | null>(null);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
+  const [recentCallsOpen, setRecentCallsOpen] = useState(false);
+  const [recentCallsModelFilter, setRecentCallsModelFilter] = useState<string>("");
+  const [recentCallsSearch, setRecentCallsSearch] = useState("");
+  const [recentCallsPage, setRecentCallsPage] = useState(0);
+  const [budgetInput, setBudgetInput] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -251,6 +269,67 @@ export function OpenAIModels({
     },
     enabled: userHasOpenAiKey,
     retry: 1,
+  });
+
+  const { data: dailyUsageData } = useQuery<{ date: string; totalCost: number; callCount: number }[]>({
+    queryKey: ["/api/openai/usage/daily"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/usage/daily", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load daily usage");
+      return res.json();
+    },
+    enabled: userHasOpenAiKey,
+    retry: 1,
+  });
+
+  const { data: monthlySpendData } = useQuery<{ totalSpend: number; totalSpendUsd: number; callCount: number }>({
+    queryKey: ["/api/openai/monthly-spend"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/monthly-spend", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load monthly spend");
+      return res.json();
+    },
+    enabled: userHasOpenAiKey,
+    retry: 1,
+  });
+
+  const userBudget = profileUser?.monthlyBudget;
+  const budgetUsd = userBudget != null && userBudget > 0 ? userBudget / 10000 : null;
+
+  const setBudgetMutation = useMutation({
+    mutationFn: async (budget: number | null) => {
+      const res = await apiRequest("PATCH", "/api/openrouter/budget", { budget });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: ["/api/openai/monthly-spend"] });
+      setBudgetInput("");
+      toast({ title: "Budget updated" });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Budget update failed", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const overBudgetBehaviorMutation = useMutation({
+    mutationFn: async (behavior: "free_model" | "skip_ai") => {
+      const res = await apiRequest("PATCH", "/api/user", { overBudgetBehavior: behavior });
+      return res.json();
+    },
+    onSuccess: (_, behavior) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: "Setting saved",
+        description:
+          behavior === "skip_ai"
+            ? "When over budget, AI summaries will be paused (plain push only)."
+            : "When over budget, summaries will use the free model.",
+      });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to save", description: e.message, variant: "destructive" });
+    },
   });
 
   const verifyOpenAiMutation = useMutation({
@@ -557,7 +636,7 @@ export function OpenAIModels({
                     </div>
                   </div>
                 )}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                   <div className="rounded-lg border border-border bg-muted/30 p-4">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Total calls</p>
                     <p className="text-xl font-semibold text-foreground">{openaiUsageData.totalCalls ?? 0}</p>
@@ -570,11 +649,96 @@ export function OpenAIModels({
                     <p className="text-xs text-muted-foreground uppercase tracking-wide">Estimated cost</p>
                     <p className="text-xl font-semibold text-foreground">{openaiUsageData.totalCostFormatted ?? "—"}</p>
                   </div>
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
+                    <p className="text-xl font-semibold text-foreground">
+                      {monthlySpendData != null ? `$${monthlySpendData.totalSpendUsd.toFixed(4)}` : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">this month</p>
+                  </div>
                 </div>
-                {openaiUsageData.costByModel && openaiUsageData.costByModel.length > 0 && (
+
+                {openaiUsageData.costByModel && openaiUsageData.costByModel.length > 0 && openaiUsageData.totalCalls > 0 && (
+                  <div className="flex flex-wrap gap-3 mb-6">
+                    <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                      <span className="text-muted-foreground">Avg/call:</span>
+                      <span className="font-medium text-foreground">
+                        ${(openaiUsageData.totalCostCents / openaiUsageData.totalCalls / 10000).toFixed(4)}
+                      </span>
+                    </div>
+                    {(() => {
+                      const withCost = openaiUsageData.costByModel.filter((r) => r.totalCalls > 0);
+                      const cheapest =
+                        withCost.length > 0
+                          ? withCost.reduce((a, b) =>
+                              a.totalCostCents / a.totalCalls < b.totalCostCents / b.totalCalls ? a : b
+                            )
+                          : null;
+                      const priciest =
+                        withCost.length > 0
+                          ? withCost.reduce((a, b) =>
+                              a.totalCostCents / a.totalCalls > b.totalCostCents / b.totalCalls ? a : b
+                            )
+                          : null;
+                      return (
+                        <>
+                          {cheapest && (
+                            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                              <span className="text-muted-foreground">Cheapest:</span>
+                              <span className="font-medium text-foreground">{getAiModelDisplayName(cheapest.model)}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ${(cheapest.totalCostCents / cheapest.totalCalls / 10000).toFixed(4)}/call
+                              </span>
+                            </div>
+                          )}
+                          {priciest && priciest.model !== cheapest?.model && (
+                            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
+                              <span className="text-muted-foreground">Priciest:</span>
+                              <span className="font-medium text-foreground">{getAiModelDisplayName(priciest.model)}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ${(priciest.totalCostCents / priciest.totalCalls / 10000).toFixed(4)}/call
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+
+                {dailyUsageData && dailyUsageData.some((d) => d.totalCost > 0) && (
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-foreground mb-3">Cost over time (last 30 days)</h4>
+                    <ChartContainer config={{ count: { label: "Cost", color: "hsl(var(--log-green))" } }} className="h-[180px] w-full">
+                      <AreaChart
+                        data={dailyUsageData.map((d) => ({
+                          dateLabel: formatLocalShortDate(d.date),
+                          costUsd: d.totalCost / 10000,
+                          calls: d.callCount,
+                        }))}
+                        margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                        <XAxis dataKey="dateLabel" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} tickLine={false} />
+                        <YAxis tick={{ fill: "hsl(var(--muted-foreground))" }} tickLine={false} tickFormatter={(v) => `$${v.toFixed(2)}`} />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Area
+                          type="monotone"
+                          dataKey="costUsd"
+                          name="Cost ($)"
+                          stroke="hsl(var(--log-green))"
+                          fill="hsl(var(--log-green) / 0.15)"
+                          strokeWidth={2}
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  </div>
+                )}
+
+                {Array.isArray(openaiUsageData.calls) && openaiUsageData.calls.length > 0 ? (
                   <>
-                    <h4 className="text-sm font-semibold text-foreground mb-2">Cost by model</h4>
-                    <div className="rounded-md border border-border overflow-hidden">
+                    <h4 className="text-sm font-semibold text-foreground mt-2 mb-2">Cost by model</h4>
+                    <div className="rounded-md border border-border overflow-hidden mb-6">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50 border-border">
@@ -586,12 +750,12 @@ export function OpenAIModels({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {openaiUsageData.costByModel.map((r) => (
+                          {(openaiUsageData.costByModel ?? []).map((r) => (
                             <TableRow key={r.model} className="border-border">
                               <TableCell className="font-medium text-foreground">{getAiModelDisplayName(r.model)}</TableCell>
                               <TableCell className="text-muted-foreground">{r.totalCalls}</TableCell>
                               <TableCell className="text-muted-foreground">{(r.totalTokens ?? 0).toLocaleString()}</TableCell>
-                              <TableCell className="text-foreground">
+                              <TableCell className="text-muted-foreground">
                                 {r.totalCostCents != null && r.totalCostCents > 0
                                   ? `$${(r.totalCostCents / 10000).toFixed(4)}`
                                   : r.totalCostCents === 0
@@ -599,18 +763,234 @@ export function OpenAIModels({
                                     : "—"}
                               </TableCell>
                               <TableCell className="text-muted-foreground text-sm">
-                                {r.lastAt ? formatLocalDateTime(r.lastAt) : "—"}
+                                {r.lastAt ? formatRelativeOrLocal(r.lastAt) : "—"}
                               </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                       </Table>
                     </div>
+                    <Collapsible open={recentCallsOpen} onOpenChange={setRecentCallsOpen}>
+                      <div className="flex flex-wrap items-center gap-2 mt-4 mb-2">
+                        <CollapsibleTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 px-2 -ml-2 text-foreground hover:bg-muted/50">
+                            {recentCallsOpen ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
+                            <span className="text-sm font-semibold">Recent calls</span>
+                            <span className="text-muted-foreground font-normal text-xs ml-1">({openaiUsageData.calls.length})</span>
+                          </Button>
+                        </CollapsibleTrigger>
+                        <Select
+                          value={recentCallsModelFilter || "all"}
+                          onValueChange={(v) => {
+                            setRecentCallsModelFilter(v === "all" ? "" : v);
+                            setRecentCallsPage(0);
+                          }}
+                        >
+                          <SelectTrigger className="w-[200px] h-8 text-sm bg-background border-border text-foreground">
+                            <SelectValue placeholder="All models" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All models</SelectItem>
+                            {Array.from(new Set((openaiUsageData.calls as { model?: string }[]).map((c) => c.model))).filter(Boolean).sort().map((m) => (
+                              <SelectItem key={m!} value={m!}>
+                                {getAiModelDisplayName(m!)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="relative flex-1 min-w-[140px] max-w-[220px]">
+                          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Search calls…"
+                            value={recentCallsSearch}
+                            onChange={(e) => {
+                              setRecentCallsSearch(e.target.value);
+                              setRecentCallsPage(0);
+                            }}
+                            className="h-8 pl-8 text-sm bg-background border-border text-foreground"
+                          />
+                        </div>
+                      </div>
+                      <CollapsibleContent>
+                        {(() => {
+                          const calls = openaiUsageData.calls as { id?: number; model?: string; tokensUsed?: number; cost?: number; costFormatted?: string; createdAt?: string }[];
+                          const filteredRecentCalls = calls
+                            .filter((c) => !recentCallsModelFilter || c.model === recentCallsModelFilter)
+                            .filter((c) => {
+                              if (!recentCallsSearch.trim()) return true;
+                              const q = recentCallsSearch.toLowerCase();
+                              return (
+                                (c.model ?? "").toLowerCase().includes(q) ||
+                                getAiModelDisplayName(c.model ?? "").toLowerCase().includes(q) ||
+                                (c.costFormatted ?? "").toLowerCase().includes(q) ||
+                                String(c.tokensUsed ?? "").includes(q)
+                              );
+                            });
+                          const totalPages = Math.max(1, Math.ceil(filteredRecentCalls.length / RECENT_CALLS_PAGE_SIZE));
+                          const pageIndex = Math.min(recentCallsPage, totalPages - 1);
+                          const paginatedCalls = filteredRecentCalls.slice(
+                            pageIndex * RECENT_CALLS_PAGE_SIZE,
+                            (pageIndex + 1) * RECENT_CALLS_PAGE_SIZE
+                          );
+                          return (
+                            <>
+                              <div className="rounded-md border border-border overflow-hidden">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-muted/50 border-border">
+                                      <TableHead className="text-foreground">Model</TableHead>
+                                      <TableHead className="text-foreground">Tokens</TableHead>
+                                      <TableHead className="text-foreground">Cost</TableHead>
+                                      <TableHead className="text-foreground">Date</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {paginatedCalls.map((c, idx) => (
+                                      <TableRow key={c.id ?? idx} className="border-border">
+                                        <TableCell className="font-medium text-foreground text-sm">
+                                          {getAiModelDisplayName(c.model ?? "")}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">
+                                          {(c.tokensUsed ?? 0).toLocaleString()}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">
+                                          {c.costFormatted != null && c.costFormatted !== ""
+                                            ? c.costFormatted
+                                            : typeof c.cost === "number"
+                                              ? c.cost === 0
+                                                ? "$0.00"
+                                                : `$${(c.cost / 10000).toFixed(4)}`
+                                              : "—"}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground text-sm">
+                                          {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
+                                        </TableCell>
+                                      </TableRow>
+                                    ))}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                              {filteredRecentCalls.length === 0 && (
+                                <p className="text-sm text-muted-foreground py-3">No calls match your filters.</p>
+                              )}
+                              {filteredRecentCalls.length > 0 && totalPages > 1 && (
+                                <div className="flex items-center justify-between gap-2 mt-2 px-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1 border-border"
+                                    disabled={pageIndex <= 0}
+                                    onClick={() => setRecentCallsPage((p) => Math.max(0, p - 1))}
+                                  >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                    Previous
+                                  </Button>
+                                  <span className="text-sm text-muted-foreground">
+                                    Page {pageIndex + 1} of {totalPages}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 gap-1 border-border"
+                                    disabled={pageIndex >= totalPages - 1}
+                                    onClick={() => setRecentCallsPage((p) => Math.min(totalPages - 1, p + 1))}
+                                  >
+                                    Next
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </>
+                          );
+                        })()}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No OpenAI calls yet. Use an integration with OpenAI to see usage here.</p>
                 )}
-                {openaiUsageData.totalCalls === 0 && (
-                  <p className="text-sm text-muted-foreground">No usage recorded yet. Usage will appear here after commit summaries are generated with OpenAI.</p>
-                )}
+
+                <div className="mb-6 mt-6 rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Monthly spend</p>
+                    {monthlySpendData ? (
+                      budgetUsd != null ? (
+                        <span className="text-xs text-muted-foreground">
+                          ${monthlySpendData.totalSpendUsd.toFixed(4)} / ${budgetUsd.toFixed(2)} budget
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">${monthlySpendData.totalSpendUsd.toFixed(4)} this month</span>
+                      )
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mb-2 text-sm">
+                    <span className="text-muted-foreground">
+                      Spent this month:{" "}
+                      <span className="font-medium text-foreground">
+                        {monthlySpendData != null ? `$${monthlySpendData.totalSpendUsd.toFixed(4)}` : "—"}
+                      </span>
+                    </span>
+                    {budgetUsd != null && (
+                      <span className="text-muted-foreground">
+                        Budget: <span className="font-medium text-foreground">${budgetUsd.toFixed(2)}</span>
+                      </span>
+                    )}
+                  </div>
+                  {budgetUsd != null && monthlySpendData && (
+                    <div className="w-full h-2 rounded-full bg-border overflow-hidden mb-2">
+                      <div
+                        className={`h-full rounded-full transition-all ${monthlySpendData.totalSpendUsd >= budgetUsd ? "bg-red-500" : "bg-log-green"}`}
+                        style={{ width: `${Math.min(100, (monthlySpendData.totalSpendUsd / budgetUsd) * 100)}%` }}
+                      />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder={budgetUsd != null ? `$${budgetUsd.toFixed(2)}` : "Set budget ($)"}
+                      value={budgetInput}
+                      onChange={(e) => setBudgetInput(e.target.value)}
+                      className="h-8 min-w-[10rem] w-40 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 min-w-[4.5rem] border-border bg-background text-xs font-medium hover:bg-muted hover:border-log-green/50"
+                      disabled={setBudgetMutation.isPending}
+                      onClick={() => {
+                        const val = budgetInput.trim() ? parseFloat(budgetInput) : null;
+                        setBudgetMutation.mutate(val);
+                      }}
+                    >
+                      {setBudgetMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : budgetInput.trim() ? "Set" : "Clear"}
+                    </Button>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-border">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">When over budget</Label>
+                    <Select
+                      value={profileUser?.overBudgetBehavior ?? "skip_ai"}
+                      onValueChange={(v: "free_model" | "skip_ai") => overBudgetBehaviorMutation.mutate(v)}
+                      disabled={overBudgetBehaviorMutation.isPending}
+                    >
+                      <SelectTrigger className="mt-1.5 h-8 w-full max-w-xs text-sm bg-background border-border">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="free_model">Use free model (summary still sent)</SelectItem>
+                        <SelectItem value="skip_ai">Skip AI (plain push only)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {profileUser?.overBudgetBehavior !== "free_model"
+                        ? "Slack will get commit info only until next month or you raise the budget."
+                        : "When over budget, summaries will use the free model instead of your chosen model."}
+                    </p>
+                  </div>
+                </div>
               </>
             ) : null}
           </CardContent>
