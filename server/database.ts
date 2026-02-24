@@ -365,6 +365,25 @@ export class DatabaseStorage implements IStorage {
     return result as PushEvent[];
   }
 
+  /** Latest pushed_at (ISO string) per repository id, for sorting integrations by recent activity. */
+  async getLatestPushedAtByRepositoryIds(repositoryIds: string[]): Promise<Map<string, string>> {
+    if (repositoryIds.length === 0) return new Map();
+    const rows = await db.execute<{ repository_id: string; max_at: string }>(sql`
+      SELECT repository_id, MAX(pushed_at)::text AS max_at
+      FROM push_events
+      WHERE repository_id = ANY(${repositoryIds})
+      GROUP BY repository_id
+    `);
+    const list = Array.isArray(rows) ? rows : [rows];
+    const map = new Map<string, string>();
+    for (const r of list) {
+      const id = r?.repository_id ?? (r as any)?.repository_id;
+      const at = r?.max_at ?? (r as any)?.max_at;
+      if (id && at) map.set(id, at);
+    }
+    return map;
+  }
+
   /** Push events for all of a user's repos, one query. Optional filters: repositoryId, from, to, minImpact. */
   async getPushEventsForUser(userId: string, options?: { limit?: number; offset?: number } & ListPushEventsFilters): Promise<PushEvent[]> {
     const limit = options?.limit ?? 100;

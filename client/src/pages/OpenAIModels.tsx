@@ -235,6 +235,7 @@ export function OpenAIModels({
     costFormatted?: string | null;
     createdAt?: string | null;
   } | null>(null);
+  const [quickApplyModelId, setQuickApplyModelId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -524,6 +525,91 @@ export function OpenAIModels({
           )}
         </CardContent>
       </Card>
+
+      {userHasOpenAiKey && (
+        <Card className="card-lift mb-8 border-border shadow-forest">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <Zap className="w-5 h-5 text-log-green" />
+              Apply a model to an integration
+            </CardTitle>
+            <CardDescription>
+              Select a model and an integration to use it for commit summaries—no need to scroll the table.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[180px] max-w-sm">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Model</Label>
+                <Select value={quickApplyModelId} onValueChange={setQuickApplyModelId}>
+                  <SelectTrigger className="w-full bg-background border-border text-foreground">
+                    <SelectValue placeholder={openaiModelsLoading ? "Loading…" : "Choose model"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {openaiModels.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>
+                        <span className="flex items-center gap-2">
+                          {getAiModelDisplayName(m.id)}
+                          {recommendedOpenai === m.id && (
+                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    ))}
+                    {!openaiModelsLoading && openaiModels.length === 0 && (
+                      <div className="py-2 px-2 text-sm text-muted-foreground">No models available</div>
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-[180px] max-w-sm">
+                <Label className="text-xs text-muted-foreground mb-1.5 block">Integration</Label>
+                <Select value={applyToIntegrationId} onValueChange={setApplyToIntegrationId}>
+                  <SelectTrigger className="w-full bg-background border-border text-foreground">
+                    <SelectValue placeholder="Choose integration…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(integrations ?? []).map((int) => (
+                      <SelectItem key={int.id} value={String(int.id)} className="text-foreground">
+                        {int.repositoryName} → #{int.slackChannelName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                variant="glow"
+                className="text-white shrink-0"
+                disabled={!quickApplyModelId || !applyToIntegrationId || applyToIntegrationMutation.isPending}
+                onClick={() => {
+                  if (!quickApplyModelId || !applyToIntegrationId) return;
+                  const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
+                  if (int?.aiModel === quickApplyModelId) {
+                    toast({
+                      title: "Already using this model",
+                      description: `This integration already uses ${getAiModelDisplayName(quickApplyModelId)}.`,
+                      variant: "default",
+                    });
+                    return;
+                  }
+                  applyToIntegrationMutation.mutate(
+                    { integrationId: applyToIntegrationId, modelId: quickApplyModelId },
+                    { onSuccess: () => setQuickApplyModelId("") }
+                  );
+                }}
+              >
+                {applyToIntegrationMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Apply"}
+              </Button>
+            </div>
+            {integrations?.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No integrations yet. Create one from <Link href="/dashboard" className="text-log-green hover:underline">Dashboard</Link> or{" "}
+                <Link href="/integrations" className="text-log-green hover:underline">Integrations</Link>.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {userHasOpenAiKey && (
         <Card className="card-lift mb-8 border-border shadow-forest">
