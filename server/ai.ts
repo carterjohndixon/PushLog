@@ -82,6 +82,94 @@ type OpenRouterGenerationResponse = {
   tokens_completion?: number;
 };
 
+/** Normalized result from OpenAI (Responses API or chat.completions fallback). No SDK-specific types. */
+export interface NormalizedOpenAIResult {
+  text: string;
+  model: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
+}
+
+/**
+ * Call OpenAI with Responses API first; fall back to chat.completions on 400/404 or "not supported".
+ * Works for any model ID (chat, codex, gpt-5.x). Single normalized shape for the rest of the app.
+ */
+async function callOpenAI(
+  client: OpenAI,
+  params: { model: string; instructions: string; input: string; max_output_tokens: number; temperature: number }
+): Promise<NormalizedOpenAIResult> {
+  const { model, instructions, input, max_output_tokens, temperature } = params;
+  try {
+    const resp = await client.responses.create({
+      model,
+      instructions: instructions || null,
+      input,
+      max_output_tokens,
+      temperature,
+    });
+    const text = resp.output_text ?? '';
+    const u = resp.usage;
+    return {
+      text,
+      model: resp.model ?? model,
+      usage: u
+        ? {
+            input_tokens: u.input_tokens,
+            output_tokens: u.output_tokens,
+            total_tokens: u.total_tokens,
+            prompt_tokens: u.input_tokens,
+            completion_tokens: u.output_tokens,
+          }
+        : undefined,
+    };
+  } catch (err: any) {
+    const status = err?.status ?? err?.code;
+    const message = String(err?.message ?? err ?? '');
+    const isNotSupported =
+      status === 400 ||
+      status === 404 ||
+      /not supported|completions endpoint|v1\/completions/i.test(message);
+    if (!isNotSupported) throw err;
+    console.warn(`📊 OpenAI Responses API failed for ${model} (${status}), falling back to chat.completions:`, message.slice(0, 120));
+    const chat = await client.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: instructions },
+        { role: 'user', content: input },
+      ],
+      max_completion_tokens: max_output_tokens,
+      temperature,
+    });
+    const msg = chat.choices[0]?.message;
+    let text = '';
+    if (typeof msg?.content === 'string') text = msg.content;
+    else if (Array.isArray(msg?.content))
+      text = (msg.content as { type?: string; text?: string }[])
+        .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+        .map((p) => p.text)
+        .join('');
+    const u = chat.usage;
+    return {
+      text,
+      model: chat.model ?? model,
+      usage: u
+        ? {
+            input_tokens: u.prompt_tokens,
+            output_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens,
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+          }
+        : undefined,
+    };
+  }
+}
+
 const OPENROUTER_GENERATION_ID_HEADER = 'x-openrouter-generation-id';
 
 /** OpenRouter gen-xxx id pattern; used to find generation id in response body when header is missing. */
@@ -160,15 +248,6 @@ export async function generateCodeSummary(
       ? new OpenAI({ apiKey: options!.openaiApiKey!.trim() })
       : openai;
 
-  // For PushLog-only: migrate invalid models to gpt-5.2
-  if (!useOpenRouter) {
-    const validModels = ['gpt-5.3-codex', 'gpt-5.2-codex', 'gpt-5.3-codex-spark', 'gpt-5.2', 'gpt-5.1', 'gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-4-turbo-preview', 'gpt-4-0125-preview', 'gpt-4-1106-preview', 'gpt-4', 'gpt-4-0613', 'gpt-3.5-turbo', 'gpt-3.5-turbo-0125', 'gpt-3.5-turbo-1106', 'gpt-3.5-turbo-16k'];
-    if (!validModels.includes(model)) {
-      console.warn(`⚠️ Invalid or deprecated model "${model}" detected. Migrating to gpt-5.2.`);
-      model = 'gpt-5.2';
-    }
-  }
-
   try {
     const prompt = `
 You are a world-class code review assistant tasked with analyzing a git push and providing a concise, helpful summary of the highest level of detail possible. Analyze this git push and provide a concise, helpful summary.
@@ -211,39 +290,11 @@ Respond with only valid JSON:
       temperature: 0.3, // All supported models support temperature
     };
 
+    let openAIResult: NormalizedOpenAIResult | null = null;
     let completion: OpenAI.Chat.Completions.ChatCompletion | undefined;
     let openRouterGenerationId: string | null = null;
 
-    // Codex (completion-only) models: use v1/completions instead of v1/chat/completions
-    if (!useOpenRouter && /codex/i.test(model)) {
-      try {
-        const promptText = requestParams.messages
-          .map((m: { role: string; content: string }) => `${m.role === 'system' ? 'System' : 'User'}: ${m.content}`)
-          .join('\n\n');
-        const completionRes = await client.completions.create({
-          model,
-          prompt: promptText,
-          max_tokens: effectiveMaxTokens,
-          temperature: 0.3,
-        });
-        const text = completionRes.choices?.[0]?.text ?? '';
-        const usage = completionRes.usage;
-        // Adapt to chat completion shape so the rest of the function (parse, validate, cost) runs unchanged
-        completion = {
-          id: completionRes.id,
-          model: completionRes.model,
-          object: 'chat.completion',
-          created: completionRes.created,
-          choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
-          usage: usage ? { total_tokens: usage.total_tokens, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens } : undefined,
-        } as unknown as OpenAI.Chat.Completions.ChatCompletion;
-      } catch (codexErr: any) {
-        // Codex may be unavailable on completions API (e.g. 500 for gpt-5.3-codex). Fall back to chat so the user still gets a summary.
-        console.warn(`📊 Codex completions failed for ${model} (${codexErr?.status ?? 'error'}), falling back to gpt-5.2 chat:`, codexErr?.message ?? codexErr);
-        requestParams.model = 'gpt-5.2';
-        completion = await client.chat.completions.create(requestParams);
-      }
-    } else if (useOpenRouter && options?.openRouterApiKey) {
+    if (useOpenRouter && options?.openRouterApiKey) {
       // Use fetch so we can read x-openrouter-generation-id header (needed for cost lookup)
       const openRouterMaxRetries = 2; // 503/429: retry up to 2 times (3 attempts total)
       const retryDelaysMs = [2000, 4000]; // backoff: 2s, then 4s
@@ -347,55 +398,58 @@ Respond with only valid JSON:
         throw apiError;
       }
     } else {
-      try {
-        completion = await client.chat.completions.create(requestParams);
-      } catch (apiError: any) {
-        console.error('❌ OpenAI API Error Details:');
-        console.error('   Status:', apiError?.status);
-        console.error('   Message:', apiError?.message);
-        console.error('   Code:', apiError?.code);
-        console.error('   Type:', apiError?.type);
-        console.error('   Param:', apiError?.param);
-        if (apiError?.error) {
-          console.error('   Error Object:', JSON.stringify(apiError.error, null, 2));
-        }
-        if (apiError?.response) {
-          console.error('   Response:', JSON.stringify(apiError.response, null, 2));
-        }
-        throw apiError; // Re-throw to be caught by outer catch
-      }
+      const systemContent = requestParams.messages.find((m: { role: string }) => m.role === 'system')?.content ?? '';
+      const userContent = requestParams.messages.find((m: { role: string }) => m.role === 'user')?.content ?? '';
+      openAIResult = await callOpenAI(client, {
+        model,
+        instructions: typeof systemContent === 'string' ? systemContent : String(systemContent),
+        input: typeof userContent === 'string' ? userContent : String(userContent),
+        max_output_tokens: effectiveMaxTokens,
+        temperature: 0.3,
+      });
     }
 
-    if (completion == null) throw new Error('No completion from API');
-    // Log the actual model used by OpenAI (in case of model fallback)
-    const actualModel = completion.model;
-    const msg = completion.choices[0]?.message as unknown as Record<string, unknown> | undefined;
-
-
-    // Get response text: prefer content; some OpenRouter models (e.g. Kimi K2.5) put output in reasoning
-    let response: string = '';
-    const rawContent = msg?.content;
-    if (typeof rawContent === 'string') {
-      response = rawContent;
-    } else if (Array.isArray(rawContent)) {
-      response = (rawContent as { type?: string; text?: string }[])
-        .filter((part) => part?.type === 'text' && typeof part.text === 'string')
-        .map((part) => part.text)
-        .join('');
-    }
-    if (!response?.trim() && msg) {
-      const reasoning = msg.reasoning;
-      if (typeof reasoning === 'string' && reasoning.trim()) {
-        response = reasoning.trim();
-      } else if (Array.isArray(msg.reasoning_details)) {
-        const parts = (msg.reasoning_details as { type?: string; text?: string }[])
-          .filter((p) => p?.type === 'reasoning.text' && typeof p.text === 'string')
-          .map((p) => p.text);
-        if (parts.length) response = parts.join('\n').trim();
+    // Normalized path: response text and usage from either OpenAI (openAIResult) or OpenRouter (completion)
+    let response: string;
+    let actualModel: string;
+    let unifiedUsage: { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } | undefined;
+    if (openAIResult) {
+      response = openAIResult.text ?? '';
+      actualModel = openAIResult.model;
+      unifiedUsage = openAIResult.usage
+        ? {
+            total_tokens: openAIResult.usage.total_tokens ?? (openAIResult.usage.input_tokens ?? 0) + (openAIResult.usage.output_tokens ?? 0),
+            prompt_tokens: openAIResult.usage.prompt_tokens ?? openAIResult.usage.input_tokens,
+            completion_tokens: openAIResult.usage.completion_tokens ?? openAIResult.usage.output_tokens,
+          }
+        : undefined;
+    } else if (completion) {
+      actualModel = completion.model;
+      const msg = completion.choices[0]?.message as unknown as Record<string, unknown> | undefined;
+      const rawContent = msg?.content;
+      if (typeof rawContent === 'string') response = rawContent;
+      else if (Array.isArray(rawContent))
+        response = (rawContent as { type?: string; text?: string }[])
+          .filter((part) => part?.type === 'text' && typeof part.text === 'string')
+          .map((part) => part.text)
+          .join('');
+      else response = '';
+      if (!response?.trim() && msg?.reasoning) {
+        const r = msg.reasoning;
+        if (typeof r === 'string' && r.trim()) response = r.trim();
+        else if (Array.isArray(msg.reasoning_details))
+          response = (msg.reasoning_details as { type?: string; text?: string }[])
+            .filter((p) => p?.type === 'reasoning.text' && typeof p.text === 'string')
+            .map((p) => p.text)
+            .join('\n')
+            .trim();
       }
+      const u = completion.usage as { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } | undefined;
+      unifiedUsage = u ? { total_tokens: u.total_tokens, prompt_tokens: u.prompt_tokens, completion_tokens: u.completion_tokens } : undefined;
+    } else {
+      throw new Error('No completion from API');
     }
     if (!response?.trim()) {
-      console.error('📄 Raw completion.choices[0]:', JSON.stringify(completion.choices?.[0], null, 2));
       throw new Error('No response from OpenAI');
     }
 
@@ -518,15 +572,15 @@ Respond with only valid JSON:
       summary.details = summary.summary || '';
     }
 
-    // Calculate usage and cost
-    let tokensUsed = completion.usage?.total_tokens || 0;
-    const usage = completion.usage as { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number; cost?: number } | undefined;
-    let promptTokens: number | undefined = usage?.prompt_tokens;
-    let completionTokens: number | undefined = usage?.completion_tokens;
+    // Calculate usage and cost (unified usage from openAIResult or completion)
+    let tokensUsed = unifiedUsage?.total_tokens || 0;
+    let promptTokens: number | undefined = unifiedUsage?.prompt_tokens;
+    let completionTokens: number | undefined = unifiedUsage?.completion_tokens;
     let cost: number;
-    if (useOpenRouter && typeof usage?.cost === 'number' && usage.cost > 0) {
+    const usageForCost = completion ? (completion.usage as { total_tokens?: number; cost?: number } | undefined) : undefined;
+    if (useOpenRouter && typeof usageForCost?.cost === 'number' && usageForCost.cost > 0) {
       // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
-      cost = Math.round(usage.cost * 10000);
+      cost = Math.round(usageForCost.cost * 10000);
     } else if (useUserOpenAi) {
       // User's OpenAI key — they pay OpenAI directly; no PushLog cost/credits
       cost = 0;
@@ -535,10 +589,8 @@ Respond with only valid JSON:
       cost = calculateTokenCost(model, tokensUsed);
     } else if (useOpenRouter && options?.openRouterApiKey) {
       // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id
-      const genId = openRouterGenerationId || completion.id;
+      const genId = openRouterGenerationId || (completion as { id?: string } | undefined)?.id;
       if (genId) {
-        if (!openRouterGenerationId && completion.id) {
-        }
         const genUsage = await fetchOpenRouterGenerationUsage(genId, options.openRouterApiKey);
         if (genUsage) {
           if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
