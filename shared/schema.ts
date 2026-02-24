@@ -139,6 +139,8 @@ export const aiUsage = pgTable("ai_usage", {
   pushEventId: uuid("push_event_id").notNull(),
   model: text("model").notNull(), // gpt-5.2, gpt-5.1, gpt-4o, openrouter: e.g. moonshotai/kimi-k2.5
   tokensUsed: integer("tokens_used").notNull(),
+  tokensPrompt: integer("tokens_prompt"), // Input/prompt tokens when available
+  tokensCompletion: integer("tokens_completion"), // Output/completion tokens when available
   cost: integer("cost").notNull(), // Cost in units of $0.0001 (ten-thousandths of a dollar) for sub-cent precision
   openrouterGenerationId: text("openrouter_generation_id"), // OpenRouter gen-xxx for GET /api/v1/generation?id=...
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

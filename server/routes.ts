@@ -3543,17 +3543,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const data = (await response.json()) as { data?: Array<{ id: string; created?: number; owned_by?: string }> };
       const raw = data.data ?? [];
-      // Only chat models (v1/chat/completions) — exclude completion-only (e.g. codex), transcribe, TTS, etc.
-      const isChatModel = (id: string) => {
+      // Chat models + codex (codex is supported via v1/completions in app). Exclude transcribe, TTS, etc.
+      const isChatOrCodexModel = (id: string) => {
         const lower = id.toLowerCase();
         if (!/^(gpt-|o1-|o3-|o4-)/i.test(id)) return false;
-        if (/codex/i.test(lower)) return false; // completion-only, not supported in chat/completions
         if (/transcribe|tts|realtime|whisper|embed|audio|image|vision-only/i.test(lower)) return false;
         if (/-image-|dall-e|dall·e/i.test(lower)) return false;
         return true;
       };
       const models = raw
-        .filter((m) => m.id && isChatModel(m.id))
+        .filter((m) => m.id && isChatOrCodexModel(m.id))
         .map((m) => ({
           id: m.id,
           name: m.id,
@@ -4058,6 +4057,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: u.id,
             model: u.model,
             tokensUsed: u.tokensUsed ?? (u as any).tokens_used ?? 0,
+            tokensPrompt: u.tokensPrompt ?? (u as any).tokens_prompt ?? null,
+            tokensCompletion: u.tokensCompletion ?? (u as any).tokens_completion ?? null,
             cost: c,
             costFormatted: c > 0 ? `$${(c / 10000).toFixed(4)}` : (c === 0 ? "$0.00" : null),
             createdAt: createdAtStr,
@@ -4090,6 +4091,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: row.id,
         model: row.model,
         tokensUsed: row.tokensUsed ?? (row as any).tokens_used ?? 0,
+        tokensPrompt: (row as any).tokensPrompt ?? (row as any).tokens_prompt ?? null,
+        tokensCompletion: (row as any).tokensCompletion ?? (row as any).tokens_completion ?? null,
         cost,
         costFormatted: cost > 0 ? `$${(cost / 10000).toFixed(4)}` : cost === 0 ? "$0.00" : null,
         createdAt: createdAt != null ? (typeof createdAt === "string" ? createdAt : new Date(createdAt).toISOString()) : null,
@@ -4593,8 +4596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Generate AI summary using the provided model or integration's model settings
-      let aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
-      if (/codex/i.test(aiModel)) aiModel = "gpt-5.2"; // completion-only models not supported in chat/completions
+      const aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
       const maxTokens = testMaxTokens || activeIntegration?.maxTokens || 350;
       
       const summary = await generateCodeSummary(
@@ -4707,8 +4709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
       const useOpenRouter = !!openRouterKeyRaw?.trim();
-      let aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
-      if (!useOpenRouter && /codex/i.test(aiModel)) aiModel = "gpt-5.2"; // completion-only not supported in chat/completions
+      const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
       let summary;
       try {
@@ -4791,6 +4792,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             pushEventId: pushEvent.id,
             model: (summary as any).actualModel ?? aiModel,
             tokensUsed: summary.tokensUsed,
+            tokensPrompt: (summary as any).promptTokens ?? null,
+            tokensCompletion: (summary as any).completionTokens ?? null,
             cost: summary.cost ?? 0,
             openrouterGenerationId: (summary as any).openrouterGenerationId ?? null,
           });

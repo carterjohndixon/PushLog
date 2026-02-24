@@ -917,7 +917,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateAiUsage(pushEventId: string, userId: string, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
-    const allowed = ['model', 'tokensUsed', 'cost', 'openrouterGenerationId'] as const;
+    const allowed = ['model', 'tokensUsed', 'tokensPrompt', 'tokensCompletion', 'cost', 'openrouterGenerationId'] as const;
     const set: Record<string, unknown> = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) set[key] = updates[key];

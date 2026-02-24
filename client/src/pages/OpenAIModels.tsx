@@ -231,6 +231,8 @@ export function OpenAIModels({
     id: string;
     model?: string;
     tokensUsed?: number;
+    tokensPrompt?: number | null;
+    tokensCompletion?: number | null;
     cost?: number;
     costFormatted?: string | null;
     createdAt?: string | null;
@@ -362,11 +364,13 @@ export function OpenAIModels({
     },
   });
 
-  const handleViewCall = (call: { id?: string; model?: string; tokensUsed?: number; cost?: number; costFormatted?: string; createdAt?: string }) => {
+  const handleViewCall = (call: { id?: string; model?: string; tokensUsed?: number; tokensPrompt?: number | null; tokensCompletion?: number | null; cost?: number; costFormatted?: string; createdAt?: string }) => {
     setViewingCall({
       id: String(call.id ?? ""),
       model: call.model,
       tokensUsed: call.tokensUsed,
+      tokensPrompt: call.tokensPrompt ?? null,
+      tokensCompletion: call.tokensCompletion ?? null,
       cost: call.cost,
       costFormatted: call.costFormatted ?? null,
       createdAt: call.createdAt ?? null,
@@ -1169,10 +1173,12 @@ export function OpenAIModels({
                     : "—"}
               </p>
               <p>
-                <span className="font-medium text-foreground">Tokens (prompt):</span> —
+                <span className="font-medium text-foreground">Tokens (prompt):</span>{" "}
+                {viewingCall.tokensPrompt != null ? viewingCall.tokensPrompt.toLocaleString() : "—"}
               </p>
               <p>
-                <span className="font-medium text-foreground">Tokens (completion):</span> —
+                <span className="font-medium text-foreground">Tokens (completion):</span>{" "}
+                {viewingCall.tokensCompletion != null ? viewingCall.tokensCompletion.toLocaleString() : "—"}
               </p>
               <p>
                 <span className="font-medium text-foreground">Total tokens:</span>{" "}

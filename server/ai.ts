@@ -40,6 +40,10 @@ export interface CodeSummary {
 export interface AiUsageResult {
   summary: CodeSummary;
   tokensUsed: number;
+  /** Input/prompt tokens when provided by the API. */
+  promptTokens?: number;
+  /** Output/completion tokens when provided by the API. */
+  completionTokens?: number;
   cost: number; // in units of $0.0001 (ten-thousandths of a dollar)
   actualModel?: string; // The actual model used by OpenAI
   /** OpenRouter generation id (gen-xxx) when using OpenRouter; use for GET /api/v1/generation?id=... */
@@ -100,7 +104,7 @@ function findGenIdInObject(obj: unknown, depth = 0): string | null {
 export async function fetchOpenRouterGenerationUsage(
   generationId: string,
   apiKey: string
-): Promise<{ tokensUsed: number; costCents: number } | null> {
+): Promise<{ tokensUsed: number; costCents: number; tokensPrompt?: number; tokensCompletion?: number } | null> {
   const idPrefix = generationId.startsWith('gen-') ? 'gen-xxx' : generationId.startsWith('chatcmpl-') ? 'chatcmpl-xxx' : 'other';
   try {
     const url = new URL('https://openrouter.ai/api/v1/generation');
@@ -130,7 +134,7 @@ export async function fetchOpenRouterGenerationUsage(
     const tokensUsed =
       (typeof tokensPrompt === 'number' ? tokensPrompt : 0) +
       (typeof tokensCompletion === 'number' ? tokensCompletion : 0) || 0;
-    return { tokensUsed, costCents };
+    return { tokensUsed, costCents, tokensPrompt: tokensPrompt || undefined, tokensCompletion: tokensCompletion || undefined };
   } catch (e) {
     console.warn('📊 OpenRouter generation lookup error:', e);
     return null;
@@ -210,7 +214,29 @@ Respond with only valid JSON:
     let completion: OpenAI.Chat.Completions.ChatCompletion | undefined;
     let openRouterGenerationId: string | null = null;
 
-    if (useOpenRouter && options?.openRouterApiKey) {
+    // Codex (completion-only) models: use v1/completions instead of v1/chat/completions
+    if (!useOpenRouter && /codex/i.test(model)) {
+      const promptText = requestParams.messages
+        .map((m: { role: string; content: string }) => `${m.role === 'system' ? 'System' : 'User'}: ${m.content}`)
+        .join('\n\n');
+      const completionRes = await client.completions.create({
+        model,
+        prompt: promptText,
+        max_tokens: effectiveMaxTokens,
+        temperature: 0.3,
+      });
+      const text = completionRes.choices?.[0]?.text ?? '';
+      const usage = completionRes.usage;
+      // Adapt to chat completion shape so the rest of the function (parse, validate, cost) runs unchanged
+      completion = {
+        id: completionRes.id,
+        model: completionRes.model,
+        object: 'chat.completion',
+        created: completionRes.created,
+        choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+        usage: usage ? { total_tokens: usage.total_tokens, prompt_tokens: usage.prompt_tokens, completion_tokens: usage.completion_tokens } : undefined,
+      } as unknown as OpenAI.Chat.Completions.ChatCompletion;
+    } else if (useOpenRouter && options?.openRouterApiKey) {
       // Use fetch so we can read x-openrouter-generation-id header (needed for cost lookup)
       const openRouterMaxRetries = 2; // 503/429: retry up to 2 times (3 attempts total)
       const retryDelaysMs = [2000, 4000]; // backoff: 2s, then 4s
@@ -487,7 +513,9 @@ Respond with only valid JSON:
 
     // Calculate usage and cost
     let tokensUsed = completion.usage?.total_tokens || 0;
-    const usage = completion.usage as { total_tokens?: number; cost?: number } | undefined;
+    const usage = completion.usage as { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number; cost?: number } | undefined;
+    let promptTokens: number | undefined = usage?.prompt_tokens;
+    let completionTokens: number | undefined = usage?.completion_tokens;
     let cost: number;
     if (useOpenRouter && typeof usage?.cost === 'number' && usage.cost > 0) {
       // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
@@ -508,6 +536,8 @@ Respond with only valid JSON:
         if (genUsage) {
           if (genUsage.tokensUsed > 0) tokensUsed = genUsage.tokensUsed;
           cost = genUsage.costCents;
+          if (genUsage.tokensPrompt != null) promptTokens = genUsage.tokensPrompt;
+          if (genUsage.tokensCompletion != null) completionTokens = genUsage.tokensCompletion;
           if (cost > 0 || tokensUsed > 0) {
           }
         } else {
@@ -525,6 +555,8 @@ Respond with only valid JSON:
     return {
       summary,
       tokensUsed,
+      promptTokens,
+      completionTokens,
       cost,
       actualModel, // Include the actual model used
       openrouterGenerationId: openRouterGenerationId ?? null,

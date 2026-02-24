@@ -221,10 +221,6 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   }
   const useOpenAi = !!openAiKeyRaw?.trim() && !modelHasSlash;
   let effectiveAiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
-  if (!useOpenRouter && /codex/i.test(effectiveAiModel)) {
-    effectiveAiModel = "gpt-5.2";
-  }
-
   let overBudgetSkipAi = false;
   try {
     const userForBudget = await databaseStorage.getUserById(integration.userId);
@@ -439,6 +435,8 @@ export async function persistPushAndNotifications(
       pushEventId: pushEvent.id,
       model: aiResult.summary.actualModel || aiResult.effectiveAiModel,
       tokensUsed: aiResult.summary.tokensUsed,
+      tokensPrompt: aiResult.summary.promptTokens ?? null,
+      tokensCompletion: aiResult.summary.completionTokens ?? null,
       cost: aiResult.summary.cost ?? 0,
       openrouterGenerationId: aiResult.summary.openrouterGenerationId ?? null,
     });
