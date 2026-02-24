@@ -20,52 +20,8 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import type { ActiveIntegration } from "@/lib/types";
 import { Send } from "lucide-react";
-
-const AI_MODELS = [
-  {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    description: 'Latest GPT-5.2 model with cutting-edge features (Latest & Recommended)',
-    costPerToken: 25
-  },
-  {
-    id: 'gpt-5.1',
-    name: 'GPT-5.1',
-    description: 'Improved GPT-5.1 with better performance',
-    costPerToken: 20
-  },
-  {
-    id: 'gpt-4o',
-    name: 'GPT-4o',
-    description: 'Most advanced GPT-4 model with improved performance and lower cost',
-    costPerToken: 5
-  },
-  {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    description: 'Faster and more affordable GPT-4o variant',
-    costPerToken: 3
-  },
-  {
-    id: 'gpt-4-turbo',
-    name: 'GPT-4 Turbo',
-    description: 'GPT-4 Turbo with extended context window',
-    costPerToken: 10
-  },
-  {
-    id: 'gpt-4',
-    name: 'GPT-4',
-    description: 'Original GPT-4 model for complex analysis',
-    costPerToken: 30
-  },
-  {
-    id: 'gpt-3.5-turbo',
-    name: 'GPT-3.5 Turbo',
-    description: 'Fast and cost-effective for most use cases',
-    costPerToken: 1
-  }
-];
 
 interface OpenRouterModel {
   id: string;
@@ -73,22 +29,10 @@ interface OpenRouterModel {
   description?: string;
 }
 
-interface Integration {
-  id: string;
-  repositoryName: string;
-  slackChannelName: string;
-  notificationLevel: string;
-  includeCommitSummaries: boolean;
-  isActive?: boolean;
-  aiModel?: string;
-  maxTokens?: number;
-  hasOpenRouterKey?: boolean;
-}
-
 interface IntegrationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  integration: Integration | null;
+  integration: ActiveIntegration | null;
   updateIntegrationMutation: UseMutationResult<any, Error, { id: string; updates: any }, unknown>;
 }
 
@@ -102,7 +46,7 @@ export function IntegrationSettingsModal({
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
   const [useOpenRouter, setUseOpenRouter] = useState(!!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey));
-  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
+  const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-4o');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
   const lastOpenRouterModelRef = useRef<string | null>(null);
@@ -143,6 +87,24 @@ export function IntegrationSettingsModal({
     enabled: open && useOpenRouter,
   });
   const openRouterModels = openRouterData?.models ?? [];
+
+  const { data: openaiModelsData } = useQuery<{ models: { id: string; name?: string }[] }>({
+    queryKey: ["/api/openai/models"],
+    queryFn: async () => {
+      const res = await fetch("/api/openai/models", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch OpenAI models");
+      return res.json();
+    },
+    enabled: open && !useOpenRouter,
+  });
+  const openaiModelsFromApi = openaiModelsData?.models ?? [];
+  const openaiOptions = (() => {
+    const list = [...openaiModelsFromApi];
+    if (aiModel && !list.some((m) => m.id === aiModel)) {
+      list.push({ id: aiModel, name: getAiModelDisplayName(aiModel) || aiModel });
+    }
+    return list;
+  })();
 
   const handleSave = () => {
     if (!integration) return;
@@ -336,30 +298,37 @@ export function IntegrationSettingsModal({
               {!useOpenRouter ? (
                 <div className="space-y-2">
                   <Label htmlFor="ai-model">PushLog AI Model</Label>
-                  <Select value={aiModel} onValueChange={setAiModel}>
+                  <Select
+                    value={openaiOptions.some((m) => m.id === aiModel) ? aiModel : (openaiOptions[0]?.id ?? "")}
+                    onValueChange={setAiModel}
+                  >
                     <SelectTrigger className="w-full bg-background text-foreground border-border">
-                      <SelectValue placeholder="Select AI model">
+                      <SelectValue placeholder={openaiOptions.length ? "Select AI model" : "Loading models…"}>
                         {aiModel ? getAiModelDisplayName(aiModel) : null}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border text-foreground" position="popper">
-                      {AI_MODELS.map((model) => (
-                        <SelectItem
-                          key={model.id}
-                          value={model.id}
-                          className="py-3 h-auto cursor-pointer group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground"
-                          textValue={model.name}
-                        >
-                          <div className="flex flex-col gap-1 w-full min-w-0 pr-4">
-                            <span className="font-medium text-sm leading-tight text-foreground group-data-[highlighted]:text-primary-foreground">{model.name}</span>
-                            <span className="text-xs text-foreground/90 leading-relaxed break-words group-data-[highlighted]:text-primary-foreground">
-                              ${(model.costPerToken / 100).toFixed(3)}/1K tokens • {model.description}
+                    <SelectContent className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border text-foreground" position="popper">
+                      {openaiOptions.map((model) => {
+                        const displayName = model.name || getAiModelDisplayName(model.id) || model.id;
+                        return (
+                          <SelectItem
+                            key={model.id}
+                            value={model.id}
+                            className="py-2 cursor-pointer min-w-0 group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground"
+                            textValue={displayName}
+                          >
+                            <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
+                              <span className="font-medium text-sm truncate min-w-0 flex-1">{displayName}</span>
+                              <span className="text-muted-foreground group-data-[highlighted]:text-primary-foreground text-xs truncate">({model.id})</span>
                             </span>
-                          </div>
-                        </SelectItem>
-                      ))}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Same models as on the <Link href="/models" className="text-log-green hover:underline">Models</Link> page. Choose any for commit summaries.
+                  </p>
                 </div>
               ) : (
                 /* OpenRouter: key is managed on Models page; here we only show model choice if user has key */

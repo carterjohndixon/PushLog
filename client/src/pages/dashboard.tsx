@@ -1052,7 +1052,10 @@ export default function Dashboard() {
                       // Active integrations first, then paused ones
                       if (a.status === 'active' && b.status !== 'active') return -1;
                       if (a.status !== 'active' && b.status === 'active') return 1;
-                      return 0;
+                      // Within same status: most recent git push / Slack activity first
+                      const aTime = a.lastUsed ? new Date(a.lastUsed).getTime() : 0;
+                      const bTime = b.lastUsed ? new Date(b.lastUsed).getTime() : 0;
+                      return bTime - aTime;
                     })
                     .map((integration) => (
                     <div key={integration.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
@@ -1367,6 +1370,11 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {integrations
                   .filter(integration => integration.status === 'active')
+                  .sort((a, b) => {
+                    const aTime = a.lastUsed ? new Date(a.lastUsed).getTime() : 0;
+                    const bTime = b.lastUsed ? new Date(b.lastUsed).getTime() : 0;
+                    return bTime - aTime;
+                  })
                   .map((integration) => (
                     <div key={integration.id} className="flex items-center justify-between p-3 border rounded-lg">
                       <div className="flex items-center space-x-3">

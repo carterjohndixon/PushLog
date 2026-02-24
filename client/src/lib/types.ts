@@ -21,10 +21,16 @@ export interface ActiveIntegration {
   repositoryName: string;
   slackChannelName: string;
   status: 'active' | 'paused' | 'error';
+  /** ISO date of latest push to this integration's repo (for sorting by recent activity). */
+  lastUsed?: string | null;
   lastActivity?: string;
   notificationLevel: string;
   includeCommitSummaries: boolean;
   isActive: boolean;
+  /** Optional; present when integration is loaded with settings (e.g. for modal). */
+  aiModel?: string;
+  maxTokens?: number;
+  hasOpenRouterKey?: boolean;
 }
 
 export interface RepositoryCardData {

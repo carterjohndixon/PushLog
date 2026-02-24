@@ -10,18 +10,12 @@ import { AlertTriangle, Clock, Github } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { UseMutationResult } from "@tanstack/react-query";
 import { formatLocalDate } from "@/lib/date";
-
-interface Integration {
-  id: string;
-  repositoryName: string;
-  slackChannelName: string;
-  lastUsed?: string;
-}
+import type { ActiveIntegration } from "@/lib/types";
 
 interface ConfirmIntegrationDeletionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  integrationToDelete: Integration | null;
+  integrationToDelete: ActiveIntegration | null;
   deleteIntegrationMutation: UseMutationResult<any, Error, string, unknown>;
 }
 

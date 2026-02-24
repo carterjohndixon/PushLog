@@ -368,18 +368,16 @@ export class DatabaseStorage implements IStorage {
   /** Latest pushed_at (ISO string) per repository id, for sorting integrations by recent activity. */
   async getLatestPushedAtByRepositoryIds(repositoryIds: string[]): Promise<Map<string, string>> {
     if (repositoryIds.length === 0) return new Map();
-    const rows = await db.execute<{ repository_id: string; max_at: string }>(sql`
-      SELECT repository_id, MAX(pushed_at)::text AS max_at
-      FROM push_events
-      WHERE repository_id = ANY(${repositoryIds})
-      GROUP BY repository_id
-    `);
-    const list = Array.isArray(rows) ? rows : [rows];
+    const rows = await db.select({ repositoryId: pushEvents.repositoryId, pushedAt: pushEvents.pushedAt })
+      .from(pushEvents)
+      .where(inArray(pushEvents.repositoryId, repositoryIds));
     const map = new Map<string, string>();
-    for (const r of list) {
-      const id = r?.repository_id ?? (r as any)?.repository_id;
-      const at = r?.max_at ?? (r as any)?.max_at;
-      if (id && at) map.set(id, at);
+    for (const r of rows as { repositoryId: string; pushedAt: Date | string | null }[]) {
+      const id = r.repositoryId;
+      const at = r.pushedAt == null ? null : typeof r.pushedAt === "string" ? r.pushedAt : new Date(r.pushedAt).toISOString();
+      if (!id || !at) continue;
+      const existing = map.get(id);
+      if (!existing || (at > existing)) map.set(id, at);
     }
     return map;
   }

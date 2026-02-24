@@ -3158,6 +3158,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const repoById = new Map(repos.map((r) => [r.id, r]));
+      const repoIds = Array.from(new Set((integrations as any[]).map((i: any) => i.repositoryId).filter(Boolean)));
+      const lastPushByRepo = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIds);
       const enrichedIntegrations = integrations.map((integration: any) => {
         const repoId = integration.repositoryId ?? null;
         const repository = repoId != null ? repoById.get(repoId) : null;
@@ -3165,7 +3167,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           ...sanitized,
           repositoryName: repository?.name ?? "Unknown Repository",
-          lastUsed: integration.createdAt ?? null,
+          lastUsed: lastPushByRepo.get(repoId!) ?? integration.createdAt ?? null,
           status: integration.isActive ? "active" : "paused",
           notificationLevel: integration.notificationLevel ?? "all",
           includeCommitSummaries: integration.includeCommitSummaries ?? true,
@@ -3224,6 +3226,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           incidentServiceName: (repo as any).incidentServiceName ?? null,
         }));
         const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
+        const repoIdsReconnect = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
+        const lastPushByRepoReconnect = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsReconnect);
         const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
           const repoId = integration.repositoryId ?? null;
           const repository = repoId != null ? repoById.get(repoId) : null;
@@ -3231,7 +3235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return {
             ...sanitized,
             repositoryName: repository?.name ?? "Unknown Repository",
-            lastUsed: integration.createdAt ?? null,
+            lastUsed: (repoId && lastPushByRepoReconnect.get(repoId)) ?? integration.createdAt ?? null,
             status: integration.isActive ? "active" : "paused",
             notificationLevel: integration.notificationLevel ?? "all",
             includeCommitSummaries: integration.includeCommitSummaries ?? true,
@@ -3278,6 +3282,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
+      const repoIdsMain = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
+      const lastPushByRepoMain = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsMain);
       const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
         const repoId = integration.repositoryId ?? null;
         const repository = repoId != null ? repoById.get(repoId) : null;
@@ -3285,7 +3291,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           ...sanitized,
           repositoryName: repository?.name ?? "Unknown Repository",
-          lastUsed: integration.createdAt ?? null,
+          lastUsed: (repoId && lastPushByRepoMain.get(repoId)) ?? integration.createdAt ?? null,
           status: integration.isActive ? "active" : "paused",
           notificationLevel: integration.notificationLevel ?? "all",
           includeCommitSummaries: integration.includeCommitSummaries ?? true,
