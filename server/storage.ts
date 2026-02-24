@@ -75,6 +75,7 @@ export interface IStorage {
   getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined>;
   createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace>;
   updateSlackWorkspace(id: string, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
+  deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean>;
 
   // OpenRouter methods
   getAiUsageByUserId(userId: string, options?: { limit?: number }): Promise<AiUsage[]>;
@@ -392,6 +393,20 @@ export class MemStorage implements IStorage {
     const updatedSlackWorkspace = { ...slackWorkspace, ...updates };
     this.slackWorkspaces.set(id, updatedSlackWorkspace);
     return updatedSlackWorkspace;
+  }
+
+  async deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean> {
+    const slackWorkspace = this.slackWorkspaces.get(workspaceId);
+    if (!slackWorkspace || slackWorkspace.userId !== userId) return false;
+    Array.from(this.integrations.values()).forEach((integration) => {
+      if (integration.slackWorkspaceId === workspaceId) {
+        (integration as any).isActive = false;
+        (integration as any).slackWorkspaceId = null;
+        (integration as any).slackChannelId = "";
+      }
+    });
+    this.slackWorkspaces.delete(workspaceId);
+    return true;
   }
 
   // OpenRouter methods

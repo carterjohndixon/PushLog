@@ -51,16 +51,25 @@
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       </div>
       <h1>Slack connected</h1>
-      <p>Your workspace is linked to PushLog. You can close this window.</p>
-      <p class="hint">Redirecting back to the app…</p>
+      <p>Your workspace is linked to PushLog.</p>
+      <p class="hint" id="hint">Taking you back to the app…</p>
     </div>
     <script>
-      if (window.opener) {
-        window.opener.postMessage('slack-connected', '*');
-        window.close();
-      } else {
-        window.location.href = '/dashboard#slack=connected';
-      }
+      (function() {
+        var opener = window.opener;
+        var origin = window.location.origin;
+        if (opener) {
+          // Only close when this was opened from the dashboard (opener = PushLog tab). Notify it and close so they can stay on the other tab.
+          try {
+            opener.postMessage('slack-connected', origin);
+          } catch (e) {}
+          document.getElementById('hint').textContent = 'Closing this window…';
+          setTimeout(function() { window.close(); }, 1200);
+        } else {
+          document.getElementById('hint').textContent = 'Redirecting back to the app…';
+          window.location.href = '/dashboard#slack=connected';
+        }
+      })();
     </script>
   </body>
 </html>

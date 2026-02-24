@@ -75,6 +75,7 @@ export default function Settings() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
+  const [slackDisconnectWorkspace, setSlackDisconnectWorkspace] = useState<{ id: string; teamName: string } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -148,6 +149,36 @@ export default function Settings() {
       if (!response.ok) throw new Error('Failed to fetch data summary');
       return response.json();
     }
+  });
+
+  // Slack workspaces (for list + disconnect)
+  const { data: slackWorkspaces = [] } = useQuery<{ id: string; teamName: string; teamId: string }[]>({
+    queryKey: ["/api/slack/workspaces"],
+    queryFn: async () => {
+      const response = await fetch("/api/slack/workspaces", { credentials: "include", headers: { Accept: "application/json" } });
+      if (!response.ok) return [];
+      return response.json();
+    },
+  });
+
+  const slackDisconnectMutation = useMutation({
+    mutationFn: async (workspaceId: string) => {
+      const response = await fetch(`/api/slack/workspaces/${workspaceId}/disconnect`, { method: "POST", credentials: "include", headers: { Accept: "application/json" } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "Failed to disconnect");
+      return data;
+    },
+    onSuccess: () => {
+      setSlackDisconnectWorkspace(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({ title: "Slack workspace disconnected", description: "Integrations using that workspace have been deactivated. You can reconnect from the Dashboard." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });
+    },
   });
 
   // GitHub connect/reconnect: get OAuth URL and redirect
@@ -460,6 +491,44 @@ export default function Settings() {
                     )}
                   </div>
                 </>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Slack workspaces */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <SiSlack className="w-5 h-5 text-log-green" />
+                Slack workspaces
+              </CardTitle>
+              <CardDescription>
+                Workspaces you have connected to PushLog. Disconnecting will deactivate any integrations that use that workspace. You can reconnect from the Dashboard.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {slackWorkspaces.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No Slack workspaces connected. Connect one from the Dashboard.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {slackWorkspaces.map((ws) => (
+                    <li key={ws.id} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-border bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <SiSlack className="w-4 h-4 text-log-green shrink-0" />
+                        <span className="font-medium text-foreground">{ws.teamName}</span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+                        onClick={() => setSlackDisconnectWorkspace({ id: ws.id, teamName: ws.teamName })}
+                        disabled={slackDisconnectMutation.isPending}
+                      >
+                        Disconnect
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
@@ -937,6 +1006,35 @@ export default function Settings() {
               className="bg-red-600 hover:bg-red-700"
             >
               {githubDisconnectMutation.isPending ? "Disconnecting…" : "Disconnect GitHub"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Slack workspace disconnect confirmation */}
+      <AlertDialog open={!!slackDisconnectWorkspace} onOpenChange={(open) => !open && setSlackDisconnectWorkspace(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disconnect Slack workspace?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Disconnecting <strong>{slackDisconnectWorkspace?.teamName}</strong> will remove it from PushLog. Any integrations that use this workspace will be deactivated (you can set up new ones after reconnecting).
+                </p>
+                <p className="pt-2">
+                  You can connect this workspace again anytime from the Dashboard.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => slackDisconnectWorkspace && slackDisconnectMutation.mutate(slackDisconnectWorkspace.id)}
+              disabled={slackDisconnectMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {slackDisconnectMutation.isPending ? "Disconnecting…" : "Disconnect workspace"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -359,12 +359,11 @@ export default function Dashboard() {
           }
         }, 500);
 
-        // Also listen for messages from the popup (if we add postMessage)
+        // Listen for messages from the Slack success popup (same origin only)
         window.addEventListener('message', (event) => {
-          if (event.data === 'slack-connected') {
-            queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
-            if (popup) popup.close();
-          }
+          if (event.origin !== window.location.origin || event.data !== 'slack-connected') return;
+          queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+          if (popup) popup.close();
         });
       } else {
         throw new Error('No OAuth URL received from server');

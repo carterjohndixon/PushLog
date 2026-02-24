@@ -151,15 +151,14 @@ export default function Home() {
         );
 
         const onMessage = (event: MessageEvent) => {
-          if (event.data === "slack-connected") {
-            window.removeEventListener("message", onMessage);
-            if (popup) popup.close();
-            toast({
-              title: "Slack Connected",
-              description: "Your Slack workspace is now connected. Go to Integrations to set up notifications.",
-            });
-            scrollToDashboard();
-          }
+          if (event.origin !== window.location.origin || event.data !== "slack-connected") return;
+          window.removeEventListener("message", onMessage);
+          if (popup) popup.close();
+          toast({
+            title: "Slack Connected",
+            description: "Your Slack workspace is now connected. Go to Integrations to set up notifications.",
+          });
+          scrollToDashboard();
         };
         window.addEventListener("message", onMessage);
 

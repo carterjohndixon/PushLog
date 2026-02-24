@@ -2991,6 +2991,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Disconnect (remove) a Slack workspace for the current user
+  app.post("/api/slack/workspaces/:workspaceId/disconnect", authenticateToken, requireEmailVerification, async (req, res) => {
+    try {
+      const userId = req.user?.userId;
+      const workspaceId = req.params.workspaceId;
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const deleted = await databaseStorage.deleteSlackWorkspace(workspaceId, userId);
+      if (!deleted) return res.status(404).json({ error: "Workspace not found or you don't have access" });
+      res.status(200).json({ success: true });
+    } catch (error) {
+      console.error("Slack workspace disconnect error:", error);
+      Sentry.captureException(error);
+      res.status(500).json({ error: "Failed to disconnect workspace" });
+    }
+  });
+
   // Create integration
   app.post("/api/integrations", authenticateToken, async (req, res) => {
     try {

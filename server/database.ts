@@ -637,6 +637,15 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  /** Disconnect (delete) a Slack workspace for the given user. Deactivates integrations that used it. */
+  async deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean> {
+    const workspace = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.id, workspaceId), eq(slackWorkspaces.userId, userId))).limit(1);
+    if (!workspace[0]) return false;
+    await db.update(integrations).set({ isActive: false, slackWorkspaceId: null, slackChannelId: "" }).where(eq(integrations.slackWorkspaceId, workspaceId));
+    await db.delete(slackWorkspaces).where(eq(slackWorkspaces.id, workspaceId));
+    return true;
+  }
+
   // Analytics methods
   async getStatsForUser(userId: string): Promise<AnalyticsStats> {
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
