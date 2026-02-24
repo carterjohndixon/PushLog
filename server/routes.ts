@@ -226,6 +226,97 @@ async function getUserIdFromOAuthState(state: string): Promise<string | null> {
   }
 }
 
+/** Sign-in-or-sign-up: find by (provider, providerAccountId), else link by verified email, else create user. Keeps users.githubId/googleId in sync. */
+async function findOrCreateUserFromOAuth(params: {
+  provider: "github" | "google";
+  providerAccountId: string;
+  email: string | null;
+  emailVerified: boolean;
+  name?: string | null;
+  suggestedUsername: string;
+  token: string;
+  isLinkingFlow: boolean;
+  currentUserId: string | null;
+}): Promise<{ user: import("@shared/schema").User; isNewUser: boolean }> {
+  const { provider, providerAccountId, email, emailVerified, suggestedUsername, token, isLinkingFlow, currentUserId } = params;
+
+  if (isLinkingFlow && currentUserId) {
+    const currentUser = await databaseStorage.getUserById(currentUserId);
+    if (!currentUser) throw new Error("Current user not found");
+    const existing = await databaseStorage.getOAuthIdentity(provider, providerAccountId);
+    if (existing && existing.userId !== currentUser.id) {
+      throw new Error("This account is already connected to another user.");
+    }
+    if (!existing) {
+      await databaseStorage.createOAuthIdentity({
+        provider,
+        providerAccountId,
+        userId: currentUser.id,
+        email: email ?? currentUser.email ?? null,
+        verified: emailVerified,
+      });
+    }
+    const updates = provider === "github"
+      ? { githubId: providerAccountId, githubToken: token, ...(email && { email }), ...(emailVerified && { emailVerified: true }) }
+      : { googleId: providerAccountId, googleToken: token, ...(email && { email }), ...(emailVerified && { emailVerified: true }) };
+    const user = await databaseStorage.updateUser(currentUser.id, updates);
+    if (!user) throw new Error("Failed to update user");
+    return { user, isNewUser: false };
+  }
+
+  const identity = await databaseStorage.getOAuthIdentity(provider, providerAccountId);
+  if (identity) {
+    let user = await databaseStorage.getUserById(identity.userId);
+    if (!user) throw new Error("User not found for OAuth identity");
+    const updates = provider === "github"
+      ? { githubToken: token, ...(email && { email }), ...(emailVerified && { emailVerified: true }) }
+      : { googleToken: token, ...(email && { email }), ...(emailVerified && { emailVerified: true }) };
+    user = await databaseStorage.updateUser(user.id, updates) ?? user;
+    return { user, isNewUser: false };
+  }
+
+  if (emailVerified && email) {
+    const existingUser = await databaseStorage.getUserByEmail(email);
+    if (existingUser) {
+      await databaseStorage.createOAuthIdentity({
+        provider,
+        providerAccountId,
+        userId: existingUser.id,
+        email,
+        verified: true,
+      });
+      const updates = provider === "github"
+        ? { githubId: providerAccountId, githubToken: token, emailVerified: true }
+        : { googleId: providerAccountId, googleToken: token, emailVerified: true };
+      const user = await databaseStorage.updateUser(existingUser.id, updates);
+      if (!user) throw new Error("Failed to link OAuth to existing user");
+      return { user, isNewUser: false };
+    }
+  }
+
+  let username = suggestedUsername;
+  let counter = 0;
+  while (true) {
+    const existing = await databaseStorage.getUserByUsername(username);
+    if (!existing) break;
+    username = `${suggestedUsername}${counter || ""}`;
+    counter = counter ? counter + 1 : 1;
+  }
+
+  const createPayload = provider === "github"
+    ? { username, email: email ?? undefined, githubId: providerAccountId, githubToken: token, emailVerified: emailVerified }
+    : { username, email: email ?? undefined, googleId: providerAccountId, googleToken: token, emailVerified: emailVerified };
+  let user = await databaseStorage.createUser(createPayload as import("@shared/schema").InsertUser);
+  await databaseStorage.createOAuthIdentity({
+    provider,
+    providerAccountId,
+    userId: user.id,
+    email: email ?? null,
+    verified: emailVerified,
+  });
+  return { user, isNewUser: true };
+}
+
 const SALT_ROUNDS = process.env.SALT_ROUNDS ? parseInt(process.env.SALT_ROUNDS) : 10;
 const BILLING_ENABLED = isBillingEnabled();
 const APP_ENV = process.env.APP_ENV || "production";
@@ -1716,52 +1807,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return loginRedirectWithError( "Could not load your GitHub account. Please try again.");
       }
       const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
-      const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow, not linking
-      let user;
-      if (isLinkingFlow) {
-        const currentUser = await databaseStorage.getUserById(currentUserId!);
-        if (currentUser) {
-          const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
-          if (existingUser && existingUser.id !== currentUser.id) {
-            return loginRedirectWithError( "This GitHub account is already connected to another account.");
-          }
-          user = await databaseStorage.updateUser(currentUser.id, {
-            githubId: githubUser.id.toString(), githubToken: token,
-            email: githubUser.email || currentUser.email, emailVerified: true
-          });
-        }
-      } else {
-        const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
-        if (existingUser) {
-          user = await databaseStorage.updateUser(existingUser.id, {
-            githubToken: token, email: githubUser.email || existingUser.email, emailVerified: true
-          });
-        } else {
-          const existingUserByUsername = await databaseStorage.getUserByUsername(githubUser.login);
-          if (existingUserByUsername) {
-            user = await databaseStorage.updateUser(existingUserByUsername.id, {
-              githubId: githubUser.id.toString(), githubToken: token,
-              email: githubUser.email || existingUserByUsername.email, emailVerified: true
-            });
-          } else {
-            try {
-              user = await databaseStorage.createUser({
-                username: githubUser.login, email: githubUser.email,
-                githubId: githubUser.id.toString(), githubToken: token, emailVerified: true
-              });
-            } catch (createError: any) {
-              if (createError.message?.includes("users_username_key") || createError.message?.includes("duplicate key")) {
-                const conflictUser = await databaseStorage.getUserByUsername(githubUser.login);
-                if (conflictUser) {
-                  user = await databaseStorage.updateUser(conflictUser.id, {
-                    githubId: githubUser.id.toString(), githubToken: token,
-                    email: githubUser.email || conflictUser.email, emailVerified: true
-                  });
-                } else throw createError;
-              } else throw createError;
-            }
-          }
-        }
+      const isLinkingFlow = !!(currentUserId && currentUserId !== "__login__");
+      let user: import("@shared/schema").User;
+      let isNewUser: boolean;
+      try {
+        const result = await findOrCreateUserFromOAuth({
+          provider: "github",
+          providerAccountId: githubUser.id.toString(),
+          email: githubUser.email ?? null,
+          emailVerified: Boolean((githubUser as { emailVerified?: boolean }).emailVerified),
+          suggestedUsername: githubUser.login,
+          token,
+          isLinkingFlow,
+          currentUserId: currentUserId ?? null,
+        });
+        user = result.user;
+        isNewUser = result.isNewUser;
+      } catch (linkError: any) {
+        console.error("GitHub OAuth findOrCreate error:", linkError);
+        return loginRedirectWithError( linkError?.message ?? "Could not sign in. Please try again.");
       }
       if (!user?.id) {
         return loginRedirectWithError( "Something went wrong. Please try again.");
@@ -1775,7 +1839,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return loginRedirectWithError( "Session error. Please try again.");
         }
         req.session!.userId = user.id;
-        req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: true };
+        req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: !!(user as any).emailVerified };
         if (!isLinkingFlow) {
           (req.session as any).mfaPending = true;
           (req.session as any).mfaSetupRequired = !hasMfa;
@@ -1786,13 +1850,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             Sentry.captureException(err);
             return loginRedirectWithError( "Session error. Please try again.");
           }
-          const targetPath = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+          const targetPath = isLinkingFlow
+            ? "/dashboard?github_connected=1"
+            : isNewUser
+              ? "/finish-setup"
+              : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
           const redirectUrl = base ? `${base}${targetPath}` : targetPath;
-          // Use 200 + HTML meta refresh instead of 302: some proxies (e.g. Cloudflare) strip Set-Cookie from 302
-          // responses. A 200 with Set-Cookie sticks; then meta refresh navigates (cookie is sent).
           res.setHeader("Content-Type", "text/html; charset=utf-8");
           res.status(200).send(
             `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head>` +
@@ -1819,7 +1885,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (error) {
         console.error("GitHub OAuth error from callback:", error, req.query.error_description);
-        return res.redirect(`/dashboard?error=github_oauth_error&message=${encodeURIComponent(error)}`);
+        const message = error === "access_denied" ? "Sign-in was cancelled." : "GitHub sign-in failed. Please try again.";
+        return res.redirect(`/login?error=${encodeURIComponent(message)}`);
       }
       
       if (code) {
@@ -1843,91 +1910,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error(`Failed to fetch GitHub user info: ${userError instanceof Error ? userError.message : 'Unknown error'}`);
         }
 
-        // Check if there's a current session/user trying to connect
         const state = req.query.state as string;
         const currentUserId = state ? await getUserIdFromOAuthState(state) : null;
-        const isLinkingFlow = currentUserId && currentUserId !== "__login__"; // __login__ = login flow
-        
-        let user;
-        if (isLinkingFlow) {
-          // User is already logged in and trying to connect GitHub
-          const currentUser = await databaseStorage.getUserById(currentUserId);
-          if (currentUser) {
-            // Check if GitHub account is already connected to another user
-            const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
-            if (existingUser && existingUser.id !== currentUser.id) {
-              return res.redirect(`/dashboard?error=github_already_connected&message=${encodeURIComponent('This GitHub account is already connected to another PushLog account. Please use a different GitHub account or contact support.')}`);
-            }
-            
-            // Update current user's GitHub connection
-            user = await databaseStorage.updateUser(currentUser.id, {
-              githubId: githubUser.id.toString(),
-              githubToken: token,
-              email: githubUser.email || currentUser.email,
-              emailVerified: true
-            });
-          }
-        } else {
-          // No current session - this is a login flow
-          // No current session - check if user already exists with this GitHub ID
-          const existingUser = await databaseStorage.getUserByGithubId(githubUser.id.toString());
-          if (existingUser) {
-            // Log in existing user
-            user = await databaseStorage.updateUser(existingUser.id, {
-              githubToken: token, // Update token in case it changed
-              email: githubUser.email || existingUser.email,
-              emailVerified: true
-            });
-          } else {
-            // Check if user exists with this username (from previous signup)
-            const existingUserByUsername = await databaseStorage.getUserByUsername(githubUser.login);
-            if (existingUserByUsername) {
-              // User exists with this username but no GitHub connection - update it
-              user = await databaseStorage.updateUser(existingUserByUsername.id, {
-                githubId: githubUser.id.toString(),
-                githubToken: token,
-                email: githubUser.email || existingUserByUsername.email,
-                emailVerified: true
-              });
-            } else {
-              // Create new user - but wrap in try-catch to handle race conditions
-              try {
-                user = await databaseStorage.createUser({
-                  username: githubUser.login,
-                  email: githubUser.email,
-                  githubId: githubUser.id.toString(),
-                  githubToken: token,
-                  emailVerified: true
-                });
-              } catch (createError: any) {
-                // If username already exists (race condition or check missed it), find and update
-                console.error(`Error creating user:`, createError.message);
-                if (createError.message && (createError.message.includes('users_username_key') || createError.message.includes('duplicate key'))) {
-                  const conflictUser = await databaseStorage.getUserByUsername(githubUser.login);
-                  if (conflictUser) {
-                    user = await databaseStorage.updateUser(conflictUser.id, {
-                      githubId: githubUser.id.toString(),
-                      githubToken: token,
-                      email: githubUser.email || conflictUser.email,
-                      emailVerified: true
-                    });
-                  } else {
-                    console.error(`Username conflict but couldn't find user - this shouldn't happen`);
-                    throw createError;
-                  }
-                } else {
-                  throw createError;
-                }
-              }
-            }
-          }
+        const isLinkingFlow = !!(currentUserId && currentUserId !== "__login__");
+
+        let user: import("@shared/schema").User;
+        let isNewUser: boolean;
+        try {
+          const result = await findOrCreateUserFromOAuth({
+            provider: "github",
+            providerAccountId: githubUser.id.toString(),
+            email: githubUser.email ?? null,
+            emailVerified: Boolean((githubUser as { emailVerified?: boolean }).emailVerified),
+            suggestedUsername: githubUser.login,
+            token,
+            isLinkingFlow,
+            currentUserId: currentUserId ?? null,
+          });
+          user = result.user;
+          isNewUser = result.isNewUser;
+        } catch (linkError: any) {
+          console.error("GitHub OAuth findOrCreate error:", linkError);
+          const msg = linkError?.message ?? "Could not sign in. Please try again.";
+          return res.redirect(`/login?error=${encodeURIComponent(msg)}`);
         }
 
-        if (!user || !user.id) {
-          console.error("Failed to create/update user. User object:", user);
-          throw new Error('Failed to create or update user properly');
+        if (!user?.id) {
+          return res.redirect(`/login?error=${encodeURIComponent("Something went wrong. Please try again.")}`);
         }
-        
+
         const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled;
 
         req.session.userId = user.id;
@@ -1937,7 +1948,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: user.email || null,
           githubConnected: true,
           googleConnected: !!user.googleId,
-          emailVerified: true
+          emailVerified: !!(user as any).emailVerified
         };
         if (!isLinkingFlow) {
           (req.session as any).mfaPending = true;
@@ -1947,15 +1958,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const redirectHost = (req.get("host") || "").split(":")[0];
         const redirectProtocol = redirectHost === "pushlog.ai" ? "https" : (req.protocol || "https");
         const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
-        const path = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+        const path = isLinkingFlow ? "/dashboard?github_connected=1" : (isNewUser ? "/finish-setup" : (hasMfa ? "/verify-mfa" : "/setup-mfa"));
         const redirectUrl = base ? `${base}${path}` : path;
 
-        // Save session before redirect so the cookie + userId are persisted before the browser navigates away.
-        // Without this, the redirect can race with the async session save and the next request may see an empty session.
         req.session.save((err) => {
           if (err) {
             console.error("❌ GitHub OAuth: session save failed:", err);
-            return res.redirect(`/login?error=session_error`);
+            return res.redirect(`/login?error=${encodeURIComponent("Session error. Please try again.")}`);
           }
           return res.redirect(redirectUrl);
         });
@@ -1992,110 +2001,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Add Google OAuth callback route
+  // Add Google OAuth callback route — sign-in-or-sign-up via oauth_identities
   app.get("/api/google/user", async (req, res) => {
+    const loginRedirectWithError = (message: string) => {
+      const host = (req.get("host") || "").split(":")[0];
+      const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
+      const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+      res.redirect(302, base ? `${base}/login?error=${encodeURIComponent(message)}` : `/login?error=${encodeURIComponent(message)}`);
+    };
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
     res.setHeader("Pragma", "no-cache");
     try {
       const code = req.query.code as string;
+      if (!code) {
+        return loginRedirectWithError("Missing authorization code. Please try again.");
+      }
       const token = await exchangeGoogleCodeForToken(code);
       const googleUser = await getGoogleUser(token);
 
-      // Try to find existing user
-      let user = await databaseStorage.getUserByEmail(googleUser.email);
-      let isNewUser = false;
-      
-      if (!user) {
-        isNewUser = true;
-        
-        // Generate a unique username from email
-        let baseUsername = googleUser.email.split('@')[0];
-        let username = baseUsername;
-        let counter = 1;
-
-        // Keep trying until we find a unique username
-        while (true) {
-          try {
-            const existingUser = await databaseStorage.getUserByUsername(username);
-            if (!existingUser) {
-              break; // Username is available
-            }
-            username = `${baseUsername}${counter}`; // Add number suffix
-            counter++;
-          } catch (error) {
-            console.error("Error checking username:", error);
-            throw error;
-          }
-        }
-
-        // Generate email verification token for new Google users
-        const verificationToken = crypto.randomBytes(32).toString('hex');
-        const verificationTokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-        // Create new user if they don't exist (unverified initially)
-        user = await databaseStorage.createUser({
-          username: username, // Use the unique username we generated
+      const suggestedUsername = googleUser.email.split("@")[0].replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 30) || "user";
+      let user: import("@shared/schema").User;
+      let isNewUser: boolean;
+      try {
+        const result = await findOrCreateUserFromOAuth({
+          provider: "google",
+          providerAccountId: googleUser.id,
           email: googleUser.email,
-          googleId: googleUser.id,
-          googleToken: token,
-          emailVerified: false, // Google OAuth users still need to verify email
-          verificationToken,
-          verificationTokenExpiry: verificationTokenExpiry.toISOString(),
+          emailVerified: !!googleUser.verified_email,
+          suggestedUsername,
+          token,
+          isLinkingFlow: false,
+          currentUserId: null,
         });
-
-        // Send verification email for new Google OAuth users
-        try {
-          await sendVerificationEmail(googleUser.email, verificationToken);
-          
-          // Create notification for email verification
-          try {
-            await storage.createNotification({
-              userId: user.id,
-              type: 'email_verification',
-              title: 'Email Verification Required',
-              message: 'Please check your email and verify your address to access all features'
-            });
-          } catch (notificationError) {
-            console.error('Failed to create verification notification:', notificationError);
-          }
-        } catch (emailError) {
-          console.error('Failed to send verification email to Google OAuth user:', emailError);
-          // Don't fail the OAuth flow if email sending fails
-        }
-      } else {
-        // Update existing user's Google token
-        user = await databaseStorage.updateUser(user.id, {
-          googleToken: token,
-          googleId: googleUser.id, // Make sure to update the Google ID as well
-        });
+        user = result.user;
+        isNewUser = result.isNewUser;
+      } catch (linkError: any) {
+        console.error("Google OAuth findOrCreate error:", linkError);
+        return loginRedirectWithError(linkError?.message ?? "Could not sign in. Please try again.");
       }
 
-      if (!user) {
-        throw new Error("Failed to create or update user");
+      if (!user?.id) {
+        return loginRedirectWithError("Something went wrong. Please try again.");
       }
 
-      const userForMfa = user as { mfaEnabled?: boolean };
-      const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
+      const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled || !!(user as any).mfa_enabled;
 
       req.session.userId = user.id;
       req.session.user = {
         userId: user.id,
-        username: user.username || '',
+        username: user.username || "",
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: true,
-        emailVerified: !!user.emailVerified
+        emailVerified: !!(user as any).emailVerified,
       };
       (req.session as any).mfaPending = true;
       (req.session as any).mfaSetupRequired = !hasMfa;
 
-      // Redirect to MFA setup or verify
-      const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
-      res.redirect(targetPath);
+      const targetPath = isNewUser ? "/finish-setup" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+      const host = (req.get("host") || "").split(":")[0];
+      const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
+      const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
+      const redirectUrl = base ? `${base}${targetPath}` : targetPath;
+      res.redirect(redirectUrl);
     } catch (error) {
       console.error("Google auth error:", error);
       Sentry.captureException(error);
-      res.status(500).json({ error: "Authentication failed" });
+      loginRedirectWithError(error instanceof Error ? error.message : "Authentication failed");
     }
   });
 

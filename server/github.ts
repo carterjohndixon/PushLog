@@ -20,6 +20,8 @@ interface GitHubUser {
   login: string;
   name: string;
   email: string | null;
+  /** True if the returned email is verified by GitHub (from /user/emails). */
+  emailVerified?: boolean;
 }
 
 interface GitHubRepository {
@@ -174,14 +176,14 @@ export async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
   }
 
   const emails = await emailResponse.json();
-  
-  // Find the primary email
+  const verifiedEmails = emails.filter((e: any) => e.verified);
   const primaryEmail = emails.find((email: any) => email.primary)?.email || emails[0]?.email;
+  const verifiedEmail = verifiedEmails.find((e: any) => e.primary)?.email || verifiedEmails[0]?.email || null;
 
-  // Return combined user data
   return {
     ...userData,
-    email: primaryEmail || null,
+    email: verifiedEmail ?? primaryEmail ?? null,
+    emailVerified: !!verifiedEmail,
   };
 }
 

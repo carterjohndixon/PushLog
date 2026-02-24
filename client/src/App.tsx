@@ -61,6 +61,7 @@ const Support = lazy(() => import("@/pages/support"));
 const GitHubCallback = lazy(() => import("@/pages/GitHubCallBack"));
 const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
 const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
+const FinishSetup = lazy(() => import("@/pages/finish-setup"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -109,6 +110,11 @@ function Router() {
       <Route path="/auth/github/callback" component={GitHubCallback} />
       <Route path="/setup-mfa" component={SetupMfa} />
       <Route path="/verify-mfa" component={VerifyMfa} />
+      <Route path="/finish-setup">
+        <ProtectedRoute pageName="finish-setup">
+          <FinishSetup />
+        </ProtectedRoute>
+      </Route>
       
       <Route path="/dashboard">
         <ProtectedRoute pageName="dashboard">

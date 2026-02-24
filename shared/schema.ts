@@ -189,6 +189,23 @@ export const oauthSessions = pgTable("oauth_sessions", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
 });
 
+/** OAuth identities: one row per (provider, provider_account_id). Prefer lookup by this over email. */
+export const oauthIdentities = pgTable(
+  "oauth_identities",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull(), // "github" | "google"
+    providerAccountId: text("provider_account_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    email: text("email"),
+    verified: boolean("verified").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  },
+  (t) => [
+    { name: "oauth_identities_provider_account_unique", unique: true, columns: [t.provider, t.providerAccountId] },
+  ]
+);
+
 /** Session store used by connect-pg-simple (express-session). Declared so db:push does not drop it. */
 export const userSessions = pgTable("user_sessions", {
   sid: text("sid").primaryKey(),
@@ -267,6 +284,16 @@ export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit
 });
 
 export const insertUserDailyStatsSchema = createInsertSchema(userDailyStats);
+
+export type OAuthIdentity = {
+  id: string;
+  provider: string;
+  providerAccountId: string;
+  userId: string;
+  email: string | null;
+  verified: boolean;
+  createdAt: Date | string;
+};
 
 export type User = {
   id: string;

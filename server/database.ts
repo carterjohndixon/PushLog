@@ -2,7 +2,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { 
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
-  favoriteModels, loginLockout, oauthSessions,
+  favoriteModels, loginLockout, oauthSessions, oauthIdentities,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -14,6 +14,7 @@ import {
   type Payment, type InsertPayment,
   type AnalyticsStats,
   type FavoriteModel,
+  type OAuthIdentity,
   analyticsStats,
   userDailyStats,
 } from "@shared/schema";
@@ -203,6 +204,48 @@ export class DatabaseStorage implements IStorage {
   async getUserByResetToken(resetToken: string): Promise<User | null> {
     const result = await db.select().from(users).where(eq(users.resetPasswordToken, resetToken)).limit(1);
     return result[0] ? convertToUser(result[0] as any) : null;
+  }
+
+  async getOAuthIdentity(provider: string, providerAccountId: string): Promise<OAuthIdentity | undefined> {
+    const result = await db.select().from(oauthIdentities).where(
+      and(eq(oauthIdentities.provider, provider), eq(oauthIdentities.providerAccountId, providerAccountId))
+    ).limit(1);
+    const row = result[0];
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      provider: row.provider,
+      providerAccountId: row.providerAccountId,
+      userId: row.userId,
+      email: row.email ?? null,
+      verified: row.verified ?? false,
+      createdAt: row.createdAt,
+    };
+  }
+
+  async createOAuthIdentity(params: {
+    provider: string;
+    providerAccountId: string;
+    userId: string;
+    email?: string | null;
+    verified?: boolean;
+  }): Promise<OAuthIdentity> {
+    const [row] = await db.insert(oauthIdentities).values({
+      provider: params.provider,
+      providerAccountId: params.providerAccountId,
+      userId: params.userId,
+      email: params.email ?? null,
+      verified: params.verified ?? false,
+    }).returning();
+    return {
+      id: row.id,
+      provider: row.provider,
+      providerAccountId: row.providerAccountId,
+      userId: row.userId,
+      email: row.email ?? null,
+      verified: row.verified ?? false,
+      createdAt: row.createdAt,
+    };
   }
 
   // Per-account login lockout (shared across instances; AUTH-VULN-11/12)
