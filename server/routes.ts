@@ -325,14 +325,29 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
   return _ghCommitsCache?.data || [];
 }
 
+/** Match deployed SHA to a commit: exact, or by prefix (7-char / 40-char). */
+function commitShaMatches(
+  commitSha: string,
+  commitShortSha: string,
+  deployedSha: string
+): boolean {
+  const d = deployedSha.trim().toLowerCase();
+  const full = (commitSha || "").trim().toLowerCase();
+  const short = (commitShortSha || full.slice(0, 7)).toLowerCase();
+  if (!d) return false;
+  if (full === d || short === d) return true;
+  if (full.startsWith(d) || (d.length >= 7 && full.startsWith(d.slice(0, 7)))) return true;
+  return false;
+}
+
 function derivePendingFromRecent(
   recentCommits: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>,
   deployedSha: string | null
 ) {
-  if (!recentCommits.length || !deployedSha) {
+  if (!recentCommits.length || !deployedSha?.trim()) {
     return { pendingCount: 0, pendingCommits: [] as Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> };
   }
-  const idx = recentCommits.findIndex((c) => c.sha === deployedSha);
+  const idx = recentCommits.findIndex((c) => commitShaMatches(c.sha, c.shortSha, deployedSha));
   if (idx === -1) {
     return { pendingCount: 0, pendingCommits: [] as Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> };
   }
@@ -944,6 +959,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pendingCount = derived.pendingCount;
         pendingCommits = derived.pendingCommits;
       }
+      if (pendingCommits.length > 0 && pendingCount !== pendingCommits.length) {
+        pendingCount = pendingCommits.length;
+      }
 
       return res.json({
         inProgress: fs.existsSync(lockFile),
@@ -1061,7 +1079,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             execAsync(`git rev-list --count ${prodDeployedSha}..${branchRef}`, { cwd: appDir }),
             execAsync(`git log --pretty=format:'%H|%h|%ad|%an|%s' --date=iso ${prodDeployedSha}..${branchRef} -n 20`, { cwd: appDir }),
           ]);
-          // pendingCount = Number(countOut.trim() || "0");
+          pendingCount = Number(countOut.trim() || "0");
           pendingCommits = pendingOut
             .split("\n")
             .map((line) => line.trim())
@@ -1070,7 +1088,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
               const [sha, shortSha, dateIso, author, ...subjectParts] = line.split("|");
               return { sha, shortSha, dateIso, author, subject: subjectParts.join("|") };
             });
-          pendingCount = Number(pendingCommits.length || "0");
         } catch {
           pendingCount = 0;
           pendingCommits = [];
@@ -1119,6 +1136,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const derived = derivePendingFromRecent(finalRecentCommits, finalProdDeployedSha);
         finalPendingCount = derived.pendingCount;
         finalPendingCommits = derived.pendingCommits;
+      }
+      // Keep count in sync with list (e.g. if remote or local gave inconsistent data)
+      if (finalPendingCommits.length > 0 && finalPendingCount !== finalPendingCommits.length) {
+        finalPendingCount = finalPendingCommits.length;
       }
 
       res.json({
