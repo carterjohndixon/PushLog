@@ -18,7 +18,7 @@ import {
   analyticsStats,
   userDailyStats,
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max, gte } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max, gte, isNull } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -571,7 +571,7 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.id, id)).limit(1);
     if (!result[0]) return undefined;
     const ws = result[0] as any;
-    // Decrypt access token
+    if (ws.disconnectedAt) return undefined;
     return {
       ...ws,
       accessToken: decrypt(ws.accessToken)
@@ -579,8 +579,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]> {
-    const results = await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.userId, userId));
-    // Decrypt access tokens (but don't expose them in list responses)
+    const results = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.userId, userId), isNull(slackWorkspaces.disconnectedAt)));
     return results.map((ws: any) => ({
       ...ws,
       accessToken: decrypt(ws.accessToken)
@@ -594,6 +593,17 @@ export class DatabaseStorage implements IStorage {
     return {
       ...ws,
       accessToken: decrypt(ws.accessToken)
+    };
+  }
+
+  /** Find workspace by user and team (for reconnect: update same row so integration links stay). */
+  async getSlackWorkspaceByTeamIdAndUserId(teamId: string, userId: string): Promise<SlackWorkspace | undefined> {
+    const result = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.teamId, teamId), eq(slackWorkspaces.userId, userId))).limit(1);
+    if (!result[0]) return undefined;
+    const ws = result[0] as any;
+    return {
+      ...ws,
+      accessToken: ws.disconnectedAt ? "" : decrypt(ws.accessToken)
     };
   }
 
@@ -637,12 +647,12 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  /** Disconnect (delete) a Slack workspace for the given user. Deactivates integrations that used it. */
+  /** Disconnect a Slack workspace (soft): set disconnectedAt so it drops out of lists; only pause integrations so reconnecting keeps workspace/channel. */
   async deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean> {
     const workspace = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.id, workspaceId), eq(slackWorkspaces.userId, userId))).limit(1);
     if (!workspace[0]) return false;
-    await db.update(integrations).set({ isActive: false, slackWorkspaceId: null, slackChannelId: "" }).where(eq(integrations.slackWorkspaceId, workspaceId));
-    await db.delete(slackWorkspaces).where(eq(slackWorkspaces.id, workspaceId));
+    await db.update(slackWorkspaces).set({ disconnectedAt: new Date().toISOString() }).where(eq(slackWorkspaces.id, workspaceId));
+    await db.update(integrations).set({ isActive: false }).where(eq(integrations.slackWorkspaceId, workspaceId));
     return true;
   }
 

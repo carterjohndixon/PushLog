@@ -118,6 +118,7 @@ export const slackWorkspaces = pgTable("slack_workspaces", {
   teamId: text("team_id").notNull(),
   teamName: text("team_name").notNull(),
   accessToken: text("access_token").notNull(),
+  disconnectedAt: timestamp("disconnected_at", { withTimezone: true, mode: 'string' }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -255,6 +256,7 @@ export const insertPushEventFileSchema = createInsertSchema(pushEventFiles).omit
 
 export const insertSlackWorkspaceSchema = createInsertSchema(slackWorkspaces).omit({
   id: true,
+  disconnectedAt: true,
   createdAt: true,
 });
 

@@ -73,6 +73,7 @@ export interface IStorage {
   getSlackWorkspace(id: string): Promise<SlackWorkspace | undefined>;
   getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]>;
   getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined>;
+  getSlackWorkspaceByTeamIdAndUserId(teamId: string, userId: string): Promise<SlackWorkspace | undefined>;
   createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace>;
   updateSlackWorkspace(id: string, updates: Partial<SlackWorkspace>): Promise<SlackWorkspace | undefined>;
   deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean>;
@@ -365,15 +366,20 @@ export class MemStorage implements IStorage {
 
   // Slack workspace methods
   async getSlackWorkspace(id: string): Promise<SlackWorkspace | undefined> {
-    return this.slackWorkspaces.get(id);
+    const ws = this.slackWorkspaces.get(id);
+    return ws && !(ws as any).disconnectedAt ? ws : undefined;
   }
 
   async getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]> {
-    return Array.from(this.slackWorkspaces.values()).filter(workspace => workspace.userId === userId);
+    return Array.from(this.slackWorkspaces.values()).filter(workspace => workspace.userId === userId && !(workspace as any).disconnectedAt);
   }
 
   async getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined> {
     return Array.from(this.slackWorkspaces.values()).find(workspace => workspace.teamId === teamId);
+  }
+
+  async getSlackWorkspaceByTeamIdAndUserId(teamId: string, userId: string): Promise<SlackWorkspace | undefined> {
+    return Array.from(this.slackWorkspaces.values()).find(workspace => workspace.teamId === teamId && workspace.userId === userId);
   }
 
   async createSlackWorkspace(workspace: InsertSlackWorkspace): Promise<SlackWorkspace> {
@@ -381,6 +387,7 @@ export class MemStorage implements IStorage {
     const newWorkspace: SlackWorkspace = {
       ...workspace,
       id,
+      disconnectedAt: null,
       createdAt: new Date().toISOString()
     };
     this.slackWorkspaces.set(id, newWorkspace);
@@ -398,14 +405,13 @@ export class MemStorage implements IStorage {
   async deleteSlackWorkspace(workspaceId: string, userId: string): Promise<boolean> {
     const slackWorkspace = this.slackWorkspaces.get(workspaceId);
     if (!slackWorkspace || slackWorkspace.userId !== userId) return false;
+    (slackWorkspace as any).disconnectedAt = new Date().toISOString();
+    this.slackWorkspaces.set(workspaceId, slackWorkspace);
     Array.from(this.integrations.values()).forEach((integration) => {
       if (integration.slackWorkspaceId === workspaceId) {
         (integration as any).isActive = false;
-        (integration as any).slackWorkspaceId = null;
-        (integration as any).slackChannelId = "";
       }
     });
-    this.slackWorkspaces.delete(workspaceId);
     return true;
   }
 

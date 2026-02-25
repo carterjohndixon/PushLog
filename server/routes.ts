@@ -2904,17 +2904,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isPopupCallback = req.query.popup === 'true';
       const slackData = await exchangeSlackCodeForToken(code as string, isPopupCallback);
 
-      // Check if workspace already exists for this user
-      const existingWorkspace = await databaseStorage.getSlackWorkspaceByTeamId(slackData.team.id);
-      
-      if (existingWorkspace && existingWorkspace.userId === session.userId) {
-        // Update existing workspace
+      // Reuse same workspace row for this user+team so integration workspace/channel stay after reconnect
+      const existingWorkspace = await databaseStorage.getSlackWorkspaceByTeamIdAndUserId(slackData.team.id, session.userId);
+      if (existingWorkspace) {
         await databaseStorage.updateSlackWorkspace(existingWorkspace.id, {
           accessToken: slackData.access_token,
-          teamName: slackData.team.name
+          teamName: slackData.team.name,
+          disconnectedAt: null
         });
       } else {
-        // Create new workspace
         await databaseStorage.createSlackWorkspace({
           userId: session.userId,
           teamId: slackData.team.id,
