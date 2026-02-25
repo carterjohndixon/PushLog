@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { calculateTokenCost } from './stripe';
+import { calculateTokenCost, estimateTokenCostForDisplay } from './stripe';
 import broadcastNotification from './helper/broadcastNotification';
 import { storage } from './storage';
 
@@ -645,8 +645,8 @@ Respond with only valid JSON:
       // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
       cost = Math.round(usageForCost.cost * 10000);
     } else if (useUserOpenAi) {
-      // User's OpenAI key — they pay OpenAI directly; no PushLog cost/credits
-      cost = 0;
+      // User's OpenAI key — store estimated cost for display (they pay OpenAI directly)
+      cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
     } else if (!useOpenRouter) {
       // PushLog credits (default OpenAI client)
       cost = calculateTokenCost(model, tokensUsed);

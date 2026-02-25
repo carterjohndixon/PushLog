@@ -31,6 +31,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { UseMutationResult } from "@tanstack/react-query";
@@ -48,6 +50,8 @@ const OPENAI_PRICING: Record<string, { inputPer1MUsd: number; outputPer1MUsd: nu
   "gpt-4.1": { inputPer1MUsd: 2.5, outputPer1MUsd: 10 },
   "gpt-4.1-mini": { inputPer1MUsd: 0.4, outputPer1MUsd: 1.6 },
   "gpt-4.1-nano": { inputPer1MUsd: 0.1, outputPer1MUsd: 0.4 },
+  "gpt-5.2": { inputPer1MUsd: 2.5, outputPer1MUsd: 10 },
+  "gpt-5.1": { inputPer1MUsd: 2, outputPer1MUsd: 8 },
   "o1": { inputPer1MUsd: 15, outputPer1MUsd: 60 },
   "o1-mini": { inputPer1MUsd: 3, outputPer1MUsd: 12 },
   "o3": { inputPer1MUsd: 4, outputPer1MUsd: 16 },
@@ -86,6 +90,18 @@ function getEffectiveOpenAiPricing(
   if (info?.promptPer1M != null && info?.completionPer1M != null)
     return { inputPer1MUsd: info.promptPer1M, outputPer1MUsd: info.completionPer1M };
   return getOpenAiPricing(modelId);
+}
+
+function estimatePromptCompletionCost(
+  modelId: string,
+  promptTokens: number,
+  completionTokens: number
+): { promptUsd: number; completionUsd: number } | null {
+  const p = getOpenAiPricing(modelId);
+  if (!p) return null;
+  const promptUsd = (promptTokens / 1_000_000) * p.inputPer1MUsd;
+  const completionUsd = (completionTokens / 1_000_000) * p.outputPer1MUsd;
+  return { promptUsd, completionUsd };
 }
 
 function costPer1MShort(p: { inputPer1MUsd: number; outputPer1MUsd: number }): string {
@@ -238,6 +254,8 @@ export function OpenAIModels({
     createdAt?: string | null;
   } | null>(null);
   const [quickApplyModelId, setQuickApplyModelId] = useState<string>("");
+  const [quickApplyModelOpen, setQuickApplyModelOpen] = useState(false);
+  const [defaultModelOpen, setDefaultModelOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -545,26 +563,54 @@ export function OpenAIModels({
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[180px] max-w-sm">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Model</Label>
-                <Select value={quickApplyModelId} onValueChange={setQuickApplyModelId}>
-                  <SelectTrigger className="w-full bg-background border-border text-foreground">
-                    <SelectValue placeholder={openaiModelsLoading ? "Loading…" : "Choose model"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {openaiModels.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="flex items-center gap-2">
-                          {getAiModelDisplayName(m.id)}
-                          {recommendedOpenai === m.id && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                    {!openaiModelsLoading && openaiModels.length === 0 && (
-                      <div className="py-2 px-2 text-sm text-muted-foreground">No models available</div>
-                    )}
-                  </SelectContent>
-                </Select>
+                <Popover open={quickApplyModelOpen} onOpenChange={setQuickApplyModelOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between bg-background border-border text-foreground font-normal"
+                    >
+                      {quickApplyModelId ? getAiModelDisplayName(quickApplyModelId) : (openaiModelsLoading ? "Loading…" : "Choose model")}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command
+                      filter={(value, search) => {
+                        const display = getAiModelDisplayName(value);
+                        const s = search.toLowerCase();
+                        return (value.toLowerCase().includes(s) || display.toLowerCase().includes(s)) ? 1 : 0;
+                      }}
+                    >
+                      <CommandInput placeholder="Search models…" />
+                      <CommandList>
+                        <CommandEmpty>No model found.</CommandEmpty>
+                        <CommandGroup>
+                          {openaiModels.map((m) => (
+                            <CommandItem
+                              key={m.id}
+                              value={m.id}
+                              onSelect={() => {
+                                setQuickApplyModelId(m.id);
+                                setQuickApplyModelOpen(false);
+                              }}
+                            >
+                              <span className="flex items-center gap-2">
+                                {getAiModelDisplayName(m.id)}
+                                {recommendedOpenai === m.id && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                                )}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        {!openaiModelsLoading && openaiModels.length === 0 && (
+                          <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="flex-1 min-w-[180px] max-w-sm">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Integration</Label>
@@ -628,34 +674,62 @@ export function OpenAIModels({
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-              <Select
-                value={
+              {(() => {
+                const effectiveDefaultId =
                   defaultModelId ||
                   (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                  (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "") ||
-                  ""
-                }
-                onValueChange={(v) => setDefaultModelId(v)}
-              >
-                <SelectTrigger className="w-full sm:max-w-md bg-background border-border text-foreground">
-                  <SelectValue placeholder={openaiModelsLoading ? "Loading models…" : "Select default model"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {openaiModels.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      <span className="flex items-center gap-2">
-                        {getAiModelDisplayName(m.id)}
-                        {recommendedOpenai === m.id && (
-                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
-                        )}
-                      </span>
-                    </SelectItem>
-                  ))}
-                  {!openaiModelsLoading && openaiModels.length === 0 && (
-                    <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
-                  )}
-                </SelectContent>
-              </Select>
+                  (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
+                return (
+              <Popover open={defaultModelOpen} onOpenChange={setDefaultModelOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full sm:max-w-md justify-between bg-background border-border text-foreground font-normal"
+                  >
+                    {effectiveDefaultId ? getAiModelDisplayName(effectiveDefaultId) : (openaiModelsLoading ? "Loading models…" : "Select default model")}
+                    <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                  <Command
+                    filter={(value, search) => {
+                      const display = getAiModelDisplayName(value);
+                      const s = search.toLowerCase();
+                      return (value.toLowerCase().includes(s) || display.toLowerCase().includes(s)) ? 1 : 0;
+                    }}
+                  >
+                    <CommandInput placeholder="Search models…" />
+                    <CommandList>
+                      <CommandEmpty>No model found.</CommandEmpty>
+                      <CommandGroup>
+                        {openaiModels.map((m) => (
+                          <CommandItem
+                            key={m.id}
+                            value={m.id}
+                            onSelect={() => {
+                              setDefaultModelId(m.id);
+                              setDefaultModelOpen(false);
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              {getAiModelDisplayName(m.id)}
+                              {recommendedOpenai === m.id && (
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                              )}
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                      {!openaiModelsLoading && openaiModels.length === 0 && (
+                        <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+                );
+              })()}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="default"
@@ -1180,6 +1254,17 @@ export function OpenAIModels({
                 <span className="font-medium text-foreground">Tokens (completion):</span>{" "}
                 {viewingCall.tokensCompletion != null ? viewingCall.tokensCompletion.toLocaleString() : "—"}
               </p>
+              {viewingCall.model && viewingCall.tokensPrompt != null && viewingCall.tokensCompletion != null && (() => {
+                const est = estimatePromptCompletionCost(viewingCall.model, viewingCall.tokensPrompt, viewingCall.tokensCompletion);
+                return est ? (
+                  <p>
+                    <span className="font-medium text-foreground">Token worth (est.):</span>{" "}
+                    <span className="text-muted-foreground">
+                      prompt ${est.promptUsd < 0.01 ? est.promptUsd.toFixed(4) : est.promptUsd.toFixed(3)}, completion ${est.completionUsd < 0.01 ? est.completionUsd.toFixed(4) : est.completionUsd.toFixed(3)}
+                    </span>
+                  </p>
+                ) : null;
+              })()}
               <p>
                 <span className="font-medium text-foreground">Total tokens:</span>{" "}
                 {(viewingCall.tokensUsed ?? 0).toLocaleString()}

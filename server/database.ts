@@ -1060,6 +1060,8 @@ export class DatabaseStorage implements IStorage {
         pushEventId: aiUsage.pushEventId,
         model: aiUsage.model,
         tokensUsed: aiUsage.tokensUsed,
+        tokensPrompt: aiUsage.tokensPrompt,
+        tokensCompletion: aiUsage.tokensCompletion,
         cost: aiUsage.cost,
         openrouterGenerationId: aiUsage.openrouterGenerationId,
         createdAt: aiUsage.createdAt,

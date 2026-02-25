@@ -167,4 +167,14 @@ export function calculateTokenCost(modelId: string, tokensUsed: number): number 
   return Math.ceil((tokensUsed / 1000) * model.costPerToken * 100);
 }
 
+/** Estimated cost for display when user pays OpenAI directly. Uses prefix match so "gpt-5.2-pro-2025-12-11" matches gpt-5.2. Returns 0 for unknown models. */
+export function estimateTokenCostForDisplay(modelId: string, tokensUsed: number): number {
+  const id = (modelId || '').toLowerCase().trim();
+  if (!id || tokensUsed <= 0) return 0;
+  const model = AI_MODELS.find(m => id === m.id || id.startsWith(m.id + '-') || id.startsWith(m.id + '.'))
+    ?? AI_MODELS.slice().sort((a, b) => b.id.length - a.id.length).find(m => id.includes(m.id));
+  if (!model) return 0;
+  return Math.ceil((tokensUsed / 1000) * model.costPerToken * 100);
+}
+
 export { stripe };
