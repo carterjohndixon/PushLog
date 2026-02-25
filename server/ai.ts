@@ -2,7 +2,7 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { calculateTokenCost, estimateTokenCostForDisplay } from './stripe';
+import { calculateTokenCost, estimateTokenCostForDisplay, estimateTokenCostFromUsage } from './aiCost';
 import broadcastNotification from './helper/broadcastNotification';
 import { storage } from './storage';
 
@@ -645,14 +645,24 @@ Respond with only valid JSON:
       // OpenRouter returned a non-zero cost in the completion response (USD); store in units of $0.0001
       cost = Math.round(usageForCost.cost * 10000);
     } else if (useUserOpenAi) {
-      // User's OpenAI key — store estimated cost for display (they pay OpenAI directly)
-      cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
-    } else if (!useOpenRouter) {
-      // PushLog credits (default OpenAI client) — use exact model id; fallback to estimate for unknown variants (e.g. gpt-5.2-pro-2025-12-11)
-      try {
-        cost = calculateTokenCost(model, tokensUsed);
-      } catch {
+      // User's OpenAI key — cost from API usage (prompt + completion tokens) when available
+      if (promptTokens != null && completionTokens != null && (promptTokens > 0 || completionTokens > 0)) {
+        cost = estimateTokenCostFromUsage(actualModel, promptTokens, completionTokens);
+        if (cost === 0 && tokensUsed > 0) cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
+      } else {
         cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
+      }
+    } else if (!useOpenRouter) {
+      // PushLog credits (default OpenAI client) — use exact model id; prefer usage breakdown when available
+      if (promptTokens != null && completionTokens != null && (promptTokens > 0 || completionTokens > 0)) {
+        cost = estimateTokenCostFromUsage(actualModel, promptTokens, completionTokens);
+        if (cost === 0 && tokensUsed > 0) cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
+      } else {
+        try {
+          cost = calculateTokenCost(model, tokensUsed);
+        } catch {
+          cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
+        }
       }
     } else if (useOpenRouter && options?.openRouterApiKey) {
       // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id

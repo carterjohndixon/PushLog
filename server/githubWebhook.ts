@@ -224,6 +224,7 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   let overBudgetSkipAi = false;
   try {
     const userForBudget = await databaseStorage.getUserById(integration.userId);
+    // PushLog-key usage (no OpenRouter, no user OpenAI key): credit check/deduction only when BILLING_ENFORCE_CREDITS=true. Beta = unlimited.
     const monthlyBudget = (userForBudget as any)?.monthlyBudget;
     // Only enforce budget when this integration uses OpenRouter. OpenAI-key usage is paid by the user to OpenAI; the budget is for OpenRouter spend.
     if (monthlyBudget != null && monthlyBudget > 0 && useOpenRouter) {

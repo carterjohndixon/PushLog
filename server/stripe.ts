@@ -25,6 +25,14 @@ export function isBillingEnabled(): boolean {
   return process.env.BILLING_ENABLED !== 'false';
 }
 
+/**
+ * When false (default): beta mode — no credit check or deduction; all users have unlimited tokens.
+ * When true: enforce credits for PushLog-key usage (check before AI, deduct after). Set when you go "official".
+ */
+export function enforceCredits(): boolean {
+  return process.env.BILLING_ENFORCE_CREDITS === 'true';
+}
+
 function assertBillingEnabled(): void {
   if (!isBillingEnabled()) {
     throw new Error('Billing is disabled');
