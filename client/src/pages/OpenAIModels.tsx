@@ -872,7 +872,7 @@ export function OpenAIModels({
                     <h4 className="text-sm font-semibold text-foreground mb-3">Cost over time (last 30 days)</h4>
                     <ChartContainer config={{ count: { label: "Cost", color: "hsl(var(--log-green))" } }} className="h-[180px] w-full">
                       <AreaChart
-                        data={dailyUsageData.map((d) => ({
+                        data={dailyUsageData?.map((d) => ({
                           dateLabel: formatLocalShortDate(d.date),
                           costUsd: d.totalCost / 10000,
                           calls: d.callCount,
@@ -1267,33 +1267,33 @@ export function OpenAIModels({
               Browse OpenAI models
             </CardTitle>
             <CardDescription>
-              {userHasOpenAiKey
-                ? "Click a model for details and to set it as default. "
-                : "Add your API key above to set a default or apply models to integrations. "}
+              Search by name or ID. Click a model for details and to set it as default.{" "}
               <a
                 href="https://openai.com/api/pricing/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-muted-foreground hover:text-foreground text-xs inline-flex items-center gap-0.5"
+                className="inline-flex items-center gap-1 text-log-green hover:underline font-medium"
               >
-                Pricing subject to change <ExternalLink className="w-3 h-3" />
+                View pricing on OpenAI <ExternalLink className="w-3 h-3 inline" />
               </a>
             </CardDescription>
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name or ID..."
+                  value={browseModelsSearch}
+                  onChange={(e) => setBrowseModelsSearch(e.target.value)}
+                  className="pl-9 bg-background border-border text-foreground"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {openaiModelsLoading ? (
               <Skeleton className="h-64 w-full" />
             ) : (
               <>
-                <div className="mb-3 flex items-center gap-2">
-                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <Input
-                    placeholder="Search models by name or id…"
-                    value={browseModelsSearch}
-                    onChange={(e) => setBrowseModelsSearch(e.target.value)}
-                    className="max-w-sm h-9 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
                 <div className="rounded-md border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
