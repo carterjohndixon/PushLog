@@ -29,6 +29,12 @@ interface OpenRouterModel {
   description?: string;
 }
 
+interface SlackChannel {
+  id: string;
+  name: string;
+  is_private: boolean;
+}
+
 interface IntegrationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,8 +55,23 @@ export function IntegrationSettingsModal({
   const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
+  const [selectedSlackChannelId, setSelectedSlackChannelId] = useState(integration?.slackChannelId ?? '');
   const lastOpenRouterModelRef = useRef<string | null>(null);
   const { toast } = useToast();
+
+  const { data: slackChannels = [], isLoading: slackChannelsLoading } = useQuery<SlackChannel[]>({
+    queryKey: ["/api/slack/workspaces", integration?.slackWorkspaceId, "channels"],
+    queryFn: async () => {
+      if (!integration?.slackWorkspaceId) return [];
+      const res = await fetch(`/api/slack/workspaces/${integration.slackWorkspaceId}/channels`, {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to fetch channels");
+      return res.json();
+    },
+    enabled: open && !!integration?.slackWorkspaceId,
+  });
 
   const testSlackMutation = useMutation({
     mutationFn: async (integrationId: string) => {
@@ -128,6 +149,11 @@ export function IntegrationSettingsModal({
     if (!useOpenRouter) {
       updates.openRouterApiKey = "";
     }
+    if (integration.slackWorkspaceId && selectedSlackChannelId && selectedSlackChannelId !== (integration.slackChannelId ?? '')) {
+      const channelName = slackChannels.find((c) => c.id === selectedSlackChannelId)?.name ?? integration.slackChannelName ?? selectedSlackChannelId;
+      updates.slackChannelId = selectedSlackChannelId;
+      updates.slackChannelName = channelName;
+    }
 
     const id = integration?.id != null ? String(integration.id) : "";
     if (!id || id === "NaN") {
@@ -156,6 +182,7 @@ export function IntegrationSettingsModal({
       setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
+      setSelectedSlackChannelId(integration.slackChannelId ?? '');
     }
   }
 
@@ -167,7 +194,8 @@ export function IntegrationSettingsModal({
     includeCommitSummaries !== (integration.includeCommitSummaries ?? true) ||
     useOpenRouter !== baseUseOpenRouter ||
     aiModel !== baseAiModel ||
-    maxTokens !== (integration.maxTokens ?? 350)
+    maxTokens !== (integration.maxTokens ?? 350) ||
+    (!!integration.slackWorkspaceId && selectedSlackChannelId !== (integration.slackChannelId ?? ''))
   );
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -179,6 +207,7 @@ export function IntegrationSettingsModal({
       setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
+      setSelectedSlackChannelId(integration.slackChannelId ?? '');
     }
     onOpenChange(newOpen);
   };
@@ -209,13 +238,44 @@ export function IntegrationSettingsModal({
                   <p className="text-sm text-muted-foreground">Repository</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 bg-log-green rounded flex items-center justify-center">
+              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                <div className="w-8 h-8 bg-log-green rounded flex items-center justify-center shrink-0">
                   <SlackIcon className="text-white w-4 h-4" />
                 </div>
-                <div>
-                  <p className="font-medium text-foreground">#{integration.slackChannelName}</p>
-                  <p className="text-sm text-muted-foreground">Slack Channel</p>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <Label className="text-sm text-muted-foreground">Slack Channel</Label>
+                  {integration.slackWorkspaceId ? (
+                    <Select
+                      value={selectedSlackChannelId || undefined}
+                      onValueChange={(v) => setSelectedSlackChannelId(v || '')}
+                      disabled={slackChannelsLoading}
+                    >
+                      <SelectTrigger className="bg-background text-foreground border-border w-full">
+                        <SelectValue placeholder={slackChannelsLoading ? "Loading channels…" : "Select channel"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                        {(() => {
+                          const hasCurrent = integration.slackChannelId && slackChannels.some((c) => c.id === integration.slackChannelId);
+                          const options = hasCurrent || !integration.slackChannelId
+                            ? slackChannels
+                            : [{ id: integration.slackChannelId, name: integration.slackChannelName || "Current channel", is_private: false }, ...slackChannels];
+                          return options.map((ch) => (
+                            <SelectItem key={ch.id} value={ch.id} className="capitalize">
+                              #{ch.name}
+                            </SelectItem>
+                          ));
+                        })()}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="font-medium text-foreground">#{integration.slackChannelName || "—"}</p>
+                  )}
+                  {integration.slackWorkspaceId && (
+                    <p className="text-xs text-muted-foreground">Change which channel receives notifications.</p>
+                  )}
+                  {!integration.slackWorkspaceId && integration.slackChannelName && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Reconnect your Slack workspace in Settings to change the channel.</p>
+                  )}
                 </div>
               </div>
             </div>
