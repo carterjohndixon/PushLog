@@ -46,3 +46,5 @@ test test GPT 5.2 AGAIN AGAIN AGAIN AGAIN
 testing gpt codex model
 
 test log
+
+test commit for cost
