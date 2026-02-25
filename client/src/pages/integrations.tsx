@@ -253,7 +253,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
           return {
             ...old,
             integrations: old.integrations.map((i) =>
-              i.id === variables.id
+              String(i.id) === String(variables.id)
                 ? {
                     ...i,
                     ...data,

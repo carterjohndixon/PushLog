@@ -178,7 +178,7 @@ export function IntegrationSettingsModal({
       updates.slackChannelName = channelName;
     }
     if (canRelink) {
-      const channelName = slackChannels.find((c) => c.id === relinkChannelId)?.name ?? "";
+      const channelName = slackChannels.find((c) => c.id === relinkChannelId)?.name ?? "channel";
       updates.slackWorkspaceId = relinkWorkspaceId;
       updates.slackChannelId = relinkChannelId;
       updates.slackChannelName = channelName;

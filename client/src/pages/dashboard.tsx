@@ -490,11 +490,32 @@ export default function Dashboard() {
       }
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
+      const newStatus = data.isActive ? "active" : "paused";
+      queryClient.setQueryData(
+        ["/api/repositories-and-integrations"],
+        (old: { repositories: unknown[]; integrations: { id: string; repositoryName?: string; lastUsed?: unknown; [key: string]: unknown }[] } | undefined) => {
+          if (!old?.integrations) return old;
+          return {
+            ...old,
+            integrations: old.integrations.map((i) =>
+              String(i.id) === String(variables.id)
+                ? {
+                    ...i,
+                    ...data,
+                    status: newStatus,
+                    repositoryName: i.repositoryName ?? data.repositoryName,
+                    lastUsed: i.lastUsed ?? data.lastUsed,
+                  }
+                : i
+            ),
+          };
+        }
+      );
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       setIsIntegrationSettingsOpen(false);
       setSelectedIntegration(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       toast({
         title: "Settings Updated",
         description: "Integration settings have been successfully updated.",
