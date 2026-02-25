@@ -44,3 +44,5 @@ testing codex 5.2 on openai
 test test GPT 5.2 AGAIN AGAIN AGAIN AGAIN
 
 testing gpt codex model
+
+test log
