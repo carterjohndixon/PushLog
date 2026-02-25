@@ -12,6 +12,7 @@ const tsvector = customType<{ data: string }>({
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id"), // FK to organizations; backfill then set NOT NULL
   username: text("username").unique(),
   email: text("email").unique(),
   password: text("password"),
@@ -39,11 +40,68 @@ export const users = pgTable("users", {
   incidentEmailEnabled: boolean("incident_email_enabled").default(true), // Email incident alerts (Sentry, spike, etc.)
   receiveIncidentNotifications: boolean("receive_incident_notifications").default(true), // In incident pool (users with repos + this true get incidents); when false, never receive
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-});
+}, (t) => [
+  { name: "users_organization_id_idx", columns: [t.organizationId] },
+]);
+
+/** Organizations (Teams). Every user belongs to exactly one org; solo users get a solo org. */
+export const organizations = pgTable("organizations", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // "solo" | "team"
+  ownerId: uuid("owner_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  { name: "organizations_owner_id_idx", columns: [t.ownerId] },
+]);
+
+/** Membership of a user in an organization. */
+export const organizationMemberships = pgTable(
+  "organization_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    role: text("role").notNull(), // "owner" | "admin" | "developer" | "viewer"
+    status: text("status").notNull(), // "active" | "pending"
+    invitedByUserId: uuid("invited_by_user_id"),
+    invitedAt: timestamp("invited_at", { withTimezone: true, mode: "string" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true, mode: "string" }),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (t) => [
+    { name: "organization_memberships_org_user_unique", unique: true, columns: [t.organizationId, t.userId] },
+    { name: "organization_memberships_org_id_idx", columns: [t.organizationId] },
+    { name: "organization_memberships_user_id_idx", columns: [t.userId] },
+  ]
+);
+
+/** Invites (link or email). Store only token hash, never raw token. */
+export const organizationInvites = pgTable(
+  "organization_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id").notNull(),
+    type: text("type").notNull(), // "link" | "email"
+    tokenHash: text("token_hash").notNull(),
+    role: text("role").notNull().default("developer"),
+    email: text("email"),
+    expiresAt: timestamp("expires_at", { withTimezone: true, mode: "string" }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true, mode: "string" }),
+    usedByUserId: uuid("used_by_user_id"),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (t) => [
+    { name: "organization_invites_org_id_idx", columns: [t.organizationId] },
+    { name: "organization_invites_token_hash_unique", unique: true, columns: [t.tokenHash] },
+  ]
+);
 
 export const repositories = pgTable("repositories", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
+  organizationId: uuid("organization_id"), // backfill from userId -> users.organizationId
   githubId: text("github_id").notNull(),
   name: text("name").notNull(),
   fullName: text("full_name").notNull(),
@@ -62,6 +120,7 @@ export const repositories = pgTable("repositories", {
 export const integrations = pgTable("integrations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
+  organizationId: uuid("organization_id"), // backfill from userId
   repositoryId: uuid("repository_id").notNull(),
   slackWorkspaceId: uuid("slack_workspace_id"), // Links to slack_workspaces table
   slackChannelId: text("slack_channel_id").notNull(),
@@ -116,6 +175,7 @@ export const pushEventFiles = pgTable("push_event_files", {
 export const slackWorkspaces = pgTable("slack_workspaces", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
+  organizationId: uuid("organization_id"), // backfill from userId
   teamId: text("team_id").notNull(),
   teamName: text("team_name").notNull(),
   accessToken: text("access_token").notNull(),
@@ -325,6 +385,7 @@ export type OAuthIdentity = {
 
 export type User = {
   id: string;
+  organizationId: string | null;
   username: string | null;
   email: string | null;
   password: string | null;
@@ -354,6 +415,7 @@ export type User = {
 };
 
 export type InsertUser = {
+  organizationId?: string | null;
   username?: string | null;
   email?: string | null;
   password?: string | null;
@@ -371,6 +433,12 @@ export type InsertUser = {
 
 export type Repository = typeof repositories.$inferSelect;
 export type InsertRepository = z.infer<typeof insertRepositorySchema>;
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+export type OrganizationMembership = typeof organizationMemberships.$inferSelect;
+export type InsertOrganizationMembership = typeof organizationMemberships.$inferInsert;
+export type OrganizationInvite = typeof organizationInvites.$inferSelect;
+export type InsertOrganizationInvite = typeof organizationInvites.$inferInsert;
 export type Integration = typeof integrations.$inferSelect;
 export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
 export type PushEvent = typeof pushEvents.$inferSelect;

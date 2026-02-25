@@ -63,6 +63,7 @@ const GitHubCallback = lazy(() => import("@/pages/GitHubCallBack"));
 const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
 const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
 const FinishSetup = lazy(() => import("@/pages/finish-setup"));
+const Join = lazy(() => import("@/pages/join"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -116,7 +117,8 @@ function Router() {
           <FinishSetup />
         </ProtectedRoute>
       </Route>
-      
+      <Route path="/join/:token" component={Join} />
+
       <Route path="/dashboard">
         <ProtectedRoute pageName="dashboard">
           <Dashboard />

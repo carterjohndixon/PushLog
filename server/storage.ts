@@ -3,6 +3,8 @@ import {
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
+  type Organization, type InsertOrganization,
+  type OrganizationMembership, type InsertOrganizationMembership,
   type PushEvent, type InsertPushEvent,
   type SlackWorkspace, type InsertSlackWorkspace,
   type Notification, type InsertNotification,
@@ -40,6 +42,17 @@ export interface IStorage {
   getAllUserIds(): Promise<string[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
+
+  createOrganization(org: InsertOrganization): Promise<Organization>;
+  createOrganizationMembership(membership: InsertOrganizationMembership): Promise<OrganizationMembership>;
+  getMembershipByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined>;
+  getRepositoriesByOrganizationId(organizationId: string): Promise<Repository[]>;
+  getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]>;
+  getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
+  getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
+  createOrganizationInviteLink(organizationId: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ rawToken: string; joinUrl: string }>;
+  createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
+  consumeOrganizationInvite(token: string, userId: string): Promise<{ organizationId: string; role: string } | { error: string }>;
 
   // Repository methods
   getRepository(id: string): Promise<Repository | undefined>;
@@ -173,6 +186,64 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
+  /*
+  TODO TODO TODO TODO
+  */
+  async createOrganization(_org: InsertOrganization): Promise<Organization> {
+    throw new Error("MemStorage: createOrganization not implemented");
+  }
+
+  async createOrganizationMembership(_membership: InsertOrganizationMembership): Promise<OrganizationMembership> {
+    throw new Error("MemStorage: createOrganizationMembership not implemented");
+  }
+
+  async getMembershipByOrganizationAndUser(_organizationId: string, _userId: string): Promise<OrganizationMembership | undefined> {
+    return undefined;
+  }
+
+  async getRepositoriesByOrganizationId(_organizationId: string): Promise<Repository[]> {
+    return [];
+  }
+
+  async getIntegrationsByOrganizationId(_organizationId: string): Promise<Integration[]> {
+    return [];
+  }
+
+  async getSlackWorkspacesByOrganizationId(_organizationId: string): Promise<SlackWorkspace[]> {
+    return [];
+  }
+
+  async getOrganizationMembers(_organizationId: string): Promise<OrganizationMembership[]> {
+    return [];
+  }
+
+  async createOrganizationInviteLink(
+    _organizationId: string,
+    _role: string,
+    _expiresAt: Date,
+    _createdByUserId: string
+  ): Promise<{ rawToken: string; joinUrl: string }> {
+    throw new Error("MemStorage: createOrganizationInviteLink not implemented");
+  }
+
+  async createOrganizationInviteEmail(
+    _organizationId: string,
+    _email: string,
+    _role: string,
+    _expiresAt: Date,
+    _createdByUserId: string
+  ): Promise<{ joinUrl: string }> {
+    throw new Error("MemStorage: createOrganizationInviteEmail not implemented");
+  }
+
+  async consumeOrganizationInvite(_token: string, _userId: string): Promise<{ organizationId: string; role: string } | { error: string }> {
+    return { error: "MemStorage: not implemented" };
+  }
+
+  /*
+  TODO TODO TODO TODO
+  */
+
   // Repository methods
   async getRepository(id: string): Promise<Repository | undefined> {
     return this.repositories.get(id);
@@ -191,6 +262,7 @@ export class MemStorage implements IStorage {
     const newRepository: Repository = {
       ...repository,
       id,
+      organizationId: (repository as any).organizationId ?? null,
       branch: repository.branch || null,
       isActive: repository.isActive ?? null,
       monitorAllBranches: repository.monitorAllBranches ?? null,
@@ -243,6 +315,7 @@ export class MemStorage implements IStorage {
     const newIntegration: Integration = {
       ...integration,
       id,
+      organizationId: (integration as any).organizationId ?? null,
       slackWorkspaceId: integration.slackWorkspaceId ?? null,
       isActive: integration.isActive ?? null,
       notificationLevel: integration.notificationLevel || null,
@@ -387,6 +460,7 @@ export class MemStorage implements IStorage {
     const newWorkspace: SlackWorkspace = {
       ...workspace,
       id,
+      organizationId: (workspace as any).organizationId ?? null,
       disconnectedAt: null,
       createdAt: new Date().toISOString()
     };

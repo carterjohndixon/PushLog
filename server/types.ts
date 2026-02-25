@@ -13,6 +13,8 @@ declare module 'express-session' {
       githubConnected: boolean;
       googleConnected: boolean;
       emailVerified: boolean;
+      organizationId: string;
+      role: 'owner' | 'admin' | 'developer' | 'viewer';
     };
   }
 } 

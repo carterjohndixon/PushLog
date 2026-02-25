@@ -4,9 +4,12 @@ import {
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
   favoriteModels, loginLockout, oauthSessions, oauthIdentities,
   aiModelPricing,
+  organizations, organizationMemberships, organizationInvites,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
+  type Organization, type InsertOrganization,
+  type OrganizationMembership, type InsertOrganizationMembership,
   type PushEvent, type InsertPushEvent,
   type PushEventFile, type InsertPushEventFile,
   type SlackWorkspace, type InsertSlackWorkspace,
@@ -26,6 +29,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
 import { encrypt, decrypt } from "./encryption";
+import { hashToken, generateJoinToken } from "./helper/tokens";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -84,6 +88,7 @@ const prodDb =
 function convertToUser(dbUser: typeof users.$inferSelect): User {
   return {
     id: dbUser.id,
+    organizationId: (dbUser as any).organizationId ?? null,
     username: dbUser.username,
     email: dbUser.email,
     password: dbUser.password,
@@ -182,7 +187,25 @@ export class DatabaseStorage implements IStorage {
       verificationTokenExpiry: user.verificationTokenExpiry ? new Date(user.verificationTokenExpiry) : null,
       resetPasswordTokenExpiry: user.resetPasswordTokenExpiry ? new Date(user.resetPasswordTokenExpiry) : null,
     }).returning();
-    return convertToUser(result[0]);
+    const created = convertToUser(result[0] as any);
+    if (!created.organizationId) {
+      const orgName = (created.username || created.email || "My PushLog").toString().trim() || "My PushLog";
+      const [org] = await db.insert(organizations).values({
+        name: orgName,
+        type: "solo",
+        ownerId: created.id,
+      }).returning();
+      await db.insert(organizationMemberships).values({
+        organizationId: org.id,
+        userId: created.id,
+        role: "owner",
+        status: "active",
+        joinedAt: new Date().toISOString(),
+      } as any);
+      await db.update(users).set({ organizationId: org.id }).where(eq(users.id, created.id));
+      return { ...created, organizationId: org.id };
+    }
+    return created;
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
@@ -209,6 +232,242 @@ export class DatabaseStorage implements IStorage {
   async getAllUserIds(): Promise<string[]> {
     const result = await db.select({ id: users.id }).from(users);
     return result.map((row) => row.id as string).filter(Boolean);
+  }
+
+  async createOrganization(org: InsertOrganization): Promise<Organization> {
+    const [row] = await db.insert(organizations).values(org).returning();
+    return row as Organization;
+  }
+
+  async createOrganizationMembership(membership: InsertOrganizationMembership): Promise<OrganizationMembership> {
+    const [row] = await db.insert(organizationMemberships).values({
+      organizationId: membership.organizationId,
+      userId: membership.userId,
+      role: membership.role,
+      status: membership.status,
+      invitedByUserId: membership.invitedByUserId ?? null,
+      invitedAt: membership.invitedAt ?? null,
+      joinedAt: membership.joinedAt ?? null,
+    } as any).returning();
+    return row as OrganizationMembership;
+  }
+
+  /**
+   * Backfill organizations: create solo org + membership for users missing organizationId,
+   * then set organizationId on repos, integrations, slack_workspaces from owning user's org.
+   * Run once after adding organization_id columns. Safe to run multiple times (idempotent for users with org).
+   */
+  async runBackfillOrganizations(): Promise<{ usersBackfilled: number; reposUpdated: number; integrationsUpdated: number; slackWorkspacesUpdated: number }> {
+    const usersWithoutOrg = await db.select().from(users).where(isNull(users.organizationId));
+    let usersBackfilled = 0;
+    for (const u of usersWithoutOrg) {
+      const orgName = (u.username || u.email || "My PushLog").toString().trim() || "My PushLog";
+      const [org] = await db.insert(organizations).values({
+        name: orgName,
+        type: "solo",
+        ownerId: u.id,
+      }).returning();
+      await db.insert(organizationMemberships).values({
+        organizationId: org.id,
+        userId: u.id,
+        role: "owner",
+        status: "active",
+        joinedAt: new Date().toISOString(),
+      } as any);
+      await db.update(users).set({ organizationId: org.id }).where(eq(users.id, u.id));
+      usersBackfilled++;
+    }
+    const userOrgMap = new Map<string, string>();
+    const allUsers = await db.select({ id: users.id, organizationId: users.organizationId }).from(users);
+    for (const u of allUsers) {
+      if (u.organizationId) userOrgMap.set(u.id, u.organizationId);
+    }
+    let reposUpdated = 0;
+    const reposToUpdate = await db.select().from(repositories).where(isNull(repositories.organizationId));
+    for (const r of reposToUpdate) {
+      const oid = userOrgMap.get(r.userId);
+      if (oid) {
+        await db.update(repositories).set({ organizationId: oid }).where(eq(repositories.id, r.id));
+        reposUpdated++;
+      }
+    }
+    let integrationsUpdated = 0;
+    const integrationsToUpdate = await db.select().from(integrations).where(isNull(integrations.organizationId));
+    for (const i of integrationsToUpdate) {
+      const oid = userOrgMap.get(i.userId);
+      if (oid) {
+        await db.update(integrations).set({ organizationId: oid }).where(eq(integrations.id, i.id));
+        integrationsUpdated++;
+      }
+    }
+    let slackWorkspacesUpdated = 0;
+    const slackToUpdate = await db.select().from(slackWorkspaces).where(isNull(slackWorkspaces.organizationId));
+    for (const s of slackToUpdate) {
+      const oid = userOrgMap.get(s.userId);
+      if (oid) {
+        await db.update(slackWorkspaces).set({ organizationId: oid }).where(eq(slackWorkspaces.id, s.id));
+        slackWorkspacesUpdated++;
+      }
+    }
+    return { usersBackfilled, reposUpdated, integrationsUpdated, slackWorkspacesUpdated };
+  }
+
+  /** Count rows that still have organizationId IS NULL (after backfill). Used by backfill script to verify and exit non-zero if any remain. */
+  async getRemainingNullOrgCounts(): Promise<{ users: number; repositories: number; integrations: number; slackWorkspaces: number }> {
+    const [u] = await db.execute<{ c: number }>(sql`SELECT count(*)::int AS c FROM users WHERE organization_id IS NULL`);
+    const [r] = await db.execute<{ c: number }>(sql`SELECT count(*)::int AS c FROM repositories WHERE organization_id IS NULL`);
+    const [i] = await db.execute<{ c: number }>(sql`SELECT count(*)::int AS c FROM integrations WHERE organization_id IS NULL`);
+    const [s] = await db.execute<{ c: number }>(sql`SELECT count(*)::int AS c FROM slack_workspaces WHERE organization_id IS NULL`);
+    return {
+      users: Number(u?.c ?? 0),
+      repositories: Number(r?.c ?? 0),
+      integrations: Number(i?.c ?? 0),
+      slackWorkspaces: Number(s?.c ?? 0),
+    };
+  }
+
+  async getMembershipByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined> {
+    const [row] = await db.select().from(organizationMemberships).where(
+      and(eq(organizationMemberships.organizationId, organizationId), eq(organizationMemberships.userId, userId))
+    ).limit(1);
+    return row as OrganizationMembership | undefined;
+  }
+
+  async getRepositoriesByOrganizationId(organizationId: string): Promise<Repository[]> {
+    return await db.select().from(repositories).where(eq(repositories.organizationId, organizationId)) as Repository[];
+  }
+
+  async getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]> {
+    return await db.select().from(integrations).where(eq(integrations.organizationId, organizationId)) as Integration[];
+  }
+
+  async getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]> {
+    return await db.select().from(slackWorkspaces).where(eq(slackWorkspaces.organizationId, organizationId)) as SlackWorkspace[];
+  }
+
+  async getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]> {
+    const rows = await db.select().from(organizationMemberships).where(eq(organizationMemberships.organizationId, organizationId));
+    return rows.filter((m) => (m as any).status === "active") as OrganizationMembership[];
+  }
+
+  async createOrganizationInviteLink(
+    organizationId: string,
+    role: string,
+    expiresAt: Date,
+    createdByUserId: string
+  ): Promise<{ rawToken: string; joinUrl: string }> {
+    const rawToken = generateJoinToken();
+    const tokenHash = hashToken(rawToken);
+    await db.insert(organizationInvites).values({
+      organizationId,
+      type: "link",
+      tokenHash,
+      role,
+      expiresAt: expiresAt.toISOString(),
+      createdByUserId,
+    } as any);
+    const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
+    const joinUrl = `${baseUrl}/join/${rawToken}`;
+    return { rawToken, joinUrl };
+  }
+
+  async createOrganizationInviteEmail(
+    organizationId: string,
+    email: string,
+    role: string,
+    expiresAt: Date,
+    createdByUserId: string
+  ): Promise<{ joinUrl: string }> {
+    const rawToken = generateJoinToken();
+    const tokenHash = hashToken(rawToken);
+    await db.insert(organizationInvites).values({
+      organizationId,
+      type: "email",
+      tokenHash,
+      role,
+      email: email.trim().toLowerCase(),
+      expiresAt: expiresAt.toISOString(),
+      createdByUserId,
+    } as any);
+    const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
+    const joinUrl = `${baseUrl}/join/${rawToken}`;
+    return { joinUrl };
+  }
+
+  async consumeOrganizationInvite(token: string, userId: string): Promise<{ organizationId: string; role: string } | { error: string; code?: string }> {
+    const tokenHash = hashToken(token);
+
+    return await db.transaction(async (tx) => {
+      const [inviteRow] = await tx
+        .select()
+        .from(organizationInvites)
+        .where(
+          and(
+            eq(organizationInvites.tokenHash, tokenHash),
+            isNull(organizationInvites.usedAt),
+            sql`expires_at > now()`
+          )
+        )
+        .for("update")
+        .limit(1);
+
+      if (!inviteRow) {
+        return { error: "Invalid, expired, or already used invite.", code: "expired_or_used" };
+      }
+
+      const invite = inviteRow as any;
+
+      const [userRow] = await tx.select().from(users).where(eq(users.id, userId)).limit(1);
+      const user = userRow ? convertToUser(userRow as any) : undefined;
+
+      if (invite.email) {
+        const userEmail = (user?.email ?? "").trim().toLowerCase();
+        const inviteEmail = (invite.email ?? "").trim().toLowerCase();
+        if (!userEmail || userEmail !== inviteEmail) {
+          return { error: "This invite was sent to a different email address. Sign in with that email to accept." };
+        }
+      }
+
+      const currentOrgId = user ? (user as any).organizationId : null;
+      if (currentOrgId && currentOrgId !== invite.organizationId) {
+        return { error: "You already belong to another organization.", code: "already_in_org" };
+      }
+
+      await tx
+        .update(organizationInvites)
+        .set({
+          usedAt: new Date().toISOString(),
+          usedByUserId: userId,
+        } as any)
+        .where(eq(organizationInvites.id, invite.id));
+
+      const [existing] = await tx
+        .select()
+        .from(organizationMemberships)
+        .where(
+          and(
+            eq(organizationMemberships.organizationId, invite.organizationId),
+            eq(organizationMemberships.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (existing && (existing as any).status === "active") {
+        return { organizationId: invite.organizationId, role: (existing as any).role };
+      }
+
+      await tx.insert(organizationMemberships).values({
+        organizationId: invite.organizationId,
+        userId,
+        role: invite.role,
+        status: "active",
+        joinedAt: new Date().toISOString(),
+      } as any);
+
+      await tx.update(users).set({ organizationId: invite.organizationId }).where(eq(users.id, userId));
+
+      return { organizationId: invite.organizationId, role: invite.role };
+    });
   }
 
   async getUserByResetToken(resetToken: string): Promise<User | null> {
@@ -315,7 +574,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
-    return await db.select().from(repositories).where(eq(repositories.userId, userId)) as any;
+    // Deprecated: prefer getRepositoriesByOrganizationId(orgId). Wrapper for backward compatibility.
+    const user = await this.getUser(userId);
+    if (!user || !(user as any).organizationId) return [];
+    return this.getRepositoriesByOrganizationId((user as any).organizationId);
   }
 
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {

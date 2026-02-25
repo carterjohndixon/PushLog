@@ -22,14 +22,21 @@ if (appEnv === 'production' || appEnv === 'staging') {
 // Without it, encrypted data (e.g. OpenRouter API key) cannot be decrypted after restart.
 const RAW = process.env.ENCRYPTION_KEY;
 const trimmed = typeof RAW === 'string' ? RAW.trim() : '';
-const ENCRYPTION_KEY = /^[a-fA-F0-9]{64}$/.test(trimmed) ? trimmed : null;
+// Accept 64 hex chars even if value had extra whitespace/newlines/quotes (strip non-hex, then require exactly 64)
+const hexOnly = trimmed.replace(/[^a-fA-F0-9]/g, '');
+const ENCRYPTION_KEY = hexOnly.length === 64 ? hexOnly : null;
 
 if (process.env.NODE_ENV !== 'test') {
-  if (trimmed.length > 0) {
+  if (trimmed.length > 0 && !ENCRYPTION_KEY) {
+    const hint = trimmed.length === 64
+      ? ' (key has 64 chars but at least one is not hex 0-9/a-f; check for spaces, newlines, or quotes in .env)'
+      : trimmed.length === 66 && (trimmed.startsWith('"') || trimmed.startsWith("'"))
+        ? ' (remove quotes around the value in .env)'
+        : ` (got ${trimmed.length} chars after trim; need exactly 64 hex).`;
     console.warn(
-      `⚠️ ENCRYPTION_KEY is invalid: must be exactly 64 hex characters (0-9, a-f). Got ${trimmed.length} chars${trimmed.length === 66 && (trimmed.startsWith('"') || trimmed.startsWith("'")) ? ' (remove quotes around the value in .env)' : ''}. Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+      `⚠️ ENCRYPTION_KEY is invalid: must be exactly 64 hex characters (0-9, a-f).${hint} Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
     );
-  } else {
+  } else if (trimmed.length === 0) {
     console.warn(
       '⚠️ ENCRYPTION_KEY is missing. Add it to .env (64 hex chars) so encrypted data (e.g. OpenRouter API key) persists. Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
     );

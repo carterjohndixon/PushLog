@@ -5,11 +5,12 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
-import { exec, spawn } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
-import { authenticateToken, requireEmailVerification, requireMfaPendingSession } from './middleware/auth';
+import { authenticateToken, requireEmailVerification, requireMfaPendingSession, getSessionUserWithOrg } from './middleware/auth';
+import { requireOrgMember, requireOrgRole } from './middleware/orgAuth';
 import {
   isProductionDeployConfigured,
   requestProductionPromote,
@@ -38,7 +39,7 @@ import {
 import { insertIntegrationSchema, insertRepositorySchema } from "@shared/schema";
 import { z } from "zod";
 import { databaseStorage } from "./database";
-import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail } from './email';
+import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail, sendOrgInviteEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { estimateTokenCostFromUsage } from './aiCost';
@@ -1556,13 +1557,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Set session data (no MFA required)
       req.session.userId = user.id;
-      req.session.user = {
+      const sessionWithOrg = await getSessionUserWithOrg(user);
+      req.session.user = sessionWithOrg ?? {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: !!user.googleId,
-        emailVerified: !!user.emailVerified
+        emailVerified: !!user.emailVerified,
+        organizationId: (user as any).organizationId ?? '',
+        role: 'viewer' as const,
       };
       req.session.userId = user.id;
       
@@ -1911,7 +1915,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return loginRedirectWithError( "Session error. Please try again.");
         }
         req.session!.userId = user.id;
-        req.session!.user = { userId: user.id, username: user.username || "", email: user.email || null, githubConnected: true, googleConnected: !!user.googleId, emailVerified: !!(user as any).emailVerified };
+        req.session!.user = {
+          userId: user.id,
+          username: user.username || "",
+          email: user.email || null,
+          githubConnected: true,
+          googleConnected: !!user.googleId,
+          emailVerified: !!(user as any).emailVerified,
+          organizationId: (user as any).organizationId ?? "",
+          role: "viewer",
+        };
         if (!isLinkingFlow) {
           (req.session as any).mfaPending = true;
           (req.session as any).mfaSetupRequired = !hasMfa;
@@ -2014,13 +2027,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled;
 
         req.session.userId = user.id;
-        req.session.user = {
+        const sessionWithOrg = await getSessionUserWithOrg(user);
+        req.session.user = sessionWithOrg ?? {
           userId: user.id,
           username: user.username || '',
           email: user.email || null,
           githubConnected: true,
           googleConnected: !!user.googleId,
-          emailVerified: !!(user as any).emailVerified
+          emailVerified: !!(user as any).emailVerified,
+          organizationId: (user as any).organizationId ?? '',
+          role: 'viewer' as const,
         };
         if (!isLinkingFlow) {
           (req.session as any).mfaPending = true;
@@ -2119,13 +2135,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hasMfa = !!(user as { mfaEnabled?: boolean }).mfaEnabled || !!(user as any).mfa_enabled;
 
       req.session.userId = user.id;
-      req.session.user = {
+      const sessionWithOrg = await getSessionUserWithOrg(user);
+      req.session.user = sessionWithOrg ?? {
         userId: user.id,
         username: user.username || "",
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: true,
         emailVerified: !!(user as any).emailVerified,
+        organizationId: (user as any).organizationId ?? "",
+        role: "viewer" as const,
       };
       (req.session as any).mfaPending = true;
       (req.session as any).mfaSetupRequired = !hasMfa;
@@ -2197,13 +2216,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.userId = user.id;
       (req.session as any).mfaPending = true;
       (req.session as any).mfaSetupRequired = true;
-      req.session.user = {
+      const sessionWithOrg = await getSessionUserWithOrg(user);
+      req.session.user = sessionWithOrg ?? {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: false,
         googleConnected: false,
-        emailVerified: false
+        emailVerified: false,
+        organizationId: (user as any).organizationId ?? '',
+        role: 'viewer' as const,
       };
 
       res.status(200).json({
@@ -2267,13 +2289,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      req.session.user = {
+      const sessionWithOrg = await getSessionUserWithOrg(user);
+      req.session.user = sessionWithOrg ?? {
         userId: user.id,
         username: user.username || '',
         email: user.email || null,
         githubConnected: !!user.githubId,
         googleConnected: !!user.googleId,
-        emailVerified: true  // Updated to true after verification
+        emailVerified: true,
+        organizationId: (user as any).organizationId ?? '',
+        role: 'viewer' as const,
       };
 
       res.status(200).json({
@@ -2392,6 +2417,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (process.env.COOKIE_DOMAIN) opts.domain = process.env.COOKIE_DOMAIN;
     res.clearCookie("connect.sid", opts);
   }
+
+  // --- Org invite (share link + accept) ---
+  app.post(
+    "/api/org/invites/link",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("role").optional().isIn(["owner", "admin", "developer", "viewer"]),
+    body("expiresInDays").optional().isInt({ min: 1, max: 365 }),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const createdByUserId = req.user!.userId;
+        const role = (req.body?.role as string) || "developer";
+        const expiresInDays = Math.min(365, Math.max(1, parseInt(String(req.body?.expiresInDays || 7), 10) || 7));
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+        const { rawToken, joinUrl } = await databaseStorage.createOrganizationInviteLink(orgId, role, expiresAt, createdByUserId);
+        res.status(201).json({ joinUrl, expiresAt: expiresAt.toISOString(), role });
+      } catch (e) {
+        console.error("Create org invite link error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to create invite link" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/org/invites/email",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("email").trim().isEmail().withMessage("Valid email is required"),
+    body("role").optional().isIn(["owner", "admin", "developer", "viewer"]),
+    body("expiresInDays").optional().isInt({ min: 1, max: 365 }),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const createdByUserId = req.user!.userId;
+        const email = String(req.body.email).trim().toLowerCase();
+        const role = (req.body?.role as string) || "developer";
+        const expiresInDays = Math.min(365, Math.max(1, parseInt(String(req.body?.expiresInDays || 7), 10) || 7));
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+        const { joinUrl } = await databaseStorage.createOrganizationInviteEmail(orgId, email, role, expiresAt, createdByUserId);
+        const inviterName = req.user?.username || req.user?.email || undefined;
+        await sendOrgInviteEmail(email, joinUrl, inviterName);
+        res.status(201).json({ success: true, message: "Invite sent" });
+      } catch (e) {
+        console.error("Create org email invite error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to send invite" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/org/invites/accept",
+    authenticateToken,
+    body("token").trim().notEmpty().withMessage("token is required"),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const userId = req.user!.userId;
+        const token = String(req.body.token).trim();
+        const result = await databaseStorage.consumeOrganizationInvite(token, userId);
+        if ("error" in result) {
+          if (result.code === "already_in_org") {
+            return res.status(409).json({ code: "already_in_org", error: result.error });
+          }
+          const status = result.error.includes("already been used") ? 409 : result.error.includes("expired") ? 410 : 400;
+          return res.status(status).json({ error: result.error });
+        }
+        res.status(200).json({ success: true, organizationId: result.organizationId, role: result.role });
+      } catch (e) {
+        console.error("Accept org invite error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to accept invite" });
+      }
+    }
+  );
 
   // Get user repositories
   app.get("/api/repositories", authenticateToken, requireEmailVerification, async (req, res) => {
@@ -2649,7 +2762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     body('githubId').isInt({ min: 1 }).withMessage('Valid GitHub ID is required'),
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
     body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
-  ], authenticateToken, requireEmailVerification, async (req: any, res: any) => {
+  ], authenticateToken, requireEmailVerification, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req: any, res: any) => {
     try {
       // Validate input
       const errors = validationResult(req);
@@ -2669,6 +2782,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = {
         ...req.body,
         userId,
+        organizationId: (req.user as any).organizationId ?? undefined,
         githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
       };
       const validatedData = schema.parse(payload);
@@ -2727,6 +2841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const repository = await storage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
+          organizationId: (req.user as any).organizationId ?? undefined,
           webhookId: webhook.id.toString(),
         });
 
@@ -2741,6 +2856,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const repository = await storage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
+          organizationId: (req.user as any).organizationId ?? undefined,
+          webhookId: null,
         });
         res.status(200).json({
           ...repository,
@@ -2760,7 +2877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     body('criticalPaths').optional().isArray().withMessage('criticalPaths must be an array'),
     body('criticalPaths.*').optional().isString().trim().isLength({ max: 256 }).withMessage('each critical path must be a string'),
     body('incidentServiceName').optional({ nullable: true }).custom((v) => v === null || v === undefined || (typeof v === 'string' && v.length <= 128)).withMessage('incidentServiceName must be a string up to 128 chars or null')
-  ], authenticateToken, async (req: any, res: any) => {
+  ], authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req: any, res: any) => {
     try {
       // Validate input
       const errors = validationResult(req);
@@ -2791,16 +2908,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // First veprify user owns this repository
+      // First verify user owns this repository or is org admin/owner
       const existingRepository = await storage.getRepository(repositoryId);
       if (!existingRepository) {
         return res.status(404).json({ error: "Repository not found" });
       }
-      
-      if (existingRepository.userId !== req.user!.userId) {
+
+      const orgId = (req.user as any).organizationId;
+      const canManage = existingRepository.userId === req.user!.userId
+        || (orgId && (existingRepository as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+      if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
-      
+
       const repository = await storage.updateRepository(repositoryId, updates);
       
       if (!repository) {
@@ -2829,7 +2949,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Disconnect a repository
-  app.delete("/api/repositories/:id", authenticateToken, async (req, res) => {
+  app.delete("/api/repositories/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
     try {
       const repositoryId = req.params.id;
       const repository = await storage.getRepository(repositoryId);
@@ -2838,8 +2958,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Repository not found" });
       }
 
-      // Verify user owns this repository
-      if (repository.userId !== req.user!.userId) {
+      // Verify user owns this repository or is org admin/owner
+      const orgId = (req.user as any).organizationId;
+      const canManage = repository.userId === req.user!.userId
+        || (orgId && (repository as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+      if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -3059,7 +3182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create integration
-  app.post("/api/integrations", authenticateToken, async (req, res) => {
+  app.post("/api/integrations", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
     try {
       const userId = req.user!.userId;
       // Coerce numeric fields so string IDs from JSON/forms don't fail validation
@@ -3072,12 +3195,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const validatedData = insertIntegrationSchema.parse(coercedBody);
       
-      // Ensure repository exists and belongs to the user
+      // Ensure repository exists and belongs to the user's org
       const repository = await storage.getRepository(validatedData.repositoryId);
       if (!repository) {
         return res.status(404).json({ error: "Repository not found", details: "The selected repository does not exist." });
       }
-      if (repository.userId !== userId) {
+      const orgId = (req.user as any).organizationId;
+      const repoInOrg = orgId && (repository as any).organizationId === orgId;
+      const repoOwnedByUser = repository.userId === userId;
+      if (!repoInOrg && !repoOwnedByUser) {
         return res.status(403).json({ error: "Access denied", details: "You do not have access to this repository." });
       }
 
@@ -3094,6 +3220,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const integration = await storage.createIntegration({
         ...validatedData,
         userId: userId,
+        organizationId: (req.user as any).organizationId ?? undefined,
         aiModel: validatedData.aiModel || defaultAiModel, // Use user's preference as default
       });
       
@@ -3336,7 +3463,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // });
 
   // Update integration
-  app.patch("/api/integrations/:id", authenticateToken, async (req, res) => {
+  app.patch("/api/integrations/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
     try {
       const integrationId = req.params.id;
       const updates = { ...req.body };
@@ -3354,8 +3481,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingIntegration) {
         return res.status(404).json({ error: "Integration not found" });
       }
-      
-      if (existingIntegration.userId !== req.user!.userId) {
+
+      const orgId = (req.user as any).organizationId;
+      const canManage = existingIntegration.userId === req.user!.userId
+        || (orgId && (existingIntegration as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+      if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
 
@@ -4435,18 +4565,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete integration
-  app.delete("/api/integrations/:id", authenticateToken, async (req, res) => {
+  app.delete("/api/integrations/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
     try {
       const integrationId = req.params.id;
-      
+
       // First get the integration to verify ownership
       const integration = await storage.getIntegration(integrationId);
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
       }
-      
-      // Verify user owns this integration
-      if (integration.userId !== req.user!.userId) {
+
+      const orgId = (req.user as any).organizationId;
+      const canManage = integration.userId === req.user!.userId
+        || (orgId && (integration as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+      if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
       

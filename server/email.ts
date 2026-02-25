@@ -11,6 +11,7 @@ import {
   getIncidentAlertEmailTemplate,
   type IncidentAlertMetadata,
 } from './templates/incidentAlertEmail';
+import { getOrgInviteEmailTemplate } from './templates/orgInviteEmail';
 
 // Email configuration schema
 const emailConfigSchema = z.object({
@@ -140,5 +141,32 @@ export async function sendIncidentAlertEmail(
     });
   } catch (error) {
     console.error('[email] Failed to send incident alert:', error);
+  }
+}
+
+/** Send team invite email with join link. Fire-and-forget; logs on failure. */
+export async function sendOrgInviteEmail(
+  email: string,
+  joinUrl: string,
+  inviterName?: string
+): Promise<void> {
+  if (!isEmailEnabled()) return;
+  const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
+  const logoPath = getLogoPath();
+  const useEmbeddedLogo = !!logoPath;
+  const { subject, html } = getOrgInviteEmailTemplate(joinUrl, inviterName, baseUrl, useEmbeddedLogo);
+  const attachments = logoPath
+    ? [{ filename: "PushLog.png", content: fs.readFileSync(logoPath), cid: "pushlog-logo" }]
+    : [];
+  try {
+    await transporter.sendMail({
+      from: getFromAddress(),
+      to: email,
+      subject,
+      html,
+      attachments,
+    });
+  } catch (error) {
+    console.error("[email] Failed to send org invite:", error);
   }
 } 

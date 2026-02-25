@@ -87,6 +87,27 @@ export function wasRecentSentryNotification(service: string, environment: string
   return true;
 }
 
+/** Get user IDs that should receive incident notifications for a given org.
+ * Active org members where receiveIncidentNotifications !== false and role !== viewer.
+ * Do NOT rely on "users with repos" in org mode.
+ */
+export async function getIncidentNotificationTargetsForOrg(
+  orgId: string,
+  _isTestNotification: boolean = false
+): Promise<string[]> {
+  const members = await storage.getOrganizationMembers(orgId);
+  const userIds: string[] = [];
+  for (const m of members) {
+    const role = (m as any).role;
+    if (role === "viewer") continue;
+    const userId = (m as any).userId;
+    const user = await storage.getUser(userId);
+    if (!user || (user as any).receiveIncidentNotifications === false) continue;
+    userIds.push(userId);
+  }
+  return userIds;
+}
+
 /** Get user IDs that should receive incident notifications.
  * Only users who have at least one repo and have "Receive incident notifications" on (Settings).
  */

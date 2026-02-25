@@ -2,6 +2,37 @@ import { Request, Response, NextFunction } from 'express';
 import { databaseStorage } from '../database';
 
 /**
+ * Build session user with org + role when user has organizationId and active membership.
+ * Use after login to cache full session and avoid extra DB on first request.
+ */
+export async function getSessionUserWithOrg(user: {
+  id: string;
+  username: string | null;
+  email: string | null;
+  githubId?: string | null;
+  googleId?: string | null;
+  emailVerified?: boolean;
+}): Promise<SessionUser | null> {
+  const orgId = (user as any).organizationId;
+  if (!orgId) return null;
+  const membership = await databaseStorage.getMembershipByOrganizationAndUser(orgId, user.id);
+  if (!membership || (membership as any).status !== 'active') return null;
+  const role = ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
+    ? (membership as any).role
+    : 'viewer';
+  return {
+    userId: user.id,
+    username: user.username || '',
+    email: user.email || null,
+    githubConnected: !!user.githubId,
+    googleConnected: !!user.googleId,
+    emailVerified: !!user.emailVerified,
+    organizationId: orgId,
+    role,
+  };
+}
+
+/**
  * Session-based user data structure
  * This replaces the JWT payload and is stored in req.session
  */
@@ -12,6 +43,8 @@ export interface SessionUser {
   githubConnected: boolean;
   googleConnected: boolean;
   emailVerified: boolean;
+  organizationId: string;
+  role: 'owner' | 'admin' | 'developer' | 'viewer';
 }
 
 declare global {
@@ -80,10 +113,11 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       (req.session as any).lastActivity = Date.now();
     }
 
-    // If we already have user data in session, use it (faster, no DB query)
-    // Otherwise, fetch from database
-    if (req.session.user) {
-      req.user = req.session.user;
+    // If we already have user data in session (with org + role), use it (faster, no DB query)
+    // Otherwise, fetch from database and resolve membership
+    const su = req.session.user;
+    if (su && typeof (su as any).organizationId === 'string' && (su as any).organizationId !== '' && typeof (su as any).role === 'string') {
+      req.user = req.session.user as SessionUser;
       next();
       return;
     }
@@ -97,6 +131,30 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       return res.status(401).json({ error: 'User not found' });
     }
 
+    const orgId = (user as any).organizationId;
+    if (!orgId || orgId === '') {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: 'Account not fully set up. Please log in again.' });
+    }
+
+    const membership = await databaseStorage.getMembershipByOrganizationAndUser(orgId, user.id);
+    if (!membership) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: 'Membership not found' });
+    }
+
+    if ((membership as any).status === 'pending') {
+      return res.status(403).json({
+        error: 'Pending invite',
+        code: 'pending_invite',
+        message: 'You have a pending team invite. Accept it to continue.',
+      });
+    }
+
+    const role = ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
+      ? (membership as any).role
+      : 'viewer';
+
     // Build session user object (same structure as old JWT payload)
     const sessionUser: SessionUser = {
       userId: user.id,
@@ -104,7 +162,9 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       email: user.email || null,
       githubConnected: !!user.githubId,
       googleConnected: !!user.googleId,
-      emailVerified: !!user.emailVerified
+      emailVerified: !!user.emailVerified,
+      organizationId: orgId,
+      role,
     };
 
     // Cache user data in session to avoid DB queries on subsequent requests

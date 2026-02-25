@@ -44,6 +44,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -167,6 +169,7 @@ export function OpenRouterModels({
   const [compareOpen, setCompareOpen] = useState(false);
   const [defaultModelId, setDefaultModelId] = useState<string>("");
   const [quickApplyModelId, setQuickApplyModelId] = useState<string>("");
+  const [quickApplyModelOpen, setQuickApplyModelOpen] = useState(false);
   const [budgetInput, setBudgetInput] = useState("");
   const [viewingGenerationId, setViewingGenerationId] = useState<string | null>(null);
   const [usagePerGenResult, setUsagePerGenResult] = useState<UsagePerGenResult | null>(null);
@@ -632,26 +635,54 @@ export function OpenRouterModels({
             <div className="flex flex-wrap items-end gap-2">
               <div className="flex-1 min-w-[180px] max-w-sm">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Model</Label>
-                <Select value={quickApplyModelId} onValueChange={setQuickApplyModelId}>
-                  <SelectTrigger className="w-full bg-background border-border text-foreground">
-                    <SelectValue placeholder={modelsLoading ? "Loading…" : "Choose model"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allModels.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
-                        <span className="flex items-center gap-2">
-                          {getAiModelDisplayName(m.id)}
-                          {recommendedOpenrouter === m.id && (
-                            <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
-                          )}
-                        </span>
-                      </SelectItem>
-                    ))}
-                    {!modelsLoading && allModels.length === 0 && (
-                      <div className="py-2 px-2 text-sm text-muted-foreground">No models available</div>
-                    )}
-                  </SelectContent>
-                </Select>
+                <Popover open={quickApplyModelOpen} onOpenChange={setQuickApplyModelOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between bg-background border-border text-foreground font-normal"
+                    >
+                      {quickApplyModelId ? getAiModelDisplayName(quickApplyModelId) : (modelsLoading ? "Loading…" : "Choose model")}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                    <Command
+                      filter={(value, search) => {
+                        const display = getAiModelDisplayName(value);
+                        const s = search.toLowerCase();
+                        return (value.toLowerCase().includes(s) || display.toLowerCase().includes(s)) ? 1 : 0;
+                      }}
+                    >
+                      <CommandInput placeholder="Search models…" />
+                      <CommandList>
+                        <CommandEmpty>No model found.</CommandEmpty>
+                        <CommandGroup>
+                          {allModels.map((m) => (
+                            <CommandItem
+                              key={m.id}
+                              value={m.id}
+                              onSelect={() => {
+                                setQuickApplyModelId(m.id);
+                                setQuickApplyModelOpen(false);
+                              }}
+                            >
+                              <span className="flex items-center gap-2">
+                                {getAiModelDisplayName(m.id)}
+                                {recommendedOpenrouter === m.id && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                                )}
+                              </span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                        {!modelsLoading && allModels.length === 0 && (
+                          <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="flex-1 min-w-[180px] max-w-sm">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Integration</Label>
