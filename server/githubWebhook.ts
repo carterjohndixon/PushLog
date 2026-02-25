@@ -16,6 +16,7 @@ import { scorePush } from "./riskEngine";
 import { ingestPushEvent } from "./streamingStats";
 import { ingestIncidentEvent } from "./incidentEngine";
 import { fetchOpenRouterGenerationUsage } from "./ai";
+import { resolveGenerationCost } from "./pricing";
 
 const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
 
@@ -427,16 +428,35 @@ export async function persistPushAndNotifications(
   }
 
   if (aiResult.aiGenerated && aiResult.summary && ((aiResult.summary.tokensUsed > 0) || ((aiResult.summary.cost ?? 0) > 0))) {
+    const provider = aiResult.useOpenRouter ? "openrouter" : "openai";
+    const modelId = aiResult.summary.actualModel || aiResult.effectiveAiModel || "";
+    const promptTokens = aiResult.summary.promptTokens ?? null;
+    const completionTokens = aiResult.summary.completionTokens ?? null;
+    const costPayload = await resolveGenerationCost(
+      (p, m) => databaseStorage.getActivePricingForModel(p, m),
+      provider,
+      modelId,
+      promptTokens,
+      completionTokens
+    );
     await databaseStorage.createAiUsage({
       userId: integration.userId,
       integrationId: integration.id,
       pushEventId: pushEvent.id,
-      model: aiResult.summary.actualModel || aiResult.effectiveAiModel,
+      model: modelId,
       tokensUsed: aiResult.summary.tokensUsed,
-      tokensPrompt: aiResult.summary.promptTokens ?? null,
-      tokensCompletion: aiResult.summary.completionTokens ?? null,
-      cost: aiResult.summary.cost ?? 0,
+      tokensPrompt: promptTokens,
+      tokensCompletion: completionTokens,
+      cost: costPayload.costStatus === "ok" ? costPayload.costLegacy : (aiResult.summary.cost ?? 0),
       openrouterGenerationId: aiResult.summary.openrouterGenerationId ?? null,
+      provider,
+      modelId,
+      totalTokens: aiResult.summary.tokensUsed,
+      estimatedCostUsd: costPayload.estimatedCostUsd != null ? String(costPayload.estimatedCostUsd) : null,
+      pricingId: costPayload.pricingId,
+      pricingInputUsdPer1M: costPayload.pricingInputUsdPer1M,
+      pricingOutputUsdPer1M: costPayload.pricingOutputUsdPer1M,
+      costStatus: costPayload.costStatus,
     });
     if ((aiResult.summary.cost ?? 0) === 0 && aiResult.summary.openrouterGenerationId && aiResult.useOpenRouter && aiResult.openRouterKeyRaw) {
       scheduleDelayedCostUpdate({

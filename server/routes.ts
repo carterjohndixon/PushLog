@@ -41,6 +41,7 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
+import { estimateTokenCostFromUsage } from './aiCost';
 import { encrypt, decrypt } from './encryption';
 import speakeasy from "speakeasy";
 import QRCode from "qrcode";
@@ -3997,7 +3998,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const openaiRows = usage.filter((u: any) => u.model && !String(u.model).includes("/"));
       const costFromRow = (u: any) => {
         const v = u.cost ?? (u as any).cost;
-        return typeof v === "number" ? v : (v != null ? Number(v) : 0);
+        let c = typeof v === "number" ? v : (v != null ? Number(v) : 0);
+        if (c === 0 && u.model && ((u.tokensPrompt ?? (u as any).tokens_prompt) != null || (u.tokensCompletion ?? (u as any).tokens_completion) != null)) {
+          const prompt = u.tokensPrompt ?? (u as any).tokens_prompt ?? 0;
+          const completion = u.tokensCompletion ?? (u as any).tokens_completion ?? 0;
+          if (prompt > 0 || completion > 0) {
+            const computed = estimateTokenCostFromUsage(String(u.model), prompt, completion);
+            if (computed > 0) c = computed;
+          }
+        }
+        return c;
       };
       const createdAtFromRow = (u: any) => {
         const created = u.createdAt ?? (u as any).created_at;
@@ -4099,14 +4109,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!row) {
         return res.status(404).json({ error: "Usage not found" });
       }
-      const cost = typeof row.cost === "number" ? row.cost : Number(row.cost) || 0;
+      let cost = typeof row.cost === "number" ? row.cost : Number(row.cost) || 0;
+      const tokensPrompt = (row as any).tokensPrompt ?? (row as any).tokens_prompt ?? null;
+      const tokensCompletion = (row as any).tokensCompletion ?? (row as any).tokens_completion ?? null;
+      if (cost === 0 && row.model && (tokensPrompt != null || tokensCompletion != null) && ((tokensPrompt ?? 0) > 0 || (tokensCompletion ?? 0) > 0)) {
+        const computed = estimateTokenCostFromUsage(String(row.model), tokensPrompt ?? 0, tokensCompletion ?? 0);
+        if (computed > 0) cost = computed;
+      }
       const createdAt = row.createdAt ?? (row as any).created_at;
       res.status(200).json({
         id: row.id,
         model: row.model,
         tokensUsed: row.tokensUsed ?? (row as any).tokens_used ?? 0,
-        tokensPrompt: (row as any).tokensPrompt ?? (row as any).tokens_prompt ?? null,
-        tokensCompletion: (row as any).tokensCompletion ?? (row as any).tokens_completion ?? null,
+        tokensPrompt,
+        tokensCompletion,
         cost,
         costFormatted: cost > 0 ? `$${(cost / 10000).toFixed(4)}` : cost === 0 ? "$0.00" : null,
         createdAt: createdAt != null ? (typeof createdAt === "string" ? createdAt : new Date(createdAt).toISOString()) : null,

@@ -3,6 +3,7 @@ import postgres from "postgres";
 import { 
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
   favoriteModels, loginLockout, oauthSessions, oauthIdentities,
+  aiModelPricing,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -11,6 +12,7 @@ import {
   type SlackWorkspace, type InsertSlackWorkspace,
   type Notification, type InsertNotification,
   type AiUsage, type InsertAiUsage,
+  type AiModelPricing, type InsertAiModelPricing,
   type Payment, type InsertPayment,
   type AnalyticsStats,
   type FavoriteModel,
@@ -18,7 +20,7 @@ import {
   analyticsStats,
   userDailyStats,
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max, gte, isNull } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, max, gte, isNull, like, or } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -1003,7 +1005,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateAiUsage(pushEventId: string, userId: string, updates: Partial<AiUsage>): Promise<AiUsage | undefined> {
-    const allowed = ['model', 'tokensUsed', 'tokensPrompt', 'tokensCompletion', 'cost', 'openrouterGenerationId'] as const;
+    const allowed = ['model', 'tokensUsed', 'tokensPrompt', 'tokensCompletion', 'cost', 'openrouterGenerationId', 'provider', 'modelId', 'totalTokens', 'estimatedCostUsd', 'pricingId', 'pricingInputUsdPer1M', 'pricingOutputUsdPer1M', 'costStatus'] as const;
     const set: Record<string, unknown> = {};
     for (const key of allowed) {
       if (updates[key] !== undefined) set[key] = updates[key];
@@ -1048,6 +1050,51 @@ export class DatabaseStorage implements IStorage {
     return deleted.length > 0;
   }
 
+  /** Get active pricing row for provider + model_id (exact match, then longest prefix match). */
+  async getActivePricingForModel(provider: string, modelId: string): Promise<AiModelPricing | null> {
+    const rows = await db.select().from(aiModelPricing)
+      .where(and(eq(aiModelPricing.provider, provider), eq(aiModelPricing.active, true)));
+    const normalized = (modelId || "").toLowerCase().trim();
+    if (!normalized) return null;
+    const exact = rows.find((r) => (r.modelId || "").toLowerCase() === normalized);
+    if (exact) return exact;
+    const prefixMatches = rows.filter(
+      (r) => (r.modelId || "").length > 0 && (normalized === (r.modelId || "").toLowerCase() || normalized.startsWith((r.modelId || "").toLowerCase() + "-") || normalized.startsWith((r.modelId || "").toLowerCase() + "."))
+    );
+    if (prefixMatches.length === 0) return null;
+    prefixMatches.sort((a, b) => (b.modelId || "").length - (a.modelId || "").length);
+    return prefixMatches[0];
+  }
+
+  /** List all active AI model pricing rows. */
+  async listAiModelPricing(): Promise<AiModelPricing[]> {
+    return await db.select().from(aiModelPricing).where(eq(aiModelPricing.active, true)).orderBy(aiModelPricing.provider, aiModelPricing.modelId);
+  }
+
+  /** Upsert pricing: update existing active row or insert. Sets updated_at. */
+  async upsertAiModelPricing(provider: string, modelId: string, inputUsdPer1M: number, outputUsdPer1M: number): Promise<AiModelPricing> {
+    const existing = await db.select().from(aiModelPricing)
+      .where(and(eq(aiModelPricing.provider, provider), eq(aiModelPricing.modelId, modelId), eq(aiModelPricing.active, true)))
+      .limit(1);
+    const inputStr = String(inputUsdPer1M);
+    const outputStr = String(outputUsdPer1M);
+    if (existing.length > 0) {
+      const [updated] = await db.update(aiModelPricing)
+        .set({ inputUsdPer1M: inputStr, outputUsdPer1M: outputStr, updatedAt: new Date() })
+        .where(eq(aiModelPricing.id, existing[0].id))
+        .returning();
+      return updated as AiModelPricing;
+    }
+    const [inserted] = await db.insert(aiModelPricing).values({
+      provider,
+      modelId,
+      inputUsdPer1M: inputStr,
+      outputUsdPer1M: outputStr,
+      active: true,
+    }).returning();
+    return inserted as AiModelPricing;
+  }
+
   /** AI usage rows with push_events.pushed_at as fallback when created_at is null (for "Last used" display). Bounded by default (limit 500). */
   async getAiUsageWithPushDateByUserId(userId: string, options?: { limit?: number; offset?: number }): Promise<(AiUsage & { pushedAt: string | null })[]> {
     const limit = options?.limit ?? 500;
@@ -1066,6 +1113,14 @@ export class DatabaseStorage implements IStorage {
         openrouterGenerationId: aiUsage.openrouterGenerationId,
         createdAt: aiUsage.createdAt,
         pushedAt: pushEvents.pushedAt,
+        provider: aiUsage.provider,
+        modelId: aiUsage.modelId,
+        totalTokens: aiUsage.totalTokens,
+        estimatedCostUsd: aiUsage.estimatedCostUsd,
+        pricingId: aiUsage.pricingId,
+        pricingInputUsdPer1M: aiUsage.pricingInputUsdPer1M,
+        pricingOutputUsdPer1M: aiUsage.pricingOutputUsdPer1M,
+        costStatus: aiUsage.costStatus,
       })
       .from(aiUsage)
       .leftJoin(pushEvents, eq(aiUsage.pushEventId, pushEvents.id))

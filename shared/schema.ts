@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, customType, date } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, jsonb, uuid, customType, date, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql, type SQL } from "drizzle-orm";
@@ -145,6 +145,27 @@ export const aiUsage = pgTable("ai_usage", {
   cost: integer("cost").notNull(), // Cost in units of $0.0001 (ten-thousandths of a dollar) for sub-cent precision
   openrouterGenerationId: text("openrouter_generation_id"), // OpenRouter gen-xxx for GET /api/v1/generation?id=...
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+  // Per-generation cost tracking (DB pricing + snapshot)
+  provider: text("provider"), // 'openai' | 'openrouter'
+  modelId: text("model_id"), // same as model; denormalized for clarity
+  totalTokens: integer("total_tokens"),
+  estimatedCostUsd: numeric("estimated_cost_usd", { precision: 12, scale: 6 }),
+  pricingId: uuid("pricing_id"), // fk -> ai_model_pricing.id
+  pricingInputUsdPer1M: numeric("pricing_input_usd_per_1m", { precision: 12, scale: 6 }),
+  pricingOutputUsdPer1M: numeric("pricing_output_usd_per_1m", { precision: 12, scale: 6 }),
+  costStatus: text("cost_status").notNull().default("ok"), // 'ok' | 'missing_pricing' | 'no_usage'
+});
+
+/** Model pricing per provider (openai, openrouter). One active row per (provider, model_id). Use partial unique index WHERE active=true for history. */
+export const aiModelPricing = pgTable("ai_model_pricing", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  provider: text("provider").notNull(), // 'openai' | 'openrouter'
+  modelId: text("model_id").notNull(),
+  inputUsdPer1M: numeric("input_usd_per_1m", { precision: 12, scale: 6 }).notNull(),
+  outputUsdPer1M: numeric("output_usd_per_1m", { precision: 12, scale: 6 }).notNull(),
+  active: boolean("active").notNull().default(true),
+  effectiveFrom: timestamp("effective_from", { withTimezone: true, mode: "date" }),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 });
 
 export const analyticsStats = pgTable("analytics_stats", {
@@ -270,6 +291,10 @@ export const insertAiUsageSchema = createInsertSchema(aiUsage).omit({
   createdAt: true,
 });
 
+export const insertAiModelPricingSchema = createInsertSchema(aiModelPricing).omit({
+  id: true,
+});
+
 export const insertAnalyticsStatsSchema = createInsertSchema(analyticsStats).omit({
   id: true,
   createdAt: true,
@@ -356,6 +381,8 @@ export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type AiUsage = typeof aiUsage.$inferSelect;
 export type InsertAiUsage = z.infer<typeof insertAiUsageSchema>;
+export type AiModelPricing = typeof aiModelPricing.$inferSelect;
+export type InsertAiModelPricing = z.infer<typeof insertAiModelPricingSchema>;
 export type AnalyticsStats = typeof analyticsStats.$inferSelect;
 export type InsertAnalyticsStats = z.infer<typeof insertAnalyticsStatsSchema>;
 export type Payment = typeof payments.$inferSelect;
