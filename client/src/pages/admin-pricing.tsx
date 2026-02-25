@@ -18,7 +18,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Pencil, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, Plus, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 
@@ -41,6 +41,7 @@ export default function AdminPricingPage() {
   const [addModelId, setAddModelId] = useState("");
   const [addInput, setAddInput] = useState("");
   const [addOutput, setAddOutput] = useState("");
+  const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = useQuery<{ pricing: PricingRow[] }>({
     queryKey: ["/api/admin/pricing"],
@@ -171,7 +172,18 @@ export default function AdminPricingPage() {
                 </Button>
               </div>
             ) : (
-              <Table>
+              <>
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="search"
+                    placeholder="Search by provider or model ID…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-foreground">Provider</TableHead>
@@ -183,7 +195,25 @@ export default function AdminPricingPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.pricing.map((row) => (
+                  {(() => {
+                    const filtered = data.pricing.filter((row) => {
+                      const q = search.trim().toLowerCase();
+                      if (!q) return true;
+                      return (
+                        row.provider.toLowerCase().includes(q) ||
+                        row.modelId.toLowerCase().includes(q)
+                      );
+                    });
+                    if (filtered.length === 0) {
+                      return (
+                        <TableRow key="no-results">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                            No models match &quot;{search.trim()}&quot;. Try a different search.
+                          </TableCell>
+                        </TableRow>
+                      );
+                    }
+                    return filtered.map((row) => (
                     <TableRow key={row.id}>
                       <TableCell className="font-medium">{row.provider}</TableCell>
                       <TableCell className="font-mono text-sm">{row.modelId}</TableCell>
@@ -202,9 +232,11 @@ export default function AdminPricingPage() {
                         )}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ));
+                  })()}
                 </TableBody>
               </Table>
+              </>
             )}
           </CardContent>
         </Card>
