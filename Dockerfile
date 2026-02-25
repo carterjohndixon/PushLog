@@ -27,6 +27,8 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/target/release/incident-engine /app/bin/incident-engine
+COPY --from=build /app/drizzle.config.ts ./
+COPY --from=build /app/shared ./shared
 
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
