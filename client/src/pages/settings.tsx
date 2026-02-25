@@ -103,12 +103,8 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: (_, checked) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: checked ? "Developer mode enabled" : "Developer mode disabled",
-        description: checked ? "Incident test features are now visible below." : "Test features are now hidden.",
-      });
     },
     onError: (error: Error) => {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
@@ -129,12 +125,8 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: (_, checked) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: checked ? "Incident emails enabled" : "Incident emails disabled",
-        description: checked ? "You'll receive emails when incidents occur." : "Incident emails are now off.",
-      });
     },
     onError: (error: Error) => {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });
@@ -155,12 +147,8 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: (_, checked) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: checked ? "You'll receive incident notifications" : "Incident notifications off",
-        description: checked ? "You're in the incident pool (with repos). You'll get in-app and, if enabled below, email." : "You won't receive any incident or crash notifications.",
-      });
     },
     onError: (error: Error) => {
       toast({ title: "Update failed", description: error.message, variant: "destructive" });

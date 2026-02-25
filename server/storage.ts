@@ -480,7 +480,15 @@ export class MemStorage implements IStorage {
       openrouterGenerationId: aiUsage.openrouterGenerationId ?? null,
       tokensPrompt: aiUsage.tokensPrompt ?? null,
       tokensCompletion: aiUsage.tokensCompletion ?? null,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      provider: aiUsage.provider ?? "openrouter",
+      modelId: aiUsage.modelId ?? "",
+      totalTokens: aiUsage.totalTokens ?? 0,
+      estimatedCostUsd: aiUsage.estimatedCostUsd ?? null,
+      pricingId: aiUsage.pricingId ?? null,
+      pricingInputUsdPer1M: aiUsage.pricingInputUsdPer1M ?? null,
+      pricingOutputUsdPer1M: aiUsage.pricingOutputUsdPer1M ?? null,
+      costStatus: aiUsage.costStatus ?? "ok",
     };
     this.aiUsage.set(id, newAiUsage);
     return newAiUsage;
