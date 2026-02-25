@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,20 @@ import { useNotifications } from "@/hooks/use-notifications";
 export function NotificationDetailsModal() {
   const { notifications, readNotification, removeNotification } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handle = (e: CustomEvent<{ id?: string | number; notification?: any }>) => {
       const { id: targetId, notification: directNotif } = e.detail ?? {};
       const notif = directNotif ?? (targetId != null ? notifications.find((n: any) => String(n.id) === String(targetId)) : null);
       if (notif) {
+        if (closeTimeoutRef.current) {
+          clearTimeout(closeTimeoutRef.current);
+          closeTimeoutRef.current = null;
+        }
         setSelectedNotification(notif);
+        setDialogOpen(true);
         readNotification(notif.id);
       }
     };
@@ -24,14 +31,24 @@ export function NotificationDetailsModal() {
     return () => window.removeEventListener("show-notification-modal", handle as EventListener);
   }, [notifications, readNotification]);
 
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      setDialogOpen(false);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = setTimeout(() => setSelectedNotification(null), 250);
+    }
+  };
+
+  useEffect(() => () => { if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current); }, []);
+
   return (
     <>
-    <Dialog open={!!selectedNotification} onOpenChange={(open) => !open && setSelectedNotification(null)}>
+    <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <ErrorBoundary fallback={
           <div className="py-4 text-center text-muted-foreground text-sm">
             <p>Couldn’t load notification details.</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={() => setSelectedNotification(null)}>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => { setDialogOpen(false); setSelectedNotification(null); }}>
               Close
             </Button>
           </div>
@@ -559,7 +576,7 @@ export function NotificationDetailsModal() {
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   variant="outline"
-                  onClick={() => setSelectedNotification(null)}
+                  onClick={() => handleOpenChange(false)}
                 >
                   Close
                 </Button>
@@ -568,7 +585,10 @@ export function NotificationDetailsModal() {
                     variant="destructive"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+                      closeTimeoutRef.current = null;
                       removeNotification(selectedNotification.id);
+                      setDialogOpen(false);
                       setSelectedNotification(null);
                     }}
                   >
