@@ -168,13 +168,27 @@ export default function Settings() {
       if (!response.ok) throw new Error(data.error || "Failed to disconnect");
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, workspaceId: string) => {
       setSlackDisconnectWorkspace(null);
+      queryClient.setQueryData(
+        ["/api/repositories-and-integrations"],
+        (prev: { repositories?: unknown[]; integrations?: { id: string; slackWorkspaceId?: string | null; [key: string]: unknown }[] } | undefined) => {
+          if (!prev?.integrations) return prev;
+          return {
+            ...prev,
+            integrations: prev.integrations.map((i) =>
+              i.slackWorkspaceId === workspaceId
+                ? { ...i, isActive: false, slackWorkspaceId: null, slackChannelId: "", status: "paused" as const }
+                : i
+            ),
+          };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
       queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      toast({ title: "Slack workspace disconnected", description: "Integrations using that workspace have been deactivated. You can reconnect from the Dashboard." });
+      toast({ title: "Slack workspace disconnected", description: "Integrations using that workspace have been paused. You can reconnect from the Dashboard." });
     },
     onError: (error: Error) => {
       toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });
