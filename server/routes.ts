@@ -613,7 +613,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (targetUsers.size === 0) return;
 
-    const message = `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
+    const topSymptom = (summary as any).top_symptoms?.[0];
+    const actualErrorMessage = topSymptom?.message != null ? String(topSymptom.message).trim() : undefined;
+    const actualExceptionType = topSymptom?.exception_type != null ? String(topSymptom.exception_type).trim() : undefined;
+    const message =
+      actualErrorMessage != null && actualErrorMessage.length > 0
+        ? (actualExceptionType ? `${actualExceptionType}: ${actualErrorMessage}` : actualErrorMessage)
+        : `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
     const rawStacktraceForMeta = (summary as any).stacktrace ?? [];
     const appStacktraceForMeta = rawStacktraceForMeta.filter(
       (f: any) => f?.file && !String(f.file).includes("node_modules")
@@ -706,6 +712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               stacktrace: resolvedStacktrace,
               sourceUrl: summary.links?.source_url,
               createdAt: summary.last_seen || summary.start_time,
+              errorMessage: actualErrorMessage ?? undefined,
+              exceptionType: actualExceptionType ?? undefined,
             });
           }
         } catch (err) {

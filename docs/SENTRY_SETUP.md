@@ -90,6 +90,12 @@ DISABLE_DEPLOY_INCIDENTS=true
 
 This stops push events from being sent to the incident engine. You'll still get Sentry error alerts (spike, regression, new issue).
 
+## PushLog crash notifications (like “PushLog is down”)
+
+When PushLog itself hits an **uncaught exception** or **unhandled promise rejection**, it emails **all PushLog users** who have incident email enabled (the address they signed up with). Respects each user’s **Email incident alerts** setting in Settings — if they’ve turned it off, they don’t get crash emails.
+
+The same incident email template is used as for Sentry/incident-engine alerts, including the **Error message** section. No env var is required.
+
 ## Deploy Correlation (Optional)
 
 To correlate errors with recent deploys, include a **change window** when sending events. PushLog’s GitHub integrations do this automatically for push events. For Sentry-only setups, you’d need to:

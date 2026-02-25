@@ -12,6 +12,10 @@ export interface IncidentAlertMetadata {
   stacktrace?: Array<{ file: string; function?: string; line?: number }>;
   sourceUrl?: string;
   createdAt?: string;
+  /** Actual error message that triggered the incident (from Sentry/engine). */
+  errorMessage?: string;
+  /** Exception type (e.g. TypeError, Error). */
+  exceptionType?: string;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -55,6 +59,9 @@ export function getIncidentAlertEmailTemplate(
     : "just now";
   const hasLocation = metadata?.route || metadata?.stackFrame || metadata?.requestUrl;
   const hasStacktrace = metadata?.stacktrace && metadata.stacktrace.length > 0;
+  const hasErrorMessage = metadata?.errorMessage != null && String(metadata.errorMessage).trim().length > 0;
+  const errorMessageEscaped = hasErrorMessage ? escapeHtml(String(metadata!.errorMessage!).trim()).replace(/\n/g, "<br>") : "";
+  const exceptionType = metadata?.exceptionType != null ? escapeHtml(String(metadata.exceptionType)) : "";
 
   const stackTraceHtml = hasStacktrace
     ? metadata!
@@ -116,6 +123,14 @@ export function getIncidentAlertEmailTemplate(
           </tr>
         </table>
         <p style="margin: 0 0 16px; font-size: 13px; color: #9ca3a8;">${escapedMessage}</p>
+
+        ${hasErrorMessage ? `
+        <!-- ERROR MESSAGE (actual error that triggered the incident) -->
+        <div style="margin-bottom: 16px;">
+          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
+          <div style="padding: 12px; background: #2d1f1f; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; color: #f0a0a0; line-height: 1.6; border: 1px solid #4a3535;">${exceptionType ? `<span style="color: #e8a74c;">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
+        </div>
+        ` : ""}
 
         ${hasLocation ? `
         <!-- LOCATION -->

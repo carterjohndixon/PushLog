@@ -14,6 +14,8 @@ import * as Sentry from "@sentry/node";
 import { registerRoutes, slackCommandsHandler, githubWebhookHandler, sentryWebhookHandler } from "./routes";
 import { verifyWebhookSignature } from "./github";
 import { ensureIncidentEngineStarted, stopIncidentEngine } from "./incidentEngine";
+import { sendIncidentAlertEmail } from "./email";
+import { databaseStorage } from "./database";
 import pkg from 'pg';
 import path from 'path';
 import crypto from 'crypto';
@@ -479,6 +481,47 @@ app.use((req, res, next) => {
     console.log(`serving on port ${port}`);
     // Start incident engine early so it can keep warm state.
     ensureIncidentEngineStarted();
+  });
+
+  // When PushLog itself crashes (uncaughtException/unhandledRejection), send incident emails
+  // to all PushLog users who have incident email enabled (the email they signed up with).
+  async function sendCrashEmailsToUsers(title: string, message: string, errName: string, severity: "critical" | "error") {
+    try {
+      const userIds = await databaseStorage.getAllUserIds();
+      for (const userId of userIds) {
+        const user = await databaseStorage.getUserById(userId);
+        if (!user?.email || (user as any).incidentEmailEnabled === false) continue;
+        sendIncidentAlertEmail(user.email, title, message, {
+          service: "pushlog",
+          environment: process.env.APP_ENV || process.env.NODE_ENV || "production",
+          severity,
+          errorMessage: message,
+          exceptionType: errName,
+          createdAt: new Date().toISOString(),
+        }).catch((e) => console.error("[incident] Failed to send crash email:", e));
+      }
+    } catch (e) {
+      console.error("[incident] Failed to fetch users for crash email:", e);
+    }
+  }
+
+  process.on("uncaughtException", (err: Error) => {
+    if (sentryDsn) Sentry.captureException(err);
+    const title = "PushLog critical error (uncaughtException)";
+    const message = err?.message || String(err);
+    const errName = err?.name || "Error";
+    sendCrashEmailsToUsers(title, message, errName, "critical").finally(() => {
+      setTimeout(() => process.exit(1), 4000);
+    });
+  });
+
+  process.on("unhandledRejection", (reason: unknown) => {
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    if (sentryDsn) Sentry.captureException(err);
+    const title = "PushLog unhandled rejection";
+    const message = err?.message || String(reason);
+    const errName = err?.name || "Error";
+    void sendCrashEmailsToUsers(title, message, errName, "error");
   });
 
   process.on("SIGTERM", () => {
