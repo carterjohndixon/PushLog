@@ -646,7 +646,7 @@ export default function Dashboard() {
     if (newStatus && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
       toast({
         title: "Cannot unpause",
-        description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+        description: "Open Integration Settings (⋮) and select a workspace and channel to re-link this integration, then Save. Or create a new integration.",
         variant: "destructive",
       });
       return;

@@ -35,6 +35,12 @@ interface SlackChannel {
   is_private: boolean;
 }
 
+interface SlackWorkspace {
+  id: string;
+  teamId: string;
+  teamName: string;
+}
+
 interface IntegrationSettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -56,21 +62,34 @@ export function IntegrationSettingsModal({
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
   const [maxTokensInput, setMaxTokensInput] = useState(integration?.maxTokens?.toString() || '350');
   const [selectedSlackChannelId, setSelectedSlackChannelId] = useState(integration?.slackChannelId ?? '');
+  const [relinkWorkspaceId, setRelinkWorkspaceId] = useState<string>("");
+  const [relinkChannelId, setRelinkChannelId] = useState<string>("");
   const lastOpenRouterModelRef = useRef<string | null>(null);
   const { toast } = useToast();
 
-  const { data: slackChannels = [], isLoading: slackChannelsLoading } = useQuery<SlackChannel[]>({
-    queryKey: ["/api/slack/workspaces", integration?.slackWorkspaceId, "channels"],
+  const { data: slackWorkspaces = [] } = useQuery<SlackWorkspace[]>({
+    queryKey: ["/api/slack/workspaces"],
     queryFn: async () => {
-      if (!integration?.slackWorkspaceId) return [];
-      const res = await fetch(`/api/slack/workspaces/${integration.slackWorkspaceId}/channels`, {
+      const res = await fetch("/api/slack/workspaces", { credentials: "include", headers: { Accept: "application/json" } });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: open,
+  });
+
+  const workspaceIdForChannels = integration?.slackWorkspaceId || relinkWorkspaceId || null;
+  const { data: slackChannels = [], isLoading: slackChannelsLoading } = useQuery<SlackChannel[]>({
+    queryKey: ["/api/slack/workspaces", workspaceIdForChannels, "channels"],
+    queryFn: async () => {
+      if (!workspaceIdForChannels) return [];
+      const res = await fetch(`/api/slack/workspaces/${workspaceIdForChannels}/channels`, {
         credentials: "include",
         headers: { Accept: "application/json" },
       });
       if (!res.ok) throw new Error("Failed to fetch channels");
       return res.json();
     },
-    enabled: open && !!integration?.slackWorkspaceId,
+    enabled: open && !!workspaceIdForChannels,
   });
 
   const testSlackMutation = useMutation({
@@ -130,10 +149,14 @@ export function IntegrationSettingsModal({
   const handleSave = () => {
     if (!integration) return;
 
-    if (isActive && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
+    const canRelink = !integration.slackWorkspaceId && relinkWorkspaceId && relinkChannelId;
+    const hasSlack = integration.slackWorkspaceId && integration.slackChannelId;
+    if (isActive && !hasSlack && !canRelink) {
       toast({
         title: "Cannot unpause",
-        description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+        description: slackWorkspaces.length > 0
+          ? "Select a workspace and channel below to re-link this integration, then click Save. You can then unpause."
+          : "You must connect a Slack workspace in Settings (or create a new integration) to unpause.",
         variant: "destructive",
       });
       return;
@@ -152,6 +175,12 @@ export function IntegrationSettingsModal({
     if (integration.slackWorkspaceId && selectedSlackChannelId && selectedSlackChannelId !== (integration.slackChannelId ?? '')) {
       const channelName = slackChannels.find((c) => c.id === selectedSlackChannelId)?.name ?? integration.slackChannelName ?? selectedSlackChannelId;
       updates.slackChannelId = selectedSlackChannelId;
+      updates.slackChannelName = channelName;
+    }
+    if (canRelink) {
+      const channelName = slackChannels.find((c) => c.id === relinkChannelId)?.name ?? "";
+      updates.slackWorkspaceId = relinkWorkspaceId;
+      updates.slackChannelId = relinkChannelId;
       updates.slackChannelName = channelName;
     }
 
@@ -183,6 +212,8 @@ export function IntegrationSettingsModal({
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
       setSelectedSlackChannelId(integration.slackChannelId ?? '');
+      setRelinkWorkspaceId("");
+      setRelinkChannelId("");
     }
   }
 
@@ -195,7 +226,8 @@ export function IntegrationSettingsModal({
     useOpenRouter !== baseUseOpenRouter ||
     aiModel !== baseAiModel ||
     maxTokens !== (integration.maxTokens ?? 350) ||
-    (!!integration.slackWorkspaceId && selectedSlackChannelId !== (integration.slackChannelId ?? ''))
+    (!!integration.slackWorkspaceId && selectedSlackChannelId !== (integration.slackChannelId ?? '')) ||
+    (!integration.slackWorkspaceId && !!(relinkWorkspaceId && relinkChannelId))
   );
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -208,6 +240,8 @@ export function IntegrationSettingsModal({
       setMaxTokens(integration.maxTokens || 350);
       setMaxTokensInput(integration.maxTokens?.toString() || '350');
       setSelectedSlackChannelId(integration.slackChannelId ?? '');
+      setRelinkWorkspaceId("");
+      setRelinkChannelId("");
     }
     onOpenChange(newOpen);
   };
@@ -267,14 +301,42 @@ export function IntegrationSettingsModal({
                         })()}
                       </SelectContent>
                     </Select>
+                  ) : slackWorkspaces.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">This integration was disconnected. Select a workspace and channel to re-link it.</p>
+                      <Select value={relinkWorkspaceId || undefined} onValueChange={(v) => { setRelinkWorkspaceId(v || ""); setRelinkChannelId(""); }}>
+                        <SelectTrigger className="bg-background text-foreground border-border w-full">
+                          <SelectValue placeholder="Select workspace" />
+                        </SelectTrigger>
+                        <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                          {slackWorkspaces.map((ws) => (
+                            <SelectItem key={ws.id} value={ws.id}>{ws.teamName}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={relinkChannelId || undefined}
+                        onValueChange={(v) => setRelinkChannelId(v || '')}
+                        disabled={!relinkWorkspaceId || slackChannelsLoading}
+                      >
+                        <SelectTrigger className="bg-background text-foreground border-border w-full">
+                          <SelectValue placeholder={relinkWorkspaceId && slackChannelsLoading ? "Loading channels…" : "Select channel"} />
+                        </SelectTrigger>
+                        <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                          {slackChannels.map((ch) => (
+                            <SelectItem key={ch.id} value={ch.id} className="capitalize">#{ch.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   ) : (
                     <p className="font-medium text-foreground">#{integration.slackChannelName || "—"}</p>
                   )}
                   {integration.slackWorkspaceId && (
                     <p className="text-xs text-muted-foreground">Change which channel receives notifications.</p>
                   )}
-                  {!integration.slackWorkspaceId && integration.slackChannelName && (
-                    <p className="text-xs text-amber-600 dark:text-amber-400">Reconnect your Slack workspace in Settings to change the channel.</p>
+                  {!integration.slackWorkspaceId && slackWorkspaces.length === 0 && integration.slackChannelName && (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">Connect a Slack workspace in Settings to re-link this integration.</p>
                   )}
                 </div>
               </div>
@@ -293,9 +355,12 @@ export function IntegrationSettingsModal({
                 checked={isActive}
                 onCheckedChange={(checked) => {
                   if (checked && integration && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
+                    const hasRelink = slackWorkspaces.length > 0;
                     toast({
                       title: "Cannot unpause",
-                      description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+                      description: hasRelink
+                        ? "Select a workspace and channel above to re-link this integration, then click Save. You can then unpause."
+                        : "Connect a Slack workspace in Settings (or create a new integration) to unpause.",
                       variant: "destructive",
                     });
                     return;
