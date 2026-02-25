@@ -4948,6 +4948,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     throw new Error(`[PushLog test] Real uncaught error from server/routes.ts — Sentry captures this (${Date.now()})`);
   });
 
+  // Test route: trigger process-level crash handlers to test crash emails (unhandledRejection or uncaughtException).
+  // Requires ENABLE_TEST_ROUTES=true or NODE_ENV=development. ?type=rejection (default, app stays up) or ?type=exception (exits process).
+  app.get("/api/test/crash", authenticateToken, (req, res) => {
+    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
+    if (!allow) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const type = (req.query.type as string)?.toLowerCase() || "rejection";
+    if (type === "exception") {
+      res.status(200).json({
+        ok: true,
+        message: "Uncaught exception will fire in 2s — server will exit. Check your email, then restart the app.",
+      });
+      setTimeout(() => {
+        throw new Error("[PushLog test] Uncaught exception — testing crash email. You can restart the server now.");
+      }, 2000);
+      return;
+    }
+    // Default: unhandled rejection (app stays up)
+    res.status(200).json({
+      ok: true,
+      message: "Unhandled rejection triggered. Check your email (and server logs).",
+    });
+    setImmediate(() => {
+      Promise.reject(new Error("[PushLog test] Unhandled rejection — testing crash email."));
+    });
+  });
+
   // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
   // We capture then return 200 so the UI doesn't see a 500; Sentry still gets the event.
   app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
