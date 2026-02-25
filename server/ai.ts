@@ -648,8 +648,12 @@ Respond with only valid JSON:
       // User's OpenAI key — store estimated cost for display (they pay OpenAI directly)
       cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
     } else if (!useOpenRouter) {
-      // PushLog credits (default OpenAI client)
-      cost = calculateTokenCost(model, tokensUsed);
+      // PushLog credits (default OpenAI client) — use exact model id; fallback to estimate for unknown variants (e.g. gpt-5.2-pro-2025-12-11)
+      try {
+        cost = calculateTokenCost(model, tokensUsed);
+      } catch {
+        cost = estimateTokenCostForDisplay(actualModel, tokensUsed);
+      }
     } else if (useOpenRouter && options?.openRouterApiKey) {
       // OpenRouter didn't include cost in response; fetch by generation ID from header (gen-xxx) or fallback to completion.id
       const genId = openRouterGenerationId || (completion as { id?: string } | undefined)?.id;

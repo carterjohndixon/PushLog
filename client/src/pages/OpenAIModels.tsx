@@ -256,6 +256,7 @@ export function OpenAIModels({
   const [quickApplyModelId, setQuickApplyModelId] = useState<string>("");
   const [quickApplyModelOpen, setQuickApplyModelOpen] = useState(false);
   const [defaultModelOpen, setDefaultModelOpen] = useState(false);
+  const [browseModelsSearch, setBrowseModelsSearch] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -266,7 +267,7 @@ export function OpenAIModels({
       if (!res.ok) throw new Error("Failed to fetch OpenAI models");
       return res.json();
     },
-    enabled: userHasOpenAiKey,
+    enabled: true,
   });
   const openaiModels = openaiModelsData?.models ?? [];
 
@@ -827,12 +828,8 @@ export function OpenAIModels({
                             .filter((i) => i.aiModel && !i.aiModel.includes("/"))
                             .map((i) => (
                               <TableRow key={i.id} className="border-border">
-                                <TableCell className="font-medium text-foreground">
-                                  {i.repositoryName} → #{i.slackChannelName}
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">
-                                  {getAiModelDisplayName(i.aiModel!)}
-                                </TableCell>
+                                <TableCell className="font-medium text-foreground">{i.repositoryName} → #{i.slackChannelName}</TableCell>
+                                <TableCell className="text-muted-foreground">{getAiModelDisplayName(i.aiModel!)}</TableCell>
                               </TableRow>
                             ))}
                         </TableBody>
@@ -861,7 +858,6 @@ export function OpenAIModels({
                     <p className="text-xs text-muted-foreground mt-0.5">this month</p>
                   </div>
                 </div>
-
                 {openaiUsageData.costByModel && openaiUsageData.costByModel.length > 0 && openaiUsageData.totalCalls > 0 && (
                   <div className="flex flex-wrap gap-3 mb-6">
                     <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
@@ -870,47 +866,8 @@ export function OpenAIModels({
                         ${(openaiUsageData.totalCostCents / openaiUsageData.totalCalls / 10000).toFixed(4)}
                       </span>
                     </div>
-                    {(() => {
-                      const withCost = openaiUsageData.costByModel.filter((r) => r.totalCalls > 0);
-                      const cheapest =
-                        withCost.length > 0
-                          ? withCost.reduce((a, b) =>
-                              a.totalCostCents / a.totalCalls < b.totalCostCents / b.totalCalls ? a : b
-                            )
-                          : null;
-                      const priciest =
-                        withCost.length > 0
-                          ? withCost.reduce((a, b) =>
-                              a.totalCostCents / a.totalCalls > b.totalCostCents / b.totalCalls ? a : b
-                            )
-                          : null;
-                      return (
-                        <>
-                          {cheapest && (
-                            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
-                              <span className="text-muted-foreground">Cheapest:</span>
-                              <span className="font-medium text-foreground">{getAiModelDisplayName(cheapest.model)}</span>
-                              <span className="text-xs text-muted-foreground">
-                                ${(cheapest.totalCostCents / cheapest.totalCalls / 10000).toFixed(4)}/call
-                              </span>
-                            </div>
-                          )}
-                          {priciest && priciest.model !== cheapest?.model && (
-                            <div className="flex items-center gap-2 rounded-full border border-border bg-muted/30 px-3 py-1.5 text-sm">
-                              <span className="text-muted-foreground">Priciest:</span>
-                              <span className="font-medium text-foreground">{getAiModelDisplayName(priciest.model)}</span>
-                              <span className="text-xs text-muted-foreground">
-                                ${(priciest.totalCostCents / priciest.totalCalls / 10000).toFixed(4)}/call
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
                   </div>
                 )}
-
-                {dailyUsageData && dailyUsageData.some((d) => d.totalCost > 0) && (
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-foreground mb-3">Cost over time (last 30 days)</h4>
                     <ChartContainer config={{ count: { label: "Cost", color: "hsl(var(--log-green))" } }} className="h-[180px] w-full">
@@ -937,7 +894,6 @@ export function OpenAIModels({
                       </AreaChart>
                     </ChartContainer>
                   </div>
-                )}
 
                 {Array.isArray(openaiUsageData.calls) && openaiUsageData.calls.length > 0 ? (
                   <>
@@ -1304,15 +1260,16 @@ export function OpenAIModels({
         </DialogContent>
       </Dialog>
 
-      {userHasOpenAiKey && (
-        <Card className="card-lift mb-8 border-border shadow-forest">
+      <Card className="card-lift mb-8 border-border shadow-forest">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <Zap className="w-5 h-5 text-log-green" />
               Browse OpenAI models
             </CardTitle>
             <CardDescription>
-              Click a model for details and to set it as default.{" "}
+              {userHasOpenAiKey
+                ? "Click a model for details and to set it as default. "
+                : "Add your API key above to set a default or apply models to integrations. "}
               <a
                 href="https://openai.com/api/pricing/"
                 target="_blank"
@@ -1327,7 +1284,17 @@ export function OpenAIModels({
             {openaiModelsLoading ? (
               <Skeleton className="h-64 w-full" />
             ) : (
-              <div className="rounded-md border border-border overflow-hidden">
+              <>
+                <div className="mb-3 flex items-center gap-2">
+                  <Search className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <Input
+                    placeholder="Search models by name or id…"
+                    value={browseModelsSearch}
+                    onChange={(e) => setBrowseModelsSearch(e.target.value)}
+                    className="max-w-sm h-9 text-sm bg-background border-border text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+                <div className="rounded-md border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 border-border">
@@ -1351,7 +1318,24 @@ export function OpenAIModels({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {openaiModels.map((m) => {
+                    {(() => {
+                      const q = browseModelsSearch.trim().toLowerCase();
+                      const filtered = !q
+                        ? openaiModels
+                        : openaiModels.filter(
+                            (m) =>
+                              m.id.toLowerCase().includes(q) || getAiModelDisplayName(m.id).toLowerCase().includes(q)
+                          );
+                      return filtered.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                            {openaiModels.length === 0
+                              ? "No models available. Add your API key above."
+                              : "No models match your search."}
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        filtered.map((m) => {
                       const info = getInfo(m.id);
                       const effectivePricing = getEffectiveOpenAiPricing(m.id, info);
                       const hasPricing = !!effectivePricing;
@@ -1389,17 +1373,16 @@ export function OpenAIModels({
                           </TableCell>
                         </TableRow>
                       );
-                    })}
+                        })
+                      );
+                    })()}
                   </TableBody>
                 </Table>
-                {openaiModels.length === 0 && (
-                  <p className="text-sm text-muted-foreground p-6 text-center">No models available. Add your API key above.</p>
-                )}
               </div>
+              </>
             )}
           </CardContent>
         </Card>
-      )}
 
       <Dialog open={!!selectedOpenAiModel} onOpenChange={(open) => !open && setSelectedOpenAiModel(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
