@@ -488,9 +488,11 @@ app.use((req, res, next) => {
   async function sendCrashEmailsToUsers(title: string, message: string, errName: string, severity: "critical" | "error") {
     try {
       const userIds = await databaseStorage.getAllUserIds();
+      const toSend: string[] = [];
       for (const userId of userIds) {
         const user = await databaseStorage.getUserById(userId);
         if (!user?.email || (user as any).incidentEmailEnabled === false) continue;
+        toSend.push(user.email);
         sendIncidentAlertEmail(user.email, title, message, {
           service: "pushlog",
           environment: process.env.APP_ENV || process.env.NODE_ENV || "production",
@@ -500,6 +502,7 @@ app.use((req, res, next) => {
           createdAt: new Date().toISOString(),
         }).catch((e) => console.error("[incident] Failed to send crash email:", e));
       }
+      console.warn(`[incident] Crash email: ${userIds.length} users, ${toSend.length} with incident email enabled (title: ${title})`);
     } catch (e) {
       console.error("[incident] Failed to fetch users for crash email:", e);
     }
@@ -510,16 +513,9 @@ app.use((req, res, next) => {
     const title = "PushLog critical error (uncaughtException)";
     const message = err?.message || String(err);
     const errName = err?.name || "Error";
-    // When Sentry is configured, it will capture the error and (if alert rules fire) send a webhook
-    // to PushLog, so users get the "New issue" email from that flow. Skip the direct crash email
-    // here to avoid duplicate emails; if Sentry isn't set up, we still send.
-    if (!sentryDsn) {
-      sendCrashEmailsToUsers(title, message, errName, "critical").finally(() => {
-        setTimeout(() => process.exit(1), 4000);
-      });
-    } else {
-      setTimeout(() => process.exit(1), 2000);
-    }
+    sendCrashEmailsToUsers(title, message, errName, "critical").finally(() => {
+      setTimeout(() => process.exit(1), 4000);
+    });
   });
 
   process.on("unhandledRejection", (reason: unknown) => {
@@ -528,11 +524,7 @@ app.use((req, res, next) => {
     const title = "PushLog unhandled rejection";
     const message = err?.message || String(reason);
     const errName = err?.name || "Error";
-    // When Sentry is configured, it captures the rejection and may send a webhook → one email from
-    // the incident flow. Skip the direct crash email to avoid duplicate.
-    if (!sentryDsn) {
-      void sendCrashEmailsToUsers(title, message, errName, "error");
-    }
+    void sendCrashEmailsToUsers(title, message, errName, "error");
   });
 
   process.on("SIGTERM", () => {
