@@ -251,6 +251,8 @@ export function OpenAIModels({
     tokensCompletion?: number | null;
     cost?: number;
     costFormatted?: string | null;
+    estimatedCostUsd?: number | null;
+    costStatus?: string | null;
     createdAt?: string | null;
   } | null>(null);
   const [quickApplyModelId, setQuickApplyModelId] = useState<string>("");
@@ -383,7 +385,7 @@ export function OpenAIModels({
     },
   });
 
-  const handleViewCall = (call: { id?: string; model?: string; tokensUsed?: number; tokensPrompt?: number | null; tokensCompletion?: number | null; cost?: number; costFormatted?: string; createdAt?: string }) => {
+  const handleViewCall = (call: { id?: string; model?: string; tokensUsed?: number; tokensPrompt?: number | null; tokensCompletion?: number | null; cost?: number; costFormatted?: string; estimatedCostUsd?: number | null; costStatus?: string | null; createdAt?: string }) => {
     setViewingCall({
       id: String(call.id ?? ""),
       model: call.model,
@@ -392,6 +394,8 @@ export function OpenAIModels({
       tokensCompletion: call.tokensCompletion ?? null,
       cost: call.cost,
       costFormatted: call.costFormatted ?? null,
+      estimatedCostUsd: call.estimatedCostUsd ?? null,
+      costStatus: call.costStatus ?? null,
       createdAt: call.createdAt ?? null,
     });
   };
@@ -1015,13 +1019,29 @@ export function OpenAIModels({
                                           {(c.tokensUsed ?? 0).toLocaleString()}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
-                                          {c.costFormatted != null && c.costFormatted !== ""
-                                            ? c.costFormatted
-                                            : typeof c.cost === "number"
-                                              ? c.cost === 0
-                                                ? "$0.00"
-                                                : `$${(c.cost / 10000).toFixed(4)}`
-                                              : "—"}
+                                          {(() => {
+                                            const costStatus = (c as { costStatus?: string }).costStatus;
+                                            const showTooltip = (costStatus === "missing_pricing" || costStatus === "no_usage") &&
+                                              (c.costFormatted == null || c.costFormatted === "" || (typeof c.cost === "number" && c.cost === 0));
+                                            const label = c.costFormatted != null && c.costFormatted !== ""
+                                              ? c.costFormatted
+                                              : typeof c.cost === "number"
+                                                ? c.cost === 0 ? "$0.00" : `$${(c.cost / 10000).toFixed(4)}`
+                                                : "—";
+                                            if (showTooltip) {
+                                              return (
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <span className="cursor-help border-b border-dotted border-muted-foreground">{label === "—" ? "—" : label}</span>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent side="top" className="max-w-xs">
+                                                    {costStatus === "missing_pricing" ? "Pricing not configured" : "Token usage not available"}
+                                                  </TooltipContent>
+                                                </Tooltip>
+                                              );
+                                            }
+                                            return label;
+                                          })()}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground text-sm">
                                           {c.createdAt ? formatLocalDateTime(c.createdAt) : "—"}
@@ -1193,14 +1213,32 @@ export function OpenAIModels({
           {viewingCall && (
             <div className="space-y-3 text-sm">
               <p>
-                <span className="font-medium text-foreground">Cost:</span>{" "}
+                <span className="font-medium text-foreground">Est. cost:</span>{" "}
                 {viewingCall.costFormatted != null && viewingCall.costFormatted !== ""
                   ? viewingCall.costFormatted
                   : typeof viewingCall.cost === "number"
                     ? viewingCall.cost === 0
-                      ? "$0.00"
+                      ? (viewingCall.costStatus === "missing_pricing" || viewingCall.costStatus === "no_usage" ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="cursor-help border-b border-dotted border-muted-foreground">—</span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              {viewingCall.costStatus === "missing_pricing" ? "Pricing not configured" : "Token usage not available"}
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : "$0.00")
                       : `$${(viewingCall.cost / 10000).toFixed(4)}`
-                    : "—"}
+                    : (viewingCall.costStatus === "missing_pricing" || viewingCall.costStatus === "no_usage" ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="cursor-help border-b border-dotted border-muted-foreground">—</span>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            {viewingCall.costStatus === "missing_pricing" ? "Pricing not configured" : "Token usage not available"}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : "—")}
               </p>
               <p>
                 <span className="font-medium text-foreground">Tokens (prompt):</span>{" "}

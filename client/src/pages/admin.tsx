@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp, ArrowUp, RotateCcw, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 type CommitInfo = {
   sha: string;
@@ -268,12 +269,15 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-forest-gradient">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center gap-4">
           <h1 className="text-3xl font-bold text-graphite">Staging Admin</h1>
-          <p className="text-steel-gray mt-2">
-            Review staged commits and approve production promotion.
-          </p>
+          <Link href="/admin/pricing">
+            <Button variant="outline" size="sm">Pricing</Button>
+          </Link>
         </div>
+        <p className="text-steel-gray mt-2 mb-6">
+          Review staged commits and approve production promotion.
+        </p>
 
         {isLoading ? (
           <Card>

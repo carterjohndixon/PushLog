@@ -1359,6 +1359,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: list AI model pricing (staging admin only)
+  app.get("/api/admin/pricing", authenticateToken, async (req: any, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
+    try {
+      const rows = await databaseStorage.listAiModelPricing();
+      res.status(200).json({
+        pricing: rows.map((r) => ({
+          id: r.id,
+          provider: r.provider,
+          modelId: r.modelId,
+          inputUsdPer1M: r.inputUsdPer1M != null ? String(r.inputUsdPer1M) : "0",
+          outputUsdPer1M: r.outputUsdPer1M != null ? String(r.outputUsdPer1M) : "0",
+          updatedAt: r.updatedAt != null ? (typeof r.updatedAt === "string" ? r.updatedAt : new Date(r.updatedAt).toISOString()) : null,
+        })),
+      });
+    } catch (err) {
+      console.error("Admin pricing list error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to load pricing" });
+    }
+  });
+
+  // Admin: create or update one AI model pricing row (staging admin only)
+  app.put("/api/admin/pricing", authenticateToken, async (req: any, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
+    try {
+      const body = req.body as { id?: string; provider?: string; modelId?: string; inputUsdPer1M?: number; outputUsdPer1M?: number };
+      const provider = typeof body.provider === "string" ? body.provider.trim() : "";
+      const modelId = typeof body.modelId === "string" ? body.modelId.trim() : "";
+      const inputUsdPer1M = typeof body.inputUsdPer1M === "number" ? body.inputUsdPer1M : Number(body.inputUsdPer1M);
+      const outputUsdPer1M = typeof body.outputUsdPer1M === "number" ? body.outputUsdPer1M : Number(body.outputUsdPer1M);
+      if (!provider || !modelId || Number.isNaN(inputUsdPer1M) || Number.isNaN(outputUsdPer1M)) {
+        return res.status(400).json({ error: "provider, modelId, inputUsdPer1M, outputUsdPer1M required" });
+      }
+      const row = await databaseStorage.upsertAiModelPricing(provider, modelId, inputUsdPer1M, outputUsdPer1M);
+      res.status(200).json({
+        id: row.id,
+        provider: row.provider,
+        modelId: row.modelId,
+        inputUsdPer1M: row.inputUsdPer1M != null ? String(row.inputUsdPer1M) : "0",
+        outputUsdPer1M: row.outputUsdPer1M != null ? String(row.outputUsdPer1M) : "0",
+        updatedAt: row.updatedAt != null ? (typeof row.updatedAt === "string" ? row.updatedAt : new Date(row.updatedAt).toISOString()) : null,
+      });
+    } catch (err) {
+      console.error("Admin pricing upsert error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to save pricing" });
+    }
+  });
+
   app.get("/health/detailed", async (req, res) => {
     try {
       // Check database connection
@@ -3997,6 +4049,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const openaiRows = usage.filter((u: any) => u.model && !String(u.model).includes("/"));
       const costFromRow = (u: any) => {
+        const estimatedUsd = u.estimatedCostUsd ?? (u as any).estimated_cost_usd;
+        if (estimatedUsd != null && Number(estimatedUsd) > 0) return Math.round(Number(estimatedUsd) * 10000);
         const v = u.cost ?? (u as any).cost;
         let c = typeof v === "number" ? v : (v != null ? Number(v) : 0);
         if (c === 0 && u.model && ((u.tokensPrompt ?? (u as any).tokens_prompt) != null || (u.tokensCompletion ?? (u as any).tokens_completion) != null)) {
@@ -4008,6 +4062,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
         return c;
+      };
+      const formatCost = (c: number, estimatedUsd: number | null) => {
+        if (estimatedUsd != null && Number(estimatedUsd) > 0) return `$${Number(estimatedUsd).toFixed(6)}`;
+        return c > 0 ? `$${(c / 10000).toFixed(4)}` : (c === 0 ? "$0.00" : null);
       };
       const createdAtFromRow = (u: any) => {
         const created = u.createdAt ?? (u as any).created_at;
@@ -4075,6 +4133,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastUsedByModel,
         calls: openaiRows.slice(0, 100).map((u: any) => {
           const c = costFromRow(u);
+          const estimatedUsd = u.estimatedCostUsd ?? (u as any).estimated_cost_usd;
+          const costStatus = u.costStatus ?? (u as any).cost_status ?? "ok";
           const at = createdAtFromRow(u);
           const createdAtStr = toIsoString(at) ?? (at != null ? (at instanceof Date ? at.toISOString() : String(at)) : null);
           return {
@@ -4084,7 +4144,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tokensPrompt: u.tokensPrompt ?? (u as any).tokens_prompt ?? null,
             tokensCompletion: u.tokensCompletion ?? (u as any).tokens_completion ?? null,
             cost: c,
-            costFormatted: c > 0 ? `$${(c / 10000).toFixed(4)}` : (c === 0 ? "$0.00" : null),
+            estimatedCostUsd: estimatedUsd != null ? Number(estimatedUsd) : null,
+            costStatus,
+            costFormatted: formatCost(c, estimatedUsd),
             createdAt: createdAtStr,
             generationId: u.openrouterGenerationId ?? (u as any).openrouter_generation_id ?? (u as any).openrouterGenerationId ?? null,
           };
@@ -4109,13 +4171,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!row) {
         return res.status(404).json({ error: "Usage not found" });
       }
-      let cost = typeof row.cost === "number" ? row.cost : Number(row.cost) || 0;
       const tokensPrompt = (row as any).tokensPrompt ?? (row as any).tokens_prompt ?? null;
       const tokensCompletion = (row as any).tokensCompletion ?? (row as any).tokens_completion ?? null;
-      if (cost === 0 && row.model && (tokensPrompt != null || tokensCompletion != null) && ((tokensPrompt ?? 0) > 0 || (tokensCompletion ?? 0) > 0)) {
+      const estimatedCostUsd = (row as any).estimatedCostUsd ?? (row as any).estimated_cost_usd;
+      const costStatus = (row as any).costStatus ?? (row as any).cost_status ?? "ok";
+      let cost = typeof row.cost === "number" ? row.cost : Number(row.cost) || 0;
+      if (estimatedCostUsd != null && Number(estimatedCostUsd) > 0) {
+        cost = Math.round(Number(estimatedCostUsd) * 10000);
+      } else if (cost === 0 && row.model && (tokensPrompt != null || tokensCompletion != null) && ((tokensPrompt ?? 0) > 0 || (tokensCompletion ?? 0) > 0)) {
         const computed = estimateTokenCostFromUsage(String(row.model), tokensPrompt ?? 0, tokensCompletion ?? 0);
         if (computed > 0) cost = computed;
       }
+      const costFormatted = estimatedCostUsd != null && Number(estimatedCostUsd) > 0
+        ? `$${Number(estimatedCostUsd).toFixed(6)}`
+        : cost > 0 ? `$${(cost / 10000).toFixed(4)}` : cost === 0 ? "$0.00" : null;
       const createdAt = row.createdAt ?? (row as any).created_at;
       res.status(200).json({
         id: row.id,
@@ -4124,7 +4193,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tokensPrompt,
         tokensCompletion,
         cost,
-        costFormatted: cost > 0 ? `$${(cost / 10000).toFixed(4)}` : cost === 0 ? "$0.00" : null,
+        estimatedCostUsd: estimatedCostUsd != null ? Number(estimatedCostUsd) : null,
+        costStatus,
+        costFormatted,
         createdAt: createdAt != null ? (typeof createdAt === "string" ? createdAt : new Date(createdAt).toISOString()) : null,
       });
     } catch (err) {

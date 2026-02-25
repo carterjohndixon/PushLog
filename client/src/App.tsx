@@ -57,6 +57,7 @@ const Terms = lazy(() => import("@/pages/terms"));
 const SubProcessors = lazy(() => import("@/pages/sub-processors"));
 const Settings = lazy(() => import("@/pages/settings"));
 const Admin = lazy(() => import("@/pages/admin"));
+const AdminPricing = lazy(() => import("@/pages/admin-pricing"));
 const Support = lazy(() => import("@/pages/support"));
 const GitHubCallback = lazy(() => import("@/pages/GitHubCallBack"));
 const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
@@ -86,7 +87,7 @@ function Router() {
   const [location] = useLocation();
   const host = typeof window !== "undefined" ? window.location.hostname : "";
   const isStagingHost = host === "staging.pushlog.ai" || host === "localhost" || host === "127.0.0.1";
-  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location) || (location === "/admin" && isStagingHost);
+  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location) || (location === "/admin" && isStagingHost) || (location === "/admin/pricing" && isStagingHost);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -162,6 +163,13 @@ function Router() {
         <Route path="/admin">
           <ProtectedRoute pageName="admin">
             <Admin />
+          </ProtectedRoute>
+        </Route>
+      )}
+      {isStagingHost && (
+        <Route path="/admin/pricing">
+          <ProtectedRoute pageName="admin">
+            <AdminPricing />
           </ProtectedRoute>
         </Route>
       )}

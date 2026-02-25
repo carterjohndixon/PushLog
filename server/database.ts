@@ -20,7 +20,7 @@ import {
   analyticsStats,
   userDailyStats,
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, max, gte, isNull, like, or } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, asc, max, gte, isNull, like, or } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -1068,7 +1068,7 @@ export class DatabaseStorage implements IStorage {
 
   /** List all active AI model pricing rows. */
   async listAiModelPricing(): Promise<AiModelPricing[]> {
-    return await db.select().from(aiModelPricing).where(eq(aiModelPricing.active, true)).orderBy(aiModelPricing.provider, aiModelPricing.modelId);
+    return await db.select().from(aiModelPricing).where(eq(aiModelPricing.active, true)).orderBy(asc(aiModelPricing.provider), asc(aiModelPricing.modelId));
   }
 
   /** Upsert pricing: update existing active row or insert. Sets updated_at. */
