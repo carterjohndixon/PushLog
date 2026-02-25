@@ -18,9 +18,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Link } from "wouter";
-import { ArrowLeft, Pencil, Loader2 } from "lucide-react";
+import { ArrowLeft, Pencil, Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type PricingRow = {
   id: string;
@@ -37,6 +44,11 @@ export default function AdminPricingPage() {
   const [editing, setEditing] = useState<PricingRow | null>(null);
   const [editInput, setEditInput] = useState("");
   const [editOutput, setEditOutput] = useState("");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addProvider, setAddProvider] = useState<"openai" | "openrouter">("openai");
+  const [addModelId, setAddModelId] = useState("");
+  const [addInput, setAddInput] = useState("");
+  const [addOutput, setAddOutput] = useState("");
 
   const { data, isLoading, error } = useQuery<{ pricing: PricingRow[] }>({
     queryKey: ["/api/admin/pricing"],
@@ -51,12 +63,13 @@ export default function AdminPricingPage() {
   });
 
   const upsertMutation = useMutation({
-    mutationFn: async (payload: { provider: string; modelId: string; inputUsdPer1M: number; outputUsdPer1M: number }) => {
+    mutationFn: async (payload: { provider: string; modelId: string; inputUsdPer1M: number; outputUsdPer1M: number; _isNew?: boolean }) => {
+      const { _isNew, ...body } = payload;
       const res = await fetch("/api/admin/pricing", {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -64,10 +77,14 @@ export default function AdminPricingPage() {
       }
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing"] });
       setEditing(null);
-      toast({ title: "Saved", description: "Pricing updated." });
+      setAddOpen(false);
+      setAddModelId("");
+      setAddInput("");
+      setAddOutput("");
+      toast({ title: "Saved", description: variables?._isNew ? "Pricing added." : "Pricing updated." });
     },
     onError: (e: Error) => {
       toast({ title: "Save failed", description: e.message, variant: "destructive" });
@@ -96,6 +113,27 @@ export default function AdminPricingPage() {
     });
   };
 
+  const handleAdd = () => {
+    const modelId = addModelId.trim();
+    const input = Number(addInput);
+    const output = Number(addOutput);
+    if (!modelId) {
+      toast({ title: "Model ID required", variant: "destructive" });
+      return;
+    }
+    if (Number.isNaN(input) || Number.isNaN(output)) {
+      toast({ title: "Enter valid input/output USD per 1M", variant: "destructive" });
+      return;
+    }
+    upsertMutation.mutate({
+      provider: addProvider,
+      modelId,
+      inputUsdPer1M: input,
+      outputUsdPer1M: output,
+      _isNew: true,
+    });
+  };
+
   return (
     <div className="min-h-screen bg-forest-gradient">
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -108,11 +146,17 @@ export default function AdminPricingPage() {
           </Link>
         </div>
         <Card>
-          <CardHeader>
-            <CardTitle>AI Model Pricing</CardTitle>
-            <CardDescription>
-              Per-1M-token rates (USD) used to compute cost for each generation. Edits apply to new generations; existing rows keep their snapshot.
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4">
+            <div>
+              <CardTitle>AI Model Pricing</CardTitle>
+              <CardDescription>
+                Per-1M-token rates (USD) used to compute cost for each generation. Add or edit rows; new generations use the current rates.
+              </CardDescription>
+            </div>
+            <Button onClick={() => setAddOpen(true)} className="gap-2 shrink-0">
+              <Plus className="h-4 w-4" />
+              Add pricing
+            </Button>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -125,9 +169,15 @@ export default function AdminPricingPage() {
                 {error instanceof Error ? error.message : "Failed to load pricing"}
               </p>
             ) : !data?.pricing?.length ? (
-              <p className="text-sm text-muted-foreground">
-                No pricing rows yet. Add entries via SQL (e.g. <code className="bg-muted px-1 rounded">INSERT INTO ai_model_pricing ...</code>) or implement an add-row flow here.
-              </p>
+              <div className="flex flex-col items-center gap-4 py-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No pricing rows yet. Add your first model to get started.
+                </p>
+                <Button onClick={() => setAddOpen(true)} variant="outline" className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  Add pricing
+                </Button>
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -206,6 +256,77 @@ export default function AdminPricingPage() {
                 </>
               ) : (
                 "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={(open) => !open && setAddOpen(false)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add pricing</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Provider</label>
+              <Select value={addProvider} onValueChange={(v) => setAddProvider(v as "openai" | "openrouter")}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai">OpenAI</SelectItem>
+                  <SelectItem value="openrouter">OpenRouter</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1">Model ID</label>
+              <Input
+                placeholder="e.g. gpt-5.2, gpt-4o, anthropic/claude-3.5-sonnet"
+                value={addModelId}
+                onChange={(e) => setAddModelId(e.target.value)}
+                className="font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Use the exact API model id; prefix match is used for variants (e.g. gpt-5.3-codex matches gpt-5.3).
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Input USD per 1M tokens</label>
+                <Input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="2.5"
+                  value={addInput}
+                  onChange={(e) => setAddInput(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1">Output USD per 1M tokens</label>
+                <Input
+                  type="number"
+                  step="any"
+                  min="0"
+                  placeholder="10"
+                  value={addOutput}
+                  onChange={(e) => setAddOutput(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdd} disabled={upsertMutation.isPending}>
+              {upsertMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Adding…
+                </>
+              ) : (
+                "Add"
               )}
             </Button>
           </DialogFooter>
