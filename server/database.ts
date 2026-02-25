@@ -579,11 +579,35 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getSlackWorkspacesByUserId(userId: string): Promise<SlackWorkspace[]> {
-    const results = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.userId, userId), isNull(slackWorkspaces.disconnectedAt)));
-    return results.map((ws: any) => ({
-      ...ws,
-      accessToken: decrypt(ws.accessToken)
-    }));
+    try {
+      const results = await db.select().from(slackWorkspaces).where(and(eq(slackWorkspaces.userId, userId), isNull(slackWorkspaces.disconnectedAt)));
+      return results.map((ws: any) => ({
+        ...ws,
+        accessToken: decrypt(ws.accessToken)
+      }));
+    } catch (e: any) {
+      // Column disconnected_at may not exist yet if migration not run (e.g. staging)
+      const missingColumn = e?.code === "42703" || e?.message?.includes("disconnected_at");
+      if (missingColumn) {
+        const results = await db
+          .select({
+            id: slackWorkspaces.id,
+            userId: slackWorkspaces.userId,
+            teamId: slackWorkspaces.teamId,
+            teamName: slackWorkspaces.teamName,
+            accessToken: slackWorkspaces.accessToken,
+            createdAt: slackWorkspaces.createdAt,
+          })
+          .from(slackWorkspaces)
+          .where(eq(slackWorkspaces.userId, userId));
+        return results.map((ws: any) => ({
+          ...ws,
+          disconnectedAt: null,
+          accessToken: decrypt(ws.accessToken)
+        }));
+      }
+      throw e;
+    }
   }
 
   async getSlackWorkspaceByTeamId(teamId: string): Promise<SlackWorkspace | undefined> {
