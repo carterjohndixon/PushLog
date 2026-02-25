@@ -96,14 +96,16 @@ export interface NormalizedOpenAIResult {
 }
 
 /**
- * Call OpenAI with Responses API first; fall back to chat.completions on 400/404 or "not supported".
- * Works for any model ID (chat, codex, gpt-5.x). Single normalized shape for the rest of the app.
+ * Call OpenAI: Responses API first (with optional temperature retry), then chat.completions, then v1/completions.
+ * Handles gpt-5.2-pro and other models that don't support temperature or are completions-only.
  */
 async function callOpenAI(
   client: OpenAI,
   params: { model: string; instructions: string; input: string; max_output_tokens: number; temperature: number }
 ): Promise<NormalizedOpenAIResult> {
   const { model, instructions, input, max_output_tokens, temperature } = params;
+
+  // 1) Try Responses API with temperature
   try {
     const resp = await client.responses.create({
       model,
@@ -130,43 +132,106 @@ async function callOpenAI(
   } catch (err: any) {
     const status = err?.status ?? err?.code;
     const message = String(err?.message ?? err ?? '');
+
+    // 2) If 400 and temperature not supported, retry Responses API without temperature
+    if (status === 400 && /temperature/i.test(message)) {
+      try {
+        const resp = await client.responses.create({
+          model,
+          instructions: instructions || null,
+          input,
+          max_output_tokens,
+        });
+        const text = resp.output_text ?? '';
+        const u = resp.usage;
+        return {
+          text,
+          model: resp.model ?? model,
+          usage: u
+            ? {
+                input_tokens: u.input_tokens,
+                output_tokens: u.output_tokens,
+                total_tokens: u.total_tokens,
+                prompt_tokens: u.input_tokens,
+                completion_tokens: u.output_tokens,
+              }
+            : undefined,
+        };
+      } catch (_e2) {
+        /* fall through to chat/completions */
+      }
+    }
+
     const isNotSupported =
       status === 400 ||
       status === 404 ||
       /not supported|completions endpoint|v1\/completions/i.test(message);
     if (!isNotSupported) throw err;
     console.warn(`📊 OpenAI Responses API failed for ${model} (${status}), falling back to chat.completions:`, message.slice(0, 120));
-    const chat = await client.chat.completions.create({
-      model,
-      messages: [
-        { role: 'system', content: instructions },
-        { role: 'user', content: input },
-      ],
-      max_completion_tokens: max_output_tokens,
-      temperature,
-    });
-    const msg = chat.choices[0]?.message;
-    let text = '';
-    if (typeof msg?.content === 'string') text = msg.content;
-    else if (Array.isArray(msg?.content))
-      text = (msg.content as { type?: string; text?: string }[])
-        .filter((p) => p?.type === 'text' && typeof p.text === 'string')
-        .map((p) => p.text)
-        .join('');
-    const u = chat.usage;
-    return {
-      text,
-      model: chat.model ?? model,
-      usage: u
-        ? {
-            input_tokens: u.prompt_tokens,
-            output_tokens: u.completion_tokens,
-            total_tokens: u.total_tokens,
-            prompt_tokens: u.prompt_tokens,
-            completion_tokens: u.completion_tokens,
-          }
-        : undefined,
-    };
+
+    // 3) Try chat.completions
+    try {
+      const chat = await client.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: instructions },
+          { role: 'user', content: input },
+        ],
+        max_completion_tokens: max_output_tokens,
+        temperature,
+      });
+      const msg = chat.choices[0]?.message;
+      let text = '';
+      if (typeof msg?.content === 'string') text = msg.content;
+      else if (Array.isArray(msg?.content))
+        text = (msg.content as { type?: string; text?: string }[])
+          .filter((p) => p?.type === 'text' && typeof p.text === 'string')
+          .map((p) => p.text)
+          .join('');
+      const u = chat.usage;
+      return {
+        text,
+        model: chat.model ?? model,
+        usage: u
+          ? {
+              input_tokens: u.prompt_tokens,
+              output_tokens: u.completion_tokens,
+              total_tokens: u.total_tokens,
+              prompt_tokens: u.prompt_tokens,
+              completion_tokens: u.completion_tokens,
+            }
+          : undefined,
+      };
+    } catch (chatErr: any) {
+      const chatMsg = String(chatErr?.message ?? '');
+      const isCompletionsOnly = /not a chat model|v1\/completions/i.test(chatMsg);
+      if (isCompletionsOnly) {
+        console.warn(`📊 Chat completions not supported for ${model}, using v1/completions:`, chatMsg.slice(0, 100));
+        const prompt = [instructions, input].filter(Boolean).join('\n\n');
+        const comp = await (client as any).completions.create({
+          model,
+          prompt,
+          max_tokens: max_output_tokens,
+        });
+        const choice = comp.choices?.[0];
+        const text = (typeof choice?.text === 'string' ? choice.text : '') || '';
+        const u = comp.usage;
+        return {
+          text,
+          model: comp.model ?? model,
+          usage: u
+            ? {
+                input_tokens: u.prompt_tokens,
+                output_tokens: u.completion_tokens,
+                total_tokens: u.total_tokens,
+                prompt_tokens: u.prompt_tokens,
+                completion_tokens: u.completion_tokens,
+              }
+            : undefined,
+        };
+      }
+      throw chatErr;
+    }
   }
 }
 
