@@ -40,3 +40,5 @@ testing now OPENAI CODEX 5.3 MODEL THROUGH OPENAI API (TESTING AGAIN)
 testing codex model AGAIN
 
 testing codex 5.2 on openai
+
+test test GPT 5.2
