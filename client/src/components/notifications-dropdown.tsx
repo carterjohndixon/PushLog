@@ -1,3 +1,6 @@
+"use client"
+
+import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,10 +18,11 @@ interface NotificationsDropdownProps {
 
 export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdownProps) {
   const { notifications, count, hasUnread, markAllAsRead, removeNotification, clearAllNotifications, refetchNotifications } = useNotifications();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   return (
     <>
-      <DropdownMenu onOpenChange={(open) => { if (open) refetchNotifications(); }}>
+      <DropdownMenu open={dropdownOpen} onOpenChange={(open) => { setDropdownOpen(open); if (open) refetchNotifications(); }}>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
@@ -83,6 +87,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 className="h-6 w-6 p-0 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
+                  setDropdownOpen(false);
                   window.dispatchEvent(new CustomEvent("show-notification-modal", { detail: { notification } }));
                 }}
                 title="View details"

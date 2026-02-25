@@ -773,10 +773,10 @@ export async function generateSlackMessage(pushData: PushEventData, summary: Cod
 
   return `*${pushData.repositoryName}* - ${pushData.branch} branch 
 
-${impactEmoji[impact]} *${summary.summary}*
+  ${impactEmoji[impact]} *${summary.summary}*
 
-${emoji} *${category.toUpperCase()}* | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
-${summary.details}
+  ${emoji} *${category.toUpperCase()}* | :bar_chart: +${pushData.additions} -${pushData.deletions} lines
+  ${summary.details}
 
-🔗 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
+  🔗 <https://github.com/${pushData.repositoryName}/commit/${pushData.commitSha}|View Commit>`;
 }
