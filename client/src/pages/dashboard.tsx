@@ -664,18 +664,23 @@ export default function Dashboard() {
 
   const handleToggleIntegration = (integration: ActiveIntegration) => {
     const newStatus = integration.status === 'active' ? false : true;
-    if (newStatus && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
-      toast({
-        title: "Cannot unpause",
-        description: "Open Integration Settings (⋮) and select a workspace and channel to re-link this integration, then Save. Or create a new integration.",
-        variant: "destructive",
-      });
-      return;
-    }
-    toggleIntegrationMutation.mutate({
-      integrationId: integration.id,
-      isActive: newStatus,
-    });
+    toggleIntegrationMutation.mutate(
+      { integrationId: integration.id, isActive: newStatus },
+      {
+        onError: (err: Error & { message?: string }) => {
+          const msg = err?.message ?? "";
+          if (msg.includes("Re-link") || msg.includes("workspace")) {
+            toast({
+              title: "Cannot unpause",
+              description: msg || "Open Integration Settings (⋮), select a workspace and channel, then Save.",
+              variant: "destructive",
+            });
+          } else {
+            toast({ title: "Update failed", description: msg || "Could not update integration.", variant: "destructive" });
+          }
+        },
+      }
+    );
   };
 
   const handleDeleteIntegration = (integration: ActiveIntegration) => {

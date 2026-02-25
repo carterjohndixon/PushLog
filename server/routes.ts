@@ -3307,7 +3307,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingIntegration.userId !== req.user!.userId) {
         return res.status(403).json({ error: "Access denied" });
       }
-          
+
+      if (updates.isActive === true) {
+        const hasSlack = existingIntegration.slackWorkspaceId && existingIntegration.slackChannelId;
+        if (!hasSlack) {
+          return res.status(400).json({
+            error: "Re-link this integration before unpausing. Open Integration Settings (⋮), select a workspace and channel, then Save.",
+          });
+        }
+      }
+
       const integration = await storage.updateIntegration(integrationId, updates);
       
       if (!integration) {
