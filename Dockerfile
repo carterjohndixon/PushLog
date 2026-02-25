@@ -1,7 +1,7 @@
 # Single build stage to reduce peak disk usage (avoids parallel Node + Rust builds)
 FROM node:20-bookworm-slim AS build
 
-RUN apt-get update -qq && apt-get install -y -qq curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y -qq curl build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install Rust (minimal)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
