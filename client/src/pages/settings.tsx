@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
@@ -17,6 +18,7 @@ import {
   Database, 
   AlertTriangle,
   AlertCircle,
+  Bell,
   CheckCircle,
   Github,
   CreditCard,
@@ -85,6 +87,7 @@ export default function Settings() {
   });
   const devMode = profileResponse?.user?.devMode ?? false;
   const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
+  const receiveIncidentNotifications = profileResponse?.user?.receiveIncidentNotifications !== false;
 
   const updateDevModeMutation = useMutation({
     mutationFn: async (checked: boolean) => {
@@ -131,6 +134,32 @@ export default function Settings() {
       toast({
         title: checked ? "Incident emails enabled" : "Incident emails disabled",
         description: checked ? "You'll receive emails when incidents occur." : "Incident emails are now off.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateReceiveIncidentNotificationsMutation = useMutation({
+    mutationFn: async (checked: boolean) => {
+      const res = await fetch("/api/user", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ receiveIncidentNotifications: checked }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update");
+      }
+      return res.json();
+    },
+    onSuccess: (_, checked) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      toast({
+        title: checked ? "You'll receive incident notifications" : "Incident notifications off",
+        description: checked ? "You're in the incident pool (with repos). You'll get in-app and, if enabled below, email." : "You won't receive any incident or crash notifications.",
       });
     },
     onError: (error: Error) => {
@@ -775,6 +804,23 @@ export default function Settings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-muted-foreground" />
+                  <Label htmlFor="receive-incident-notifications" className="cursor-pointer font-medium">
+                    Receive incident notifications
+                  </Label>
+                </div>
+                <Switch
+                  id="receive-incident-notifications"
+                  checked={receiveIncidentNotifications}
+                  onCheckedChange={(checked) => updateReceiveIncidentNotificationsMutation.mutate(checked)}
+                />
+              </div>
+              <p className="text-sm text-muted-foreground">
+                When on, you're in the incident pool: you get in-app alerts and, if enabled below, emails when Sentry or the app reports an error or crash. Only users with at least one repo connected receive incidents. Turn off to opt out entirely.
+              </p>
+              <Separator />
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Mail className="w-4 h-4 text-muted-foreground" />

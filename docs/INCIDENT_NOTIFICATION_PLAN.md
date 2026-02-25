@@ -12,7 +12,7 @@
 - **Webhook** — User-configurable webhook URL to POST incident payloads for PagerDuty, Opsgenie, custom scripts, etc.
 
 ### Routing today
-- Incidents are routed by `links.pushlog_user_id` (from Sentry/GitHub) or `INCIDENT_NOTIFY_USER_IDS` (env) or all users.
+- Incidents are routed by `links.pushlog_user_id` (from Sentry/GitHub when present), or else to users who have at least one repo and “Receive incident notifications” on (Settings).
 - Each targeted user gets a DB notification + SSE broadcast → bell dropdown + new incident toast.
 
 ---

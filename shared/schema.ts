@@ -37,6 +37,7 @@ export const users = pgTable("users", {
   overBudgetBehavior: text("over_budget_behavior").default("skip_ai"), // "skip_ai" = send plain push when over budget; "free_model" = use free model
   devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
   incidentEmailEnabled: boolean("incident_email_enabled").default(true), // Email incident alerts (Sentry, spike, etc.)
+  receiveIncidentNotifications: boolean("receive_incident_notifications").default(true), // In incident pool (users with repos + this true get incidents); when false, never receive
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
@@ -348,6 +349,7 @@ export type User = {
   overBudgetBehavior: "free_model" | "skip_ai";
   devMode?: boolean;
   incidentEmailEnabled?: boolean;
+  receiveIncidentNotifications?: boolean;
   createdAt: string;
 };
 

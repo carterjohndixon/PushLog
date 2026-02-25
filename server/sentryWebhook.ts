@@ -87,26 +87,19 @@ export function wasRecentSentryNotification(service: string, environment: string
   return true;
 }
 
-/** Get user IDs that should receive incident notifications. */
+/** Get user IDs that should receive incident notifications.
+ * Only users who have at least one repo and have "Receive incident notifications" on (Settings).
+ */
 export async function getIncidentNotificationTargets(
   isTestNotification: boolean = false
 ): Promise<string[]> {
-  const configuredIds = (process.env.INCIDENT_NOTIFY_USER_IDS || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (configuredIds.length > 0) {
-    return configuredIds;
-  }
-
   if (isTestNotification && APP_ENV === "staging" && process.env.SENTRY_TEST_NOTIFY_ALL !== "true") {
     const allUsers = await storage.getAllUserIds();
     const stagingAdmins: string[] = [];
 
     for (const userId of allUsers) {
       const user = await storage.getUser(userId);
-      if (!user) continue;
+      if (!user || (user as any).receiveIncidentNotifications === false) continue;
 
       const email = String(user.email || "").toLowerCase();
       const username = String(user.username || "").toLowerCase();
@@ -127,16 +120,30 @@ export async function getIncidentNotificationTargets(
     const usersWithRepos: string[] = [];
 
     for (const userId of allUsers) {
-      const repos = await storage.getRepositoriesByUserId(userId);
-      if (repos.length > 0) {
+      const [user, repos] = await Promise.all([
+        storage.getUser(userId),
+        storage.getRepositoriesByUserId(userId),
+      ]);
+      if (user && (user as any).receiveIncidentNotifications !== false && repos.length > 0) {
         usersWithRepos.push(userId);
       }
     }
     return usersWithRepos;
   }
 
+  // Default: only users who have at least one repo and have not opted out of incident notifications
   const allUserIds = await storage.getAllUserIds();
-  return allUserIds;
+  const usersWithRepos: string[] = [];
+  for (const userId of allUserIds) {
+    const [user, repos] = await Promise.all([
+      storage.getUser(userId),
+      storage.getRepositoriesByUserId(userId),
+    ]);
+    if (user && (user as any).receiveIncidentNotifications !== false && repos.length > 0) {
+      usersWithRepos.push(userId);
+    }
+  }
+  return usersWithRepos;
 }
 
 export async function handleSentryWebhook(req: Request, res: Response): Promise<void> {

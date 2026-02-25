@@ -484,10 +484,20 @@ app.use((req, res, next) => {
   });
 
   // When PushLog itself crashes (uncaughtException/unhandledRejection), send incident emails
-  // to all PushLog users who have incident email enabled (the email they signed up with).
+  // only to users who have at least one repo and "Receive incident notifications" on (Settings).
   async function sendCrashEmailsToUsers(title: string, message: string, errName: string, severity: "critical" | "error") {
     try {
-      const userIds = await databaseStorage.getAllUserIds();
+      const allIds = await databaseStorage.getAllUserIds();
+      const userIds: string[] = [];
+      for (const userId of allIds) {
+        const [user, repos] = await Promise.all([
+          databaseStorage.getUserById(userId),
+          databaseStorage.getRepositoriesByUserId(userId),
+        ]);
+        if (user && (user as any).receiveIncidentNotifications !== false && repos.length > 0) {
+          userIds.push(userId);
+        }
+      }
       const toSend: string[] = [];
       for (const userId of userIds) {
         const user = await databaseStorage.getUserById(userId);
@@ -502,7 +512,7 @@ app.use((req, res, next) => {
           createdAt: new Date().toISOString(),
         }).catch((e) => console.error("[incident] Failed to send crash email:", e));
       }
-      console.warn(`[incident] Crash email: ${userIds.length} users, ${toSend.length} with incident email enabled (title: ${title})`);
+      console.warn(`[incident] Crash email: ${userIds.length} eligible, ${toSend.length} with incident email enabled (title: ${title})`);
     } catch (e) {
       console.error("[incident] Failed to fetch users for crash email:", e);
     }

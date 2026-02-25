@@ -587,24 +587,15 @@ export async function sentryWebhookHandler(req: Request, res: Response): Promise
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  const getDefaultIncidentNotifyUserIds = (): string[] => {
-    return (process.env.INCIDENT_NOTIFY_USER_IDS || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
-  };
-
   const handleIncidentSummary = async (summary: IncidentSummaryOutput) => {
     console.log(
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
 
-    // Route incidents to one user when payload includes links.pushlog_user_id.
-    // Otherwise use the incident notification targets (respects INCIDENT_NOTIFY_USER_IDS config).
+    // Route to one user when payload includes links.pushlog_user_id; otherwise users with repos + "Receive incident notifications" on.
     const targetUsers = new Set<string>();
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
-    for (const id of getDefaultIncidentNotifyUserIds()) targetUsers.add(id);
 
     if (targetUsers.size === 0) {
       const defaultTargets = await getIncidentNotificationTargets(false);
@@ -1696,6 +1687,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
         devMode: !!((user as any).devMode),
         incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
+        receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
       };
       res.status(200).json({ success: true, user: profileUser });
     } catch (err) {
@@ -5194,6 +5186,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
           devMode: !!(user as any).devMode,
           incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
+          receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
         }
       };
       res.status(200).json(payload);
@@ -5211,7 +5204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/user", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean };
+      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean };
       const updates: Record<string, unknown> = {};
       if (body.overBudgetBehavior && body.overBudgetBehavior === "free_model" || body.overBudgetBehavior === "skip_ai") {
         updates.overBudgetBehavior = body.overBudgetBehavior;
@@ -5225,16 +5218,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (typeof body.incidentEmailEnabled === "boolean") {
         updates.incidentEmailEnabled = body.incidentEmailEnabled;
       }
+      if (typeof body.receiveIncidentNotifications === "boolean") {
+        updates.receiveIncidentNotifications = body.receiveIncidentNotifications;
+      }
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ error: "No valid updates" });
       }
       const user = await databaseStorage.updateUser(userId, updates as any);
       if (!user) return res.status(404).json({ error: "User not found" });
-      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean } = { success: true };
+      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean } = { success: true };
       if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
       if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
       if (updates.devMode !== undefined) resBody.devMode = !!(user as any).devMode;
       if (updates.incidentEmailEnabled !== undefined) resBody.incidentEmailEnabled = (user as any).incidentEmailEnabled !== false;
+      if (updates.receiveIncidentNotifications !== undefined) resBody.receiveIncidentNotifications = (user as any).receiveIncidentNotifications !== false;
       res.status(200).json(resBody);
     } catch (error) {
       console.error("Error updating user:", error);

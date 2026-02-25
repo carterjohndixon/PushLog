@@ -27,6 +27,8 @@ export interface ProfileUser {
   devMode?: boolean;
   /** Receive incident alert emails (Sentry, spike, regression, etc.) */
   incidentEmailEnabled?: boolean;
+  /** In incident notification pool (users with repos + this on get incidents); when off, never receive */
+  receiveIncidentNotifications?: boolean;
 }
 
 export interface ProfileResponse {

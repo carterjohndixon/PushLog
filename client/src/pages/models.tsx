@@ -160,7 +160,7 @@ export default function Models() {
             >
               OpenRouter <span className="text-xs opacity-80">(recommended)</span>
             </button>
-            <button
+                <button
               type="button"
               onClick={() => setProviderTab("openai")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
@@ -170,9 +170,9 @@ export default function Models() {
               }`}
             >
               OpenAI
-            </button>
-          </div>
-        </div>
+                </button>
+              </div>
+                  </div>
 
         {providerTab === "openrouter" && (
           <OpenRouterModels

@@ -79,7 +79,7 @@ Existing users can stay solo or opt in to create a team.
 
 **Status:** TODO | **Phase:** 2 (depends on Teams)
 
-**Context:** Today incident notifications go to all users (or `INCIDENT_NOTIFY_USER_IDS` if set). No in-app control. The current layout doesn't support this—Teams must exist first so there's an admin, members, and roles to configure.
+**Context:** Today incident notifications go to users who have at least one repo and “Receive incident notifications” on. No env override; control is in-app (Settings).
 
 **Goal:** Add a user-facing setting so the account owner (admin) can choose who receives incident notifications and delegate responsibility:
 
@@ -89,9 +89,7 @@ Existing users can stay solo or opt in to create a team.
 - **Delegation** — Admin can assign responsibility per person (e.g. who gets which types of incidents, or who owns which repos/services).
 - **Priority** — Configurable priority/ordering for who receives notifications (e.g. on-call first, then backup).
 
-`INCIDENT_NOTIFY_USER_IDS` would remain as an env override for advanced/enterprise use.
-
-**Ref:** Discussion Feb 2026; `getIncidentNotificationTargets` in `server/routes.ts`, `sentryWebhook.ts`.
+**Ref:** Discussion Feb 2026; `getIncidentNotificationTargets` in `server/sentryWebhook.ts`.
 
 ---
 
