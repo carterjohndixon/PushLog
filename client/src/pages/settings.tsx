@@ -103,11 +103,20 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+    onMutate: async (checked: boolean) => {
+      await queryClient.cancelQueries({ queryKey: PROFILE_QUERY_KEY });
+      const prev = queryClient.getQueryData<{ success: boolean; user: Record<string, unknown> }>(PROFILE_QUERY_KEY);
+      queryClient.setQueryData(PROFILE_QUERY_KEY, (old: typeof prev) =>
+        old?.user ? { ...old, user: { ...old.user, devMode: checked } } : old
+      );
+      return { prev };
     },
-    onError: (error: Error) => {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    onError: (_err, _checked, context) => {
+      if (context?.prev) queryClient.setQueryData(PROFILE_QUERY_KEY, context.prev);
+      toast({ title: "Update failed", description: "Could not save. Try again.", variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
     },
   });
 
@@ -125,11 +134,20 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+    onMutate: async (checked: boolean) => {
+      await queryClient.cancelQueries({ queryKey: PROFILE_QUERY_KEY });
+      const prev = queryClient.getQueryData<{ success: boolean; user: Record<string, unknown> }>(PROFILE_QUERY_KEY);
+      queryClient.setQueryData(PROFILE_QUERY_KEY, (old: typeof prev) =>
+        old?.user ? { ...old, user: { ...old.user, incidentEmailEnabled: checked } } : old
+      );
+      return { prev };
     },
-    onError: (error: Error) => {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    onError: (_err, _checked, context) => {
+      if (context?.prev) queryClient.setQueryData(PROFILE_QUERY_KEY, context.prev);
+      toast({ title: "Update failed", description: "Could not save. Try again.", variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
     },
   });
 
@@ -147,11 +165,20 @@ export default function Settings() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+    onMutate: async (checked: boolean) => {
+      await queryClient.cancelQueries({ queryKey: PROFILE_QUERY_KEY });
+      const prev = queryClient.getQueryData<{ success: boolean; user: Record<string, unknown> }>(PROFILE_QUERY_KEY);
+      queryClient.setQueryData(PROFILE_QUERY_KEY, (old: typeof prev) =>
+        old?.user ? { ...old, user: { ...old.user, receiveIncidentNotifications: checked } } : old
+      );
+      return { prev };
     },
-    onError: (error: Error) => {
-      toast({ title: "Update failed", description: error.message, variant: "destructive" });
+    onError: (_err, _checked, context) => {
+      if (context?.prev) queryClient.setQueryData(PROFILE_QUERY_KEY, context.prev);
+      toast({ title: "Update failed", description: "Could not save. Try again.", variant: "destructive" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
     },
   });
 
