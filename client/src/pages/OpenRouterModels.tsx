@@ -718,8 +718,8 @@ export function OpenRouterModels({
             <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <Select
                 value={
-                  defaultModelId ||
-                  savedPreferredModel ||
+                  getAiModelDisplayName(defaultModelId) ||
+                  getAiModelDisplayName(savedPreferredModel) ||
                   (recommendedOpenrouter && allModels.some((m) => m.id === recommendedOpenrouter) ? recommendedOpenrouter : "") ||
                   ""
                 }
