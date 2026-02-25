@@ -549,8 +549,11 @@ app.use((req, res, next) => {
     }
   }
 
-  process.on("uncaughtException", (err: Error) => {
-    if (sentryDsn) Sentry.captureException(err);
+  process.on("uncaughtException", async (err: Error) => {
+    if (sentryDsn) {
+      Sentry.captureException(err);
+      await Sentry.flush(2000).catch(() => {});
+    }
     const title = "PushLog critical error (uncaughtException)";
     const message = err?.message || String(err);
     const errName = err?.name || "Error";
@@ -559,9 +562,12 @@ app.use((req, res, next) => {
     });
   });
 
-  process.on("unhandledRejection", (reason: unknown) => {
+  process.on("unhandledRejection", async (reason: unknown) => {
     const err = reason instanceof Error ? reason : new Error(String(reason));
-    if (sentryDsn) Sentry.captureException(err);
+    if (sentryDsn) {
+      Sentry.captureException(err);
+      await Sentry.flush(2000).catch(() => {});
+    }
     const title = "PushLog unhandled rejection";
     const message = err?.message || String(reason);
     const errName = err?.name || "Error";
