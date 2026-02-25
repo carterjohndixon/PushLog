@@ -87,7 +87,6 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 className="h-6 w-6 p-0 hover:bg-muted"
                 onClick={(e) => {
                   e.stopPropagation();
-                  setDropdownOpen(false);
                   window.dispatchEvent(new CustomEvent("show-notification-modal", { detail: { notification } }));
                 }}
                 title="View details"
