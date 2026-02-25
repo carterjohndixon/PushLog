@@ -643,6 +643,14 @@ export default function Dashboard() {
 
   const handleToggleIntegration = (integration: ActiveIntegration) => {
     const newStatus = integration.status === 'active' ? false : true;
+    if (newStatus && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
+      toast({
+        title: "Cannot unpause",
+        description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+        variant: "destructive",
+      });
+      return;
+    }
     toggleIntegrationMutation.mutate({
       integrationId: integration.id,
       isActive: newStatus,

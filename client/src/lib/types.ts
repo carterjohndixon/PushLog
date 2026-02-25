@@ -31,6 +31,9 @@ export interface ActiveIntegration {
   aiModel?: string;
   maxTokens?: number;
   hasOpenRouterKey?: boolean;
+  /** Set to null/empty when Slack workspace was disconnected; unpause requires reconnecting Slack. */
+  slackWorkspaceId?: string | null;
+  slackChannelId?: string | null;
 }
 
 export interface RepositoryCardData {

@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="refresh" content="4;url=/dashboard#slack=connected" />
     <title>Slack Connected – PushLog</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -61,6 +62,7 @@
       (function() {
         var opener = window.opener;
         var origin = window.location.origin;
+        var dashboardUrl = origin + '/dashboard#slack=connected';
         var hint = document.getElementById('hint');
         var backLink = document.getElementById('back-link');
 
@@ -69,7 +71,7 @@
             try { opener.focus(); } catch (e) {}
             try { opener.postMessage('slack-connected', origin); } catch (e) {}
           }
-          window.location.href = '/dashboard#slack=connected';
+          window.location.replace(dashboardUrl);
         }
 
         if (opener) {
@@ -81,14 +83,18 @@
           setTimeout(function() {
             window.close();
             hint.textContent = "If this window didn't close, click \"Return to PushLog\" below.";
-            if (backLink) backLink.style.visibility = 'visible';
-          }, 1500);
+            if (backLink) { backLink.style.visibility = 'visible'; backLink.href = dashboardUrl; }
+          }, 1200);
+          setTimeout(function() {
+            goToDashboard();
+          }, 2500);
         } else {
           hint.textContent = 'Redirecting back to the app…';
-          setTimeout(goToDashboard, 800);
+          goToDashboard();
         }
 
         if (backLink) {
+          backLink.href = dashboardUrl;
           backLink.onclick = function(e) {
             e.preventDefault();
             goToDashboard();

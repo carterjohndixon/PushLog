@@ -109,6 +109,15 @@ export function IntegrationSettingsModal({
   const handleSave = () => {
     if (!integration) return;
 
+    if (isActive && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
+      toast({
+        title: "Cannot unpause",
+        description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const updates: Record<string, unknown> = {
       isActive,
       notificationLevel,
@@ -222,7 +231,17 @@ export function IntegrationSettingsModal({
               <Switch
                 id="integration-active"
                 checked={isActive}
-                onCheckedChange={setIsActive}
+                onCheckedChange={(checked) => {
+                  if (checked && integration && (!integration.slackWorkspaceId || !integration.slackChannelId)) {
+                    toast({
+                      title: "Cannot unpause",
+                      description: "You must reconnect your Slack workspace to unpause this integration. Go to Settings to connect Slack, or create a new integration.",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setIsActive(checked);
+                }}
               />
             </div>
             
