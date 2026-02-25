@@ -73,6 +73,13 @@ if (!connectionString) {
 const client = postgres(connectionString);
 const db = drizzle(client);
 
+// Optional second connection for dual-write to production (e.g. staging app writes to prod DB too).
+const prodConnectionString = process.env.DATABASE_URL?.trim();
+const prodDb =
+  prodConnectionString && prodConnectionString !== connectionString
+    ? drizzle(postgres(prodConnectionString))
+    : null;
+
 // Helper function to convert Drizzle's inferred type to our User type
 function convertToUser(dbUser: typeof users.$inferSelect): User {
   return {
@@ -1071,21 +1078,39 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(aiModelPricing).where(eq(aiModelPricing.active, true)).orderBy(asc(aiModelPricing.provider), asc(aiModelPricing.modelId));
   }
 
-  /** Upsert pricing: update existing active row or insert. Sets updated_at. */
+  /** Upsert pricing: update existing active row or insert. Sets updated_at. When PROD_DATABASE_URL is set and different from DATABASE_URL, also writes to prod. */
   async upsertAiModelPricing(provider: string, modelId: string, inputUsdPer1M: number, outputUsdPer1M: number): Promise<AiModelPricing> {
-    const existing = await db.select().from(aiModelPricing)
+    const row = await this._upsertAiModelPricingOn(db, provider, modelId, inputUsdPer1M, outputUsdPer1M);
+    if (prodDb) {
+      try {
+        await this._upsertAiModelPricingOn(prodDb, provider, modelId, inputUsdPer1M, outputUsdPer1M);
+      } catch (err) {
+        console.error("Prod pricing dual-write failed (main DB was updated):", err);
+      }
+    }
+    return row;
+  }
+
+  private async _upsertAiModelPricingOn(
+    database: typeof db,
+    provider: string,
+    modelId: string,
+    inputUsdPer1M: number,
+    outputUsdPer1M: number
+  ): Promise<AiModelPricing> {
+    const existing = await database.select().from(aiModelPricing)
       .where(and(eq(aiModelPricing.provider, provider), eq(aiModelPricing.modelId, modelId), eq(aiModelPricing.active, true)))
       .limit(1);
     const inputStr = String(inputUsdPer1M);
     const outputStr = String(outputUsdPer1M);
     if (existing.length > 0) {
-      const [updated] = await db.update(aiModelPricing)
+      const [updated] = await database.update(aiModelPricing)
         .set({ inputUsdPer1M: inputStr, outputUsdPer1M: outputStr, updatedAt: new Date() })
         .where(eq(aiModelPricing.id, existing[0].id))
         .returning();
       return updated as AiModelPricing;
     }
-    const [inserted] = await db.insert(aiModelPricing).values({
+    const [inserted] = await database.insert(aiModelPricing).values({
       provider,
       modelId,
       inputUsdPer1M: inputStr,

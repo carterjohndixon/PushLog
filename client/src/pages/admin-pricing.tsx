@@ -21,13 +21,6 @@ import { Link } from "wouter";
 import { ArrowLeft, Pencil, Loader2, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 type PricingRow = {
   id: string;
@@ -45,7 +38,6 @@ export default function AdminPricingPage() {
   const [editInput, setEditInput] = useState("");
   const [editOutput, setEditOutput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
-  const [addProvider, setAddProvider] = useState<"openai" | "openrouter">("openai");
   const [addModelId, setAddModelId] = useState("");
   const [addInput, setAddInput] = useState("");
   const [addOutput, setAddOutput] = useState("");
@@ -126,7 +118,7 @@ export default function AdminPricingPage() {
       return;
     }
     upsertMutation.mutate({
-      provider: addProvider,
+      provider: "openai",
       modelId,
       inputUsdPer1M: input,
       outputUsdPer1M: output,
@@ -201,9 +193,13 @@ export default function AdminPricingPage() {
                         {row.updatedAt ? new Date(row.updatedAt).toLocaleString() : "—"}
                       </TableCell>
                       <TableCell>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(row)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        {row.provider === "openai" ? (
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => openEdit(row)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">From API</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -219,7 +215,9 @@ export default function AdminPricingPage() {
           <DialogHeader>
             <DialogTitle>Edit pricing</DialogTitle>
           </DialogHeader>
-          {editing && (
+          {editing && editing.provider !== "openai" ? (
+            <p className="text-sm text-muted-foreground">OpenRouter pricing is from the API; edit there.</p>
+          ) : editing && (
             <div className="space-y-4 py-2">
               <p className="text-sm text-muted-foreground">
                 {editing.provider} / {editing.modelId}
@@ -248,16 +246,18 @@ export default function AdminPricingPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={handleSaveEdit} disabled={upsertMutation.isPending}>
-              {upsertMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Saving…
-                </>
-              ) : (
-                "Save"
-              )}
-            </Button>
+            {editing?.provider === "openai" && (
+              <Button onClick={handleSaveEdit} disabled={upsertMutation.isPending}>
+                {upsertMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving…
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -268,28 +268,17 @@ export default function AdminPricingPage() {
             <DialogTitle>Add pricing</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div>
-              <label className="text-xs text-muted-foreground block mb-1">Provider</label>
-              <Select value={addProvider} onValueChange={(v) => setAddProvider(v as "openai" | "openrouter")}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="openrouter">OpenRouter</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <p className="text-sm text-muted-foreground">Add OpenAI model pricing (from <a href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener noreferrer" className="underline">OpenAI Pricing</a>).</p>
             <div>
               <label className="text-xs text-muted-foreground block mb-1">Model ID</label>
               <Input
-                placeholder="e.g. gpt-5.2, gpt-4o, anthropic/claude-3.5-sonnet"
+                placeholder="e.g. gpt-5.2, gpt-4o, gpt-4o-mini"
                 value={addModelId}
                 onChange={(e) => setAddModelId(e.target.value)}
                 className="font-mono"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Use the exact API model id; prefix match is used for variants (e.g. gpt-5.3-codex matches gpt-5.3).
+                Use the exact API model id; prefix match is used for variants.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
