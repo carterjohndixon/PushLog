@@ -15,6 +15,7 @@ import { registerRoutes, slackCommandsHandler, githubWebhookHandler, sentryWebho
 import { verifyWebhookSignature } from "./github";
 import { ensureIncidentEngineStarted, stopIncidentEngine } from "./incidentEngine";
 import { sendIncidentAlertEmail } from "./email";
+import broadcastNotification from "./helper/broadcastNotification";
 import { databaseStorage } from "./database";
 import pkg from 'pg';
 import path from 'path';
@@ -501,7 +502,37 @@ app.use((req, res, next) => {
       const toSend: string[] = [];
       for (const userId of userIds) {
         const user = await databaseStorage.getUserById(userId);
-        if (!user?.email || (user as any).incidentEmailEnabled === false) continue;
+        if (!user) continue;
+        // In-app notification for every eligible user (bell + SSE)
+        try {
+          const notif = await databaseStorage.createNotification({
+            userId,
+            type: "incident_alert",
+            title,
+            message,
+            metadata: JSON.stringify({
+              service: "pushlog",
+              environment: process.env.APP_ENV || process.env.NODE_ENV || "production",
+              severity,
+              errorMessage: message,
+              exceptionType: errName,
+              createdAt: new Date().toISOString(),
+            }),
+          });
+          broadcastNotification(userId, {
+            id: notif.id,
+            type: notif.type,
+            title: notif.title,
+            message: notif.message,
+            metadata: notif.metadata,
+            createdAt: notif.createdAt,
+            isRead: false,
+          });
+        } catch (e) {
+          console.error("[incident] Failed to create/broadcast crash notification for user:", userId, e);
+        }
+        // Email only if user has incident email enabled
+        if (!user.email || (user as any).incidentEmailEnabled === false) continue;
         toSend.push(user.email);
         sendIncidentAlertEmail(user.email, title, message, {
           service: "pushlog",
