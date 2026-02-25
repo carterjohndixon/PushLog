@@ -300,7 +300,7 @@ export async function sendSlackForPush(
   integration: any,
   pushData: any,
   authorName: string,
-  aiResult: { aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null },
+  aiResult: { aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null; actualModel?: string },
   res: Response
 ): Promise<boolean> {
   try {
@@ -310,7 +310,7 @@ export async function sendSlackForPush(
         impact: aiResult.aiImpact as "low" | "medium" | "high",
         category: aiResult.aiCategory!,
         details: aiResult.aiDetails!,
-      });
+      }, { actualModel: aiResult.actualModel });
       await sendSlackMessage(workspaceToken, {
         channel: integration.slackChannelId,
         blocks: [{ type: "section", text: { type: "mrkdwn", text: slackMessage } }],
@@ -463,7 +463,7 @@ export async function persistPushAndNotifications(
     additions: pushData.additions ?? 0,
     deletions: pushData.deletions ?? 0,
     filesChanged: pushData.filesChanged?.length ?? 0,
-    aiModel: aiResult.effectiveAiModel ?? null,
+    aiModel: (aiResult.summary?.actualModel || aiResult.effectiveAiModel) ?? null,
     aiSummary: aiResult.aiSummary ?? null,
     aiImpact: aiResult.aiImpact ?? null,
     aiCategory: aiResult.aiCategory ?? null,
@@ -510,7 +510,7 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
     const repoDisplayName = storedRepo?.name || pushData.repositoryName.split("/").pop() || pushData.repositoryName;
     const aiResult = await runAiSummary(pushData, integration, repoDisplayName, aiConfig);
 
-    const slackSent = await sendSlackForPush(workspaceToken, integration, pushData, authorName, aiResult, res);
+    const slackSent = await sendSlackForPush(workspaceToken, integration, pushData, authorName, { ...aiResult, actualModel: aiResult.summary?.actualModel }, res);
     if (!slackSent) return;
 
     try {
