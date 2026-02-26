@@ -592,9 +592,9 @@ export default function OrganizationPage() {
                       tabIndex={canInvite ? 0 : undefined}
                       onClick={canInvite ? () => setSelectedMember(member) : undefined}
                       onKeyDown={canInvite ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedMember(member); } } : undefined}
-                      className={`flex items-center gap-4 p-4 rounded-lg border bg-card ${
+                      className={`flex items-center gap-4 p-4 rounded-lg border bg-card outline-none focus:ring-0 focus-visible:ring-0 ${
                         isYou
-                          ? "border-log-green ring-2 ring-log-green/40 focus-visible:ring-log-green focus-visible:outline-none"
+                          ? "border-log-green ring-2 ring-log-green/40 focus-visible:ring-2 focus-visible:ring-log-green"
                           : "border-border"
                       } ${canInvite ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
                     >
