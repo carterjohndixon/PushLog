@@ -583,15 +583,19 @@ export default function OrganizationPage() {
                 <p className="text-muted-foreground py-4">No members found.</p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {sortedMembers.map((member) => (
+                  {sortedMembers.map((member) => {
+                    const isYou = member.userId === String(currentUserId);
+                    return (
                     <div
                       key={member.userId}
                       role={canInvite ? "button" : undefined}
                       tabIndex={canInvite ? 0 : undefined}
                       onClick={canInvite ? () => setSelectedMember(member) : undefined}
                       onKeyDown={canInvite ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedMember(member); } } : undefined}
-                      className={`flex items-center gap-4 p-4 rounded-lg border border-border bg-card ${
-                        member.userId === String(currentUserId) ? "ring-2 ring-log-green/30" : ""
+                      className={`flex items-center gap-4 p-4 rounded-lg border bg-card ${
+                        isYou
+                          ? "border-log-green ring-2 ring-log-green/40 focus-visible:ring-log-green focus-visible:outline-none"
+                          : "border-border"
                       } ${canInvite ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
                     >
                       <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
@@ -600,7 +604,7 @@ export default function OrganizationPage() {
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">
                           {member.displayName}
-                          {member.userId === String(currentUserId) && (
+                          {isYou && (
                             <span className="text-muted-foreground font-normal ml-1">(you)</span>
                           )}
                         </p>
@@ -621,7 +625,8 @@ export default function OrganizationPage() {
                         </span>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
