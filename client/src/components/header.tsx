@@ -74,11 +74,13 @@ export function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center space-x-4">
-            <Link href="/" className="flex items-center space-x-3">
+            <Link href="/" className="flex items-center space-x-3 flex-shrink-0">
               <Logo size="md" />
-              <div>
-                <h1 className="text-xl font-bold text-brand-gradient">PushLog</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block">GitHub ↔ Slack Integration</p>
+              <div className="flex flex-col justify-center min-w-0">
+                <h1 className="text-xl font-bold text-brand-gradient leading-tight">PushLog</h1>
+                <p className="text-xs text-muted-foreground hidden sm:block whitespace-nowrap truncate leading-tight">
+                  GitHub ↔ Slack Integration
+                </p>
               </div>
             </Link>
             {user && (
