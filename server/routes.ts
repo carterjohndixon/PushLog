@@ -1620,13 +1620,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.session!.userId!;
       const user = await databaseStorage.getUserById(userId);
       if ((user as any)?.mfaEnabled) return res.status(400).json({ error: "MFA already set up." });
-      const secret = speakeasy.generateSecret({ name: `PushLog (${user?.username || userId.slice(0, 8)})`, length: 20 });
+      // Reuse existing secret if present (avoids overwriting on double-mount/refetch so scanned QR matches POST)
+      let secretBase32 = (req.session as any).mfaSetupSecret as string | undefined;
+      if (!secretBase32) {
+        const gen = speakeasy.generateSecret({ name: `PushLog (${user?.username || userId.slice(0, 8)})`, length: 20 });
+        secretBase32 = gen.base32;
+        (req.session as any).mfaSetupSecret = secretBase32;
+        await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
+      }
       const label = `PushLog:${user?.username || user?.email || userId}`;
-      const otpauth = `otpauth://totp/${encodeURIComponent(label)}?secret=${secret.base32}&issuer=PushLog`;
+      const otpauth = `otpauth://totp/${encodeURIComponent(label)}?secret=${secretBase32}&issuer=PushLog`;
       const qrDataUrl = await QRCode.toDataURL(otpauth, { width: 200, margin: 2 });
-      (req.session as any).mfaSetupSecret = secret.base32;
-      await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
-      res.status(200).json({ qrDataUrl, secretBase32: secret.base32 });
+      res.status(200).json({ qrDataUrl, secretBase32 });
     } catch (err) {
       console.error("MFA setup error:", err);
       Sentry.captureException(err);
@@ -1641,7 +1646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const code = req.body.code as string;
       const secret = (req.session as any).mfaSetupSecret;
       if (!secret) return res.status(400).json({ error: "Setup session expired. Refresh the page." });
-      const valid = speakeasy.totp.verify({ secret, encoding: "base32", token: code, window: 1 });
+      const valid = speakeasy.totp.verify({ secret, encoding: "base32", token: code, window: 2 });
       if (!valid) return res.status(401).json({ error: "Invalid code. Please try again." });
       const userId = req.session!.userId!;
       const encrypted = encrypt(secret);
