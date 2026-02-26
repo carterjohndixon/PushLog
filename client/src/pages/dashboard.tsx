@@ -290,6 +290,7 @@ export default function Dashboard() {
       const response = await fetch('/api/repositories-and-integrations', {
         credentials: 'include',
         headers: { 'Accept': 'application/json' },
+        cache: 'no-store',
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));

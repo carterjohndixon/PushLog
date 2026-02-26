@@ -35,7 +35,7 @@ export default function VerifyMfa() {
       toast({ title: "Login successful", description: "Welcome back." });
       setLocation("/dashboard");
       // Prefetch full profile and dashboard data in background so dashboard loads instantly
-      const opts = { credentials: "include" as RequestCredentials, headers: { Accept: "application/json" } };
+      const opts = { credentials: "include" as RequestCredentials, headers: { Accept: "application/json" }, cache: "no-store" as RequestCache };
       queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile }).catch(() => {});
       queryClient.prefetchQuery({
         queryKey: ["/api/repositories-and-integrations"],

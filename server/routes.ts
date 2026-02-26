@@ -3404,7 +3404,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             includeCommitSummaries: integration.includeCommitSummaries ?? true,
           };
         });
-        res.setHeader("Cache-Control", "private, max-age=15");
+        res.setHeader("Cache-Control", "no-store, must-revalidate, private");
         return res.status(200).json({ repositories, integrations: enrichedIntegrations, requiresGitHubReconnect: true });
       }
 
@@ -3460,7 +3460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           includeCommitSummaries: integration.includeCommitSummaries ?? true,
         };
       });
-      res.setHeader("Cache-Control", "private, max-age=15");
+      res.setHeader("Cache-Control", "no-store, must-revalidate, private");
       return res.status(200).json({ repositories, integrations: enrichedIntegrations });
     } catch (error) {
       console.error("Error fetching repositories and integrations:", error);

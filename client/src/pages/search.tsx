@@ -102,6 +102,7 @@ export default function Search() {
       const res = await fetch("/api/repositories-and-integrations", {
         credentials: "include",
         headers: { Accept: "application/json" },
+        cache: "no-store",
       });
       if (!res.ok) throw new Error("Failed to fetch repositories");
       return res.json();
