@@ -1,6 +1,7 @@
+import * as React from "react";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
-import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor } from "lucide-react";
+import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor, Menu } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -9,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotificationsDropdown } from "./notifications-dropdown";
@@ -23,6 +25,7 @@ export function Header() {
   });
   const user: ProfileUser | null = profileResponse?.user ?? null;
   const [location, setLocation] = useLocation();
+  const [navOpen, setNavOpen] = React.useState(false);
   const queryClient = useQueryClient();
 
   const handleLogout = async () => {
@@ -71,41 +74,78 @@ export function Header() {
 
   return (
     <header className="bg-background border-b border-border sticky top-0 z-50">
-      <div className="w-full px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center space-x-4">
+      <div className="w-full px-4 sm:px-6 lg:px-8 min-w-0">
+        <div className="flex justify-between items-center h-16 gap-2">
+          <div className="flex items-center min-w-0 flex-1 gap-2 sm:gap-4">
             <Link href="/" className="flex items-center space-x-3 flex-shrink-0">
               <Logo size="md" />
-              <div className="flex flex-col justify-center min-w-0">
+              <div className="hidden sm:flex flex-col justify-center min-w-0">
                 <h1 className="text-xl font-bold text-brand-gradient leading-tight">PushLog</h1>
-                <p className="text-xs text-muted-foreground hidden sm:block whitespace-nowrap truncate leading-tight">
+                <p className="text-xs text-muted-foreground whitespace-nowrap truncate leading-tight">
                   GitHub ↔ Slack Integration
                 </p>
               </div>
             </Link>
             {user && (
-              <nav className="hidden md:flex space-x-8 ml-8 mr-6">
-                {navLinks.map(({ href, label }) => {
-                  const isActive = location === href;
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      className={`transition-colors duration-200 ${
-                        isActive
-                          ? "text-foreground font-semibold"
-                          : "text-log-green hover:text-foreground"
-                      }`}
+              <>
+                <div className="hidden lg:block min-w-0 flex-1 overflow-x-auto">
+                  <nav className="flex items-center space-x-6 xl:space-x-8 ml-2 xl:ml-6 pr-2" aria-label="Main">
+                    {navLinks.map(({ href, label }) => {
+                      const isActive = location === href;
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          className={`whitespace-nowrap transition-colors duration-200 ${
+                            isActive
+                              ? "text-foreground font-semibold"
+                              : "text-log-green hover:text-foreground"
+                          }`}
+                        >
+                          {label}
+                        </Link>
+                      );
+                    })}
+                  </nav>
+                </div>
+                <Sheet open={navOpen} onOpenChange={setNavOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="lg:hidden shrink-0"
+                      aria-label="Open menu"
                     >
-                      {label}
-                    </Link>
-                  );
-                })}
-              </nav>
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="w-72 pt-10">
+                    <nav className="flex flex-col gap-1" aria-label="Main">
+                      {navLinks.map(({ href, label }) => {
+                        const isActive = location === href;
+                        return (
+                          <Link
+                            key={href}
+                            href={href}
+                            onClick={() => setNavOpen(false)}
+                            className={`rounded-lg px-3 py-2 text-left font-medium transition-colors ${
+                              isActive
+                                ? "bg-primary/10 text-foreground"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                          >
+                            {label}
+                          </Link>
+                        );
+                      })}
+                    </nav>
+                  </SheetContent>
+                </Sheet>
+              </>
             )}
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-4 pl-6 ml-2 border-l border-border flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 pl-2 sm:pl-4 border-l border-border flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
@@ -127,7 +167,7 @@ export function Header() {
                       <div className="w-8 h-8 bg-log-green rounded-full flex items-center justify-center">
                         <User className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm font-medium hidden md:block text-foreground">
+                      <span className="text-sm font-medium hidden lg:block text-foreground truncate max-w-[120px]">
                         {user.username}
                       </span>
                     </Button>
