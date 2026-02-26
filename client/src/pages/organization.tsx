@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserCog } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserCog, EyeIcon, EyeOffIcon } from "lucide-react";
 import { Link } from "wouter";
 import {
   Dialog,
@@ -69,6 +69,7 @@ export default function OrganizationPage() {
   const [createUserPassword, setCreateUserPassword] = useState("");
   const [createUserRole, setCreateUserRole] = useState<string>("developer");
   const [createUserJoinUrl, setCreateUserJoinUrl] = useState<string | null>(null);
+  const [showCreateUserPassword, setShowCreateUserPassword] = useState(false);
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -354,14 +355,25 @@ export default function OrganizationPage() {
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="create-password">Temporary password</Label>
-                          <Input
-                            id="create-password"
-                            type="password"
-                            placeholder="••••••••"
-                            value={createUserPassword}
-                            onChange={(e) => setCreateUserPassword(e.target.value)}
-                            disabled={createUserForInviteMutation.isPending}
-                          />
+                          <div className="relative">
+                            <Input
+                              id="create-password"
+                              type={showCreateUserPassword ? "text" : "password"}
+                              placeholder="••••••••"
+                              value={createUserPassword}
+                              onChange={(e) => setCreateUserPassword(e.target.value)}
+                              disabled={createUserForInviteMutation.isPending}
+                              className="pr-10"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowCreateUserPassword((prev) => !prev)}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                              aria-label={showCreateUserPassword ? "Hide password" : "Show password"}
+                            >
+                              {showCreateUserPassword ? <EyeOffIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+                            </button>
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             At least 8 characters, with uppercase, lowercase, number, and special character.
                           </p>
