@@ -34,7 +34,12 @@ const transporter = nodemailer.createTransport({
 });
 
 function isEmailEnabled(): boolean {
-  return process.env.EMAIL_ENABLED !== 'false';
+  const enabled = process.env.EMAIL_ENABLED !== 'false';
+  const env = process.env.APP_ENV || process.env.NODE_ENV || '';
+  if (!enabled && env !== 'test' && (env === 'staging' || env === 'development')) {
+    console.warn('[email] Sending disabled (EMAIL_ENABLED=false). Set EMAIL_ENABLED=true and SMTP_* in .env.staging to send invite/verification emails.');
+  }
+  return enabled;
 }
 
 /** Format "from" for display: PushLog <no-reply@pushlog.ai>. Use SMTP_FROM if set (plain email gets "PushLog" prefix). */
@@ -144,13 +149,13 @@ export async function sendIncidentAlertEmail(
   }
 }
 
-/** Send team invite email with join link. Fire-and-forget; logs on failure. */
+/** Send team invite email with join link. Returns true if sent, false if skipped or failed (logs on failure). */
 export async function sendOrgInviteEmail(
   email: string,
   joinUrl: string,
   inviterName?: string
-): Promise<void> {
-  if (!isEmailEnabled()) return;
+): Promise<boolean> {
+  if (!isEmailEnabled()) return false;
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");
   const logoPath = getLogoPath();
   const useEmbeddedLogo = !!logoPath;
@@ -166,7 +171,9 @@ export async function sendOrgInviteEmail(
       html,
       attachments,
     });
+    return true;
   } catch (error) {
     console.error("[email] Failed to send org invite:", error);
+    return false;
   }
 } 

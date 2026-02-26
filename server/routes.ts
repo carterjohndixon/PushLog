@@ -2594,8 +2594,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         expiresAt.setDate(expiresAt.getDate() + expiresInDays);
         const { joinUrl } = await databaseStorage.createOrganizationInviteEmail(orgId, email, role, expiresAt, createdByUserId);
         const inviterName = req.user?.username || req.user?.email || undefined;
-        await sendOrgInviteEmail(email, joinUrl, inviterName);
-        res.status(201).json({ success: true, message: "Invite sent" });
+        const emailSent = await sendOrgInviteEmail(email, joinUrl, inviterName);
+        res.status(201).json({
+          success: true,
+          message: emailSent ? "Invite sent" : "Invite created; email was not sent (email is disabled or failed in this environment).",
+          emailSent,
+        });
       } catch (e) {
         console.error("Create org email invite error:", e);
         Sentry.captureException(e);

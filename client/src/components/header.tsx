@@ -45,7 +45,7 @@ export function Header() {
     setLocation("/");
   };
 
-  const isUserStagingAdmin = user?.email?.toLowerCase() === "carterjohndixon@gmail.com".toLowerCase();
+  const isUserStagingAdmin = user?.email?.toLowerCase() === import.meta.env.VITE_ADMIN_STAGING_EMAIL?.toLowerCase();
 
   const { theme, setTheme } = useTheme();
 
