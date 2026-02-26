@@ -388,8 +388,8 @@ export class DatabaseStorage implements IStorage {
     return rows.filter((m) => (m as any).status === "active") as OrganizationMembership[];
   }
 
-  /** Organization members with user display info (username or email) for org page. */
-  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]> {
+  /** Organization members with user display info (username, email) for org page. */
+  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[]> {
     const rows = await db
       .select({
         userId: organizationMemberships.userId,
@@ -412,6 +412,8 @@ export class DatabaseStorage implements IStorage {
       role: r.role,
       joinedAt: r.joinedAt,
       displayName: (r.username && String(r.username).trim()) || (r.email && String(r.email).trim()) || "Unknown",
+      username: r.username ? String(r.username).trim() : null,
+      email: r.email ? String(r.email).trim() : null,
     }));
   }
 
@@ -1742,6 +1744,17 @@ export class DatabaseStorage implements IStorage {
     };
 
     try {
+      // 0. Organization-related: remove membership, clear invite refs, delete invites created by user, then delete any orgs they own
+      await db.delete(organizationMemberships).where(eq(organizationMemberships.userId, userId));
+      await db.update(organizationInvites).set({ usedByUserId: null } as any).where(eq(organizationInvites.usedByUserId, userId));
+      await db.delete(organizationInvites).where(eq(organizationInvites.createdByUserId, userId));
+      const ownedOrgs = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.ownerId, userId));
+      for (const org of ownedOrgs) {
+        await db.delete(organizationInvites).where(eq(organizationInvites.organizationId, org.id));
+        await db.delete(organizationMemberships).where(eq(organizationMemberships.organizationId, org.id));
+        await db.delete(organizations).where(eq(organizations.id, org.id));
+      }
+
       // 1. Delete AI usage records (bulk delete, no full-table load)
       const deletedUsage = await db.delete(aiUsage).where(eq(aiUsage.userId, userId)).returning({ id: aiUsage.id });
       deletedData.aiUsage = deletedUsage.length;

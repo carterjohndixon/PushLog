@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import {
   AlertDialog,
@@ -52,9 +52,11 @@ function fetchOrg() {
 
 function fetchOrgMembers() {
   return apiRequest("GET", "/api/org/members").then((r) => r.json()) as Promise<{
-    members: { userId: string; role: string; joinedAt: string | null; displayName: string }[];
+    members: { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[];
   }>;
 }
+
+type Member = { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null };
 
 const ROLE_ORDER = ["owner", "admin", "developer", "viewer"];
 const ROLE_LABELS: Record<string, string> = {
@@ -75,6 +77,7 @@ export default function OrganizationPage() {
   const [emailInviteEmail, setEmailInviteEmail] = useState("");
   const [emailInviteRole, setEmailInviteRole] = useState<string>("developer");
   const [memberToRemove, setMemberToRemove] = useState<{ userId: string; displayName: string } | null>(null);
+  const [selectedMember, setSelectedMember] = useState<Member | null>(null);
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -211,6 +214,7 @@ export default function OrganizationPage() {
     },
     onSuccess: () => {
       setMemberToRemove(null);
+      setSelectedMember(null);
       queryClient.invalidateQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
       toast({ title: "Member removed", description: "They no longer have access to this organization." });
     },
@@ -293,15 +297,6 @@ export default function OrganizationPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm" className="text-muted-foreground">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Dashboard
-            </Button>
-          </Link>
-        </div>
-
         <div className="space-y-8">
           {/* Organization overview */}
           <Card>
@@ -475,6 +470,97 @@ export default function OrganizationPage() {
             </AlertDialogContent>
           </AlertDialog>
 
+          {/* Member detail modal (owner/admin only) */}
+          {canInvite && (
+            <Dialog open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
+              <DialogContent className="max-w-md">
+                {selectedMember && (
+                  <>
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                          <User className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                        <span>{selectedMember.displayName}</span>
+                        {selectedMember.userId === String(currentUserId) && (
+                          <span className="text-muted-foreground font-normal text-sm">(you)</span>
+                        )}
+                      </DialogTitle>
+                      <DialogDescription>
+                        Member details and actions. Remove revokes access only—their account stays.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                      <dl className="grid gap-3 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground">Name</dt>
+                          <dd className="font-medium text-foreground">{selectedMember.displayName}</dd>
+                        </div>
+                        {selectedMember.username != null && selectedMember.username !== "" && (
+                          <div>
+                            <dt className="text-muted-foreground">Username</dt>
+                            <dd className="font-mono text-foreground">{selectedMember.username}</dd>
+                          </div>
+                        )}
+                        {selectedMember.email != null && selectedMember.email !== "" && (
+                          <div>
+                            <dt className="text-muted-foreground">Email</dt>
+                            <dd className="font-mono text-foreground break-all">{selectedMember.email}</dd>
+                          </div>
+                        )}
+                        {selectedMember.joinedAt && (
+                          <div>
+                            <dt className="text-muted-foreground">Joined</dt>
+                            <dd className="text-foreground">{formatLocalDate(selectedMember.joinedAt)}</dd>
+                          </div>
+                        )}
+                      </dl>
+                      {selectedMember.userId !== String(currentUserId) && (
+                        <div className="flex flex-col gap-3 pt-2 border-t border-border">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Role</span>
+                            <Select
+                              value={selectedMember.role}
+                              onValueChange={(role) => {
+                                updateRoleMutation.mutate({ userId: selectedMember.userId, role });
+                                setSelectedMember((m) => (m ? { ...m, role } : null));
+                              }}
+                              disabled={updateRoleMutation.isPending}
+                            >
+                              <SelectTrigger className="w-[140px]">
+                                <SelectValue placeholder="Change role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ROLE_ORDER.map((r) => (
+                                  <SelectItem key={r} value={r}>
+                                    {ROLE_LABELS[r]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive w-fit"
+                            onClick={() => {
+                              setMemberToRemove({ userId: selectedMember.userId, displayName: selectedMember.displayName });
+                              setSelectedMember(null);
+                            }}
+                            disabled={removeMemberMutation.isPending}
+                          >
+                            <UserMinus className="w-4 h-4 mr-2" />
+                            Remove from organization
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
+
           {/* Team members */}
           <Card>
             <CardHeader>
@@ -500,9 +586,13 @@ export default function OrganizationPage() {
                   {sortedMembers.map((member) => (
                     <div
                       key={member.userId}
+                      role={canInvite ? "button" : undefined}
+                      tabIndex={canInvite ? 0 : undefined}
+                      onClick={canInvite ? () => setSelectedMember(member) : undefined}
+                      onKeyDown={canInvite ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedMember(member); } } : undefined}
                       className={`flex items-center gap-4 p-4 rounded-lg border border-border bg-card ${
                         member.userId === String(currentUserId) ? "ring-2 ring-log-green/30" : ""
-                      }`}
+                      } ${canInvite ? "cursor-pointer hover:bg-muted/50 transition-colors" : ""}`}
                     >
                       <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
                         <User className="w-6 h-6 text-muted-foreground" />
@@ -514,29 +604,10 @@ export default function OrganizationPage() {
                             <span className="text-muted-foreground font-normal ml-1">(you)</span>
                           )}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          {canInvite ? (
-                            <Select
-                              value={member.role}
-                              onValueChange={(role) => updateRoleMutation.mutate({ userId: member.userId, role })}
-                              disabled={updateRoleMutation.isPending}
-                            >
-                              <SelectTrigger className="w-[120px] h-7 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {ROLE_ORDER.map((r) => (
-                                  <SelectItem key={r} value={r}>
-                                    {ROLE_LABELS[r]}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <Badge variant="secondary" className="capitalize font-normal">
-                              {ROLE_LABELS[member.role] ?? member.role}
-                            </Badge>
-                          )}
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="secondary" className="capitalize font-normal">
+                            {ROLE_LABELS[member.role] ?? member.role}
+                          </Badge>
                         </div>
                         {member.joinedAt && (
                           <p className="text-xs text-muted-foreground mt-1">
@@ -544,17 +615,10 @@ export default function OrganizationPage() {
                           </p>
                         )}
                       </div>
-                      {canInvite && member.userId !== String(currentUserId) && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-muted-foreground hover:text-destructive shrink-0"
-                          onClick={() => setMemberToRemove({ userId: member.userId, displayName: member.displayName })}
-                          disabled={removeMemberMutation.isPending}
-                          title="Remove from organization"
-                        >
-                          <UserMinus className="w-4 h-4" />
-                        </Button>
+                      {canInvite && (
+                        <span className="text-muted-foreground shrink-0" aria-hidden>
+                          <ChevronRight className="w-4 h-4" />
+                        </span>
                       )}
                     </div>
                   ))}
