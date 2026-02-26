@@ -553,7 +553,7 @@ export function OpenAIModels({
         </CardContent>
       </Card>
 
-      {userHasOpenAiKey && (
+          {userHasOpenAiKey && (
         <Card className="card-lift mb-8 border-border shadow-forest">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
@@ -616,7 +616,7 @@ export function OpenAIModels({
                     </Command>
                   </PopoverContent>
                 </Popover>
-              </div>
+                </div>
               <div className="flex-1 min-w-[180px] max-w-sm">
                 <Label className="text-xs text-muted-foreground mb-1.5 block">Integration</Label>
                 <Select value={applyToIntegrationId} onValueChange={setApplyToIntegrationId}>
@@ -678,11 +678,11 @@ export function OpenAIModels({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               {(() => {
                 const effectiveDefaultId =
-                  defaultModelId ||
-                  (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                      defaultModelId ||
+                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
                   (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
                 return (
               <Popover open={defaultModelOpen} onOpenChange={setDefaultModelOpen}>
@@ -708,7 +708,7 @@ export function OpenAIModels({
                     <CommandList>
                       <CommandEmpty>No model found.</CommandEmpty>
                       <CommandGroup>
-                        {openaiModels.map((m) => (
+                      {openaiModels.map((m) => (
                           <CommandItem
                             key={m.id}
                             value={m.id}
@@ -717,14 +717,14 @@ export function OpenAIModels({
                               setDefaultModelOpen(false);
                             }}
                           >
-                            <span className="flex items-center gap-2">
-                              {getAiModelDisplayName(m.id)}
-                              {recommendedOpenai === m.id && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
-                              )}
-                            </span>
+                          <span className="flex items-center gap-2">
+                            {getAiModelDisplayName(m.id)}
+                            {recommendedOpenai === m.id && (
+                              <span className="text-xs px-1.5 py-0.5 rounded-full bg-log-green/20 text-log-green font-medium">Recommended</span>
+                            )}
+                          </span>
                           </CommandItem>
-                        ))}
+                      ))}
                       </CommandGroup>
                       {!openaiModelsLoading && openaiModels.length === 0 && (
                         <div className="py-4 px-2 text-sm text-muted-foreground text-center">No models available</div>
@@ -735,67 +735,67 @@ export function OpenAIModels({
               </Popover>
                 );
               })()}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant="default"
-                  className="bg-log-green hover:bg-log-green/90"
-                  disabled={
-                    !(
-                      defaultModelId ||
-                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                      (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="default"
+                      className="bg-log-green hover:bg-log-green/90"
+                      disabled={
+                        !(
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
                     ) || setDefaultModelMutation.isPending
-                  }
-                  onClick={() => {
-                    const val =
-                      defaultModelId ||
-                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                      (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
+                      }
+                      onClick={() => {
+                        const val =
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
                     if (val) setDefaultModelMutation.mutate(val);
-                  }}
-                >
-                  {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
-                </Button>
-                <Button
-                  variant="outline"
-                  className="border-border"
-                  disabled={
-                    !(
-                      defaultModelId ||
-                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                      (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
+                      }}
+                    >
+                      {setDefaultModelMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Set as default"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="border-border"
+                      disabled={
+                        !(
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "")
                     ) || replaceAllIntegrationsMutation.isPending || !integrations?.length
-                  }
-                  onClick={() => {
-                    const val =
-                      defaultModelId ||
-                      (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
-                      (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
-                    setReplaceAllModelId(val || "");
-                    setReplaceAllConfirmOpen(true);
-                  }}
-                >
-                  {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
-                </Button>
-              </div>
-            </div>
+                      }
+                      onClick={() => {
+                        const val =
+                          defaultModelId ||
+                          (savedPreferredModel && openaiModels.some((m) => m.id === savedPreferredModel) ? savedPreferredModel : "") ||
+                          (recommendedOpenai && openaiModels.some((m) => m.id === recommendedOpenai) ? recommendedOpenai : "");
+                        setReplaceAllModelId(val || "");
+                        setReplaceAllConfirmOpen(true);
+                      }}
+                    >
+                      {replaceAllIntegrationsMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Replace all active integrations"}
+                    </Button>
+                  </div>
+                </div>
             {savedPreferredModel && (
-              <p className="text-sm text-muted-foreground">
-                Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                  <p className="text-sm text-muted-foreground">
+                    Current default: <span className="font-medium text-foreground">{getAiModelDisplayName(savedPreferredModel)}</span>
+                  </p>
+          )}
+        </CardContent>
+      </Card>
       )}
 
       {userHasOpenAiKey && (
         <Card className="card-lift mb-8 border-border shadow-forest">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <DollarSign className="w-5 h-5 text-log-green" />
-                Usage & cost
-              </CardTitle>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <DollarSign className="w-5 h-5 text-log-green" />
+              Usage & cost
+            </CardTitle>
               <button
                 onClick={handleRefreshUsage}
                 disabled={usageRefreshing}
@@ -1332,7 +1332,7 @@ export function OpenAIModels({
               <Skeleton className="h-64 w-full" />
             ) : (
               <>
-                <div className="rounded-md border border-border overflow-hidden">
+              <div className="rounded-md border border-border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50 border-border">
