@@ -34,10 +34,12 @@ const transporter = nodemailer.createTransport({
 });
 
 function isEmailEnabled(): boolean {
-  const enabled = process.env.EMAIL_ENABLED !== 'false';
+  const explicitDisabled = process.env.EMAIL_ENABLED === 'false';
+  const hasSmtp = !!(process.env.SMTP_USER && process.env.SMTP_PASS);
+  const enabled = !explicitDisabled && hasSmtp;
   const env = process.env.APP_ENV || process.env.NODE_ENV || '';
   if (!enabled && env !== 'test' && (env === 'staging' || env === 'development')) {
-    console.warn('[email] Sending disabled (EMAIL_ENABLED=false). Set EMAIL_ENABLED=true and SMTP_* in .env.staging to send invite/verification emails.');
+    console.warn('[email] Sending disabled. Set EMAIL_ENABLED=true and SMTP_USER/SMTP_PASS (and optionally SMTP_HOST/SMTP_PORT) in .env to send verification and invite emails.');
   }
   return enabled;
 }
@@ -50,6 +52,7 @@ function getFromAddress(): string {
 
 export async function sendVerificationEmail(email: string, token: string) {
   if (!isEmailEnabled()) {
+    console.warn("[email] Verification email skipped. Set EMAIL_ENABLED=true and SMTP_USER/SMTP_PASS to send on signup.");
     return;
   }
   const baseUrl = (process.env.APP_URL || "https://pushlog.ai").replace(/\/$/, "");

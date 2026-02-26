@@ -2221,8 +2221,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         verificationTokenExpiry,
       });
 
-      // Send verification email
-      await sendVerificationEmail(email, verificationToken);
+      // Send verification email immediately after creating the user (before session/response).
+      // If send fails or is skipped (e.g. EMAIL_ENABLED=false), we still succeed so the user can use "Resend".
+      try {
+        await sendVerificationEmail(email, verificationToken);
+      } catch (err) {
+        console.error("[signup] Verification email failed (user can use Resend):", err);
+      }
+
       req.session.userId = user.id;
       (req.session as any).mfaPending = true;
       (req.session as any).mfaSetupRequired = true;
