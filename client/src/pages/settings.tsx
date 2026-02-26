@@ -474,11 +474,11 @@ export default function Settings() {
                         {formatLocalDate(dataSummary.accountCreated)}
                       </p>
                     </div>
-                    {profileResponse?.user?.role && (
+                    {((profileResponse?.user?.role) || (profileResponse?.user?.organizationId)) && (
                       <div>
                         <p className="text-sm text-steel-gray">Team role</p>
                         <p className="font-medium capitalize">
-                          {profileResponse.user.role}
+                          {profileResponse?.user?.role ?? "—"}
                         </p>
                       </div>
                     )}

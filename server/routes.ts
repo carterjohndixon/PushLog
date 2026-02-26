@@ -5320,8 +5320,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Prevent caching so clients always get fresh emailVerified after verification
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-      const role = (req.user as any)?.role ?? null;
+      let role = (req.user as any)?.role ?? null;
       const organizationId = (req.user as any)?.organizationId ?? (user as any).organizationId ?? null;
+      // If role missing from session (e.g. old session or cache), fetch from DB so Team role always shows
+      if (!role && organizationId) {
+        const membership = await databaseStorage.getMembershipByOrganizationAndUser(organizationId, user.id);
+        if (membership && ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')) {
+          role = (membership as any).role;
+        }
+      }
       const payload = {
         success: true,
         user: {
