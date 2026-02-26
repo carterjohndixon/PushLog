@@ -84,9 +84,10 @@ export default function Settings() {
 
   const queryClient = useQueryClient();
 
-  const { data: profileResponse } = useQuery({
+  const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: fetchProfile,
+    refetchOnMount: "always",
   });
   const devMode = profileResponse?.user?.devMode ?? false;
   const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
@@ -498,11 +499,11 @@ export default function Settings() {
                         {formatLocalDate(dataSummary.accountCreated)}
                       </p>
                     </div>
-                    {((profileResponse?.user?.role) || (profileResponse?.user?.organizationId)) && (
+                    {((profileResponse?.user?.role) || (profileResponse?.user?.organizationId) || profileLoading) && (
                       <div>
                         <p className="text-sm text-steel-gray">Team role</p>
                         <p className="font-medium capitalize">
-                          {profileResponse?.user?.role ?? "—"}
+                          {profileLoading ? "Loading…" : (profileResponse?.user?.role ?? "—")}
                         </p>
                       </div>
                     )}
@@ -549,7 +550,7 @@ export default function Settings() {
                   Invite to team
                 </CardTitle>
                 <CardDescription>
-                  Create a link to invite people to your organization. They’ll need to log in (or sign up) and accept the invite.
+                  Create a link to invite people to your organization. They'll need to log in (or sign up) and accept the invite.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
