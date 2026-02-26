@@ -51,6 +51,10 @@ export interface IStorage {
   getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
   getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
   getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]>;
+  /** Remove a member from the org (delete membership, set user.organizationId = null). Returns false if cannot remove (e.g. last owner). */
+  removeOrganizationMember(organizationId: string, userIdToRemove: string, actorRole: string): Promise<{ ok: boolean; error?: string }>;
+  /** Update a member's role. Only owner/admin can do it; cannot demote last owner. */
+  updateOrganizationMemberRole(organizationId: string, userId: string, newRole: string, actorRole: string): Promise<{ ok: boolean; error?: string }>;
   createOrganizationInviteLink(organizationId: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ rawToken: string; joinUrl: string }>;
   revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean>;
   createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
@@ -221,6 +225,14 @@ export class MemStorage implements IStorage {
 
   async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]> {
     return [];
+  }
+
+  async removeOrganizationMember(_organizationId: string, _userIdToRemove: string, _actorRole: string): Promise<{ ok: boolean; error?: string }> {
+    return { ok: false, error: "Not implemented" };
+  }
+
+  async updateOrganizationMemberRole(_organizationId: string, _userId: string, _newRole: string, _actorRole: string): Promise<{ ok: boolean; error?: string }> {
+    return { ok: false, error: "Not implemented" };
   }
 
   async createOrganizationInviteLink(

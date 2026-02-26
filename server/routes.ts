@@ -2444,6 +2444,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /** Remove a member from the organization (revoke access only; does not delete their account). */
+  app.delete(
+    "/api/org/members/:userId",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const userIdToRemove = String(req.params.userId).trim();
+        if (!userIdToRemove) return res.status(400).json({ error: "userId is required" });
+        const actorRole = (req.user as any)?.role ?? "viewer";
+        const result = await databaseStorage.removeOrganizationMember(orgId, userIdToRemove, actorRole);
+        if (!result.ok) {
+          return res.status(400).json({ error: result.error || "Cannot remove member" });
+        }
+        res.status(200).json({ success: true, message: "Member removed from organization" });
+      } catch (e) {
+        console.error("Remove org member error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to remove member" });
+      }
+    }
+  );
+
+  /** Update a member's role (e.g. developer → admin). */
+  app.patch(
+    "/api/org/members/:userId",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("role").isIn(["owner", "admin", "developer", "viewer"]),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const userId = String(req.params.userId).trim();
+        const newRole = String(req.body?.role);
+        if (!userId) return res.status(400).json({ error: "userId is required" });
+        const actorRole = (req.user as any)?.role ?? "viewer";
+        const result = await databaseStorage.updateOrganizationMemberRole(orgId, userId, newRole, actorRole);
+        if (!result.ok) {
+          return res.status(400).json({ error: result.error || "Cannot update role" });
+        }
+        res.status(200).json({ success: true, message: "Role updated" });
+      } catch (e) {
+        console.error("Update org member role error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to update role" });
+      }
+    }
+  );
+
   app.patch(
     "/api/org",
     authenticateToken,

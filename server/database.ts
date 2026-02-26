@@ -415,6 +415,67 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
+  /** Remove a member from the org. Clears their organizationId. Fails if removing the last owner. */
+  async removeOrganizationMember(
+    organizationId: string,
+    userIdToRemove: string,
+    actorRole: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (actorRole !== "owner" && actorRole !== "admin") {
+      return { ok: false, error: "Only owners and admins can remove members." };
+    }
+    const members = await this.getOrganizationMembers(organizationId);
+    const target = members.find((m) => (m as any).userId === userIdToRemove);
+    if (!target) return { ok: false, error: "Member not found." };
+    const targetRole = (target as any).role;
+    if (targetRole === "owner") {
+      const ownerCount = members.filter((m) => (m as any).role === "owner").length;
+      if (ownerCount <= 1) return { ok: false, error: "Cannot remove the last owner. Transfer ownership first." };
+    }
+    await db
+      .delete(organizationMemberships)
+      .where(
+        and(
+          eq(organizationMemberships.organizationId, organizationId),
+          eq(organizationMemberships.userId, userIdToRemove)
+        )
+      );
+    await db.update(users).set({ organizationId: null }).where(eq(users.id, userIdToRemove));
+    return { ok: true };
+  }
+
+  /** Update a member's role. Cannot demote the last owner. */
+  async updateOrganizationMemberRole(
+    organizationId: string,
+    userId: string,
+    newRole: string,
+    actorRole: string
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (actorRole !== "owner" && actorRole !== "admin") {
+      return { ok: false, error: "Only owners and admins can change roles." };
+    }
+    const allowedRoles = ["owner", "admin", "developer", "viewer"];
+    if (!allowedRoles.includes(newRole)) return { ok: false, error: "Invalid role." };
+    const members = await this.getOrganizationMembers(organizationId);
+    const target = members.find((m) => (m as any).userId === userId);
+    if (!target) return { ok: false, error: "Member not found." };
+    const currentRole = (target as any).role;
+    if (currentRole === "owner" && newRole !== "owner") {
+      const ownerCount = members.filter((m) => (m as any).role === "owner").length;
+      if (ownerCount <= 1) return { ok: false, error: "Cannot demote the last owner. Transfer ownership first." };
+    }
+    await db
+      .update(organizationMemberships)
+      .set({ role: newRole } as any)
+      .where(
+        and(
+          eq(organizationMemberships.organizationId, organizationId),
+          eq(organizationMemberships.userId, userId)
+        )
+      );
+    return { ok: true };
+  }
+
   async getOrganization(organizationId: string): Promise<Organization | undefined> {
     const [row] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
     return row as Organization | undefined;

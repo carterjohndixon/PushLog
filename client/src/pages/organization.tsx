@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,18 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2 } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus } from "lucide-react";
 import { Link } from "wouter";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -58,11 +68,13 @@ const INVITE_ROLES = ["admin", "developer", "viewer"] as const;
 
 export default function OrganizationPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteLinkRole, setInviteLinkRole] = useState<string>("developer");
   const [emailInviteEmail, setEmailInviteEmail] = useState("");
   const [emailInviteRole, setEmailInviteRole] = useState<string>("developer");
+  const [memberToRemove, setMemberToRemove] = useState<{ userId: string; displayName: string } | null>(null);
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -186,6 +198,48 @@ export default function OrganizationPage() {
     if (inviteLink) revokeInviteLinkMutation.mutate(inviteLink);
   };
 
+  const removeMemberMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/org/members/${encodeURIComponent(userId)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to remove member");
+      return data;
+    },
+    onSuccess: () => {
+      setMemberToRemove(null);
+      queryClient.invalidateQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
+      toast({ title: "Member removed", description: "They no longer have access to this organization." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Remove failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
+      const res = await fetch(`/api/org/members/${encodeURIComponent(userId)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to update role");
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
+      toast({ title: "Role updated", description: "The member's role has been changed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -240,10 +294,10 @@ export default function OrganizationPage() {
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
-          <Link href="/settings">
+          <Link href="/dashboard">
             <Button variant="ghost" size="sm" className="text-muted-foreground">
               <ArrowLeft className="w-4 h-4 mr-2" />
-              Settings
+              Dashboard
             </Button>
           </Link>
         </div>
@@ -394,6 +448,33 @@ export default function OrganizationPage() {
             </>
           )}
 
+          {/* Remove member confirmation */}
+          <AlertDialog open={!!memberToRemove} onOpenChange={(open) => !open && setMemberToRemove(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove from organization?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {memberToRemove && (
+                    <>
+                      <strong>{memberToRemove.displayName}</strong> will lose access to this organization. Their account
+                      will not be deleted—they can be invited again later.
+                    </>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => memberToRemove && removeMemberMutation.mutate(memberToRemove.userId)}
+                  disabled={removeMemberMutation.isPending}
+                >
+                  {removeMemberMutation.isPending ? "Removing…" : "Remove from organization"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
           {/* Team members */}
           <Card>
             <CardHeader>
@@ -433,10 +514,29 @@ export default function OrganizationPage() {
                             <span className="text-muted-foreground font-normal ml-1">(you)</span>
                           )}
                         </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="secondary" className="capitalize font-normal">
-                            {ROLE_LABELS[member.role] ?? member.role}
-                          </Badge>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          {canInvite ? (
+                            <Select
+                              value={member.role}
+                              onValueChange={(role) => updateRoleMutation.mutate({ userId: member.userId, role })}
+                              disabled={updateRoleMutation.isPending}
+                            >
+                              <SelectTrigger className="w-[120px] h-7 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {ROLE_ORDER.map((r) => (
+                                  <SelectItem key={r} value={r}>
+                                    {ROLE_LABELS[r]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <Badge variant="secondary" className="capitalize font-normal">
+                              {ROLE_LABELS[member.role] ?? member.role}
+                            </Badge>
+                          )}
                         </div>
                         {member.joinedAt && (
                           <p className="text-xs text-muted-foreground mt-1">
@@ -444,6 +544,18 @@ export default function OrganizationPage() {
                           </p>
                         )}
                       </div>
+                      {canInvite && member.userId !== String(currentUserId) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground hover:text-destructive shrink-0"
+                          onClick={() => setMemberToRemove({ userId: member.userId, displayName: member.displayName })}
+                          disabled={removeMemberMutation.isPending}
+                          title="Remove from organization"
+                        >
+                          <UserMinus className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
