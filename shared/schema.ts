@@ -50,6 +50,7 @@ export const users = pgTable("users", {
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  domain: text("domain"), // optional company domain (e.g. acme.com)
   type: text("type").notNull(), // legacy — always "solo"; not read at runtime
   ownerId: uuid("owner_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),

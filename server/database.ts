@@ -483,9 +483,10 @@ export class DatabaseStorage implements IStorage {
     return row as Organization | undefined;
   }
 
-  async updateOrganization(organizationId: string, updates: { name?: string }): Promise<void> {
+  async updateOrganization(organizationId: string, updates: { name?: string; domain?: string | null }): Promise<void> {
     const set: Record<string, unknown> = {};
     if (updates.name !== undefined) set.name = updates.name;
+    if (updates.domain !== undefined) set.domain = updates.domain === "" ? null : updates.domain;
     if (Object.keys(set).length === 0) return;
     await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
   }

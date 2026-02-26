@@ -2438,7 +2438,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const orgId = (req as any).orgId as string;
       const org = await databaseStorage.getOrganization(orgId);
       if (!org) return res.status(404).json({ error: "Organization not found" });
-      res.status(200).json({ id: org.id, name: (org as any).name, type: (org as any).type });
+      const members = await databaseStorage.getOrganizationMembers(orgId);
+      const memberCount = members.length;
+      let isDefaultOrgName = false;
+      const ownerId = (org as any).ownerId;
+      if (ownerId && memberCount > 0) {
+        const owner = await databaseStorage.getUserById(ownerId);
+        const ownerLabel = (owner?.username || owner?.email || "My PushLog").toString().trim() || "My PushLog";
+        const defaultName = `${ownerLabel}'s workspace`;
+        isDefaultOrgName = (org as any).name === defaultName;
+      }
+      res.status(200).json({
+        id: org.id,
+        name: (org as any).name,
+        domain: (org as any).domain ?? null,
+        type: (org as any).type,
+        memberCount,
+        isDefaultOrgName,
+      });
     } catch (e) {
       console.error("Get org error:", e);
       Sentry.captureException(e);
@@ -2518,8 +2535,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/org",
     authenticateToken,
     requireOrgMember,
-    requireOrgRole(["owner"]),
-    body("name").optional().trim().isLength({ min: 1, max: 100 }),
+    requireOrgRole(["owner", "admin"]),
+    body("name").optional().trim().isLength({ min: 1, max: 60 }),
+    body("domain").optional().trim(),
     async (req: Request, res: Response) => {
       try {
         const errors = validationResult(req);
@@ -2527,13 +2545,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "Validation failed", details: errors.array() });
         }
         const orgId = (req as any).orgId as string;
-        const updates: { name?: string } = {};
-        if (typeof req.body?.name === "string" && req.body.name.trim()) updates.name = req.body.name.trim();
+        const updates: { name?: string; domain?: string | null } = {};
+        if (typeof req.body?.name === "string" && req.body.name.trim()) {
+          updates.name = req.body.name.trim();
+        }
+        if (req.body?.domain !== undefined) {
+          let domain = typeof req.body.domain === "string" ? req.body.domain.trim().toLowerCase() : "";
+          if (domain) {
+            domain = domain.replace(/^https?:\/\//, "").replace(/\/+$/, "").split("/")[0] ?? "";
+            const domainRegex = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\.[a-z]{2,}$/i;
+            if (!domainRegex.test(domain)) {
+              return res.status(400).json({ error: "Invalid domain. Use a format like acme.com" });
+            }
+          }
+          updates.domain = domain || null;
+        }
         if (Object.keys(updates).length === 0) {
           return res.status(400).json({ error: "No valid updates" });
         }
         await databaseStorage.updateOrganization(orgId, updates);
-        res.status(200).json({ success: true });
+        const org = await databaseStorage.getOrganization(orgId);
+        res.status(200).json({
+          success: true,
+          org: org ? { id: org.id, name: (org as any).name, domain: (org as any).domain ?? null } : undefined,
+        });
       } catch (e) {
         console.error("Update org error:", e);
         Sentry.captureException(e);

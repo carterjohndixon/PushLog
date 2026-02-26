@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import {
   AlertDialog,
@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SetupOrganizationModal, isSetupOrgDismissed } from "@/components/setup-organization-modal";
 
 const ORG_QUERY_KEY = ["org"];
 const ORG_MEMBERS_QUERY_KEY = ["org", "members"];
@@ -46,7 +47,10 @@ function fetchOrg() {
   return apiRequest("GET", "/api/org").then((r) => r.json()) as Promise<{
     id: string;
     name: string;
+    domain?: string | null;
     type: string;
+    memberCount: number;
+    isDefaultOrgName: boolean;
   }>;
 }
 
@@ -78,6 +82,8 @@ export default function OrganizationPage() {
   const [emailInviteRole, setEmailInviteRole] = useState<string>("developer");
   const [memberToRemove, setMemberToRemove] = useState<{ userId: string; displayName: string } | null>(null);
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
+  const [setupModalMode, setSetupModalMode] = useState<"setup" | "edit">("setup");
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -102,6 +108,24 @@ export default function OrganizationPage() {
   const sortedMembers = [...members].sort(
     (a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)
   );
+
+  const showSetupPrompt =
+    !!canInvite &&
+    orgData?.memberCount === 1 &&
+    !!orgData?.isDefaultOrgName &&
+    !!orgData?.id &&
+    !isSetupOrgDismissed(orgData.id);
+
+  useEffect(() => {
+    if (showSetupPrompt && orgData?.id) {
+      setSetupModalMode("setup");
+      setSetupModalOpen(true);
+    }
+  }, [showSetupPrompt, orgData?.id]);
+
+  const handleSetupSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ORG_QUERY_KEY });
+  };
 
   const createInviteLinkMutation = useMutation({
     mutationFn: async (opts?: { role?: string; expiresInDays?: number }) => {
@@ -317,22 +341,40 @@ export default function OrganizationPage() {
                         <Skeleton className="h-4 w-24 mt-1" />
                       ) : (
                         <>
+                          {orgData?.domain && (
+                            <span className="block text-muted-foreground">{orgData.domain}</span>
+                          )}
                           {members.length} member{members.length !== 1 ? "s" : ""}
                         </>
                       )}
                     </CardDescription>
                   </div>
                 </div>
-                {canInvite && (
-                  <Button
-                    variant="glow"
-                    className="text-white"
-                    onClick={() => setInviteModalOpen(true)}
-                  >
-                    <UserPlus className="w-4 h-4 mr-2" />
-                    Invite member
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {canInvite && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSetupModalMode("edit");
+                        setSetupModalOpen(true);
+                      }}
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Edit organization
+                    </Button>
+                  )}
+                  {canInvite && (
+                    <Button
+                      variant="glow"
+                      className="text-white"
+                      onClick={() => setInviteModalOpen(true)}
+                    >
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Invite member
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
           </Card>
@@ -559,6 +601,20 @@ export default function OrganizationPage() {
                 )}
               </DialogContent>
             </Dialog>
+          )}
+
+          {/* Setup / Edit organization modal */}
+          {orgData && (
+            <SetupOrganizationModal
+              open={setupModalOpen}
+              onOpenChange={setSetupModalOpen}
+              orgId={orgData.id}
+              initialName={orgData.name}
+              initialDomain={orgData.domain ?? undefined}
+              mode={setupModalMode}
+              onSuccess={handleSetupSuccess}
+              onSkip={setupModalMode === "setup" ? handleSetupSuccess : undefined}
+            />
           )}
 
           {/* Members */}
