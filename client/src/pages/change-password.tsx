@@ -19,8 +19,6 @@ export default function ChangePasswordPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const fromJoin = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("from") === "join";
-
   const changePasswordMutation = useMutation({
     mutationFn: async () => {
       if (newPassword !== confirmPassword) throw new Error("New passwords do not match");
@@ -60,9 +58,7 @@ export default function ChangePasswordPage() {
               <CardTitle>Change password</CardTitle>
             </div>
             <CardDescription>
-              {fromJoin
-                ? "You've joined the team. Please set a new password to continue."
-                : "Enter your current password and choose a new one."}
+              Enter your current password and choose a new one.
             </CardDescription>
           </CardHeader>
           <CardContent>

@@ -580,7 +580,7 @@ export default function Settings() {
                 <div className="flex flex-wrap gap-2">
                   <Link href="/organization">
                     <Button variant="outline" size="sm">
-                      View team page
+                      View organization page
                     </Button>
                   </Link>
                 </div>
@@ -620,7 +620,7 @@ export default function Settings() {
                   Organization
                 </CardTitle>
                 <CardDescription>
-                  View your team and members.
+                  View your organization and members.
                 </CardDescription>
               </CardHeader>
               <CardContent>

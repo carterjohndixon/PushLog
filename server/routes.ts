@@ -2532,68 +2532,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
-  /** Create a user account for an invite (admin sets email, username, password). Invitee will be prompted to change password after accepting. */
+  /** Revoke an invite link. Accepts joinUrl (token extracted from path) or token. Sets usedAt so the link stops working. */
   app.post(
-    "/api/org/invites/create-user",
+    "/api/org/invites/revoke-link",
     authenticateToken,
     requireOrgMember,
     requireOrgRole(["owner", "admin"]),
-    body("email").trim().isEmail().withMessage("Valid email is required"),
-    body("username").trim().isLength({ min: 1, max: 100 }).withMessage("Username is required"),
-    body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
-    body("role").optional().isIn(["owner", "admin", "developer", "viewer"]),
-    body("sendEmail").optional().isBoolean(),
+    body("joinUrl").optional().trim(),
+    body("token").optional().trim(),
     async (req: Request, res: Response) => {
       try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-          return res.status(400).json({ error: "Validation failed", details: errors.array() });
-        }
         const orgId = (req as any).orgId as string;
-        const createdByUserId = req.user!.userId;
-        const email = String(req.body.email).trim().toLowerCase();
-        const username = String(req.body.username).trim();
-        const password = String(req.body.password);
-        const role = (req.body?.role as string) || "developer";
-        const sendEmail = req.body?.sendEmail === true;
-
-        const passwordError = validatePasswordRequirements(password);
-        if (passwordError) {
-          return res.status(400).json({ error: passwordError });
+        let token: string | undefined = (req.body?.token as string)?.trim();
+        const joinUrl = (req.body?.joinUrl as string)?.trim();
+        if (!token && joinUrl) {
+          const match = joinUrl.match(/\/join\/([^/?#]+)/);
+          token = match ? match[1].replace(/\/+$/, "").trim() : undefined;
         }
-
-        const existingByEmail = await databaseStorage.getUserByEmail(email);
-        if (existingByEmail) {
-          return res.status(400).json({ error: "An account with this email already exists." });
+        if (!token) {
+          return res.status(400).json({ error: "joinUrl or token is required" });
         }
-        const existingByUsername = await databaseStorage.getUserByUsername(username);
-        if (existingByUsername) {
-          return res.status(400).json({ error: "This username is already taken." });
+        const revoked = await databaseStorage.revokeOrganizationInviteLink(orgId, token);
+        if (!revoked) {
+          return res.status(404).json({ error: "Invite link not found, already used, or expired" });
         }
-
-        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-        await databaseStorage.createUserWithoutOrg({
-          email,
-          username,
-          password: hashedPassword,
-          emailVerified: true,
-          mustChangePassword: true,
-        });
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7);
-        const { joinUrl } = await databaseStorage.createOrganizationInviteEmail(orgId, email, role, expiresAt, createdByUserId);
-
-        if (sendEmail) {
-          const inviterName = req.user?.username || req.user?.email || undefined;
-          await sendOrgInviteEmail(email, joinUrl, inviterName);
-        }
-
-        res.status(201).json({ success: true, joinUrl, message: sendEmail ? "Account created and invite email sent." : "Account created. Share the invite link with them." });
+        res.status(200).json({ success: true, message: "Invite link revoked" });
       } catch (e) {
-        console.error("Create user for invite error:", e);
+        console.error("Revoke invite link error:", e);
         Sentry.captureException(e);
-        res.status(500).json({ error: "Failed to create user and invite" });
+        res.status(500).json({ error: "Failed to revoke invite link" });
       }
     }
   );
@@ -2624,7 +2591,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           const members = await databaseStorage.getOrganizationMembers(result.organizationId);
           const joiner = await databaseStorage.getUserById(userId);
-          const joinerName = (joiner?.username || joiner?.email || "A team member").toString().trim();
+          const joinerName = (joiner?.username || joiner?.email || "An organization member").toString().trim();
           const roleLabel = result.role === "owner" ? "owner" : result.role === "admin" ? "admin" : result.role === "developer" ? "developer" : "viewer";
           for (const m of members) {
             const memberUserId = (m as any).userId;
@@ -2632,7 +2599,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await databaseStorage.createNotification({
               userId: memberUserId,
               type: "member_joined",
-              title: "New team member",
+              title: "New organization member",
               message: `${joinerName} joined the organization as ${roleLabel}.`,
               metadata: JSON.stringify({ organizationId: result.organizationId, joinedUserId: userId, role: result.role }),
             } as any);

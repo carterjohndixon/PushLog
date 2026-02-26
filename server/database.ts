@@ -449,6 +449,24 @@ export class DatabaseStorage implements IStorage {
     return { rawToken, joinUrl };
   }
 
+  /** Revoke an invite link by raw token. Sets usedAt so the link can no longer be used. Only touches type='link'; email invites are unaffected. */
+  async revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean> {
+    const tokenHash = hashToken(token);
+    const result = await db
+      .update(organizationInvites)
+      .set({ usedAt: new Date().toISOString() } as any)
+      .where(
+        and(
+          eq(organizationInvites.organizationId, organizationId),
+          eq(organizationInvites.tokenHash, tokenHash),
+          eq(organizationInvites.type, "link"),
+          isNull(organizationInvites.usedAt)
+        )
+      )
+      .returning({ id: organizationInvites.id });
+    return result.length > 0;
+  }
+
   async createOrganizationInviteEmail(
     organizationId: string,
     email: string,

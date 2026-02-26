@@ -169,7 +169,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       return res.status(403).json({
         error: 'Pending invite',
         code: 'pending_invite',
-        message: 'You have a pending team invite. Accept it to continue.',
+        message: 'You have a pending organization invite. Accept it to continue.',
       });
     }
 

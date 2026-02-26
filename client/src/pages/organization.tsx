@@ -135,7 +135,7 @@ export default function OrganizationPage() {
       setEmailInviteEmail("");
       toast({
         title: "Invite sent",
-        description: `An email with a sign-in link was sent to ${variables.email}. They can join the team after logging in.`,
+        description: `An email with a sign-in link was sent to ${variables.email}. They can join the organization after logging in.`,
       });
       setInviteModalOpen(false);
     },
@@ -154,9 +154,36 @@ export default function OrganizationPage() {
     sendEmailInviteMutation.mutate({ email, role: emailInviteRole });
   };
 
+  const revokeInviteLinkMutation = useMutation({
+    mutationFn: async (joinUrl: string) => {
+      const res = await fetch("/api/org/invites/revoke-link", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ joinUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 404) {
+        return { alreadyInvalid: true } as const;
+      }
+      if (!res.ok) throw new Error(data.error || "Failed to revoke link");
+      return data;
+    },
+    onSuccess: (data: { alreadyInvalid?: boolean }) => {
+      setInviteLink(null);
+      if (data?.alreadyInvalid) {
+        toast({ title: "Link already invalid", description: "This link was already used or expired. It can no longer be used." });
+      } else {
+        toast({ title: "Invite link revoked", description: "The link no longer works. Create a new link if needed." });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Revoke failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const revokeInviteLink = () => {
-    setInviteLink(null);
-    toast({ title: "Link cleared", description: "Create a new link when you're ready. Existing links will still expire in 7 days." });
+    if (inviteLink) revokeInviteLinkMutation.mutate(inviteLink);
   };
 
   if (!user) {
@@ -269,7 +296,7 @@ export default function OrganizationPage() {
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <UserPlus className="w-5 h-5 text-log-green" />
-                      Invite to team
+                      Invite to organization
                     </DialogTitle>
                     <DialogDescription>
                       Manage access to your organization. Invite people by email or create a link—they create their own account or sign in to join.
@@ -281,7 +308,7 @@ export default function OrganizationPage() {
                     <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
                       <h3 className="font-medium text-foreground">Invite by email</h3>
                       <p className="text-sm text-muted-foreground">
-                        We'll send them a link. They create an account or sign in to join your team.
+                        We'll send them a link. They create an account or sign in to join your organization.
                       </p>
                       <form onSubmit={handleSendEmailInvite} className="flex flex-wrap items-end gap-2">
                         <Input
@@ -355,8 +382,8 @@ export default function OrganizationPage() {
                               <Copy className="w-4 h-4" />
                             </Button>
                           </div>
-                          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={revokeInviteLink}>
-                            Revoke link
+                          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={revokeInviteLink} disabled={revokeInviteLinkMutation.isPending}>
+                            {revokeInviteLinkMutation.isPending ? "Revoking…" : "Revoke link"}
                           </Button>
                         </div>
                       )}

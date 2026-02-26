@@ -25,15 +25,8 @@ export default function Join() {
       .then(({ res, data }) => {
           if (res.ok && data.success) {
             setStatus("success");
-            setMessage(
-              data.requirePasswordChange
-                ? "You've joined the team. Redirecting to set a new password..."
-                : "You've joined the team. Redirecting to dashboard..."
-            );
-            setTimeout(
-              () => setLocation(data.requirePasswordChange ? "/change-password?from=join" : "/dashboard"),
-              1500
-            );
+            setMessage("You've joined the organization. Redirecting to dashboard...");
+            setTimeout(() => setLocation("/dashboard"), 1500);
           } else {
           setStatus("error");
           setMessage(
@@ -80,18 +73,11 @@ export default function Join() {
           if (cancelled) return;
         if (res.ok && data.success) {
           setStatus("success");
-          setMessage(
-            data.requirePasswordChange
-              ? "You've joined the team. Redirecting to set a new password..."
-              : "You've joined the team. Redirecting to dashboard..."
-          );
-          setTimeout(
-            () => setLocation(data.requirePasswordChange ? "/change-password?from=join" : "/dashboard"),
-            1500
-          );
+          setMessage("You've joined the organization. Redirecting to dashboard...");
+          setTimeout(() => setLocation("/dashboard"), 1500);
         } else if (data?.code === "already_in_org") {
             setStatus("confirm_leave");
-            setMessage("You're already in an organization. Do you want to leave it and join this team? You'll lose access to that organization's repos and integrations.");
+            setMessage("You're already in an organization. Do you want to leave it and join this organization? You'll lose access to that organization's repos and integrations.");
           } else {
             setStatus("error");
             setMessage(data?.error || "Failed to accept invite.");
@@ -114,7 +100,7 @@ export default function Join() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-center">Team invite</CardTitle>
+          <CardTitle className="text-center">Organization invite</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {status === "loading" && (
@@ -149,7 +135,7 @@ export default function Join() {
                   variant="default"
                   onClick={() => acceptInvite(true)}
                 >
-                  Leave and join this team
+                  Leave and join this organization
                 </Button>
               </div>
             </div>

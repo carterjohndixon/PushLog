@@ -52,6 +52,7 @@ export interface IStorage {
   getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
   getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]>;
   createOrganizationInviteLink(organizationId: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ rawToken: string; joinUrl: string }>;
+  revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean>;
   createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
   consumeOrganizationInvite(token: string, userId: string, options?: { leaveCurrentOrg?: boolean }): Promise<{ organizationId: string; role: string } | { error: string; code?: string }>;
 
@@ -229,6 +230,10 @@ export class MemStorage implements IStorage {
     _createdByUserId: string
   ): Promise<{ rawToken: string; joinUrl: string }> {
     throw new Error("MemStorage: createOrganizationInviteLink not implemented");
+  }
+
+  async revokeOrganizationInviteLink(_organizationId: string, _token: string): Promise<boolean> {
+    return false;
   }
 
   async createOrganizationInviteEmail(
