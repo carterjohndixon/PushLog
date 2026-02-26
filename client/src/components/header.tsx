@@ -84,7 +84,7 @@ export function Header() {
               </div>
             </Link>
             {user && (
-              <nav className="hidden md:flex space-x-8 ml-8 mr-2">
+              <nav className="hidden md:flex space-x-8 ml-8 mr-6">
                 {navLinks.map(({ href, label }) => {
                   const isActive = location === href;
                   return (
@@ -105,11 +105,11 @@ export function Header() {
             )}
           </div>
 
-          <div className="flex items-center space-x-2 sm:space-x-4 ml-6 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4 pl-6 ml-2 border-l border-border flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9"
+              className="h-9 w-9 shrink-0"
               aria-label={`Theme: ${theme} (click to cycle)`}
               onClick={cycleTheme}
             >
