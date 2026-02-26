@@ -326,6 +326,33 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
+  /**
+   * If the user has no organizationId, create a solo org + membership and set it (idempotent).
+   * Returns the updated user or null if user not found. Use after login so auth never 401s for "no org".
+   */
+  async ensureUserHasOrganization(userId: string): Promise<User | null> {
+    const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!u) return null;
+    const orgId = (u as any).organizationId;
+    if (orgId) return u ? convertToUser(u as any) : null;
+    const orgName = ((u.username || u.email || "My PushLog") as string).toString().trim() || "My PushLog";
+    const [org] = await db.insert(organizations).values({
+      name: orgName,
+      type: "solo",
+      ownerId: userId,
+    }).returning();
+    await db.insert(organizationMemberships).values({
+      organizationId: org.id,
+      userId,
+      role: "owner",
+      status: "active",
+      joinedAt: new Date().toISOString(),
+    } as any);
+    await db.update(users).set({ organizationId: org.id }).where(eq(users.id, userId));
+    const [updated] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    return updated ? convertToUser(updated as any) : null;
+  }
+
   async getMembershipByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined> {
     const [row] = await db.select().from(organizationMemberships).where(
       and(eq(organizationMemberships.organizationId, organizationId), eq(organizationMemberships.userId, userId))

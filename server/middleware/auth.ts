@@ -124,7 +124,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
     // Fetch user from database to populate session data
     // This happens on first request after login, then we cache it in session
-    const user = await databaseStorage.getUser(req.session.userId);
+    let user = await databaseStorage.getUser(req.session.userId);
     if (!user) {
       // User was deleted but session still exists - destroy session
       req.session.destroy(() => {});
@@ -133,11 +133,22 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
     const orgId = (user as any).organizationId;
     if (!orgId || orgId === '') {
+      // User has no org (e.g. staging not backfilled) — create solo org and set orgId so we don't bounce them to login
+      const updated = await databaseStorage.ensureUserHasOrganization(user.id);
+      if (!updated) {
+        req.session.destroy(() => {});
+        return res.status(401).json({ error: 'Account not fully set up. Please log in again.' });
+      }
+      user = updated;
+    }
+
+    const resolvedOrgId = (user as any).organizationId;
+    if (!resolvedOrgId || resolvedOrgId === '') {
       req.session.destroy(() => {});
       return res.status(401).json({ error: 'Account not fully set up. Please log in again.' });
     }
 
-    const membership = await databaseStorage.getMembershipByOrganizationAndUser(orgId, user.id);
+    const membership = await databaseStorage.getMembershipByOrganizationAndUser(resolvedOrgId, user.id);
     if (!membership) {
       req.session.destroy(() => {});
       return res.status(401).json({ error: 'Membership not found' });
@@ -163,7 +174,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       githubConnected: !!user.githubId,
       googleConnected: !!user.googleId,
       emailVerified: !!user.emailVerified,
-      organizationId: orgId,
+      organizationId: resolvedOrgId,
       role,
     };
 
