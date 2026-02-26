@@ -601,10 +601,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
-    // Deprecated: prefer getRepositoriesByOrganizationId(orgId). Wrapper for backward compatibility.
     const user = await this.getUser(userId);
-    if (!user || !(user as any).organizationId) return [];
-    return this.getRepositoriesByOrganizationId((user as any).organizationId);
+    if (!user) return [];
+    const orgId = (user as any).organizationId;
+    // Repos in the user's org (primary path)
+    const byOrg = orgId
+      ? await db.select().from(repositories).where(eq(repositories.organizationId, orgId))
+      : [];
+    // Repos owned by this user but with null organizationId (e.g. created before backfill or before user had org) — include them and backfill
+    const withNullOrg = await db
+      .select()
+      .from(repositories)
+      .where(and(eq(repositories.userId, userId), isNull(repositories.organizationId)));
+    if (withNullOrg.length > 0 && orgId) {
+      for (const r of withNullOrg) {
+        await db.update(repositories).set({ organizationId: orgId }).where(eq(repositories.id, r.id));
+      }
+    }
+    const byOrgIds = new Set(byOrg.map((r) => r.id));
+    const combined = [...byOrg];
+    for (const r of withNullOrg) {
+      if (!byOrgIds.has(r.id)) combined.push(r);
+    }
+    return combined as Repository[];
   }
 
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {

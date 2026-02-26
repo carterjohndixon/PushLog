@@ -23,6 +23,7 @@ import {
   getGitHubUser, 
   getUserRepositories, 
   createWebhook,
+  findExistingWebhook,
   deleteWebhook,
   validateGitHubToken,
   getGitHubTokenScopes
@@ -2821,21 +2822,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error("Admin permissions required. You need admin access to this repository to create webhooks.");
         }
 
-        // Try to create webhook with better error handling
+        // Try to reuse existing webhook or create one
         let webhook;
-        try {
-          webhook = await createWebhook(
-            user.githubToken,
-            validatedData.owner,
-            validatedData.name,
-            webhookUrl
-          );
-        } catch (webhookError) {
-          // If webhook creation fails due to OAuth app limitations, provide helpful error
-          if (webhookError instanceof Error && webhookError.message.includes('Resource not accessible by integration')) {
-            throw new Error("Webhook creation failed. This is likely due to GitHub OAuth app configuration. Please ensure your GitHub OAuth app has the 'repo' and 'admin:org_hook' scopes configured. You may need to reconnect your GitHub account to get the updated permissions.");
+        const existingHook = await findExistingWebhook(
+          user.githubToken,
+          validatedData.owner,
+          validatedData.name,
+          webhookUrl
+        );
+        if (existingHook) {
+          webhook = existingHook;
+        } else {
+          try {
+            webhook = await createWebhook(
+              user.githubToken,
+              validatedData.owner,
+              validatedData.name,
+              webhookUrl
+            );
+          } catch (webhookError) {
+            // If webhook creation fails due to OAuth app limitations, provide helpful error
+            if (webhookError instanceof Error && webhookError.message.includes('Resource not accessible by integration')) {
+              throw new Error("Webhook creation failed. This is likely due to GitHub OAuth app configuration. Please ensure your GitHub OAuth app has the 'repo' and 'admin:org_hook' scopes configured. You may need to reconnect your GitHub account to get the updated permissions.");
+            }
+            throw webhookError;
           }
-          throw webhookError;
         }
 
         const repository = await storage.createRepository({

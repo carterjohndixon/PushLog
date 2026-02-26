@@ -282,6 +282,36 @@ export async function getUserRepositories(accessToken: string): Promise<GitHubRe
 }
 
 /**
+ * List repository webhooks and return the one matching webhookUrl if it exists.
+ * Uses OAuth token; falls back to PAT if provided.
+ */
+export async function findExistingWebhook(
+  accessToken: string,
+  owner: string,
+  repo: string,
+  webhookUrl: string
+): Promise<GitHubWebhook | null> {
+  const tryFetch = async (token: string): Promise<GitHubWebhook | null> => {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/hooks`, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github.v3+json",
+      },
+    });
+    if (!response.ok) return null;
+    const hooks: GitHubWebhook[] = await response.json();
+    const normalizedOur = webhookUrl.replace(/\/$/, "");
+    const found = hooks.find((h) => (h.config?.url || "").replace(/\/$/, "") === normalizedOur);
+    return found ?? null;
+  };
+  const existing = await tryFetch(accessToken);
+  if (existing) return existing;
+  const pat = process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+  if (pat) return tryFetch(pat);
+  return null;
+}
+
+/**
  * Create a webhook for a repository using OAuth token or fallback to PAT
  */
 export async function createWebhook(
