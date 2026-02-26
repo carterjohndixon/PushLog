@@ -51,7 +51,7 @@ export default function FinishSetup() {
               <div>
                 <p className="font-semibold text-foreground">Solo developer</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  It’s just me. I’ll connect my repos and get notifications.
+                  It's just me. I'll connect my repos and get notifications.
                 </p>
               </div>
               {savingRole ? (
@@ -71,7 +71,7 @@ export default function FinishSetup() {
               <div>
                 <p className="font-semibold text-foreground">Team / organization</p>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  I’ll invite teammates and we’ll manage repos together.
+                  I'll invite teammates and we'll manage repos together.
                 </p>
               </div>
               {savingRole ? (

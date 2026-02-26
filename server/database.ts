@@ -114,6 +114,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     devMode: !!(dbUser as any).devMode,
     incidentEmailEnabled: (dbUser as any).incidentEmailEnabled !== false,
     receiveIncidentNotifications: (dbUser as any).receiveIncidentNotifications !== false,
+    mustChangePassword: !!(dbUser as any).mustChangePassword,
     createdAt: dbUser.createdAt
   };
 }
@@ -206,6 +207,16 @@ export class DatabaseStorage implements IStorage {
       return { ...created, organizationId: org.id };
     }
     return created;
+  }
+
+  /** Create a user without creating a solo org (e.g. for admin-created invite). Caller must add user to org when they accept invite. */
+  async createUserWithoutOrg(user: InsertUser): Promise<User> {
+    const result = await db.insert(users).values({
+      ...user,
+      verificationTokenExpiry: user.verificationTokenExpiry ? new Date(user.verificationTokenExpiry) : null,
+      resetPasswordTokenExpiry: user.resetPasswordTokenExpiry ? new Date(user.resetPasswordTokenExpiry) : null,
+    }).returning();
+    return convertToUser(result[0] as any);
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {

@@ -1,12 +1,12 @@
 # Risk Engine
 
-PushLog’s **diff / risk scoring engine** (Part 2.1). Turns each push’s file list, commit message, and churn into a numeric impact score, risk flags, change-type tags, hotspot files, and short explanations. Used in the GitHub webhook before persisting the push event.
+PushLog's **diff / risk scoring engine** (Part 2.1). Turns each push's file list, commit message, and churn into a numeric impact score, risk flags, change-type tags, hotspot files, and short explanations. Used in the GitHub webhook before persisting the push event.
 
 **V1:** Rule-based only — no AI, no database, no network. Pure computation.
 
 ---
 
-## How it’s used
+## How it's used
 
 - **Invocation:** The Node app spawns this binary as a **subprocess** for each push.
 - **Input:** One JSON object on **stdin** (commit message, files changed, additions, deletions).
@@ -65,7 +65,7 @@ cargo test -p risk-engine
 echo '{"commit_message":"feat: add auth","files_changed":["src/auth/jwt.go","package-lock.json"],"additions":50,"deletions":10}' | cargo run -p risk-engine --release
 ```
 
-Binary path used by Node: `target/release/risk-engine` (or `target/debug/risk-engine` if release isn’t built). Override with `RISK_ENGINE_BIN`.
+Binary path used by Node: `target/release/risk-engine` (or `target/debug/risk-engine` if release isn't built). Override with `RISK_ENGINE_BIN`.
 
 ---
 

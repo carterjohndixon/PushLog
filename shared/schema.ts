@@ -39,6 +39,8 @@ export const users = pgTable("users", {
   devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
   incidentEmailEnabled: boolean("incident_email_enabled").default(true), // Email incident alerts (Sentry, spike, etc.)
   receiveIncidentNotifications: boolean("receive_incident_notifications").default(true), // In incident pool (users with repos + this true get incidents); when false, never receive
+  /** When true, user must set a new password (e.g. after admin-created invite). Cleared after they change password. */
+  mustChangePassword: boolean("must_change_password").default(false),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (t) => [
   { name: "users_organization_id_idx", columns: [t.organizationId] },
@@ -411,6 +413,7 @@ export type User = {
   devMode?: boolean;
   incidentEmailEnabled?: boolean;
   receiveIncidentNotifications?: boolean;
+  mustChangePassword?: boolean;
   createdAt: string;
 };
 
@@ -429,6 +432,7 @@ export type InsertUser = {
   verificationTokenExpiry?: string | null;
   resetPasswordToken?: string | null;
   resetPasswordTokenExpiry?: string | null;
+  mustChangePassword?: boolean;
 };
 
 export type Repository = typeof repositories.$inferSelect;

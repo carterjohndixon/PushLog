@@ -69,7 +69,7 @@ The URL is also shown in-app under **Integrations** → **Incident Alerts (Sentr
 
 ## What PushLog Receives
 
-PushLog’s Sentry adapter accepts Sentry’s native webhook payload and transforms it into the incident engine format:
+PushLog's Sentry adapter accepts Sentry's native webhook payload and transforms it into the incident engine format:
 
 - **Exception type** from `exception.values[0].type`
 - **Message** from `exception.values[0].value` or the event title
@@ -98,10 +98,10 @@ The same incident email template is used as for Sentry/incident-engine alerts, i
 
 ## Deploy Correlation (Optional)
 
-To correlate errors with recent deploys, include a **change window** when sending events. PushLog’s GitHub integrations do this automatically for push events. For Sentry-only setups, you’d need to:
+To correlate errors with recent deploys, include a **change window** when sending events. PushLog's GitHub integrations do this automatically for push events. For Sentry-only setups, you'd need to:
 
 1. Use a release/deploy tracking tool that POSTs to `/api/webhooks/incidents` with `change_window`
-2. Or rely on the incident engine’s spike/regression detection (no deploy correlation)
+2. Or rely on the incident engine's spike/regression detection (no deploy correlation)
 
 ---
 
@@ -169,12 +169,12 @@ If you see **Request received** but not **Ingested**, the payload may be missing
 ## Troubleshooting
 
 **No incidents showing up?**
-- Confirm the Sentry alert rule fired (check Sentry’s Alert History)
+- Confirm the Sentry alert rule fired (check Sentry's Alert History)
 - Verify the webhook URL and that PushLog is reachable from Sentry
 - Check PushLog server logs for `[webhooks/sentry]` entries
 
 **Wrong format errors?**
-- PushLog expects Sentry’s **Issue Alert** webhook format. If using a custom integration, ensure it sends the standard `event_alert` payload.
+- PushLog expects Sentry's **Issue Alert** webhook format. If using a custom integration, ensure it sends the standard `event_alert` payload.
 
 **Need the generic webhook instead?**
 - Use `POST /api/webhooks/incidents` with the [Incident Event schema](../server/incidentEngine.ts) — useful for Datadog, custom scripts, etc.

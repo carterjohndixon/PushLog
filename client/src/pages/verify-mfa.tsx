@@ -83,7 +83,7 @@ export default function VerifyMfa() {
               Enter your verification code
             </h1>
             <p className="text-muted-foreground">
-              We need to confirm it’s you. Open your authenticator app and enter the 6-digit code.
+              We need to confirm it's you. Open your authenticator app and enter the 6-digit code.
             </p>
           </div>
 
@@ -96,7 +96,7 @@ export default function VerifyMfa() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">Check your authenticator app</h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Enter the code that’s currently showing. It updates every 30 seconds.
+                  Enter the code that's currently showing. It updates every 30 seconds.
                 </p>
               </div>
             </div>
@@ -126,8 +126,8 @@ export default function VerifyMfa() {
             <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-log-green shrink-0 mt-0.5" />
               <div className="text-sm text-muted-foreground">
-                <p className="font-medium text-foreground mb-0.5">Don’t have your phone?</p>
-                <p>Use a different account to sign in, or recover access from your account settings after you’re in.</p>
+                <p className="font-medium text-foreground mb-0.5">Don't have your phone?</p>
+                <p>Use a different account to sign in, or recover access from your account settings after you're in.</p>
               </div>
             </div>
           </div>

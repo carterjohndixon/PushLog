@@ -39,7 +39,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 **Status:** TODO | **Phase:** 1 (first)
 
-**Context:** PushLog is for GitHub change logging and incident tracking. Today it’s per-user: each developer manages their own repos and integrations. Some teams want a shared setup.
+**Context:** PushLog is for GitHub change logging and incident tracking. Today it's per-user: each developer manages their own repos and integrations. Some teams want a shared setup.
 
 **Goal:** Allow a CTO (or admin) to create a PushLog account and add developers to a team.
 
@@ -48,7 +48,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 - **Admin (e.g. CTO)** creates the PushLog account and is the account owner.
 - **Admin** can invite and add developers to the team.
 - **Shared visibility:** All repos and integrations are visible to everyone on the team.
-- **Restricted edits:** Only the admin can create, edit, or delete repos and integrations. Developers have read-only (or limited) access—they see everything but can’t change config.
+- **Restricted edits:** Only the admin can create, edit, or delete repos and integrations. Developers have read-only (or limited) access—they see everything but can't change config.
 - Developers still get their own push notifications, incident alerts, etc. based on what the admin has configured.
 
 ### Invite flow (preference: support all)

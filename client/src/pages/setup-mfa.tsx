@@ -131,7 +131,7 @@ export default function SetupMfa() {
               Set up two-factor authentication
             </h1>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Add an extra layer of security to your PushLog account. You’ll use an authenticator app to generate codes when you sign in.
+              Add an extra layer of security to your PushLog account. You'll use an authenticator app to generate codes when you sign in.
             </p>
           </div>
 

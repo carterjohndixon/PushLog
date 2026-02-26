@@ -65,6 +65,7 @@ const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
 const FinishSetup = lazy(() => import("@/pages/finish-setup"));
 const Join = lazy(() => import("@/pages/join"));
 const Organization = lazy(() => import("@/pages/organization"));
+const ChangePassword = lazy(() => import("@/pages/change-password"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -165,6 +166,11 @@ function Router() {
       <Route path="/organization">
         <ProtectedRoute pageName="organization">
           <Organization />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/change-password">
+        <ProtectedRoute pageName="change-password">
+          <ChangePassword />
         </ProtectedRoute>
       </Route>
       {isStagingHost && (

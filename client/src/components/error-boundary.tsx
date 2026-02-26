@@ -36,7 +36,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             <AlertCircle className="w-12 h-12 text-destructive mx-auto" />
             <h2 className="text-lg font-semibold text-foreground">Something went wrong</h2>
             <p className="text-sm text-muted-foreground">
-              This page couldn’t load. Try refreshing or go back to the dashboard.
+              This page couldn't load. Try refreshing or go back to the dashboard.
             </p>
             <div className="flex gap-2 justify-center">
               <Button variant="outline" onClick={() => window.location.reload()}>

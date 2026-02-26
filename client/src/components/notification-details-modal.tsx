@@ -47,7 +47,7 @@ export function NotificationDetailsModal() {
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <ErrorBoundary fallback={
           <div className="py-4 text-center text-muted-foreground text-sm">
-            <p>Couldn’t load notification details.</p>
+            <p>Couldn't load notification details.</p>
             <Button variant="outline" size="sm" className="mt-2" onClick={() => { setDialogOpen(false); setSelectedNotification(null); }}>
               Close
             </Button>

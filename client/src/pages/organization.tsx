@@ -13,8 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserCog } from "lucide-react";
 import { Link } from "wouter";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -52,10 +59,16 @@ const INVITE_ROLES = ["admin", "developer", "viewer"] as const;
 
 export default function OrganizationPage() {
   const { toast } = useToast();
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [inviteLinkRole, setInviteLinkRole] = useState<string>("developer");
   const [emailInviteEmail, setEmailInviteEmail] = useState("");
   const [emailInviteRole, setEmailInviteRole] = useState<string>("developer");
+  const [createUserEmail, setCreateUserEmail] = useState("");
+  const [createUserUsername, setCreateUserUsername] = useState("");
+  const [createUserPassword, setCreateUserPassword] = useState("");
+  const [createUserRole, setCreateUserRole] = useState<string>("developer");
+  const [createUserJoinUrl, setCreateUserJoinUrl] = useState<string | null>(null);
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -130,6 +143,7 @@ export default function OrganizationPage() {
         title: "Invite sent",
         description: `An email with a sign-in link was sent to ${variables.email}. They can join the team after logging in.`,
       });
+      setInviteModalOpen(false);
     },
     onError: (err: Error) => {
       toast({ title: "Send failed", description: err.message, variant: "destructive" });
@@ -145,6 +159,48 @@ export default function OrganizationPage() {
     }
     sendEmailInviteMutation.mutate({ email, role: emailInviteRole });
   };
+
+  const createUserForInviteMutation = useMutation({
+    mutationFn: async (sendEmail: boolean) => {
+      const res = await fetch("/api/org/invites/create-user", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          email: createUserEmail.trim().toLowerCase(),
+          username: createUserUsername.trim(),
+          password: createUserPassword,
+          role: createUserRole,
+          sendEmail,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to create user and invite");
+      return data as { success: boolean; joinUrl: string; message?: string };
+    },
+    onSuccess: (data, sendEmail) => {
+      if (sendEmail) {
+        toast({
+          title: "Account created and invite sent",
+          description: "They'll receive an email with the join link and will be prompted to change their password after accepting.",
+        });
+        setCreateUserEmail("");
+        setCreateUserUsername("");
+        setCreateUserPassword("");
+        setCreateUserJoinUrl(null);
+        setInviteModalOpen(false);
+      } else {
+        setCreateUserJoinUrl(data.joinUrl);
+        toast({
+          title: "Account created",
+          description: "Share the link below with them. They'll log in with the credentials you set and be prompted to change their password after joining.",
+        });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    },
+  });
 
   if (!user) {
     return (
@@ -234,98 +290,244 @@ export default function OrganizationPage() {
                     </CardDescription>
                   </div>
                 </div>
+                {canInvite && (
+                  <Button
+                    variant="glow"
+                    className="text-white"
+                    onClick={() => setInviteModalOpen(true)}
+                  >
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Invite member
+                  </Button>
+                )}
               </div>
             </CardHeader>
           </Card>
 
-          {/* Invite member (owner & admin only): create link + email invite */}
+          {/* Invite modal (owner & admin only) */}
           {canInvite && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-log-green" />
-                  Invite member
-                </CardTitle>
-                <CardDescription>
-                  Add someone to your team. Create a link to share, or send an invite by email. They’ll sign in (or sign up) and accept the invite.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <Label className="text-sm text-steel-gray">Create invite link</Label>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Select value={inviteLinkRole} onValueChange={setInviteLinkRole}>
-                      <SelectTrigger className="w-[140px]">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {INVITE_ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="glow"
-                      className="text-white"
-                      disabled={createInviteLinkMutation.isPending}
-                      onClick={() => createInviteLinkMutation.mutate({ role: inviteLinkRole, expiresInDays: 7 })}
-                    >
-                      {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
-                    </Button>
+            <>
+              <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-log-green" />
+                      Invite to team
+                    </DialogTitle>
+                    <DialogDescription>
+                      Create an account for someone and send them an invite, or invite by email/link and they create their own account.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-6 pt-2 max-h-[70vh] overflow-y-auto">
+                    {/* Option: Create account for them */}
+                    <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <UserCog className="w-4 h-4 text-log-green" />
+                        <Label className="text-sm font-medium">Create account for them</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Set their email, username, and a temporary password. They'll be prompted to change it when they accept the invite.
+                      </p>
+                      <div className="grid gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="create-email">Email</Label>
+                          <Input
+                            id="create-email"
+                            type="email"
+                            placeholder="colleague@example.com"
+                            value={createUserEmail}
+                            onChange={(e) => setCreateUserEmail(e.target.value)}
+                            disabled={createUserForInviteMutation.isPending}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="create-username">Username</Label>
+                          <Input
+                            id="create-username"
+                            type="text"
+                            placeholder="jdoe"
+                            value={createUserUsername}
+                            onChange={(e) => setCreateUserUsername(e.target.value)}
+                            disabled={createUserForInviteMutation.isPending}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="create-password">Temporary password</Label>
+                          <Input
+                            id="create-password"
+                            type="password"
+                            placeholder="••••••••"
+                            value={createUserPassword}
+                            onChange={(e) => setCreateUserPassword(e.target.value)}
+                            disabled={createUserForInviteMutation.isPending}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            At least 8 characters, with uppercase, lowercase, number, and special character.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="space-y-1.5 min-w-[120px]">
+                            <Label>Role</Label>
+                            <Select value={createUserRole} onValueChange={setCreateUserRole} disabled={createUserForInviteMutation.isPending}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {INVITE_ROLES.map((r) => (
+                                  <SelectItem key={r} value={r}>
+                                    {ROLE_LABELS[r]}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="flex gap-2 items-end flex-1">
+                            <Button
+                              type="button"
+                              variant="default"
+                              disabled={
+                                createUserForInviteMutation.isPending ||
+                                !createUserEmail.trim() ||
+                                !createUserUsername.trim() ||
+                                createUserPassword.length < 8
+                              }
+                              onClick={() => createUserForInviteMutation.mutate(true)}
+                            >
+                              <Mail className="w-4 h-4 mr-2" />
+                              {createUserForInviteMutation.isPending ? "Creating…" : "Send invite email"}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={
+                                createUserForInviteMutation.isPending ||
+                                !createUserEmail.trim() ||
+                                !createUserUsername.trim() ||
+                                createUserPassword.length < 8
+                              }
+                              onClick={() => createUserForInviteMutation.mutate(false)}
+                            >
+                              <Link2 className="w-4 h-4 mr-2" />
+                              Copy invite link
+                            </Button>
+                          </div>
+                        </div>
+                        {createUserJoinUrl && (
+                          <div className="flex gap-2 items-center pt-2">
+                            <Input readOnly value={createUserJoinUrl} className="font-mono text-xs flex-1" />
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              title="Copy link"
+                              onClick={() => {
+                                navigator.clipboard.writeText(createUserJoinUrl);
+                                toast({ title: "Copied", description: "Invite link copied to clipboard." });
+                              }}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-muted-foreground border-t border-border pt-2">
+                      Or invite without creating an account—they'll create their own when they follow the link.
+                    </p>
+
+                    {/* Option 1: Send invite by email (no account creation) */}
+                    <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-log-green" />
+                        <Label className="text-sm font-medium">Send invite by email</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        We'll email them a link. They create their own account (or sign in) and join your team.
+                      </p>
+                      <form onSubmit={handleSendEmailInvite} className="flex flex-wrap items-end gap-2">
+                        <Input
+                          type="email"
+                          placeholder="colleague@example.com"
+                          value={emailInviteEmail}
+                          onChange={(e) => setEmailInviteEmail(e.target.value)}
+                          disabled={sendEmailInviteMutation.isPending}
+                          className="flex-1 min-w-[180px]"
+                        />
+                        <Select value={emailInviteRole} onValueChange={setEmailInviteRole}>
+                          <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INVITE_ROLES.map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {ROLE_LABELS[r]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="submit" disabled={sendEmailInviteMutation.isPending}>
+                          {sendEmailInviteMutation.isPending ? "Sending…" : "Send invite"}
+                        </Button>
+                      </form>
+                    </div>
+
+                    {/* Option 2: Copy invite link (no account creation) */}
+                    <div className="space-y-3 rounded-lg border border-border p-4 bg-muted/30">
+                      <div className="flex items-center gap-2">
+                        <Link2 className="w-4 h-4 text-log-green" />
+                        <Label className="text-sm font-medium">Copy invite link</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Share this link. Anyone who opens it can sign up or sign in and join your team. Link expires in 7 days.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Select value={inviteLinkRole} onValueChange={setInviteLinkRole}>
+                          <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Role" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {INVITE_ROLES.map((r) => (
+                              <SelectItem key={r} value={r}>
+                                {ROLE_LABELS[r]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={createInviteLinkMutation.isPending}
+                          onClick={() => createInviteLinkMutation.mutate({ role: inviteLinkRole, expiresInDays: 7 })}
+                        >
+                          {createInviteLinkMutation.isPending ? "Creating…" : "Create link"}
+                        </Button>
+                      </div>
+                      {inviteLink && (
+                        <div className="flex gap-2 items-center">
+                          <Input readOnly value={inviteLink} className="font-mono text-xs flex-1" />
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="Copy link"
+                            onClick={() => {
+                              navigator.clipboard.writeText(inviteLink);
+                              toast({ title: "Copied", description: "Invite link copied to clipboard." });
+                            }}
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-muted-foreground border-t border-border pt-4">
+                      When you create an account for someone, they must change their password after accepting the invite.
+                    </p>
                   </div>
-                  {inviteLink && (
-                    <div className="flex gap-2 items-center">
-                      <Input readOnly value={inviteLink} className="font-mono text-sm flex-1" />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        title="Copy link"
-                        onClick={() => {
-                          navigator.clipboard.writeText(inviteLink);
-                          toast({ title: "Copied", description: "Invite link copied to clipboard." });
-                        }}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="border-t border-border pt-6">
-                  <Label className="text-sm text-steel-gray flex items-center gap-2 mb-3">
-                    <Mail className="w-4 h-4" />
-                    Or send an invite by email
-                  </Label>
-                  <form onSubmit={handleSendEmailInvite} className="flex flex-wrap items-end gap-2">
-                    <div className="space-y-1.5 flex-1 min-w-[200px]">
-                      <Input
-                        type="email"
-                        placeholder="colleague@example.com"
-                        value={emailInviteEmail}
-                        onChange={(e) => setEmailInviteEmail(e.target.value)}
-                        disabled={sendEmailInviteMutation.isPending}
-                      />
-                    </div>
-                    <Select value={emailInviteRole} onValueChange={setEmailInviteRole}>
-                      <SelectTrigger className="w-[130px]">
-                        <SelectValue placeholder="Role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {INVITE_ROLES.map((r) => (
-                          <SelectItem key={r} value={r}>
-                            {ROLE_LABELS[r]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button type="submit" disabled={sendEmailInviteMutation.isPending}>
-                      {sendEmailInviteMutation.isPending ? "Sending…" : "Send invite"}
-                    </Button>
-                  </form>
-                </div>
-              </CardContent>
-            </Card>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
 
           {/* Team members */}

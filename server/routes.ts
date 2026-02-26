@@ -2532,6 +2532,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  /** Create a user account for an invite (admin sets email, username, password). Invitee will be prompted to change password after accepting. */
+  app.post(
+    "/api/org/invites/create-user",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("email").trim().isEmail().withMessage("Valid email is required"),
+    body("username").trim().isLength({ min: 1, max: 100 }).withMessage("Username is required"),
+    body("password").isLength({ min: 8 }).withMessage("Password must be at least 8 characters"),
+    body("role").optional().isIn(["owner", "admin", "developer", "viewer"]),
+    body("sendEmail").optional().isBoolean(),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const createdByUserId = req.user!.userId;
+        const email = String(req.body.email).trim().toLowerCase();
+        const username = String(req.body.username).trim();
+        const password = String(req.body.password);
+        const role = (req.body?.role as string) || "developer";
+        const sendEmail = req.body?.sendEmail === true;
+
+        const passwordError = validatePasswordRequirements(password);
+        if (passwordError) {
+          return res.status(400).json({ error: passwordError });
+        }
+
+        const existingByEmail = await databaseStorage.getUserByEmail(email);
+        if (existingByEmail) {
+          return res.status(400).json({ error: "An account with this email already exists." });
+        }
+        const existingByUsername = await databaseStorage.getUserByUsername(username);
+        if (existingByUsername) {
+          return res.status(400).json({ error: "This username is already taken." });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
+        await databaseStorage.createUserWithoutOrg({
+          email,
+          username,
+          password: hashedPassword,
+          emailVerified: true,
+          mustChangePassword: true,
+        });
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+        const { joinUrl } = await databaseStorage.createOrganizationInviteEmail(orgId, email, role, expiresAt, createdByUserId);
+
+        if (sendEmail) {
+          const inviterName = req.user?.username || req.user?.email || undefined;
+          await sendOrgInviteEmail(email, joinUrl, inviterName);
+        }
+
+        res.status(201).json({ success: true, joinUrl, message: sendEmail ? "Account created and invite email sent." : "Account created. Share the invite link with them." });
+      } catch (e) {
+        console.error("Create user for invite error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to create user and invite" });
+      }
+    }
+  );
+
   app.post(
     "/api/org/invites/accept",
     authenticateToken,
@@ -2574,7 +2640,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (notifErr) {
           console.error("Failed to create member_joined notifications (non-fatal):", notifErr);
         }
-        res.status(200).json({ success: true, organizationId: result.organizationId, role: result.role });
+        const user = await databaseStorage.getUserById(userId);
+        const requirePasswordChange = !!(user as any)?.mustChangePassword;
+        res.status(200).json({
+          success: true,
+          organizationId: result.organizationId,
+          role: result.role,
+          requirePasswordChange,
+        });
       } catch (e) {
         console.error("Accept org invite error:", e);
         Sentry.captureException(e);
@@ -5962,7 +6035,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, SALT_ROUNDS);
-      await databaseStorage.updateUser(userId, { password: hashedPassword });
+      await databaseStorage.updateUser(userId, { password: hashedPassword, mustChangePassword: false } as any);
 
       // Invalidate all other sessions so stolen sessions are logged out; keep current session
       const sessionId = req.sessionID;

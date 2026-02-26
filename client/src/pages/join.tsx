@@ -23,11 +23,18 @@ export default function Join() {
     })
       .then((res) => res.json().then((data) => ({ res, data })))
       .then(({ res, data }) => {
-        if (res.ok && data.success) {
-          setStatus("success");
-          setMessage("You've joined the team. Redirecting to dashboard...");
-          setTimeout(() => setLocation("/dashboard"), 2000);
-        } else {
+          if (res.ok && data.success) {
+            setStatus("success");
+            setMessage(
+              data.requirePasswordChange
+                ? "You've joined the team. Redirecting to set a new password..."
+                : "You've joined the team. Redirecting to dashboard..."
+            );
+            setTimeout(
+              () => setLocation(data.requirePasswordChange ? "/change-password?from=join" : "/dashboard"),
+              1500
+            );
+          } else {
           setStatus("error");
           setMessage(
             data?.code === "already_in_org"
@@ -71,11 +78,18 @@ export default function Join() {
         if (!res || cancelled) return;
         return res.json().then((data) => {
           if (cancelled) return;
-          if (res.ok && data.success) {
-            setStatus("success");
-            setMessage("You've joined the team. Redirecting to dashboard...");
-            setTimeout(() => setLocation("/dashboard"), 2000);
-          } else if (data?.code === "already_in_org") {
+        if (res.ok && data.success) {
+          setStatus("success");
+          setMessage(
+            data.requirePasswordChange
+              ? "You've joined the team. Redirecting to set a new password..."
+              : "You've joined the team. Redirecting to dashboard..."
+          );
+          setTimeout(
+            () => setLocation(data.requirePasswordChange ? "/change-password?from=join" : "/dashboard"),
+            1500
+          );
+        } else if (data?.code === "already_in_org") {
             setStatus("confirm_leave");
             setMessage("You're already in an organization. Do you want to leave it and join this team? You'll lose access to that organization's repos and integrations.");
           } else {
