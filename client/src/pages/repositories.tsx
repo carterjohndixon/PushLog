@@ -548,20 +548,37 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     onSuccess: (data, repository) => {
       setConnectingRepoId(null);
       const repoId = String(repository.githubId);
-      // Update cache so the list re-renders with this repo as connected (no refetch = no race)
+      const ownerLogin = typeof repository.owner === "string" ? repository.owner : repository.owner?.login ?? "";
+      // Add the new repo to the cache (it wasn't in the list before — API only returns connected repos)
       queryClient.setQueryData(
         ["/api/repositories-and-integrations"],
         (prev: { repositories: RepositoryCardData[]; integrations: ActiveIntegration[] } | undefined) => {
           if (!prev) return prev;
-          const repositories = prev.repositories.map((r) =>
-            String(r.githubId) === repoId
-              ? { ...r, isConnected: true, id: data.id ?? r.id }
-              : r
-          );
-          return { ...prev, repositories };
+          const alreadyInList = prev.repositories.some((r) => String(r.id) === String(data.id) || String(r.githubId) === repoId);
+          if (alreadyInList) {
+            return {
+              ...prev,
+              repositories: prev.repositories.map((r) =>
+                String(r.githubId) === repoId ? { ...r, isConnected: true, id: data.id ?? r.id } : r
+              ),
+            };
+          }
+          const newRepo: RepositoryCardData = {
+            id: data.id,
+            githubId: String(data.githubId ?? repository.githubId),
+            name: data.name ?? repository.name,
+            full_name: data.fullName ?? repository.full_name ?? `${ownerLogin}/${repository.name}`,
+            owner: { login: ownerLogin },
+            default_branch: data.branch ?? repository.default_branch ?? "main",
+            isActive: true,
+            isConnected: true,
+            private: repository.private ?? false,
+          };
+          return { ...prev, repositories: [...prev.repositories, newRepo] };
         }
       );
-      // Switch to Active tab so the newly connected repo is visible (it moved from Unconnected → Active)
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       setActiveTab("active");
       setStatusFilter("active");
       toast({
