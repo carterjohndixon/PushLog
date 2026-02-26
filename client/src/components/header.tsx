@@ -53,7 +53,7 @@ export function Header() {
     { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "Models" },
-    ...(user?.organizationId ? [{ href: "/organization", label: "Organization" }] : []),
+    { href: "/organization", label: "Organization" },
     ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
 

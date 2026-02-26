@@ -308,7 +308,7 @@ export default function OrganizationPage() {
           {canInvite && (
             <>
               <Dialog open={inviteModalOpen} onOpenChange={setInviteModalOpen}>
-                <DialogContent className="max-w-md">
+                <DialogContent className="max-w-xl">
                   <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                       <UserPlus className="w-5 h-5 text-log-green" />
