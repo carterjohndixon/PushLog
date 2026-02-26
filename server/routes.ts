@@ -5628,7 +5628,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jwtEmailVerified = req.user!.emailVerified;
       const user = await databaseStorage.getUserById(userId);
       if (!user) {
-        throw new Error("User not found");
+        if (req.session) req.session.destroy(() => {});
+        return res.status(401).json({ error: "User not found", code: "user_not_found" });
       }
 
       // Add email verification notification if needed and user was created via regular signup
@@ -5694,7 +5695,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const jwtEmailVerified = req.user!.emailVerified;
       const user = await databaseStorage.getUserById(userId);
       if (!user) {
-        throw new Error("User not found");
+        if (req.session) req.session.destroy(() => {});
+        return res.status(401).json({ error: "User not found", code: "user_not_found" });
       }
       // Add email verification notification if needed and user was created via regular signup
       // Use JWT token status as it's more up-to-date than database

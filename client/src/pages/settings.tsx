@@ -390,7 +390,9 @@ export default function Settings() {
         title: "Account Deleted",
         description: "Your account and all data have been permanently deleted.",
       });
-      setLocation('/');
+      queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY });
+      queryClient.clear();
+      window.location.href = '/';
     },
     onError: (error: any) => {
       toast({
