@@ -2760,7 +2760,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/repositories", [
     body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Repository name is required and must be 1-100 characters'),
     body('owner').trim().isLength({ min: 1, max: 100 }).withMessage('Repository owner is required and must be 1-100 characters'),
-    body('githubId').isInt({ min: 1 }).withMessage('Valid GitHub ID is required'),
+    body('githubId').custom((val) => {
+      const n = val != null ? Number(val) : NaN;
+      return Number.isInteger(n) && n >= 1;
+    }).withMessage('Valid GitHub ID is required (number or numeric string)'),
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
     body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
   ], authenticateToken, requireEmailVerification, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req: any, res: any) => {
@@ -2785,6 +2788,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         organizationId: (req.user as any).organizationId ?? undefined,
         githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
+        fullName: req.body.fullName ?? req.body.full_name ?? (req.body.owner && req.body.name ? `${req.body.owner}/${req.body.name}` : undefined),
       };
       const validatedData = schema.parse(payload);
 
@@ -2887,7 +2891,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Error connecting repository:", error);
-      res.status(400).json({ error: "Invalid repository data" });
+      const message = error instanceof Error ? error.message : "Invalid repository data";
+      const details = error && typeof (error as any).errors !== "undefined" ? (error as any).errors : undefined;
+      res.status(400).json({ error: message, ...(details && { details }) });
     }
   });
 
