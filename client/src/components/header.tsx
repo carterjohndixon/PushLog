@@ -84,7 +84,7 @@ export function Header() {
               </div>
             </Link>
             {user && (
-              <nav className="hidden md:flex space-x-8 ml-8">
+              <nav className="hidden md:flex space-x-8 ml-8 mr-2">
                 {navLinks.map(({ href, label }) => {
                   const isActive = location === href;
                   return (
@@ -105,7 +105,7 @@ export function Header() {
             )}
           </div>
 
-          <div className="flex items-center space-x-2 sm:space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4 ml-6 flex-shrink-0">
             <Button
               variant="ghost"
               size="icon"
