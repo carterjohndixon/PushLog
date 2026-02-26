@@ -1942,9 +1942,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const targetPath = isLinkingFlow
             ? "/dashboard?github_connected=1"
-            : isNewUser
-              ? "/finish-setup"
-              : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+            : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
@@ -2051,7 +2049,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const redirectHost = (req.get("host") || "").split(":")[0];
         const redirectProtocol = redirectHost === "pushlog.ai" ? "https" : (req.protocol || "https");
         const base = redirectHost ? `${redirectProtocol}://${redirectHost}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
-        const path = isLinkingFlow ? "/dashboard?github_connected=1" : (isNewUser ? "/finish-setup" : (hasMfa ? "/verify-mfa" : "/setup-mfa"));
+        const path = isLinkingFlow ? "/dashboard?github_connected=1" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
         const redirectUrl = base ? `${base}${path}` : path;
 
         req.session.save((err) => {
@@ -2154,7 +2152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       (req.session as any).mfaPending = true;
       (req.session as any).mfaSetupRequired = !hasMfa;
 
-      const targetPath = isNewUser ? "/finish-setup" : (hasMfa ? "/verify-mfa" : "/setup-mfa");
+      const targetPath = hasMfa ? "/verify-mfa" : "/setup-mfa";
       const host = (req.get("host") || "").split(":")[0];
       const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
       const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
@@ -2521,7 +2519,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authenticateToken,
     requireOrgMember,
     requireOrgRole(["owner"]),
-    body("type").optional().isIn(["solo", "team"]),
     body("name").optional().trim().isLength({ min: 1, max: 100 }),
     async (req: Request, res: Response) => {
       try {
@@ -2530,11 +2527,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "Validation failed", details: errors.array() });
         }
         const orgId = (req as any).orgId as string;
-        const updates: { type?: "solo" | "team"; name?: string } = {};
-        if (req.body?.type === "solo" || req.body?.type === "team") updates.type = req.body.type;
+        const updates: { name?: string } = {};
         if (typeof req.body?.name === "string" && req.body.name.trim()) updates.name = req.body.name.trim();
         if (Object.keys(updates).length === 0) {
-          return res.status(400).json({ error: "No valid updates (type or name)" });
+          return res.status(400).json({ error: "No valid updates" });
         }
         await databaseStorage.updateOrganization(orgId, updates);
         res.status(200).json({ success: true });

@@ -46,11 +46,11 @@ export const users = pgTable("users", {
   { name: "users_organization_id_idx", columns: [t.organizationId] },
 ]);
 
-/** Organizations (Teams). Every user belongs to exactly one org; solo users get a solo org. */
+/** Organizations. Every user belongs to exactly one org (workspace). */
 export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  type: text("type").notNull(), // "solo" | "team"
+  type: text("type").notNull(), // legacy — always "solo"; not read at runtime
   ownerId: uuid("owner_id").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (t) => [

@@ -149,7 +149,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
     const orgId = (user as any).organizationId;
     if (!orgId || orgId === '') {
-      // User has no org (e.g. staging not backfilled) — create solo org and set orgId so we don't bounce them to login
+      // User has no org (e.g. not yet backfilled) — create org and set orgId so we don't bounce them to login
       const updated = await databaseStorage.ensureUserHasOrganization(user.id);
       if (!updated) {
         req.session.destroy(() => {});

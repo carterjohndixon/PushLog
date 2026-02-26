@@ -29,7 +29,7 @@ export interface ProfileUser {
   incidentEmailEnabled?: boolean;
   /** In incident notification pool (users with repos + this on get incidents); when off, never receive */
   receiveIncidentNotifications?: boolean;
-  /** Organization/team role: owner | admin | developer | viewer */
+  /** Organization role: owner | admin | developer | viewer */
   role?: "owner" | "admin" | "developer" | "viewer";
   organizationId?: string;
 }

@@ -317,7 +317,7 @@ export default function OrganizationPage() {
                         <Skeleton className="h-4 w-24 mt-1" />
                       ) : (
                         <>
-                          {orgData?.type === "team" ? "Team" : "Solo developer"} · {members.length} member{members.length !== 1 ? "s" : ""}
+                          {members.length} member{members.length !== 1 ? "s" : ""}
                         </>
                       )}
                     </CardDescription>
@@ -336,6 +336,25 @@ export default function OrganizationPage() {
               </div>
             </CardHeader>
           </Card>
+
+          {/* Invite teammates banner (only when user is the sole member) */}
+          {canInvite && members.length === 1 && !membersLoading && (
+            <div className="rounded-xl border border-border bg-card/60 p-5 flex items-center justify-between flex-wrap gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-full bg-log-green/10 flex items-center justify-center shrink-0">
+                  <UserPlus className="w-5 h-5 text-log-green" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Invite teammates to collaborate in this workspace.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Share access to repositories, integrations, and analytics.</p>
+                </div>
+              </div>
+              <Button variant="glow" size="sm" className="text-white shrink-0" onClick={() => setInviteModalOpen(true)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Invite member
+              </Button>
+            </div>
+          )}
 
           {/* Invite modal (owner & admin only) */}
           {canInvite && (
@@ -561,12 +580,12 @@ export default function OrganizationPage() {
             </Dialog>
           )}
 
-          {/* Team members */}
+          {/* Members */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Shield className="w-5 h-5 text-log-green" />
-                Team members
+                Members
               </CardTitle>
               <CardDescription>
                 Everyone with access to this organization. You manage membership and roles—not their personal accounts.

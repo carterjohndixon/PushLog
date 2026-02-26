@@ -186,37 +186,6 @@ export default function Settings() {
     },
   });
 
-  const { data: orgData } = useQuery({
-    queryKey: ["/api/org"],
-    queryFn: async () => {
-      const res = await fetch("/api/org", { credentials: "include", headers: { Accept: "application/json" } });
-      if (!res.ok) return null;
-      return res.json() as Promise<{ id: string; name: string; type: string }>;
-    },
-    enabled: profileResponse?.user?.role === "owner",
-  });
-
-  const updateOrgTypeMutation = useMutation({
-    mutationFn: async (type: "solo" | "team") => {
-      const res = await fetch("/api/org", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ type }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to update");
-      return data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/org"] });
-      toast({ title: "Updated", description: "Organization type updated." });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Update failed", description: err.message, variant: "destructive" });
-    },
-  });
-
   // Fetch account data summary (uses session cookie via credentials: include)
   const { data: dataSummary, isLoading } = useQuery<DataSummary>({
     queryKey: ["/api/account/data-summary"],
@@ -513,7 +482,7 @@ export default function Settings() {
                     </div>
                     {((profileResponse?.user?.role) || (profileResponse?.user?.organizationId) || profileLoading) && (
                       <div>
-                        <p className="text-sm text-steel-gray">Team role</p>
+                        <p className="text-sm text-steel-gray">Organization role</p>
                         <p className="font-medium capitalize">
                           {profileLoading ? "Loading…" : (profileResponse?.user?.role ?? "—")}
                         </p>
@@ -566,8 +535,8 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Organization type (owner only) */}
-          {profileResponse?.user?.role === "owner" && (
+          {/* Organization */}
+          {profileResponse?.user?.organizationId && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -575,60 +544,13 @@ export default function Settings() {
                   Organization
                 </CardTitle>
                 <CardDescription>
-                  How you're using PushLog. Solo is just you; Team lets you invite others and manage repos together.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  <Link href="/organization">
-                    <Button variant="outline" size="sm">
-                      View organization page
-                    </Button>
-                  </Link>
-                </div>
-                {orgData && (
-                  <div className="space-y-2">
-                    <Label className="text-sm text-steel-gray">Organization type</Label>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={orgData.type === "solo" ? "default" : "outline"}
-                        size="sm"
-                        disabled={updateOrgTypeMutation.isPending}
-                        onClick={() => updateOrgTypeMutation.mutate("solo")}
-                      >
-                        Solo developer
-                      </Button>
-                      <Button
-                        variant={orgData.type === "team" ? "default" : "outline"}
-                        size="sm"
-                        disabled={updateOrgTypeMutation.isPending}
-                        onClick={() => updateOrgTypeMutation.mutate("team")}
-                      >
-                        Team
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Organization (non-owner members: link to org page) */}
-          {profileResponse?.user?.organizationId && profileResponse?.user?.role !== "owner" && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-log-green" />
-                  Organization
-                </CardTitle>
-                <CardDescription>
-                  View your organization and members.
+                  Manage your organization and members.
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Link href="/organization">
                   <Button variant="outline" size="sm">
-                    View team page
+                    View organization
                   </Button>
                 </Link>
               </CardContent>

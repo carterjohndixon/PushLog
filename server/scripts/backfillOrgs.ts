@@ -1,5 +1,5 @@
 /**
- * Backfill organizations: create solo org + membership for users missing organizationId,
+ * Backfill organizations: create org + membership for users missing organizationId,
  * then set organizationId on repos, integrations, slack_workspaces.
  *
  * Run after db:push (once new tables and columns exist):

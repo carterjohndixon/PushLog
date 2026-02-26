@@ -45,8 +45,6 @@ export function Header() {
     setLocation("/");
   };
 
-  const isUserStagingAdmin = user?.email?.toLowerCase() === import.meta.env.VITE_ADMIN_STAGING_EMAIL?.toLowerCase();
-
   const { theme, setTheme } = useTheme();
 
   const isStagingHost = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
@@ -59,7 +57,7 @@ export function Header() {
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "Models" },
     { href: "/organization", label: "Organization" },
-    ...(isStagingHost && isUserStagingAdmin ? [{ href: "/admin", label: "Admin" }] : []),
+    ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
 
   const themeCycle: Theme[] = ["light", "dark", "system"];

@@ -192,7 +192,7 @@ export class DatabaseStorage implements IStorage {
     if (!created.organizationId) {
       const orgName = (created.username || created.email || "My PushLog").toString().trim() || "My PushLog";
       const [org] = await db.insert(organizations).values({
-        name: orgName,
+        name: `${orgName}'s workspace`,
         type: "solo",
         ownerId: created.id,
       }).returning();
@@ -209,7 +209,7 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  /** Create a user without creating a solo org (e.g. for admin-created invite). Caller must add user to org when they accept invite. */
+  /** Create a user without creating an org (e.g. for admin-created invite). Caller must add user to org when they accept invite. */
   async createUserWithoutOrg(user: InsertUser): Promise<User> {
     const result = await db.insert(users).values({
       ...user,
@@ -264,7 +264,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
-   * Backfill organizations: create solo org + membership for users missing organizationId,
+   * Backfill organizations: create org + membership for users missing organizationId,
    * then set organizationId on repos, integrations, slack_workspaces from owning user's org.
    * Run once after adding organization_id columns. Safe to run multiple times (idempotent for users with org).
    */
@@ -338,7 +338,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
-   * If the user has no organizationId, create a solo org + membership and set it (idempotent).
+   * If the user has no organizationId, create an org + membership and set it (idempotent).
    * Returns the updated user or null if user not found. Use after login so auth never 401s for "no org".
    */
   async ensureUserHasOrganization(userId: string): Promise<User | null> {
@@ -346,9 +346,9 @@ export class DatabaseStorage implements IStorage {
     if (!u) return null;
     const orgId = (u as any).organizationId;
     if (orgId) return u ? convertToUser(u as any) : null;
-    const orgName = ((u.username || u.email || "My PushLog") as string).toString().trim() || "My PushLog";
+    const base = ((u.username || u.email || "My PushLog") as string).toString().trim() || "My PushLog";
     const [org] = await db.insert(organizations).values({
-      name: orgName,
+      name: `${base}'s workspace`,
       type: "solo",
       ownerId: userId,
     }).returning();
@@ -483,9 +483,8 @@ export class DatabaseStorage implements IStorage {
     return row as Organization | undefined;
   }
 
-  async updateOrganization(organizationId: string, updates: { type?: "solo" | "team"; name?: string }): Promise<void> {
+  async updateOrganization(organizationId: string, updates: { name?: string }): Promise<void> {
     const set: Record<string, unknown> = {};
-    if (updates.type !== undefined) set.type = updates.type;
     if (updates.name !== undefined) set.name = updates.name;
     if (Object.keys(set).length === 0) return;
     await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
