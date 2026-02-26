@@ -366,7 +366,7 @@ export default function OrganizationPage() {
                             At least 8 characters, with uppercase, lowercase, number, and special character.
                           </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="space-y-3">
                           <div className="space-y-1.5 min-w-[120px]">
                             <Label>Role</Label>
                             <Select value={createUserRole} onValueChange={setCreateUserRole} disabled={createUserForInviteMutation.isPending}>
@@ -382,7 +382,7 @@ export default function OrganizationPage() {
                               </SelectContent>
                             </Select>
                           </div>
-                          <div className="flex gap-2 items-end flex-1">
+                          <div className="flex gap-2">
                             <Button
                               type="button"
                               variant="default"
