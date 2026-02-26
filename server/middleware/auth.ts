@@ -169,12 +169,17 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     }
 
     const membership = await databaseStorage.getMembershipByOrganizationAndUser(resolvedOrgId, user.id);
-    if (!membership) {
+    let resolvedMembership = membership;
+    if (!resolvedMembership) {
+      // Repair: user may be org owner but membership row missing (e.g. backfill gap, race)
+      resolvedMembership = await databaseStorage.ensureUserMembership(user.id, resolvedOrgId) ?? undefined;
+    }
+    if (!resolvedMembership) {
       req.session.destroy(() => {});
       return res.status(401).json({ error: 'Membership not found' });
     }
 
-    if ((membership as any).status === 'pending') {
+    if ((resolvedMembership as any).status === 'pending') {
       return res.status(403).json({
         error: 'Pending invite',
         code: 'pending_invite',
@@ -182,8 +187,8 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       });
     }
 
-    const role = ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
-      ? (membership as any).role
+    const role = ((resolvedMembership as any).role === 'owner' || (resolvedMembership as any).role === 'admin' || (resolvedMembership as any).role === 'developer' || (resolvedMembership as any).role === 'viewer')
+      ? (resolvedMembership as any).role
       : 'viewer';
 
     // Build session user object (same structure as old JWT payload)

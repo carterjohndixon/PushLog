@@ -371,6 +371,28 @@ export class DatabaseStorage implements IStorage {
     return row as OrganizationMembership | undefined;
   }
 
+  /**
+   * Repair missing membership: if the user is the org owner but has no membership row (e.g. data inconsistency),
+   * insert an active owner membership and return it. Otherwise return existing membership or null.
+   */
+  async ensureUserMembership(userId: string, organizationId: string): Promise<OrganizationMembership | null> {
+    const org = await this.getOrganization(organizationId);
+    if (!org || (org as any).ownerId !== userId) return null;
+    const existing = await this.getMembershipByOrganizationAndUser(organizationId, userId);
+    if (existing) return existing;
+    await db.insert(organizationMemberships).values({
+      organizationId,
+      userId,
+      role: "owner",
+      status: "active",
+      joinedAt: new Date().toISOString(),
+    } as any);
+    const [inserted] = await db.select().from(organizationMemberships).where(
+      and(eq(organizationMemberships.organizationId, organizationId), eq(organizationMemberships.userId, userId))
+    ).limit(1);
+    return (inserted as OrganizationMembership) ?? null;
+  }
+
   async getRepositoriesByOrganizationId(organizationId: string): Promise<Repository[]> {
     return await db.select().from(repositories).where(eq(repositories.organizationId, organizationId)) as Repository[];
   }
