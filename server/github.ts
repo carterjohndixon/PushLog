@@ -317,7 +317,9 @@ export async function createWebhook(
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
+      const errorsDetail = Array.isArray((error as any).errors) ? (error as any).errors.map((e: any) => e.message || e.field || JSON.stringify(e)).join("; ") : "";
+      const message = (error as any).message || (error as any).error || response.statusText;
       console.error('GitHub webhook creation error with OAuth token:', {
         status: response.status,
         statusText: response.statusText,
@@ -326,8 +328,7 @@ export async function createWebhook(
         repo,
         webhookUrl
       });
-      // This will trigger the catch block
-      throw new Error(`Failed to create webhook: ${error.message || error.error || response.statusText}`);
+      throw new Error(`Failed to create webhook: ${message}${errorsDetail ? ` (${errorsDetail})` : ""}`);
     }
 
     return await response.json();
@@ -352,7 +353,9 @@ export async function createWebhook(
         });
 
         if (!response.ok) {
-          const error = await response.json();
+          const error = await response.json().catch(() => ({}));
+          const errorsDetail = Array.isArray((error as any).errors) ? (error as any).errors.map((e: any) => e.message || e.field || JSON.stringify(e)).join("; ") : "";
+          const message = (error as any).message || (error as any).error || response.statusText;
           console.error('GitHub webhook creation error with PAT:', {
             status: response.status,
             statusText: response.statusText,
@@ -361,7 +364,7 @@ export async function createWebhook(
             repo,
             webhookUrl
           });
-          throw new Error(`Failed to create webhook with PAT: ${error.message || error.error || response.statusText}`);
+          throw new Error(`Failed to create webhook with PAT: ${message}${errorsDetail ? ` (${errorsDetail})` : ""}`);
         }
 
         return await response.json();
