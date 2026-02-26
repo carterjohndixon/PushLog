@@ -515,7 +515,10 @@ export default function OrganizationPage() {
           {/* Member detail modal (owner/admin only) */}
           {canInvite && (
             <Dialog open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
-              <DialogContent className="max-w-md">
+              <DialogContent
+                className="max-w-md"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+              >
                 {selectedMember && (
                   <>
                     <DialogHeader>
