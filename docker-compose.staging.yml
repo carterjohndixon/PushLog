@@ -37,7 +37,7 @@ services:
       COOKIE_DOMAIN: staging.pushlog.ai
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine
       # GitHub: set GITHUB_OAUTH_CLIENT_ID + GITHUB_OAUTH_CLIENT_SECRET in .env.staging (PushLog DEV app)
-      EMAIL_ENABLED: "false"
+      # Email: set EMAIL_ENABLED=true and SMTP_USER/SMTP_PASS (and optional SMTP_HOST/SMTP_FROM) in .env.staging to send invite/verification emails
       SLACK_NOTIFICATIONS_ENABLED: "false"
       BILLING_ENABLED: "false"
     ports:
