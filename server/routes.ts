@@ -3440,6 +3440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
       }
       const connectedByGithubId = new Map(connectedRepos.map((r) => [r.githubId, r]));
+      const githubIdsInResponse = new Set(repositoriesFromGitHub.map((repo: any) => repo.id.toString()));
       const repositories = repositoriesFromGitHub.map((repo: any) => {
         const connectedRepo = connectedByGithubId.get(repo.id.toString());
         return {
@@ -3454,6 +3455,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           incidentServiceName: (connectedRepo as any)?.incidentServiceName ?? null,
         };
       });
+      // Include connected repos that GitHub didn't return (so they still show up)
+      for (const cr of connectedRepos) {
+        const gid = String(cr.githubId ?? "");
+        if (!gid || githubIdsInResponse.has(gid)) continue;
+        const ownerLogin = typeof cr.owner === "string" ? cr.owner : (cr.owner as any)?.login ?? (cr.fullName?.split("/")[0] ?? "");
+        repositories.push({
+          id: cr.id,
+          githubId: gid,
+          name: cr.name,
+          full_name: cr.fullName ?? `${ownerLogin}/${cr.name}`,
+          fullName: cr.fullName ?? `${ownerLogin}/${cr.name}`,
+          owner: { login: ownerLogin },
+          default_branch: cr.branch ?? "main",
+          branch: cr.branch ?? "main",
+          isActive: cr.isActive ?? true,
+          isConnected: true,
+          monitorAllBranches: cr.monitorAllBranches ?? false,
+          private: false,
+          integrationCount: integrationCountByRepoId.get(cr.id) ?? 0,
+          criticalPaths: (cr as any).criticalPaths ?? null,
+          incidentServiceName: (cr as any).incidentServiceName ?? null,
+        });
+      }
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
       const repoIdsMain = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
       const lastPushByRepoMain = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsMain);
