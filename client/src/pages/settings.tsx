@@ -26,7 +26,9 @@ import {
   EyeIcon,
   EyeOffIcon,
   Code2,
-  Mail
+  Mail,
+  Copy,
+  UserPlus,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -78,6 +80,7 @@ export default function Settings() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
   const [slackDisconnectWorkspace, setSlackDisconnectWorkspace] = useState<{ id: string; teamName: string } | null>(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -179,6 +182,27 @@ export default function Settings() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+    },
+  });
+
+  const createInviteLinkMutation = useMutation({
+    mutationFn: async (opts?: { role?: string; expiresInDays?: number }) => {
+      const res = await fetch("/api/org/invites/link", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ role: opts?.role ?? "developer", expiresInDays: opts?.expiresInDays ?? 7 }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed to create invite link");
+      return data as { joinUrl: string; expiresAt: string; role: string };
+    },
+    onSuccess: (data) => {
+      setInviteLink(data.joinUrl);
+      toast({ title: "Invite link created", description: "Share this link with people you want to add to your team. It expires in 7 days." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to create link", description: err.message, variant: "destructive" });
     },
   });
 
@@ -515,6 +539,55 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+
+          {/* Invite to team (owner/admin only) */}
+          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserPlus className="w-5 h-5 text-log-green" />
+                  Invite to team
+                </CardTitle>
+                <CardDescription>
+                  Create a link to invite people to your organization. They’ll need to log in (or sign up) and accept the invite.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button
+                  variant="glow"
+                  className="text-white"
+                  disabled={createInviteLinkMutation.isPending}
+                  onClick={() => createInviteLinkMutation.mutate(undefined)}
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
+                </Button>
+                {inviteLink && (
+                  <div className="space-y-2">
+                    <Label className="text-sm text-steel-gray">Invite link (expires in 7 days)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={inviteLink}
+                        className="font-mono text-sm"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="Copy link"
+                        onClick={() => {
+                          navigator.clipboard.writeText(inviteLink);
+                          toast({ title: "Copied", description: "Invite link copied to clipboard." });
+                        }}
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* GitHub connection */}
           <Card>

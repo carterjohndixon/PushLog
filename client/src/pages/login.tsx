@@ -17,6 +17,16 @@ export default function Login() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
 
+  // Safe redirect path from ?redirect= (same-origin path only, e.g. /join/TOKEN)
+  const getRedirectPath = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const r = urlParams.get("redirect");
+    if (!r || typeof r !== "string") return null;
+    const path = r.startsWith("/") ? r : `/${r}`;
+    if (!path.startsWith("/")) return null;
+    return path;
+  };
+
   const [showPassword, setShowPassword] = React.useState(false);
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -35,7 +45,8 @@ export default function Login() {
         });
         
         if (response.ok) {
-          window.location.href = "/dashboard";
+          const path = getRedirectPath() || "/dashboard";
+          window.location.href = path;
           return;
         }
         if (response.status === 403) {
@@ -90,7 +101,8 @@ export default function Login() {
           return;
         }
         await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
-        setLocation("/dashboard");
+        const redirectPath = getRedirectPath();
+        setLocation(redirectPath || "/dashboard");
       },
       onError: (error: any) => {
         toast({
@@ -128,7 +140,8 @@ export default function Login() {
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
-    window.location.href = "/api/auth/github/init?returnPath=/dashboard";
+    const returnPath = getRedirectPath() || "/dashboard";
+    window.location.href = `/api/auth/github/init?returnPath=${encodeURIComponent(returnPath)}`;
   };
 
   const handleGoogleConnect = () => {
