@@ -882,13 +882,27 @@ export default function Dashboard() {
                   ))}
                 </div>
               ) : repositoriesError ? (
-                // ERROR STATE - Check if it's a GitHub connection issue or expired token
+                // ERROR STATE - Treat expected/soft cases gently; only show heavy error UI for real failures
                 (() => {
                   const errorMessage = repositoriesError.message;
                   const isExpiredToken = errorMessage.includes('expired') || errorMessage.includes('token');
                   const isNoConnection = errorMessage.includes('No repositories found') || errorMessage.includes('GitHub connection');
+                  const isEmailVerification = /email\s*verification\s*required/i.test(errorMessage);
                   
-                  if (isExpiredToken) {
+                  if (isEmailVerification) {
+                    return (
+                      <div className="text-center py-6">
+                        <p className="text-sm text-muted-foreground">
+                          Verify your email in Settings to connect repositories.
+                        </p>
+                        <Link href="/settings">
+                          <Button variant="outline" size="sm" className="mt-3">
+                            Go to Settings
+                          </Button>
+                        </Link>
+                      </div>
+                    );
+                  } else if (isExpiredToken) {
                     // Show expired token message
                     return (
                       <div className="text-center py-8">
@@ -921,17 +935,17 @@ export default function Dashboard() {
                       </div>
                     );
                   } else {
-                    // Show generic error
+                    // Generic error — keep it minimal so we don't overload the card
                     return (
-                      <div className="text-center py-8">
-                        <Github className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="font-medium text-foreground mb-2">Error Loading Repositories</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
+                      <div className="text-center py-6">
+                        <p className="text-sm text-muted-foreground mb-3">
                           {repositoriesError.message}
                         </p>
-                        <Button onClick={() => window.location.reload()} variant="glow"
-            className="text-white">
-                          <Github className="w-4 h-4 mr-2" />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] })}
+                        >
                           Retry
                         </Button>
                       </div>
