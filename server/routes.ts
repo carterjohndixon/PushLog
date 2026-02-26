@@ -2849,7 +2849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const repository = await storage.createRepository({
+        const repository = await databaseStorage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
           organizationId: (req.user as any).organizationId ?? undefined,
@@ -2864,7 +2864,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const errorMessage = webhookError instanceof Error ? webhookError.message : "Unknown error occurred";
         
         // Still create the repository without webhook, but inform the user
-        const repository = await storage.createRepository({
+        const repository = await databaseStorage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
           organizationId: (req.user as any).organizationId ?? undefined,
