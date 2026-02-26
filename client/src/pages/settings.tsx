@@ -72,6 +72,7 @@ export default function Settings() {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -1037,7 +1038,7 @@ export default function Settings() {
                   All your repositories, integrations, push events, and Slack connections will be deleted.
                 </p>
                 
-                <AlertDialog>
+                <AlertDialog open={deleteAccountDialogOpen} onOpenChange={(open) => { setDeleteAccountDialogOpen(open); if (open) setDeleteConfirmation(""); }}>
                   <AlertDialogTrigger asChild>
                     <Button variant="destructive">
                       <Trash2 className="w-4 h-4 mr-2" />

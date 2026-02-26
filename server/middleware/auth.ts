@@ -74,6 +74,10 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     // Check if session exists and has userId
     // Express automatically reads the HTTP-only cookie and populates req.session
     // Note: req.session might exist even without cookies (empty session object)
+    // Fallback: some session stores (e.g. under load) can return session with user but no userId; repair it
+    if (req.session?.user?.userId && !req.session.userId) {
+      req.session.userId = req.session.user.userId;
+    }
     if (!req.session || !req.session.userId) {
       // Only log if it's not a public endpoint to reduce noise
       if (!req.path.includes('/health') && !req.path.includes('/api/notifications/stream')) {
