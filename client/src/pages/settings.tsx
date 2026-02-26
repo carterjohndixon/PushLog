@@ -491,7 +491,7 @@ export default function Settings() {
                   </div>
 
                   {/* What each role can do */}
-                  {(profileResponse?.user?.role || profileResponse?.user?.organizationId) && !profileLoading && (
+                  {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && !profileLoading && (
                     <div className="pt-4 border-t">
                       <p className="text-sm text-steel-gray mb-2">What each role can do</p>
                       <ul className="text-sm space-y-1.5 text-muted-foreground">
