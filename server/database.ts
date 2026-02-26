@@ -623,6 +623,14 @@ export class DatabaseStorage implements IStorage {
     for (const r of withNullOrg) {
       if (!byOrgIds.has(r.id)) combined.push(r);
     }
+    // Fallback: include any repos owned by this user that we might have missed (e.g. org mismatch or backfill not run)
+    const byUserId = await db.select().from(repositories).where(eq(repositories.userId, userId));
+    for (const r of byUserId) {
+      if (!byOrgIds.has(r.id)) {
+        combined.push(r);
+        byOrgIds.add(r.id);
+      }
+    }
     return combined as Repository[];
   }
 

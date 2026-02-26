@@ -3482,10 +3482,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // app.post("/api/ai/add-open-router-key", authenticateToken, async (req, res) => {
-    
-  // });
-
   // Update integration
   app.patch("/api/integrations/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
     try {
