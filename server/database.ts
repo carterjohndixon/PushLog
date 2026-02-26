@@ -393,6 +393,32 @@ export class DatabaseStorage implements IStorage {
     return (inserted as OrganizationMembership) ?? null;
   }
 
+  /** Get invite preview by raw token. Does not consume the invite. Returns null if invalid/expired/used. */
+  async getInvitePreviewByToken(token: string): Promise<{ organizationName: string; role: string } | null> {
+    const tokenHash = hashToken(token);
+    const [inviteRow] = await db
+      .select({
+        organizationId: organizationInvites.organizationId,
+        role: organizationInvites.role,
+      })
+      .from(organizationInvites)
+      .where(
+        and(
+          eq(organizationInvites.tokenHash, tokenHash),
+          isNull(organizationInvites.usedAt),
+          sql`organization_invites.expires_at > now()`
+        )
+      )
+      .limit(1);
+    if (!inviteRow) return null;
+    const org = await this.getOrganization(inviteRow.organizationId);
+    if (!org) return null;
+    return {
+      organizationName: (org as any).name ?? "Organization",
+      role: (inviteRow as any).role ?? "developer",
+    };
+  }
+
   async getRepositoriesByOrganizationId(organizationId: string): Promise<Repository[]> {
     return await db.select().from(repositories).where(eq(repositories.organizationId, organizationId)) as Repository[];
   }

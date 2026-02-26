@@ -14,6 +14,28 @@ export default function Join() {
   const token = params?.token ?? "";
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "confirm_leave">("idle");
   const [message, setMessage] = useState("");
+  const [invitePreview, setInvitePreview] = useState<{ organizationName: string; role: string } | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/org/invites/preview?token=${encodeURIComponent(token)}`, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.organizationName) {
+          setInvitePreview({ organizationName: data.organizationName, role: data.role ?? "developer" });
+        }
+      })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (invitePreview?.organizationName) {
+      document.title = `Join ${invitePreview.organizationName} · PushLog`;
+    }
+    return () => {
+      document.title = "PushLog";
+    };
+  }, [invitePreview?.organizationName]);
 
   const acceptInvite = (leaveCurrentOrg: boolean) => {
     setStatus("loading");
@@ -105,7 +127,9 @@ export default function Join() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle className="text-center">Organization invite</CardTitle>
+          <CardTitle className="text-center">
+            {invitePreview?.organizationName ? `Join ${invitePreview.organizationName}` : "Organization invite"}
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {status === "loading" && (

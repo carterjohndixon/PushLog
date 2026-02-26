@@ -2672,6 +2672,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  /** Public invite preview: return org name and role for a valid invite token (does not consume). */
+  app.get("/api/org/invites/preview", async (req: Request, res: Response) => {
+    try {
+      const token = (req.query.token as string)?.trim();
+      if (!token) {
+        return res.status(400).json({ error: "Token is required" });
+      }
+      const preview = await databaseStorage.getInvitePreviewByToken(token);
+      if (!preview) {
+        return res.status(404).json({ error: "Invalid or expired invite" });
+      }
+      res.status(200).json(preview);
+    } catch (e) {
+      console.error("Invite preview error:", e);
+      Sentry.captureException(e);
+      res.status(500).json({ error: "Failed to load invite" });
+    }
+  });
+
   app.post(
     "/api/org/invites/accept",
     authenticateToken,

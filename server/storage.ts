@@ -48,6 +48,8 @@ export interface IStorage {
   getMembershipByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined>;
   /** If user is org owner but membership row is missing, create it and return; otherwise return existing or null. */
   ensureUserMembership(userId: string, organizationId: string): Promise<OrganizationMembership | null>;
+  /** Get invite preview (org name, role) by token without consuming. Returns null if invalid/expired/used. */
+  getInvitePreviewByToken(token: string): Promise<{ organizationName: string; role: string } | null>;
   getRepositoriesByOrganizationId(organizationId: string): Promise<Repository[]>;
   getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]>;
   getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
@@ -210,6 +212,10 @@ export class MemStorage implements IStorage {
   }
 
   async ensureUserMembership(_userId: string, _organizationId: string): Promise<OrganizationMembership | null> {
+    return null;
+  }
+
+  async getInvitePreviewByToken(_token: string): Promise<{ organizationName: string; role: string } | null> {
     return null;
   }
 
