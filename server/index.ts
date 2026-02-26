@@ -209,6 +209,8 @@ const AUTH_NO_CACHE_PATHS = [
   '/api/auth/github/exchange',  // POST exchange — fallback
   '/auth/github/callback',     // Server-side callback — Set-Cookie must reach browser
   '/api/google/user',    // Google OAuth callback
+  '/api/mfa/setup',      // MFA setup — session must be fresh
+  '/api/mfa/verify',     // MFA verify — session must be fresh
 ];
 app.use((req, res, next) => {
   if (AUTH_NO_CACHE_PATHS.includes(req.path)) {

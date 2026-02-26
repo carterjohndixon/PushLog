@@ -2154,7 +2154,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
       const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
       const redirectUrl = base ? `${base}${targetPath}` : targetPath;
-      res.redirect(redirectUrl);
+      req.session.save((err) => {
+        if (err) {
+          console.error("Google OAuth: session save failed:", err);
+          Sentry.captureException(err);
+          return loginRedirectWithError("Session error. Please try again.");
+        }
+        res.redirect(redirectUrl);
+      });
     } catch (error) {
       console.error("Google auth error:", error);
       Sentry.captureException(error);
@@ -2227,6 +2234,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         organizationId: (user as any).organizationId ?? '',
         role: 'viewer' as const,
       };
+
+      await new Promise<void>((resolve, reject) => {
+        req.session!.save((err) => (err ? reject(err) : resolve()));
+      });
 
       res.status(200).json({
         success: true,
