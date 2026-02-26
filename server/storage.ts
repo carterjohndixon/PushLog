@@ -50,6 +50,7 @@ export interface IStorage {
   getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]>;
   getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
   getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
+  getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]>;
   createOrganizationInviteLink(organizationId: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ rawToken: string; joinUrl: string }>;
   createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
   consumeOrganizationInvite(token: string, userId: string, options?: { leaveCurrentOrg?: boolean }): Promise<{ organizationId: string; role: string } | { error: string; code?: string }>;
@@ -214,6 +215,10 @@ export class MemStorage implements IStorage {
   }
 
   async getOrganizationMembers(_organizationId: string): Promise<OrganizationMembership[]> {
+    return [];
+  }
+
+  async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]> {
     return [];
   }
 

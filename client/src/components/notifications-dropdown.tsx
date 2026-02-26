@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { Bell, Mail, MessageSquare, GitBranch, X, Eye, AlertCircle } from "lucide-react";
+import { Bell, Mail, MessageSquare, GitBranch, X, Eye, AlertCircle, UserPlus } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { formatRelativeOrLocal } from "@/lib/date";
 
@@ -56,6 +56,8 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <GitBranch className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_message_sent' ? (
                 <MessageSquare className="w-5 h-5 text-sky-blue mr-3 flex-shrink-0" />
+              ) : (notification as { type: string }).type === 'member_joined' ? (
+                <UserPlus className="w-5 h-5 text-log-green mr-3 flex-shrink-0" />
               ) : notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert' ? (
                 <AlertCircle className="w-5 h-5 text-destructive mr-3 flex-shrink-0" />
               ) : (
@@ -67,6 +69,7 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 <span className={`text-sm font-medium truncate ${
                   notification.type === 'email_verification' ? 'text-amber-600 dark:text-amber-400' : 
                   notification.type === 'push_event' ? 'text-log-green' :
+                  (notification as { type: string }).type === 'member_joined' ? 'text-log-green' :
                   notification.type === 'slack_message_sent' ? 'text-sky-blue' :
                   notification.type === 'slack_delivery_failed' || notification.type === 'openrouter_error' || notification.type === 'incident_alert' || (notification as { type: string }).type === 'budget_alert' ? 'text-destructive' : 'text-foreground'
                 }`}>

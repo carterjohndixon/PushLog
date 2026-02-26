@@ -64,6 +64,7 @@ const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
 const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
 const FinishSetup = lazy(() => import("@/pages/finish-setup"));
 const Join = lazy(() => import("@/pages/join"));
+const Organization = lazy(() => import("@/pages/organization"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -82,7 +83,7 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings"];
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/organization"];
 
 function Router() {
   const [location] = useLocation();
@@ -159,6 +160,11 @@ function Router() {
       <Route path="/settings">
         <ProtectedRoute pageName="settings">
           <Settings />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/organization">
+        <ProtectedRoute pageName="organization">
+          <Organization />
         </ProtectedRoute>
       </Route>
       {isStagingHost && (

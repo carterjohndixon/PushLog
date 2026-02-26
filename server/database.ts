@@ -377,6 +377,46 @@ export class DatabaseStorage implements IStorage {
     return rows.filter((m) => (m as any).status === "active") as OrganizationMembership[];
   }
 
+  /** Organization members with user display info (username or email) for org page. */
+  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string }[]> {
+    const rows = await db
+      .select({
+        userId: organizationMemberships.userId,
+        role: organizationMemberships.role,
+        joinedAt: organizationMemberships.joinedAt,
+        username: users.username,
+        email: users.email,
+      })
+      .from(organizationMemberships)
+      .innerJoin(users, eq(organizationMemberships.userId, users.id))
+      .where(
+        and(
+          eq(organizationMemberships.organizationId, organizationId),
+          eq(organizationMemberships.status, "active")
+        )
+      )
+      .orderBy(asc(organizationMemberships.role));
+    return rows.map((r) => ({
+      userId: r.userId,
+      role: r.role,
+      joinedAt: r.joinedAt,
+      displayName: (r.username && String(r.username).trim()) || (r.email && String(r.email).trim()) || "Unknown",
+    }));
+  }
+
+  async getOrganization(organizationId: string): Promise<Organization | undefined> {
+    const [row] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+    return row as Organization | undefined;
+  }
+
+  async updateOrganization(organizationId: string, updates: { type?: "solo" | "team"; name?: string }): Promise<void> {
+    const set: Record<string, unknown> = {};
+    if (updates.type !== undefined) set.type = updates.type;
+    if (updates.name !== undefined) set.name = updates.name;
+    if (Object.keys(set).length === 0) return;
+    await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
+  }
+
   async createOrganizationInviteLink(
     organizationId: string,
     role: string,

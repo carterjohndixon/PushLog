@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Button } from "@/components/ui/button";
-import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink } from "lucide-react";
+import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink, UserPlus } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { formatCreatedAt } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
@@ -59,6 +59,8 @@ export function NotificationDetailsModal() {
               <GitBranch className="w-5 h-5 text-log-green mr-2" />
             ) : selectedNotification?.type === 'slack_message_sent' ? (
               <MessageSquare className="w-5 h-5 text-sky-blue mr-2" />
+            ) : selectedNotification?.type === 'member_joined' ? (
+              <UserPlus className="w-5 h-5 text-log-green mr-2" />
             ) : selectedNotification?.type === 'slack_delivery_failed' || selectedNotification?.type === 'openrouter_error' || selectedNotification?.type === 'incident_alert' || (selectedNotification as { type?: string })?.type === 'budget_alert' ? (
               <AlertCircle className="w-5 h-5 text-destructive mr-2" />
             ) : (

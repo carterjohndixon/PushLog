@@ -2419,6 +2419,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }
 
   // --- Org invite (share link + accept) ---
+  app.get("/api/org", authenticateToken, requireOrgMember, async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).orgId as string;
+      const org = await databaseStorage.getOrganization(orgId);
+      if (!org) return res.status(404).json({ error: "Organization not found" });
+      res.status(200).json({ id: org.id, name: (org as any).name, type: (org as any).type });
+    } catch (e) {
+      console.error("Get org error:", e);
+      Sentry.captureException(e);
+      res.status(500).json({ error: "Failed to load organization" });
+    }
+  });
+
+  app.get("/api/org/members", authenticateToken, requireOrgMember, async (req: Request, res: Response) => {
+    try {
+      const orgId = (req as any).orgId as string;
+      const members = await databaseStorage.getOrganizationMembersWithUsers(orgId);
+      res.status(200).json({ members });
+    } catch (e) {
+      console.error("Get org members error:", e);
+      Sentry.captureException(e);
+      res.status(500).json({ error: "Failed to load organization members" });
+    }
+  });
+
+  app.patch(
+    "/api/org",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner"]),
+    body("type").optional().isIn(["solo", "team"]),
+    body("name").optional().trim().isLength({ min: 1, max: 100 }),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const updates: { type?: "solo" | "team"; name?: string } = {};
+        if (req.body?.type === "solo" || req.body?.type === "team") updates.type = req.body.type;
+        if (typeof req.body?.name === "string" && req.body.name.trim()) updates.name = req.body.name.trim();
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ error: "No valid updates (type or name)" });
+        }
+        await databaseStorage.updateOrganization(orgId, updates);
+        res.status(200).json({ success: true });
+      } catch (e) {
+        console.error("Update org error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to update organization" });
+      }
+    }
+  );
+
   app.post(
     "/api/org/invites/link",
     authenticateToken,
@@ -2498,6 +2553,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           const status = result.error.includes("already been used") ? 409 : result.error.includes("expired") ? 410 : 400;
           return res.status(status).json({ error: result.error });
+        }
+        // Notify all other org members that someone joined (owner, admin, developer, viewer all see it)
+        try {
+          const members = await databaseStorage.getOrganizationMembers(result.organizationId);
+          const joiner = await databaseStorage.getUserById(userId);
+          const joinerName = (joiner?.username || joiner?.email || "A team member").toString().trim();
+          const roleLabel = result.role === "owner" ? "owner" : result.role === "admin" ? "admin" : result.role === "developer" ? "developer" : "viewer";
+          for (const m of members) {
+            const memberUserId = (m as any).userId;
+            if (memberUserId === userId) continue;
+            await databaseStorage.createNotification({
+              userId: memberUserId,
+              type: "member_joined",
+              title: "New team member",
+              message: `${joinerName} joined the organization as ${roleLabel}.`,
+              metadata: JSON.stringify({ organizationId: result.organizationId, joinedUserId: userId, role: result.role }),
+            } as any);
+          }
+        } catch (notifErr) {
+          console.error("Failed to create member_joined notifications (non-fatal):", notifErr);
         }
         res.status(200).json({ success: true, organizationId: result.organizationId, role: result.role });
       } catch (e) {

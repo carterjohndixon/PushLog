@@ -29,6 +29,7 @@ import {
   Mail,
   Copy,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -80,7 +81,6 @@ export default function Settings() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
   const [slackDisconnectWorkspace, setSlackDisconnectWorkspace] = useState<{ id: string; teamName: string } | null>(null);
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -186,24 +186,34 @@ export default function Settings() {
     },
   });
 
-  const createInviteLinkMutation = useMutation({
-    mutationFn: async (opts?: { role?: string; expiresInDays?: number }) => {
-      const res = await fetch("/api/org/invites/link", {
-        method: "POST",
+  const { data: orgData } = useQuery({
+    queryKey: ["/api/org"],
+    queryFn: async () => {
+      const res = await fetch("/api/org", { credentials: "include", headers: { Accept: "application/json" } });
+      if (!res.ok) return null;
+      return res.json() as Promise<{ id: string; name: string; type: string }>;
+    },
+    enabled: profileResponse?.user?.role === "owner",
+  });
+
+  const updateOrgTypeMutation = useMutation({
+    mutationFn: async (type: "solo" | "team") => {
+      const res = await fetch("/api/org", {
+        method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ role: opts?.role ?? "developer", expiresInDays: opts?.expiresInDays ?? 7 }),
+        body: JSON.stringify({ type }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Failed to create invite link");
-      return data as { joinUrl: string; expiresAt: string; role: string };
+      if (!res.ok) throw new Error(data.error || "Failed to update");
+      return data;
     },
-    onSuccess: (data) => {
-      setInviteLink(data.joinUrl);
-      toast({ title: "Invite link created", description: "Share this link with people you want to add to your team. It expires in 7 days." });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/org"] });
+      toast({ title: "Updated", description: "Organization type updated." });
     },
     onError: (err: Error) => {
-      toast({ title: "Failed to create link", description: err.message, variant: "destructive" });
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -509,6 +519,19 @@ export default function Settings() {
                     )}
                   </div>
 
+                  {/* What each role can do */}
+                  {(profileResponse?.user?.role || profileResponse?.user?.organizationId) && !profileLoading && (
+                    <div className="pt-4 border-t">
+                      <p className="text-sm text-steel-gray mb-2">What each role can do</p>
+                      <ul className="text-sm space-y-1.5 text-muted-foreground">
+                        <li><strong className="text-foreground">Owner</strong> — Full control: manage repos, integrations, invites, change member roles, and delete the organization.</li>
+                        <li><strong className="text-foreground">Admin</strong> — Same as owner for day-to-day use: manage repos, integrations, and invite members. Cannot delete the organization.</li>
+                        <li><strong className="text-foreground">Developer</strong> — Use connected repos and integrations; view push events and notifications. Cannot invite others or change settings.</li>
+                        <li><strong className="text-foreground">Viewer</strong> — Read-only access. Cannot add repos, edit integrations, or invite. Excluded from incident notification pool.</li>
+                      </ul>
+                    </div>
+                  )}
+
                   <div className="pt-4 border-t">
                     <p className="text-sm text-steel-gray mb-2">Connected Services</p>
                     <div className="flex gap-2">
@@ -541,51 +564,71 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Invite to team (owner/admin only) */}
-          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+          {/* Organization type (owner only) */}
+          {profileResponse?.user?.role === "owner" && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <UserPlus className="w-5 h-5 text-log-green" />
-                  Invite to team
+                  <Users className="w-5 h-5 text-log-green" />
+                  Organization
                 </CardTitle>
                 <CardDescription>
-                  Create a link to invite people to your organization. They'll need to log in (or sign up) and accept the invite.
+                  How you're using PushLog. Solo is just you; Team lets you invite others and manage repos together.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Button
-                  variant="glow"
-                  className="text-white"
-                  disabled={createInviteLinkMutation.isPending}
-                  onClick={() => createInviteLinkMutation.mutate(undefined)}
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
-                </Button>
-                {inviteLink && (
+                <div className="flex flex-wrap gap-2">
+                  <Link href="/organization">
+                    <Button variant="outline" size="sm">
+                      View team page
+                    </Button>
+                  </Link>
+                </div>
+                {orgData && (
                   <div className="space-y-2">
-                    <Label className="text-sm text-steel-gray">Invite link (expires in 7 days)</Label>
+                    <Label className="text-sm text-steel-gray">Organization type</Label>
                     <div className="flex gap-2">
-                      <Input
-                        readOnly
-                        value={inviteLink}
-                        className="font-mono text-sm"
-                      />
                       <Button
-                        variant="outline"
-                        size="icon"
-                        title="Copy link"
-                        onClick={() => {
-                          navigator.clipboard.writeText(inviteLink);
-                          toast({ title: "Copied", description: "Invite link copied to clipboard." });
-                        }}
+                        variant={orgData.type === "solo" ? "default" : "outline"}
+                        size="sm"
+                        disabled={updateOrgTypeMutation.isPending}
+                        onClick={() => updateOrgTypeMutation.mutate("solo")}
                       >
-                        <Copy className="w-4 h-4" />
+                        Solo developer
+                      </Button>
+                      <Button
+                        variant={orgData.type === "team" ? "default" : "outline"}
+                        size="sm"
+                        disabled={updateOrgTypeMutation.isPending}
+                        onClick={() => updateOrgTypeMutation.mutate("team")}
+                      >
+                        Team
                       </Button>
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Organization (non-owner members: link to org page) */}
+          {profileResponse?.user?.organizationId && profileResponse?.user?.role !== "owner" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-log-green" />
+                  Organization
+                </CardTitle>
+                <CardDescription>
+                  View your team and members.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link href="/organization">
+                  <Button variant="outline" size="sm">
+                    View team page
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           )}
