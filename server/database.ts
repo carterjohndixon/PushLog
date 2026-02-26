@@ -421,7 +421,11 @@ export class DatabaseStorage implements IStorage {
     return { joinUrl };
   }
 
-  async consumeOrganizationInvite(token: string, userId: string): Promise<{ organizationId: string; role: string } | { error: string; code?: string }> {
+  async consumeOrganizationInvite(
+    token: string,
+    userId: string,
+    options?: { leaveCurrentOrg?: boolean }
+  ): Promise<{ organizationId: string; role: string } | { error: string; code?: string }> {
     const tokenHash = hashToken(token);
 
     return await db.transaction(async (tx) => {
@@ -455,9 +459,22 @@ export class DatabaseStorage implements IStorage {
         }
       }
 
-      const currentOrgId = user ? (user as any).organizationId : null;
+      let currentOrgId = user ? (user as any).organizationId : null;
       if (currentOrgId && currentOrgId !== invite.organizationId) {
-        return { error: "You already belong to another organization.", code: "already_in_org" };
+        if (options?.leaveCurrentOrg) {
+          await tx
+            .delete(organizationMemberships)
+            .where(
+              and(
+                eq(organizationMemberships.userId, userId),
+                eq(organizationMemberships.organizationId, currentOrgId)
+              )
+            );
+          await tx.update(users).set({ organizationId: null }).where(eq(users.id, userId));
+          currentOrgId = null;
+        } else {
+          return { error: "You already belong to another organization.", code: "already_in_org" };
+        }
       }
 
       await tx

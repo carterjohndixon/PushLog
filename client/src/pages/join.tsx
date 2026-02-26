@@ -9,8 +9,38 @@ export default function Join() {
   const [, params] = useRoute("/join/:token");
   const [, setLocation] = useLocation();
   const token = params?.token ?? "";
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "confirm_leave">("idle");
   const [message, setMessage] = useState("");
+
+  const acceptInvite = (leaveCurrentOrg: boolean) => {
+    setStatus("loading");
+    setMessage("");
+    fetch("/api/org/invites/accept", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, leaveCurrentOrg }),
+    })
+      .then((res) => res.json().then((data) => ({ res, data })))
+      .then(({ res, data }) => {
+        if (res.ok && data.success) {
+          setStatus("success");
+          setMessage("You've joined the team. Redirecting to dashboard...");
+          setTimeout(() => setLocation("/dashboard"), 2000);
+        } else {
+          setStatus("error");
+          setMessage(
+            data?.code === "already_in_org"
+              ? "You already belong to another organization. You can only be in one organization at a time."
+              : data?.error || "Failed to accept invite."
+          );
+        }
+      })
+      .catch((err) => {
+        setStatus("error");
+        setMessage(err?.message || "Something went wrong.");
+      });
+  };
 
   useEffect(() => {
     if (!token) {
@@ -45,13 +75,12 @@ export default function Join() {
             setStatus("success");
             setMessage("You've joined the team. Redirecting to dashboard...");
             setTimeout(() => setLocation("/dashboard"), 2000);
+          } else if (data?.code === "already_in_org") {
+            setStatus("confirm_leave");
+            setMessage("You're already in an organization. Do you want to leave it and join this team? You'll lose access to that organization's repos and integrations.");
           } else {
             setStatus("error");
-            setMessage(
-              data?.code === "already_in_org"
-                ? "You already belong to another organization. You can only be in one organization at a time."
-                : data?.error || "Failed to accept invite."
-            );
+            setMessage(data?.error || "Failed to accept invite.");
           }
         });
       })
@@ -93,6 +122,22 @@ export default function Join() {
               <Link href="/dashboard">
                 <Button variant="outline">Go to dashboard</Button>
               </Link>
+            </div>
+          )}
+          {status === "confirm_leave" && (
+            <div className="flex flex-col items-center gap-4 text-center">
+              <p className="text-muted-foreground">{message}</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <Link href="/dashboard">
+                  <Button variant="outline">Cancel</Button>
+                </Link>
+                <Button
+                  variant="default"
+                  onClick={() => acceptInvite(true)}
+                >
+                  Leave and join this team
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

@@ -2481,6 +2481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     "/api/org/invites/accept",
     authenticateToken,
     body("token").trim().notEmpty().withMessage("token is required"),
+    body("leaveCurrentOrg").optional().isBoolean(),
     async (req: Request, res: Response) => {
       try {
         const errors = validationResult(req);
@@ -2489,7 +2490,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const userId = req.user!.userId;
         const token = String(req.body.token).trim();
-        const result = await databaseStorage.consumeOrganizationInvite(token, userId);
+        const leaveCurrentOrg = req.body.leaveCurrentOrg === true;
+        const result = await databaseStorage.consumeOrganizationInvite(token, userId, { leaveCurrentOrg });
         if ("error" in result) {
           if (result.code === "already_in_org") {
             return res.status(409).json({ code: "already_in_org", error: result.error });
