@@ -2793,6 +2793,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(401).json({ error: "User not found" });
       }
+
+      // Already connected: return existing repo and do not create a duplicate
+      const githubIdStr = String(validatedData.githubId ?? "");
+      if (githubIdStr) {
+        const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
+        const existing = connectedRepos.find((r) => String(r.githubId) === githubIdStr);
+        if (existing) {
+          return res.status(200).json(existing);
+        }
+      }
       
       if (!user.githubId || !user.githubToken) {
         return res.status(401).json({ error: "GitHub not connected. Please try refreshing your GitHub connection." });
