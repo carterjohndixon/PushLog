@@ -474,6 +474,14 @@ export default function Settings() {
                         {formatLocalDate(dataSummary.accountCreated)}
                       </p>
                     </div>
+                    {profileResponse?.user?.role && (
+                      <div>
+                        <p className="text-sm text-steel-gray">Team role</p>
+                        <p className="font-medium capitalize">
+                          {profileResponse.user.role}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="pt-4 border-t">

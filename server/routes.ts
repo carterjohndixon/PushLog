@@ -5320,6 +5320,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Prevent caching so clients always get fresh emailVerified after verification
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      const role = (req.user as any)?.role ?? null;
+      const organizationId = (req.user as any)?.organizationId ?? (user as any).organizationId ?? null;
       const payload = {
         success: true,
         user: {
@@ -5339,6 +5341,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           devMode: !!(user as any).devMode,
           incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
           receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
+          organizationId: organizationId ?? undefined,
+          role: role ?? undefined,
         }
       };
       res.status(200).json(payload);
