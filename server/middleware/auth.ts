@@ -113,11 +113,22 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
       (req.session as any).lastActivity = Date.now();
     }
 
-    // If we already have user data in session (with org + role), use it (faster, no DB query)
-    // Otherwise, fetch from database and resolve membership
+    // If we already have user data in session (with org), refresh role from DB so permissions stay correct
+    // (e.g. after an admin promotes you to owner, we use current role, not stale session)
     const su = req.session.user;
-    if (su && typeof (su as any).organizationId === 'string' && (su as any).organizationId !== '' && typeof (su as any).role === 'string') {
-      req.user = req.session.user as SessionUser;
+    if (su && typeof (su as any).organizationId === 'string' && (su as any).organizationId !== '') {
+      const membership = await databaseStorage.getMembershipByOrganizationAndUser((su as any).organizationId, (su as any).userId);
+      const role = membership && ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
+        ? (membership as any).role
+        : (su as any).role ?? 'viewer';
+      const sessionUser: SessionUser = {
+        ...(su as SessionUser),
+        role: role as SessionUser['role'],
+      };
+      if ((su as any).role !== role) {
+        req.session.user = sessionUser;
+      }
+      req.user = sessionUser;
       next();
       return;
     }
