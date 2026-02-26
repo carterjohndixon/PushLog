@@ -23,7 +23,6 @@ import {
   getGitHubUser, 
   getUserRepositories, 
   createWebhook,
-  findExistingWebhook,
   deleteWebhook,
   validateGitHubToken,
   getGitHubTokenScopes
@@ -2760,10 +2759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/repositories", [
     body('name').trim().isLength({ min: 1, max: 100 }).withMessage('Repository name is required and must be 1-100 characters'),
     body('owner').trim().isLength({ min: 1, max: 100 }).withMessage('Repository owner is required and must be 1-100 characters'),
-    body('githubId').custom((val) => {
-      const n = val != null ? Number(val) : NaN;
-      return Number.isInteger(n) && n >= 1;
-    }).withMessage('Valid GitHub ID is required (number or numeric string)'),
+    body('githubId').isInt({ min: 1 }).withMessage('Valid GitHub ID is required'),
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
     body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean')
   ], authenticateToken, requireEmailVerification, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req: any, res: any) => {
@@ -2788,7 +2784,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         organizationId: (req.user as any).organizationId ?? undefined,
         githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
-        fullName: req.body.fullName ?? req.body.full_name ?? (req.body.owner && req.body.name ? `${req.body.owner}/${req.body.name}` : undefined),
       };
       const validatedData = schema.parse(payload);
 
@@ -2796,16 +2791,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!user) {
         return res.status(401).json({ error: "User not found" });
-      }
-
-      // Already connected: return existing repo and do not create a duplicate
-      const githubIdStr = String(validatedData.githubId ?? "");
-      if (githubIdStr) {
-        const connectedRepos = await databaseStorage.getRepositoriesByUserId(userId);
-        const existing = connectedRepos.find((r) => String(r.githubId) === githubIdStr);
-        if (existing) {
-          return res.status(200).json(existing);
-        }
       }
       
       if (!user.githubId || !user.githubToken) {
@@ -2836,34 +2821,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           throw new Error("Admin permissions required. You need admin access to this repository to create webhooks.");
         }
 
-        // Try to reuse existing webhook or create one
+        // Try to create webhook with better error handling
         let webhook;
-        const existingHook = await findExistingWebhook(
-          user.githubToken,
-          validatedData.owner,
-          validatedData.name,
-          webhookUrl
-        );
-        if (existingHook) {
-          webhook = existingHook;
-        } else {
-          try {
-            webhook = await createWebhook(
-              user.githubToken,
-              validatedData.owner,
-              validatedData.name,
-              webhookUrl
-            );
-          } catch (webhookError) {
-            // If webhook creation fails due to OAuth app limitations, provide helpful error
-            if (webhookError instanceof Error && webhookError.message.includes('Resource not accessible by integration')) {
-              throw new Error("Webhook creation failed. This is likely due to GitHub OAuth app configuration. Please ensure your GitHub OAuth app has the 'repo' and 'admin:org_hook' scopes configured. You may need to reconnect your GitHub account to get the updated permissions.");
-            }
-            throw webhookError;
+        try {
+          webhook = await createWebhook(
+            user.githubToken,
+            validatedData.owner,
+            validatedData.name,
+            webhookUrl
+          );
+        } catch (webhookError) {
+          // If webhook creation fails due to OAuth app limitations, provide helpful error
+          if (webhookError instanceof Error && webhookError.message.includes('Resource not accessible by integration')) {
+            throw new Error("Webhook creation failed. This is likely due to GitHub OAuth app configuration. Please ensure your GitHub OAuth app has the 'repo' and 'admin:org_hook' scopes configured. You may need to reconnect your GitHub account to get the updated permissions.");
           }
+          throw webhookError;
         }
 
-        const repository = await databaseStorage.createRepository({
+        const repository = await storage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
           organizationId: (req.user as any).organizationId ?? undefined,
@@ -2878,7 +2853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const errorMessage = webhookError instanceof Error ? webhookError.message : "Unknown error occurred";
         
         // Still create the repository without webhook, but inform the user
-        const repository = await databaseStorage.createRepository({
+        const repository = await storage.createRepository({
           ...validatedData,
           userId: req.user!.userId,
           organizationId: (req.user as any).organizationId ?? undefined,
@@ -2891,9 +2866,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       console.error("Error connecting repository:", error);
-      const message = error instanceof Error ? error.message : "Invalid repository data";
-      const details = error && typeof (error as any).errors !== "undefined" ? (error as any).errors : undefined;
-      res.status(400).json({ error: message, ...(details && { details }) });
+      res.status(400).json({ error: "Invalid repository data" });
     }
   });
 
@@ -3420,7 +3393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             includeCommitSummaries: integration.includeCommitSummaries ?? true,
           };
         });
-        res.setHeader("Cache-Control", "no-store, must-revalidate, private");
+        res.setHeader("Cache-Control", "private, max-age=15");
         return res.status(200).json({ repositories, integrations: enrichedIntegrations, requiresGitHubReconnect: true });
       }
 
@@ -3446,7 +3419,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
       }
       const connectedByGithubId = new Map(connectedRepos.map((r) => [r.githubId, r]));
-      const githubIdsInResponse = new Set(repositoriesFromGitHub.map((repo: any) => repo.id.toString()));
       const repositories = repositoriesFromGitHub.map((repo: any) => {
         const connectedRepo = connectedByGithubId.get(repo.id.toString());
         return {
@@ -3461,29 +3433,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           incidentServiceName: (connectedRepo as any)?.incidentServiceName ?? null,
         };
       });
-      // Include connected repos that GitHub didn't return (so they still show up)
-      for (const cr of connectedRepos) {
-        const gid = String(cr.githubId ?? "");
-        if (!gid || githubIdsInResponse.has(gid)) continue;
-        const ownerLogin = typeof cr.owner === "string" ? cr.owner : (cr.owner as any)?.login ?? (cr.fullName?.split("/")[0] ?? "");
-        repositories.push({
-          id: cr.id,
-          githubId: gid,
-          name: cr.name,
-          full_name: cr.fullName ?? `${ownerLogin}/${cr.name}`,
-          fullName: cr.fullName ?? `${ownerLogin}/${cr.name}`,
-          owner: { login: ownerLogin },
-          default_branch: cr.branch ?? "main",
-          branch: cr.branch ?? "main",
-          isActive: cr.isActive ?? true,
-          isConnected: true,
-          monitorAllBranches: cr.monitorAllBranches ?? false,
-          private: false,
-          integrationCount: integrationCountByRepoId.get(cr.id) ?? 0,
-          criticalPaths: (cr as any).criticalPaths ?? null,
-          incidentServiceName: (cr as any).incidentServiceName ?? null,
-        });
-      }
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
       const repoIdsMain = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
       const lastPushByRepoMain = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsMain);
@@ -3500,7 +3449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           includeCommitSummaries: integration.includeCommitSummaries ?? true,
         };
       });
-      res.setHeader("Cache-Control", "no-store, must-revalidate, private");
+      res.setHeader("Cache-Control", "private, max-age=15");
       return res.status(200).json({ repositories, integrations: enrichedIntegrations });
     } catch (error) {
       console.error("Error fetching repositories and integrations:", error);
