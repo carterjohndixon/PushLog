@@ -115,22 +115,27 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
 
     // If we already have user data in session (with org), refresh role from DB so permissions stay correct
     // (e.g. after an admin promotes you to owner, we use current role, not stale session)
+    // If membership for the session's org is missing (e.g. user just accepted an invite and left that org),
+    // fall through to reload user from DB so we get the new organizationId and role.
     const su = req.session.user;
     if (su && typeof (su as any).organizationId === 'string' && (su as any).organizationId !== '') {
       const membership = await databaseStorage.getMembershipByOrganizationAndUser((su as any).organizationId, (su as any).userId);
-      const role = membership && ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
-        ? (membership as any).role
-        : (su as any).role ?? 'viewer';
-      const sessionUser: SessionUser = {
-        ...(su as SessionUser),
-        role: role as SessionUser['role'],
-      };
-      if ((su as any).role !== role) {
-        req.session.user = sessionUser;
+      if (membership && (membership as any).status === 'active') {
+        const role = ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')
+          ? (membership as any).role
+          : (su as any).role ?? 'viewer';
+        const sessionUser: SessionUser = {
+          ...(su as SessionUser),
+          role: role as SessionUser['role'],
+        };
+        if ((su as any).role !== role) {
+          req.session.user = sessionUser;
+        }
+        req.user = sessionUser;
+        next();
+        return;
       }
-      req.user = sessionUser;
-      next();
-      return;
+      // Membership missing or not active (e.g. user left org / joined another) — reload from DB below
     }
 
     // Fetch user from database to populate session data

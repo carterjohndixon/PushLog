@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Link } from "wouter";
+import { PROFILE_QUERY_KEY } from "@/lib/profile";
 
 export default function Join() {
   const [, params] = useRoute("/join/:token");
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const token = params?.token ?? "";
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "confirm_leave">("idle");
   const [message, setMessage] = useState("");
@@ -26,6 +29,7 @@ export default function Join() {
           if (res.ok && data.success) {
             setStatus("success");
             setMessage("You've joined the organization. Redirecting to dashboard...");
+            queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
             setTimeout(() => setLocation("/dashboard"), 1500);
           } else {
           setStatus("error");
@@ -74,6 +78,7 @@ export default function Join() {
         if (res.ok && data.success) {
           setStatus("success");
           setMessage("You've joined the organization. Redirecting to dashboard...");
+          queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
           setTimeout(() => setLocation("/dashboard"), 1500);
         } else if (data?.code === "already_in_org") {
             setStatus("confirm_leave");

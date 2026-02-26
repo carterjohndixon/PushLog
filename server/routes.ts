@@ -2685,6 +2685,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const user = await databaseStorage.getUserById(userId);
         const requirePasswordChange = !!(user as any)?.mustChangePassword;
+        // Update session so the next request sees the new org and role (avoids stale cache showing old org/owner)
+        if (req.session?.user) {
+          (req.session.user as any).organizationId = result.organizationId;
+          (req.session.user as any).role = result.role;
+        }
         res.status(200).json({
           success: true,
           organizationId: result.organizationId,
