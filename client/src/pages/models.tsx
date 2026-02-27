@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
@@ -17,6 +17,34 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
 
+type ModelsTab = "openrouter" | "openai";
+
+const MODELS_TAB_STORAGE_KEY = "pushlog-models-tab";
+const VALID_MODELS_TABS: readonly ModelsTab[] = ["openrouter", "openai"];
+const DEFAULT_MODELS_TAB: ModelsTab = "openrouter";
+
+function getStoredModelsTab(): ModelsTab {
+  if (typeof window === "undefined") return DEFAULT_MODELS_TAB;
+  try {
+    const stored = localStorage.getItem(MODELS_TAB_STORAGE_KEY);
+    if (stored !== null && (VALID_MODELS_TABS as readonly string[]).includes(stored)) {
+      return stored as ModelsTab;
+    }
+  } catch {
+    // localStorage disabled or quota exceeded
+  }
+  return DEFAULT_MODELS_TAB;
+}
+
+function setStoredModelsTab(tab: ModelsTab): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(MODELS_TAB_STORAGE_KEY, tab);
+  } catch {
+    // ignore
+  }
+}
+
 interface IntegrationOption {
   id: string | number;
   repositoryName: string;
@@ -32,13 +60,17 @@ interface ProfileUser extends ProfileUserForModels {
 }
 
 export default function Models() {
-  const [providerTab, setProviderTab] = useState<"openrouter" | "openai">("openrouter");
-  const hasSetInitialTab = useRef(false);
+  const [providerTab, setProviderTab] = useState<ModelsTab>(getStoredModelsTab);
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const [replaceAllConfirmOpen, setReplaceAllConfirmOpen] = useState(false);
   const [replaceAllModelId, setReplaceAllModelId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const switchProviderTab = (tab: ModelsTab) => {
+    setProviderTab(tab);
+    setStoredModelsTab(tab);
+  };
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -59,12 +91,6 @@ export default function Models() {
   });
   const recommendedOpenai = recommendedData?.openai ?? null;
   const recommendedOpenrouter = recommendedData?.openrouter ?? null;
-
-  useEffect(() => {
-    if (hasSetInitialTab.current || profileLoading) return;
-    hasSetInitialTab.current = true;
-    if (profileResponse?.user?.hasOpenAiKey) setProviderTab("openai");
-  }, [profileLoading, profileResponse?.user?.hasOpenAiKey]);
 
   const { data: integrations } = useQuery<IntegrationOption[]>({
     queryKey: ["/api/integrations"],
@@ -151,7 +177,7 @@ export default function Models() {
           <div className="flex gap-2 mt-4">
             <button
               type="button"
-              onClick={() => setProviderTab("openrouter")}
+              onClick={() => switchProviderTab("openrouter")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 providerTab === "openrouter"
                   ? "bg-log-green/15 border-log-green text-log-green"
@@ -160,9 +186,9 @@ export default function Models() {
             >
               OpenRouter <span className="text-xs opacity-80">(recommended)</span>
             </button>
-                <button
+            <button
               type="button"
-              onClick={() => setProviderTab("openai")}
+              onClick={() => switchProviderTab("openai")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 providerTab === "openai"
                   ? "bg-log-green/15 border-log-green text-log-green"
@@ -170,9 +196,9 @@ export default function Models() {
               }`}
             >
               OpenAI
-                </button>
-              </div>
-                  </div>
+            </button>
+          </div>
+        </div>
 
         {providerTab === "openrouter" && (
           <OpenRouterModels
