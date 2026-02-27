@@ -174,9 +174,16 @@ export default function Models() {
           <p className="text-muted-foreground mt-1">
             Choose a provider, add your API key, and configure models for commit summaries.
           </p>
-          <div className="flex gap-2 mt-4">
+          <div
+            className="flex gap-2 mt-4"
+            role="tablist"
+            aria-label="AI provider"
+          >
             <button
               type="button"
+              id="models-tab-openrouter"
+              role="tab"
+              aria-selected={providerTab === "openrouter"}
               onClick={() => switchProviderTab("openrouter")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 providerTab === "openrouter"
@@ -188,6 +195,9 @@ export default function Models() {
             </button>
             <button
               type="button"
+              id="models-tab-openai"
+              role="tab"
+              aria-selected={providerTab === "openai"}
               onClick={() => switchProviderTab("openai")}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                 providerTab === "openai"
@@ -201,7 +211,8 @@ export default function Models() {
         </div>
 
         {providerTab === "openrouter" && (
-          <OpenRouterModels
+          <div role="tabpanel" aria-labelledby="models-tab-openrouter">
+            <OpenRouterModels
             userHasKey={userHasKey}
             profileLoading={profileLoading}
             profileUser={profileUser}
@@ -216,10 +227,12 @@ export default function Models() {
             setReplaceAllModelId={setReplaceAllModelId}
             replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
           />
+          </div>
         )}
 
         {providerTab === "openai" && (
-          <OpenAIModels
+          <div role="tabpanel" aria-labelledby="models-tab-openai">
+            <OpenAIModels
             userHasOpenAiKey={userHasOpenAiKey}
             profileLoading={profileLoading}
             profileUser={profileUser}
@@ -234,6 +247,7 @@ export default function Models() {
             setReplaceAllModelId={setReplaceAllModelId}
             replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
           />
+          </div>
         )}
 
         <Dialog
