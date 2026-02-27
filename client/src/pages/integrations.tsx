@@ -57,7 +57,7 @@ interface IntegrationCardProps {
   canManageRepos?: boolean;
 }
 
-function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending, canManageRepos = true }: IntegrationCardProps) {
+function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending, canManageRepos = false }: IntegrationCardProps) {
   return (
     <Card className="card-lift hover:shadow-md transition-shadow">
       <CardContent className="p-6">

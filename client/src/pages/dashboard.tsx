@@ -1138,6 +1138,8 @@ export default function Dashboard() {
                         >
                           {integration.status === 'active' ? 'Active' : 'Paused'}
                         </Badge>
+                        {canManageRepos && (
+                        <>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -1167,6 +1169,8 @@ export default function Dashboard() {
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
+                        </>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -1312,20 +1316,21 @@ export default function Dashboard() {
           private: repo.private
         }))}
         onIntegrationCreated={(data, variables) => {
+          const d = data as Record<string, unknown>;
+          const { openRouterApiKey: _, ...sanitized } = d;
           queryClient.setQueryData(
             ['/api/repositories-and-integrations'],
             (prev: { repositories: any[]; integrations: any[] } | undefined) => {
               if (!prev) return prev;
               const repositoryName =
                 repositories.find((r) => r.id?.toString() === variables.repositoryId)?.name ?? 'Unknown Repository';
-              const { openRouterApiKey: _, ...sanitized } = data;
               const newIntegration = {
                 ...sanitized,
                 repositoryName,
-                lastUsed: data.createdAt ?? null,
-                status: data.isActive ? 'active' : 'paused',
-                notificationLevel: data.notificationLevel ?? 'all',
-                includeCommitSummaries: data.includeCommitSummaries ?? true,
+                lastUsed: d.createdAt ?? null,
+                status: d.isActive ? 'active' : 'paused',
+                notificationLevel: d.notificationLevel ?? 'all',
+                includeCommitSummaries: d.includeCommitSummaries ?? true,
               };
               return {
                 ...prev,
