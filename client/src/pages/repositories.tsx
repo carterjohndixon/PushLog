@@ -78,6 +78,7 @@ interface RepositoryCardProps {
   handleDeleteRepository: (repository: RepositoryCardData) => void;
   deleteRepositoryIsPending: boolean;
   getRepositoryEvents: (repository: RepositoryCardData) => { count: number; events: any[] };
+  canManageRepos?: boolean;
 }
 
 const RepositoryCard = ({
@@ -95,6 +96,7 @@ const RepositoryCard = ({
   handleDeleteRepository,
   deleteRepositoryIsPending,
   getRepositoryEvents,
+  canManageRepos = true,
 }: RepositoryCardProps) => {
   const repoHasIntegration = integrations?.some(
     (integration) => integration.repositoryId === repository.id
@@ -153,6 +155,7 @@ const RepositoryCard = ({
               Available to connect
             </div>
             
+            {canManageRepos && (
             <Button
               size="sm"
               variant="glow"
@@ -170,6 +173,7 @@ const RepositoryCard = ({
               <Plus className="w-4 h-4 mr-2" />
               {connectingRepoId === String(repository.githubId) ? "Connecting…" : "Connect Repository"}
             </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -256,6 +260,7 @@ const RepositoryCard = ({
             }
           </div>
           
+          {canManageRepos && (
           <div className="flex items-center space-x-1">
             <Button
               size="sm"
@@ -290,6 +295,7 @@ const RepositoryCard = ({
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -310,6 +316,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const [isEventsModalOpen, setIsEventsModalOpen] = useState(false);
   const [selectedRepositoryForEvents, setSelectedRepositoryForEvents] = useState<RepositoryCardData | null>(null);
   const [connectingRepoId, setConnectingRepoId] = useState<string | null>(null);
+
+  const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -580,8 +588,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       );
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
-      setActiveTab("active");
-      setStatusFilter("active");
       toast({
         title: "Repository connected",
         description: data.warning ?? `${repository.name} has been connected to PushLog.`,
@@ -798,6 +804,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
               </div>
             )}
           </div>
+          {canManageRepos && (
           <Button 
             variant="glow"
             onClick={() => setIsRepoModalOpen(true)}
@@ -806,6 +813,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             <Plus className="w-4 h-4 mr-2" />
             Add Repository
           </Button>
+          )}
         </div>
 
         {/* Repositories Tabs */}
@@ -875,6 +883,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>
@@ -889,6 +898,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                       : "Connect your first repository to start monitoring."
                     }
                   </p>
+                  {canManageRepos && (
                   <Button 
                     variant="glow"
                     onClick={() => setIsRepoModalOpen(true)}
@@ -897,6 +907,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     <Plus className="w-4 h-4 mr-2" />
                     Add Repository
                   </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -922,6 +933,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>
@@ -956,6 +968,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>
@@ -990,6 +1003,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>

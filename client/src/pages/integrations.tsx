@@ -54,9 +54,10 @@ interface IntegrationCardProps {
   onDelete: (integration: ActiveIntegration) => void;
   togglePending: boolean;
   deletePending: boolean;
+  canManageRepos?: boolean;
 }
 
-function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending }: IntegrationCardProps) {
+function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending, canManageRepos = true }: IntegrationCardProps) {
   return (
     <Card className="card-lift hover:shadow-md transition-shadow">
       <CardContent className="p-6">
@@ -87,6 +88,8 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
           </div>
           <div className="flex items-center justify-between mt-auto">
             <div className="flex items-center space-x-2">
+              {canManageRepos && (
+              <>
               <Button
                 size="sm"
                 variant="ghost"
@@ -117,6 +120,8 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
+              </>
+              )}
             </div>
             <Badge
               variant={integration.status === 'active' ? "default" : "secondary"}
@@ -149,6 +154,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
     queryFn: fetchProfile,
   });
   const userProfile = profileResponse?.user ?? userProfileProp;
+  const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
   const { toast } = useToast();
 
   // Single request for repos + integrations (faster load); also populate separate caches for other components
@@ -406,6 +412,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                 {integrationsLoading ? "Loading..." : "Manage your GitHub to Slack integrations"}
               </p>
             </div>
+            {canManageRepos && (
             <Button 
               onClick={() => setIsIntegrationModalOpen(true)}
               variant="glow"
@@ -414,6 +421,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
               <Plus className="w-4 h-4 mr-2" />
               New Integration
             </Button>
+            )}
           </div>
         </div>
 
@@ -617,6 +625,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     onDelete={handleDeleteIntegration}
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>
@@ -631,7 +640,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                       : "Get started by creating your first integration."
                     }
                   </p>
-                  {!searchTerm && statusFilter === "all" && (
+                  {canManageRepos && !searchTerm && statusFilter === "all" && (
                     <Button 
                       onClick={() => setIsIntegrationModalOpen(true)}
                       variant="glow"
@@ -658,6 +667,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     onDelete={handleDeleteIntegration}
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>
@@ -684,6 +694,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     onDelete={handleDeleteIntegration}
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
+                    canManageRepos={canManageRepos}
                   />
                 ))}
               </div>

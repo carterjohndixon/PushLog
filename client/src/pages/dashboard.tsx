@@ -259,6 +259,8 @@ export default function Dashboard() {
   });
   const userProfile = profileResponse?.user;
 
+  const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
+
   // Fetch dashboard stats (uses session cookie via credentials: include)
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
     queryKey: ['/api/stats'],
@@ -855,6 +857,7 @@ export default function Dashboard() {
                       View All
                     </Button>
                   </Link>
+                  {canManageRepos && (
                   <Button 
                     size="sm" 
                     variant="glow"
@@ -864,6 +867,7 @@ export default function Dashboard() {
                     <Plus className="w-4 h-4 mr-1" />
                     Add Repo
                   </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1006,6 +1010,8 @@ export default function Dashboard() {
                             <Badge variant={badgeVariant} className="text-xs">
                               {statusText}
                             </Badge>
+                            {canManageRepos && (
+                            <>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -1023,6 +1029,8 @@ export default function Dashboard() {
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
+                            </>
+                            )}
                           </div>
                         </div>
                       );
@@ -1034,7 +1042,7 @@ export default function Dashboard() {
                   <h3 className="font-medium text-foreground mb-2">No Connected Repositories</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     {userProfile?.githubConnected 
-                      ? "Click the 'Add Repo' button above to start monitoring your repositories."
+                      ? (canManageRepos ? "Click the 'Add Repo' button above to start monitoring your repositories." : "Repositories are managed by your organization's owner or admin.")
                       : "Connect your GitHub account to start monitoring repositories."}
                   </p>
                   {!userProfile?.githubConnected && (
@@ -1065,6 +1073,7 @@ export default function Dashboard() {
                       View All
                     </Button>
                   </Link>
+                  {canManageRepos && (
                   <Button 
                     size="sm" 
                     variant="glow"
@@ -1074,6 +1083,7 @@ export default function Dashboard() {
                     <Plus className="w-4 h-4 mr-1" />
                     Add Integration
                   </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
