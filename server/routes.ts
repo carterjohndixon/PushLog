@@ -2774,11 +2774,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
+      const getConnectedRepos = orgId
+        ? () => databaseStorage.getRepositoriesByOrganizationId(orgId)
+        : () => databaseStorage.getRepositoriesByUserId(userId);
+      const getIntegrations = orgId
+        ? () => databaseStorage.getIntegrationsByOrganizationId(orgId)
+        : () => storage.getIntegrationsByUserId(userId);
+
       // If no GitHub token, still return connected repos from DB so the dashboard list matches the stats
       if (!user.githubId || !user.githubToken) {
         const [connectedRepos, userIntegrations] = await Promise.all([
-          databaseStorage.getRepositoriesByUserId(userId),
-          storage.getIntegrationsByUserId(userId),
+          getConnectedRepos(),
+          getIntegrations(),
         ]);
         const integrationCountByRepoId = new Map<string, number>();
         for (const i of userIntegrations) {
@@ -2837,8 +2845,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch GitHub repos and DB data in parallel so we don't wait for GitHub before starting DB (or vice versa)
         const [repositories, connectedRepos, userIntegrations] = await Promise.all([
           getUserRepositories(user.githubToken),
-          databaseStorage.getRepositoriesByUserId(userId),
-          storage.getIntegrationsByUserId(userId),
+          getConnectedRepos(),
+          getIntegrations(),
         ]);
 
         // Precompute integration count per repo (O(n) instead of O(repos × integrations))
@@ -3554,12 +3562,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid session" });
       }
 
+      const user = await databaseStorage.getUserById(userId).catch(() => null);
+      const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
       const [integrations, repos] = await Promise.all([
-        storage.getIntegrationsByUserId(userId),
-        storage.getRepositoriesByUserId(userId),
+        orgId ? databaseStorage.getIntegrationsByOrganizationId(orgId) : storage.getIntegrationsByUserId(userId),
+        orgId ? databaseStorage.getRepositoriesByOrganizationId(orgId) : storage.getRepositoriesByUserId(userId),
       ]);
       if (!Array.isArray(integrations)) {
-        console.error("getIntegrationsByUserId did not return an array:", typeof integrations);
+        console.error("getIntegrations did not return an array:", typeof integrations);
         return res.status(200).json([]);
       }
 
@@ -3605,10 +3615,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "User not found" });
       }
 
+      const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
+      const getConnectedRepos = orgId
+        ? () => databaseStorage.getRepositoriesByOrganizationId(orgId)
+        : () => databaseStorage.getRepositoriesByUserId(userId);
+      const getIntegrations = orgId
+        ? () => databaseStorage.getIntegrationsByOrganizationId(orgId)
+        : () => storage.getIntegrationsByUserId(userId);
+
       if (!user.githubId || !user.githubToken) {
         const [connectedRepos, integrations] = await Promise.all([
-          databaseStorage.getRepositoriesByUserId(userId),
-          storage.getIntegrationsByUserId(userId),
+          getConnectedRepos(),
+          getIntegrations(),
         ]);
         const integrationCountByRepoId = new Map<string, number>();
         for (const i of integrations) {
@@ -3664,8 +3682,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [repositoriesFromGitHub, connectedRepos, integrations] = await Promise.all([
         getUserRepositories(user.githubToken),
-        databaseStorage.getRepositoriesByUserId(userId),
-        storage.getIntegrationsByUserId(userId),
+        getConnectedRepos(),
+        getIntegrations(),
       ]);
       const integrationCountByRepoId = new Map<string, number>();
       for (const i of integrations) {
