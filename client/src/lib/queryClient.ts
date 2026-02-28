@@ -51,7 +51,7 @@ async function throwIfResNotOk(res: Response) {
     const text = await res.text();
     const message = sanitizeErrorMessage(text, res.status, res.statusText);
 
-    // Handle 403 with MFA required - redirect to setup or verify
+    // Handle 403 Forbidden (e.g. Cloudflare Access expired on staging, or other auth wall)
     if (res.status === 403) {
       try {
         const json = JSON.parse(text);
@@ -60,7 +60,6 @@ async function throwIfResNotOk(res: Response) {
             const currentPath = window.location.pathname;
             const targetPath = new URL(json.redirectTo, window.location.origin).pathname;
             const isPublicOrAuthPage = currentPath === "/" || currentPath === "/login" || currentPath === "/signup";
-            // Don't redirect if already on target MFA page, or if user is on home/login/signup (they chose to be there).
             if (currentPath !== targetPath && !isPublicOrAuthPage) {
               window.location.href = json.redirectTo;
             }
@@ -69,11 +68,16 @@ async function throwIfResNotOk(res: Response) {
         }
       } catch (e) {
         if (e instanceof SyntaxError) {
-          // Not JSON, fall through to generic throw
-        } else {
+          // Not JSON, fall through
+        } else if (e instanceof Error && e.message === "MFA required") {
           throw e;
         }
       }
+      // 403 but not MFA (e.g. Cloudflare Access expired): redirect to login so user can re-auth
+      if (typeof window !== "undefined" && !PUBLIC_PATHS.includes(window.location.pathname)) {
+        window.location.href = "/login";
+      }
+      throw new Error(message || "Access denied");
     }
 
     // Handle 401 Unauthorized

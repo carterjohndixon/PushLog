@@ -1,5 +1,4 @@
 import React, { useEffect } from "react";
-import { useLocation } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PROFILE_QUERY_KEY, fetchProfile, ProfileError, type ProfileResponse } from "@/lib/profile";
 
@@ -9,7 +8,6 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
-  const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
 
   // After GitHub connect/reconnect (redirect with ?github_connected=1), invalidate repo queries once and clean URL
@@ -37,13 +35,12 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const isAuthenticated = !!profileResponse?.success && !!profileResponse?.user;
   const userProfile = profileResponse?.user ?? null;
 
+  // On session/cookie or Cloudflare Access expiry, redirect to login with a full page load
+  // so the user doesn't have to refresh; full load also lets CF re-auth if needed (staging).
   if (isFetched && !isLoading && !isAuthenticated) {
     if (error instanceof ProfileError) {
-      if (error.redirectTo) {
-        setLocation(error.redirectTo);
-      } else {
-        setLocation("/login");
-      }
+      const target = error.redirectTo || "/login";
+      window.location.href = target;
       return null;
     }
   }
@@ -71,7 +68,8 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   }
 
   if (isError && error instanceof ProfileError) {
-    setLocation(error.redirectTo || "/login");
+    const target = error.redirectTo || "/login";
+    window.location.href = target;
     return null;
   }
 
