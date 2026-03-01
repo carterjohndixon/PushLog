@@ -1887,8 +1887,13 @@ export class DatabaseStorage implements IStorage {
       const userRepos = await this.getRepositoriesByUserId(userId);
       const repoIds = userRepos.map((r) => r.id);
 
-      // 5. Delete all push events for user's repos in one query (no load-then-delete loop)
+      // 5. Delete push_event_files first (FK from push_event_files to push_events), then push_events
       if (repoIds.length > 0) {
+        const eventIds = await db.select({ id: pushEvents.id }).from(pushEvents).where(inArray(pushEvents.repositoryId, repoIds));
+        const eventIdList = eventIds.map((e) => e.id);
+        if (eventIdList.length > 0) {
+          await db.delete(pushEventFiles).where(inArray(pushEventFiles.pushEventId, eventIdList));
+        }
         const deleted = await db.delete(pushEvents).where(inArray(pushEvents.repositoryId, repoIds)).returning({ id: pushEvents.id });
         deletedData.pushEvents = deleted.length;
       }

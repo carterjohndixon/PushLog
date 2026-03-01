@@ -10,6 +10,17 @@ import { useMutation } from "@tanstack/react-query";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AuthLayout } from "@/components/auth-layout";
 
+// Safe redirect path from ?redirect= (same-origin path only, e.g. /join/TOKEN)
+function getRedirectPath(): string | null {
+  if (typeof window === "undefined") return null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const r = urlParams.get("redirect");
+  if (!r || typeof r !== "string") return null;
+  const path = r.startsWith("/") ? r : `/${r}`;
+  if (!path.startsWith("/")) return null;
+  return path;
+}
+
 interface PasswordRequirement {
   name: string;
   regex: RegExp;
@@ -88,7 +99,8 @@ export default function Signup() {
         if (data?.needsMfaSetup && data?.redirectTo) {
           window.location.href = data.redirectTo;
         } else {
-          window.location.href = "/dashboard";
+          const redirectPath = getRedirectPath();
+          window.location.href = redirectPath || "/dashboard";
         }
       },
       onError: (error: any) => {
@@ -138,7 +150,8 @@ export default function Signup() {
   const handleGitHubConnect = () => {
     setIsOAuthLoading(true);
     setOauthProvider("GitHub");
-    window.location.href = "/api/auth/github/init?returnPath=/dashboard";
+    const returnPath = getRedirectPath() || "/dashboard";
+    window.location.href = `/api/auth/github/init?returnPath=${encodeURIComponent(returnPath)}`;
   };
 
   const handleGoogleConnect = () => {
@@ -262,7 +275,7 @@ export default function Signup() {
 
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <a href="/login" className="text-primary font-medium hover:underline">Log in</a>
+          <a href={getRedirectPath() ? `/login?redirect=${encodeURIComponent(getRedirectPath()!)}` : "/login"} className="text-primary font-medium hover:underline">Log in</a>
         </p>
       </div>
 

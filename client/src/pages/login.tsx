@@ -243,7 +243,7 @@ export default function Login() {
 
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{" "}
-          <a href="/signup" className="text-primary font-medium hover:underline">Sign up</a>
+          <a href={getRedirectPath() ? `/signup?redirect=${encodeURIComponent(getRedirectPath()!)}` : "/signup"} className="text-primary font-medium hover:underline">Sign up</a>
         </p>
       </div>
 
