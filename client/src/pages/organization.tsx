@@ -161,6 +161,15 @@ export default function OrganizationPage() {
     setIncidentPriorityUserIds(incidentSettingsData.priorityUserIds ?? []);
   }, [incidentSettingsData]);
 
+  // When members list updates (e.g. after refetch on opening modal), keep selected member in sync so "Last active" is fresh
+  useEffect(() => {
+    if (!selectedMember || members.length === 0) return;
+    const fresh = members.find((m) => m.userId === selectedMember.userId);
+    if (fresh && (fresh.lastActiveAt !== selectedMember.lastActiveAt || fresh.role !== selectedMember.role)) {
+      setSelectedMember(fresh);
+    }
+  }, [members, selectedMember?.userId]);
+
   const handleSetupSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ORG_QUERY_KEY });
   };
@@ -340,9 +349,9 @@ export default function OrganizationPage() {
     }
     saveIncidentSettingsMutation.mutate({
       targetingMode: incidentMode,
-      specificUserIds: incidentMode === "specific_users" ? incidentSpecificUserIds : null,
-      specificRoles: incidentMode === "specific_users" ? incidentSpecificRoles : null,
-      priorityUserIds: incidentPriorityUserIds.length > 0 ? incidentPriorityUserIds : null,
+      specificUserIds: incidentMode === "specific_users" ? incidentSpecificUserIds : [],
+      specificRoles: incidentMode === "specific_users" ? incidentSpecificRoles : [],
+      priorityUserIds: incidentPriorityUserIds,
       includeViewers: incidentIncludeViewers,
     });
   };
@@ -913,8 +922,17 @@ export default function OrganizationPage() {
                       key={member.userId}
                       role={canInvite ? "button" : undefined}
                       tabIndex={canInvite ? 0 : undefined}
-                      onClick={canInvite ? () => setSelectedMember(member) : undefined}
-                      onKeyDown={canInvite ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedMember(member); } } : undefined}
+                      onClick={canInvite ? () => {
+                        setSelectedMember(member);
+                        queryClient.refetchQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
+                      } : undefined}
+                      onKeyDown={canInvite ? (e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setSelectedMember(member);
+                          queryClient.refetchQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
+                        }
+                      } : undefined}
                       className={`flex items-center gap-4 p-4 rounded-lg border bg-card outline-none focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 ${
                         isYou
                           ? "border-2 border-log-green"
