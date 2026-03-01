@@ -370,12 +370,12 @@ let _ghCommitsCache: { data: Array<{ sha: string; shortSha: string; dateIso: str
 const GH_CACHE_TTL = 60_000; // 60 seconds
 
 async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
-  // Return cached data if fresh
-  if (_ghCommitsCache && Date.now() - _ghCommitsCache.ts < GH_CACHE_TTL && _ghCommitsCache.data.length > 0) {
-    return _ghCommitsCache.data;
+  // Return cached data if fresh and we have at least as many as requested
+  if (_ghCommitsCache && Date.now() - _ghCommitsCache.ts < GH_CACHE_TTL && _ghCommitsCache.data.length >= limit) {
+    return _ghCommitsCache.data.slice(0, limit);
   }
-
-  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`;
+  const fetchLimit = Math.max(limit, _ghCommitsCache?.data.length ?? 0, 30);
+  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${fetchLimit}`;
   const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
   if (GITHUB_TOKEN) {
     headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
@@ -440,7 +440,8 @@ function derivePendingFromRecent(
   }
   const idx = recentCommits.findIndex((c) => commitShaMatches(c.sha, c.shortSha, deployedSha));
   if (idx === -1) {
-    return { pendingCount: 0, pendingCommits: [] as Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }> };
+    // Deployed SHA is older than our window (e.g. prod deployed days ago, 30+ commits since). Treat all shown commits as pending.
+    return { pendingCount: recentCommits.length, pendingCommits: [...recentCommits] };
   }
   const pendingCommits = recentCommits.slice(0, idx);
   return { pendingCount: pendingCommits.length, pendingCommits };
@@ -995,7 +996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always prefer canonical GitHub history for Admin timeline.
       // If GitHub is unavailable/rate-limited, fall back to local git history.
-      const githubCommits = await fetchRecentCommitsFromGitHub(30);
+      const githubCommits = await fetchRecentCommitsFromGitHub(100);
       if (githubCommits.length > 0) {
         recentCommits = githubCommits;
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
@@ -1135,7 +1136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always prefer canonical GitHub history for Admin timeline.
       // If GitHub is unavailable/rate-limited, fall back to local git history.
-      const githubCommits = await fetchRecentCommitsFromGitHub(30);
+      const githubCommits = await fetchRecentCommitsFromGitHub(100);
       if (githubCommits.length > 0) {
         recentCommits = githubCommits;
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
@@ -1212,7 +1213,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always fetch from GitHub as the canonical source — production may be on old code after rollback
       if (finalRecentCommits.length === 0) {
-        finalRecentCommits = await fetchRecentCommitsFromGitHub(30);
+        finalRecentCommits = await fetchRecentCommitsFromGitHub(100);
       }
       if (!finalHeadSha && finalRecentCommits[0]?.sha) {
         finalHeadSha = finalRecentCommits[0].sha;
