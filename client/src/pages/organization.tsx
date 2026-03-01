@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
-import { formatLocalDate } from "@/lib/date";
+import { formatLocalDate, formatLocalDateTime } from "@/lib/date";
 import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import {
@@ -39,9 +39,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SetupOrganizationModal, isSetupOrgDismissed } from "@/components/setup-organization-modal";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Bell, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 
 const ORG_QUERY_KEY = ["org"];
 const ORG_MEMBERS_QUERY_KEY = ["org", "members"];
+const ORG_INCIDENT_SETTINGS_QUERY_KEY = ["org", "incident-settings"];
+
+type IncidentSettingsPayload = {
+  targetingMode: "users_with_repos" | "all_members" | "specific_users";
+  specificUserIds: string[] | null;
+  specificRoles: string[] | null;
+  priorityUserIds: string[] | null;
+  includeViewers: boolean;
+  updatedAt: string;
+};
+
+function fetchOrgIncidentSettings() {
+  return apiRequest("GET", "/api/org/incident-settings").then((r) => r.json()) as Promise<IncidentSettingsPayload>;
+}
 
 function fetchOrg() {
   return apiRequest("GET", "/api/org").then((r) => r.json()) as Promise<{
@@ -56,11 +74,11 @@ function fetchOrg() {
 
 function fetchOrgMembers() {
   return apiRequest("GET", "/api/org/members").then((r) => r.json()) as Promise<{
-    members: { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[];
+    members: { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[];
   }>;
 }
 
-type Member = { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null };
+type Member = { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null };
 
 const ROLE_ORDER = ["owner", "admin", "developer", "viewer"];
 const ROLE_LABELS: Record<string, string> = {
@@ -84,6 +102,12 @@ export default function OrganizationPage() {
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [setupModalOpen, setSetupModalOpen] = useState(false);
   const [setupModalMode, setSetupModalMode] = useState<"setup" | "edit">("setup");
+  // Incident notification targeting form (owner/admin)
+  const [incidentMode, setIncidentMode] = useState<IncidentSettingsPayload["targetingMode"]>("users_with_repos");
+  const [incidentSpecificUserIds, setIncidentSpecificUserIds] = useState<string[]>([]);
+  const [incidentSpecificRoles, setIncidentSpecificRoles] = useState<string[]>([]);
+  const [incidentIncludeViewers, setIncidentIncludeViewers] = useState(false);
+  const [incidentPriorityUserIds, setIncidentPriorityUserIds] = useState<string[]>([]);
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -99,6 +123,11 @@ export default function OrganizationPage() {
     queryKey: ORG_MEMBERS_QUERY_KEY,
     queryFn: fetchOrgMembers,
     enabled: !!profileResponse?.user?.organizationId,
+  });
+  const { data: incidentSettingsData } = useQuery({
+    queryKey: ORG_INCIDENT_SETTINGS_QUERY_KEY,
+    queryFn: fetchOrgIncidentSettings,
+    enabled: !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"),
   });
 
   const user = profileResponse?.user;
@@ -122,6 +151,15 @@ export default function OrganizationPage() {
       setSetupModalOpen(true);
     }
   }, [showSetupPrompt, orgData?.id]);
+
+  useEffect(() => {
+    if (!incidentSettingsData) return;
+    setIncidentMode(incidentSettingsData.targetingMode);
+    setIncidentSpecificUserIds(incidentSettingsData.specificUserIds ?? []);
+    setIncidentSpecificRoles(incidentSettingsData.specificRoles ?? []);
+    setIncidentIncludeViewers(incidentSettingsData.includeViewers);
+    setIncidentPriorityUserIds(incidentSettingsData.priorityUserIds ?? []);
+  }, [incidentSettingsData]);
 
   const handleSetupSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ORG_QUERY_KEY });
@@ -268,6 +306,47 @@ export default function OrganizationPage() {
     },
   });
 
+  const saveIncidentSettingsMutation = useMutation({
+    mutationFn: async (payload: {
+      targetingMode: IncidentSettingsPayload["targetingMode"];
+      specificUserIds: string[] | null;
+      specificRoles: string[] | null;
+      priorityUserIds: string[] | null;
+      includeViewers: boolean;
+    }) => {
+      const res = await fetch("/api/org/incident-settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed to update incident settings");
+      return data as IncidentSettingsPayload;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ORG_INCIDENT_SETTINGS_QUERY_KEY });
+      toast({ title: "Incident settings saved", description: "Who receives alerts has been updated." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Save failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleSaveIncidentSettings = () => {
+    if (incidentMode === "specific_users" && incidentSpecificUserIds.length === 0 && incidentSpecificRoles.length === 0) {
+      toast({ title: "Select at least one", description: "Choose specific users or roles to notify.", variant: "destructive" });
+      return;
+    }
+    saveIncidentSettingsMutation.mutate({
+      targetingMode: incidentMode,
+      specificUserIds: incidentMode === "specific_users" ? incidentSpecificUserIds : null,
+      specificRoles: incidentMode === "specific_users" ? incidentSpecificRoles : null,
+      priorityUserIds: incidentPriorityUserIds.length > 0 ? incidentPriorityUserIds : null,
+      includeViewers: incidentIncludeViewers,
+    });
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -378,6 +457,185 @@ export default function OrganizationPage() {
               </div>
             </CardHeader>
           </Card>
+
+          {/* Incident notifications (owner/admin only) */}
+          {canInvite && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-log-green" />
+                  Incident notifications
+                </CardTitle>
+                <CardDescription>
+                  Choose who in the organization receives Sentry and incident alerts. Per-user &quot;Receive incident notifications&quot; in Settings still applies.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <Label>Who receives incidents</Label>
+                  <RadioGroup
+                    value={incidentMode}
+                    onValueChange={(v) => setIncidentMode(v as IncidentSettingsPayload["targetingMode"])}
+                    className="grid gap-2"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="users_with_repos" id="incident-users-with-repos" />
+                      <Label htmlFor="incident-users-with-repos" className="font-normal cursor-pointer">Users with repos</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="all_members" id="incident-all-members" />
+                      <Label htmlFor="incident-all-members" className="font-normal cursor-pointer">All members</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="specific_users" id="incident-specific-users" />
+                      <Label htmlFor="incident-specific-users" className="font-normal cursor-pointer">Specific users or roles</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+
+                {incidentMode === "specific_users" && (
+                  <div className="space-y-4 pl-6 border-l-2 border-border">
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Roles</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {ROLE_ORDER.map((role) => (
+                          <div key={role} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`incident-role-${role}`}
+                              checked={incidentSpecificRoles.includes(role)}
+                              onCheckedChange={(checked) => {
+                                setIncidentSpecificRoles((prev) =>
+                                  checked ? [...prev, role] : prev.filter((r) => r !== role)
+                                );
+                              }}
+                            />
+                            <Label htmlFor={`incident-role-${role}`} className="font-normal cursor-pointer">{ROLE_LABELS[role]}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-muted-foreground">Members</Label>
+                      <div className="flex flex-wrap gap-3">
+                        {sortedMembers.map((m) => (
+                          <div key={m.userId} className="flex items-center space-x-2">
+                            <Checkbox
+                              id={`incident-member-${m.userId}`}
+                              checked={incidentSpecificUserIds.includes(m.userId)}
+                              onCheckedChange={(checked) => {
+                                setIncidentSpecificUserIds((prev) =>
+                                  checked ? [...prev, m.userId] : prev.filter((id) => id !== m.userId)
+                                );
+                              }}
+                            />
+                            <Label htmlFor={`incident-member-${m.userId}`} className="font-normal cursor-pointer">{m.displayName}</Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="incident-include-viewers"
+                    checked={incidentIncludeViewers}
+                    onCheckedChange={(c) => setIncidentIncludeViewers(!!c)}
+                  />
+                  <Label htmlFor="incident-include-viewers" className="font-normal cursor-pointer">Include viewers</Label>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Notify first (optional)</Label>
+                  <p className="text-xs text-muted-foreground">People at the top of this list are notified first. Add members in the order you want.</p>
+                  <div className="flex flex-col gap-1">
+                    {incidentPriorityUserIds.map((userId, idx) => {
+                      const member = sortedMembers.find((m) => m.userId === userId);
+                      return (
+                        <div key={userId} className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-muted/30">
+                          <div className="flex items-center gap-0">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                if (idx > 0) {
+                                  const next = [...incidentPriorityUserIds];
+                                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                  setIncidentPriorityUserIds(next);
+                                }
+                              }}
+                              disabled={idx === 0}
+                              aria-label="Move up"
+                            >
+                              <ChevronUp className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => {
+                                if (idx < incidentPriorityUserIds.length - 1) {
+                                  const next = [...incidentPriorityUserIds];
+                                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                  setIncidentPriorityUserIds(next);
+                                }
+                              }}
+                              disabled={idx === incidentPriorityUserIds.length - 1}
+                              aria-label="Move down"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </Button>
+                          </div>
+                          <span className="flex-1 font-medium">{member?.displayName ?? userId}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setIncidentPriorityUserIds((prev) => prev.filter((id) => id !== userId))}
+                            aria-label="Remove"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    {sortedMembers.filter((m) => !incidentPriorityUserIds.includes(m.userId)).length > 0 && (
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (value) setIncidentPriorityUserIds((prev) => [...prev, value]);
+                        }}
+                      >
+                        <SelectTrigger className="w-full max-w-xs">
+                          <SelectValue placeholder="Add person to priority list" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sortedMembers
+                            .filter((m) => !incidentPriorityUserIds.includes(m.userId))
+                            .map((m) => (
+                              <SelectItem key={m.userId} value={m.userId}>
+                                {m.displayName}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  onClick={handleSaveIncidentSettings}
+                  disabled={saveIncidentSettingsMutation.isPending}
+                >
+                  {saveIncidentSettingsMutation.isPending ? "Saving…" : "Save incident settings"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Invite modal (owner & admin only) */}
           {canInvite && (
@@ -559,6 +817,12 @@ export default function OrganizationPage() {
                             <dd className="text-foreground">{formatLocalDate(selectedMember.joinedAt)}</dd>
                           </div>
                         )}
+                        <div>
+                          <dt className="text-muted-foreground">Last active</dt>
+                          <dd className="text-foreground">
+                            {selectedMember.lastActiveAt ? formatLocalDateTime(selectedMember.lastActiveAt) : "Never"}
+                          </dd>
+                        </div>
                       </dl>
                       {selectedMember.userId !== String(currentUserId) && (
                         <div className="flex flex-col gap-3 pt-2 border-t border-border">

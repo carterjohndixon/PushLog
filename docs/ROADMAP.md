@@ -6,7 +6,7 @@ Future features and plans. Not scheduled—captured for when we're ready.
 
 ## Quick TODOs
 
-- [ ] **Error messages / stack traces:** Filter stack traces so only user/application code is shown—strip Node internals (`node:internal/*`, `node:events`, etc.) and compiled/package code.
+- **Error messages / stack traces:** Filter stack traces so only user/application code is shown—strip Node internals (`node:internal/`*, `node:events`, etc.) and compiled/package code.
 
 ---
 
@@ -29,6 +29,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 **Goal:** Let users enter their own OpenAI API key. When set, use it for summaries instead of PushLog credits—user pays OpenAI directly, same models (GPT-4o, etc.). No credit deduction.
 
 **Options after implementation:**
+
 - **PushLog credits** — Uses PushLog's OpenAI key; user buys credits.
 - **User's OpenAI key** — Uses user's key; user pays OpenAI. Same provider, simpler than OpenRouter for OpenAI-only users.
 - **User's OpenRouter key** — (Existing) For users who want access to other providers (Anthropic, etc.).
@@ -60,6 +61,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 ### Account type at launch
 
 When these features ship, users choose **Team / Business** vs **Solo**. Two different UIs:
+
 - **Solo** — Current per-user experience, no team concepts.
 - **Team** — Full team model, invites, roles, shared visibility, delegation.
 
@@ -106,11 +108,13 @@ Existing users can stay solo or opt in to create a team.
 
 When the admin "delegates per person," *what* are they assigning? Options:
 
-| Granularity | Meaning | Example |
-|-------------|---------|---------|
-| **By repo/service** | Person A gets incidents for `api`, person B for `frontend`. | "Sarah owns api incidents, Mike owns frontend." |
-| **By severity** | Person A gets critical only, person B gets all. | "On-call gets critical; team gets error/warning." |
+
+| Granularity                    | Meaning                                                     | Example                                                      |
+| ------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| **By repo/service**            | Person A gets incidents for `api`, person B for `frontend`. | "Sarah owns api incidents, Mike owns frontend."              |
+| **By severity**                | Person A gets critical only, person B gets all.             | "On-call gets critical; team gets error/warning."            |
 | **By type (Sentry vs deploy)** | Person A gets Sentry errors, person B gets deploy failures. | "Backend on-call gets Sentry; DevOps gets deploy incidents." |
+
 
 Simplest first version: **by person + priority** only ("who gets incidents" and "try person 1 first, then 2"). Add repo/service or severity filters later if needed.
 
@@ -120,10 +124,12 @@ Simplest first version: **by person + priority** only ("who gets incidents" and 
 
 App is free today. If/when you monetize, common patterns:
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Fixed price per team** (e.g. $29/mo unlimited members) | Simple, predictable. | May leave money on table for large teams. |
-| **Per-seat** (e.g. $X per user/month) | Scales with value. Familiar. | Can feel expensive as team grows. |
-| **Free solo + paid teams** | Solo stays free (good for adoption). | Need to define team vs solo clearly. |
+
+| Option                                                   | Pros                                 | Cons                                      |
+| -------------------------------------------------------- | ------------------------------------ | ----------------------------------------- |
+| **Fixed price per team** (e.g. $29/mo unlimited members) | Simple, predictable.                 | May leave money on table for large teams. |
+| **Per-seat** (e.g. $X per user/month)                    | Scales with value. Familiar.         | Can feel expensive as team grows.         |
+| **Free solo + paid teams**                               | Solo stays free (good for adoption). | Need to define team vs solo clearly.      |
+
 
 **Recommendation:** Free solo, fixed price for teams (e.g. $19–29/mo per team, unlimited seats). Simple to build and explain. Add per-seat or usage-based later if needed.

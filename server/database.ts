@@ -4,12 +4,13 @@ import {
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
   favoriteModels, loginLockout, oauthSessions, oauthIdentities,
   aiModelPricing,
-  organizations, organizationMemberships, organizationInvites,
+  organizations, organizationMemberships, organizationInvites, organizationIncidentSettings,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
   type Organization, type InsertOrganization,
   type OrganizationMembership, type InsertOrganizationMembership,
+  type OrganizationIncidentSettings, type InsertOrganizationIncidentSettings,
   type PushEvent, type InsertPushEvent,
   type PushEventFile, type InsertPushEventFile,
   type SlackWorkspace, type InsertSlackWorkspace,
@@ -23,7 +24,7 @@ import {
   analyticsStats,
   userDailyStats,
 } from "@shared/schema";
-import { eq, and, sql, inArray, desc, asc, max, gte, isNull, like, or } from "drizzle-orm";
+import { eq, and, sql, inArray, desc, asc, max, gte, isNull, isNotNull, like, or, lt } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -227,6 +228,15 @@ export class DatabaseStorage implements IStorage {
     };
     const result = await db.update(users).set(dbUpdates).where(eq(users.id, id)).returning();
     return result[0] ? convertToUser(result[0] as any) : undefined;
+  }
+
+  /** Set last_active_at to now; only writes if null or older than 5 minutes to throttle DB updates. */
+  async updateUserLastActive(userId: string): Promise<void> {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    await db
+      .update(users)
+      .set({ lastActiveAt: new Date().toISOString() })
+      .where(and(eq(users.id, userId), or(isNull(users.lastActiveAt), lt(users.lastActiveAt, fiveMinutesAgo.toISOString()))));
   }
 
   async getUserById(id: string): Promise<User | undefined> {
@@ -437,7 +447,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Organization members with user display info (username, email) for org page. */
-  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[]> {
+  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
     const rows = await db
       .select({
         userId: organizationMemberships.userId,
@@ -445,6 +455,7 @@ export class DatabaseStorage implements IStorage {
         joinedAt: organizationMemberships.joinedAt,
         username: users.username,
         email: users.email,
+        lastActiveAt: users.lastActiveAt,
       })
       .from(organizationMemberships)
       .innerJoin(users, eq(organizationMemberships.userId, users.id))
@@ -462,6 +473,7 @@ export class DatabaseStorage implements IStorage {
       displayName: (r.username && String(r.username).trim()) || (r.email && String(r.email).trim()) || "Unknown",
       username: r.username ? String(r.username).trim() : null,
       email: r.email ? String(r.email).trim() : null,
+      lastActiveAt: r.lastActiveAt ?? null,
     }));
   }
 
@@ -529,6 +541,45 @@ export class DatabaseStorage implements IStorage {
   async getOrganization(organizationId: string): Promise<Organization | undefined> {
     const [row] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
     return row as Organization | undefined;
+  }
+
+  async getOrganizationIncidentSettings(organizationId: string): Promise<OrganizationIncidentSettings | null> {
+    const [row] = await db
+      .select()
+      .from(organizationIncidentSettings)
+      .where(eq(organizationIncidentSettings.organizationId, organizationId))
+      .limit(1);
+    return (row as OrganizationIncidentSettings | undefined) ?? null;
+  }
+
+  async upsertOrganizationIncidentSettings(
+    organizationId: string,
+    settings: {
+      targetingMode?: string;
+      specificUserIds?: string[] | null;
+      specificRoles?: string[] | null;
+      priorityUserIds?: string[] | null;
+      includeViewers?: boolean;
+    }
+  ): Promise<OrganizationIncidentSettings> {
+    const now = new Date().toISOString();
+    const payload = {
+      targetingMode: settings.targetingMode ?? "users_with_repos",
+      specificUserIds: settings.specificUserIds ?? null,
+      specificRoles: settings.specificRoles ?? null,
+      priorityUserIds: settings.priorityUserIds ?? null,
+      includeViewers: settings.includeViewers ?? false,
+      updatedAt: now,
+    };
+    const [row] = await db
+      .insert(organizationIncidentSettings)
+      .values({ organizationId, ...payload } as any)
+      .onConflictDoUpdate({
+        target: organizationIncidentSettings.organizationId,
+        set: payload as any,
+      })
+      .returning();
+    return row as OrganizationIncidentSettings;
   }
 
   async updateOrganization(organizationId: string, updates: { name?: string; domain?: string | null }): Promise<void> {
@@ -834,6 +885,17 @@ export class DatabaseStorage implements IStorage {
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {
     const result = await db.select().from(repositories).where(eq(repositories.githubId, githubId)).limit(1);
     return result[0] as any;
+  }
+
+  /** Resolve org from Sentry/integration service name (repos can set incidentServiceName to match). */
+  async getOrganizationIdByIncidentServiceName(service: string): Promise<string | null> {
+    const [row] = await db
+      .select({ organizationId: repositories.organizationId })
+      .from(repositories)
+      .where(and(eq(repositories.incidentServiceName, service), isNotNull(repositories.organizationId)))
+      .limit(1);
+    const oid = (row as { organizationId: string | null } | undefined)?.organizationId;
+    return oid ?? null;
   }
 
   async createRepository(repository: InsertRepository): Promise<Repository> {

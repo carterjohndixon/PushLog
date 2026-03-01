@@ -136,6 +136,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
           req.session.user = sessionUser;
         }
         req.user = sessionUser;
+        databaseStorage.updateUserLastActive((req.session as any).userId).catch(() => {});
         next();
         return;
       }
@@ -206,7 +207,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     // Cache user data in session to avoid DB queries on subsequent requests
     req.session.user = sessionUser;
     req.user = sessionUser;
-    
+    databaseStorage.updateUserLastActive(req.session.userId).catch(() => {});
     next();
   } catch (error) {
     console.error('Authentication error:', error);

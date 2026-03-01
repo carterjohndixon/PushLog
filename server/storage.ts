@@ -42,8 +42,8 @@ export interface IStorage {
   getAllUserIds(): Promise<string[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<User>): Promise<User | undefined>;
-
-  createOrganization(org: InsertOrganization): Promise<Organization>;
+  /** Set user last_active_at to now; only updates if null or older than 5 minutes (throttle). */
+  updateUserLastActive(userId: string): Promise<void>;
   createOrganizationMembership(membership: InsertOrganizationMembership): Promise<OrganizationMembership>;
   getMembershipByOrganizationAndUser(organizationId: string, userId: string): Promise<OrganizationMembership | undefined>;
   /** If user is org owner but membership row is missing, create it and return; otherwise return existing or null. */
@@ -54,7 +54,7 @@ export interface IStorage {
   getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]>;
   getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
   getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
-  getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[]>;
+  getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]>;
   /** Remove a member from the org (delete membership, set user.organizationId = null). Returns false if cannot remove (e.g. last owner). */
   removeOrganizationMember(organizationId: string, userIdToRemove: string, actorRole: string): Promise<{ ok: boolean; error?: string }>;
   /** Update a member's role. Only owner/admin can do it; cannot demote last owner. */
@@ -63,6 +63,9 @@ export interface IStorage {
   revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean>;
   createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
   consumeOrganizationInvite(token: string, userId: string, options?: { leaveCurrentOrg?: boolean }): Promise<{ organizationId: string; role: string } | { error: string; code?: string }>;
+  getOrganizationIncidentSettings(organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null>;
+  upsertOrganizationIncidentSettings(organizationId: string, settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }>;
+  getOrganizationIdByIncidentServiceName(service: string): Promise<string | null>;
 
   // Repository methods
   getRepository(id: string): Promise<Repository | undefined>;
@@ -196,9 +199,9 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
-  /*
-  TODO TODO TODO TODO
-  */
+  async updateUserLastActive(_userId: string): Promise<void> {
+    // No-op for MemStorage; only DB persists last_active_at.
+  }
   async createOrganization(_org: InsertOrganization): Promise<Organization> {
     throw new Error("MemStorage: createOrganization not implemented");
   }
@@ -235,7 +238,7 @@ export class MemStorage implements IStorage {
     return [];
   }
 
-  async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null }[]> {
+  async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
     return [];
   }
 
@@ -274,9 +277,25 @@ export class MemStorage implements IStorage {
     return { error: "MemStorage: not implemented" };
   }
 
-  /*
-  TODO TODO TODO TODO
-  */
+  async getOrganizationIncidentSettings(_organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null> {
+    return null;
+  }
+
+  async upsertOrganizationIncidentSettings(organizationId: string, _settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }> {
+    return {
+      organizationId,
+      targetingMode: "users_with_repos",
+      specificUserIds: null,
+      specificRoles: null,
+      priorityUserIds: null,
+      includeViewers: false,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getOrganizationIdByIncidentServiceName(_service: string): Promise<string | null> {
+    return null;
+  }
 
   // Repository methods
   async getRepository(id: string): Promise<Repository | undefined> {

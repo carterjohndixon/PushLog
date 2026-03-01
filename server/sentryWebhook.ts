@@ -88,24 +88,62 @@ export function wasRecentSentryNotification(service: string, environment: string
 }
 
 /** Get user IDs that should receive incident notifications for a given org.
- * Active org members where receiveIncidentNotifications !== false and role !== viewer.
- * Do NOT rely on "users with repos" in org mode.
+ * Uses organization_incident_settings when present; otherwise defaults to users_with_repos (members who have at least one repo + receiveIncidentNotifications).
  */
 export async function getIncidentNotificationTargetsForOrg(
   orgId: string,
-  _isTestNotification: boolean = false
+  isTestNotification: boolean = false
 ): Promise<string[]> {
-  const members = await storage.getOrganizationMembers(orgId);
-  const userIds: string[] = [];
-  for (const m of members) {
-    const role = (m as any).role;
-    if (role === "viewer") continue;
-    const userId = (m as any).userId;
-    const user = await storage.getUser(userId);
-    if (!user || (user as any).receiveIncidentNotifications === false) continue;
-    userIds.push(userId);
+  const settings = await storage.getOrganizationIncidentSettings(orgId);
+  const mode = settings?.targetingMode ?? "users_with_repos";
+  const includeViewers = settings?.includeViewers ?? false;
+  const membersWithUsers = await storage.getOrganizationMembersWithUsers(orgId);
+  const members = membersWithUsers.map((m) => ({ userId: m.userId, role: m.role }));
+
+  let candidateUserIds: string[] = [];
+
+  if (mode === "all_members") {
+    candidateUserIds = members
+      .filter((m) => includeViewers || m.role !== "viewer")
+      .map((m) => m.userId);
+  } else if (mode === "specific_users") {
+    const byId = new Set<string>(settings?.specificUserIds ?? []);
+    const byRole = (settings?.specificRoles ?? []).map((r) => r.toLowerCase());
+    for (const m of members) {
+      if (byId.has(m.userId)) candidateUserIds.push(m.userId);
+      else if (byRole.length > 0 && byRole.includes(m.role)) candidateUserIds.push(m.userId);
+    }
+    if (!includeViewers) {
+      candidateUserIds = candidateUserIds.filter((id) => {
+        const m = members.find((x) => x.userId === id);
+        return !m || m.role !== "viewer";
+      });
+    }
+  } else {
+    // users_with_repos (default): members who have at least one repo in the org
+    const orgRepos = await storage.getRepositoriesByOrganizationId(orgId);
+    const userIdsWithRepos = new Set<string>(orgRepos.map((r) => (r as any).userId));
+    for (const m of members) {
+      if (m.role === "viewer" && !includeViewers) continue;
+      if (userIdsWithRepos.has(m.userId)) candidateUserIds.push(m.userId);
+    }
   }
-  return userIds;
+
+  // Per-user opt-out: only users with receiveIncidentNotifications !== false
+  const withOptOut: string[] = [];
+  for (const userId of candidateUserIds) {
+    const user = await storage.getUser(userId);
+    if (user && (user as any).receiveIncidentNotifications !== false) withOptOut.push(userId);
+  }
+
+  // Priority order: if priority_user_ids set, notify in that order, then the rest
+  const priorityIds = settings?.priorityUserIds ?? [];
+  if (priorityIds.length > 0) {
+    const ordered = priorityIds.filter((id) => withOptOut.includes(id));
+    const rest = withOptOut.filter((id) => !priorityIds.includes(id));
+    return [...ordered, ...rest];
+  }
+  return withOptOut;
 }
 
 /** Get user IDs that should receive incident notifications.
@@ -319,7 +357,11 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       return;
     }
 
-    const targetUserIds = await getIncidentNotificationTargets(false);
+    const targetUserIds = await (async (): Promise<string[]> => {
+      const orgId = await storage.getOrganizationIdByIncidentServiceName(service);
+      if (orgId) return getIncidentNotificationTargetsForOrg(orgId, false);
+      return getIncidentNotificationTargets(false);
+    })();
     const targetUsers = new Set<string>(targetUserIds);
 
     const directTitle = `Sentry: ${event.exception_type} in ${service}/${environment}`;

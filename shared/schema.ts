@@ -41,6 +41,8 @@ export const users = pgTable("users", {
   receiveIncidentNotifications: boolean("receive_incident_notifications").default(true), // In incident pool (users with repos + this true get incidents); when false, never receive
   /** When true, user must set a new password (e.g. after admin-created invite). Cleared after they change password. */
   mustChangePassword: boolean("must_change_password").default(false),
+  /** Last time the user made an authenticated request (touched in auth middleware). Used for org member "last active" display. */
+  lastActiveAt: timestamp("last_active_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 }, (t) => [
   { name: "users_organization_id_idx", columns: [t.organizationId] },
@@ -100,6 +102,17 @@ export const organizationInvites = pgTable(
     { name: "organization_invites_token_hash_unique", unique: true, columns: [t.tokenHash] },
   ]
 );
+
+/** Per-org incident notification targeting: who receives Sentry/incident alerts. */
+export const organizationIncidentSettings = pgTable("organization_incident_settings", {
+  organizationId: uuid("organization_id").primaryKey().references(() => organizations.id, { onDelete: "cascade" }),
+  targetingMode: text("targeting_mode").notNull().default("users_with_repos"), // "users_with_repos" | "all_members" | "specific_users"
+  specificUserIds: jsonb("specific_user_ids").$type<string[]>(),
+  specificRoles: jsonb("specific_roles").$type<string[]>(),
+  priorityUserIds: jsonb("priority_user_ids").$type<string[]>(),
+  includeViewers: boolean("include_viewers").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+});
 
 export const repositories = pgTable("repositories", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -415,6 +428,7 @@ export type User = {
   incidentEmailEnabled?: boolean;
   receiveIncidentNotifications?: boolean;
   mustChangePassword?: boolean;
+  lastActiveAt?: string | null;
   createdAt: string;
 };
 
@@ -444,6 +458,8 @@ export type OrganizationMembership = typeof organizationMemberships.$inferSelect
 export type InsertOrganizationMembership = typeof organizationMemberships.$inferInsert;
 export type OrganizationInvite = typeof organizationInvites.$inferSelect;
 export type InsertOrganizationInvite = typeof organizationInvites.$inferInsert;
+export type OrganizationIncidentSettings = typeof organizationIncidentSettings.$inferSelect;
+export type InsertOrganizationIncidentSettings = typeof organizationIncidentSettings.$inferInsert;
 export type Integration = typeof integrations.$inferSelect;
 export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
 export type PushEvent = typeof pushEvents.$inferSelect;

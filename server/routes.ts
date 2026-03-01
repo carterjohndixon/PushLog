@@ -52,7 +52,7 @@ import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/
 import broadcastNotification from "./helper/broadcastNotification";
 import { resolveToSource } from "./helper/sourceMapResolve";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
-import { handleSentryWebhook, getIncidentNotificationTargets, wasRecentSentryNotification } from "./sentryWebhook";
+import { handleSentryWebhook, getIncidentNotificationTargets, getIncidentNotificationTargetsForOrg, wasRecentSentryNotification } from "./sentryWebhook";
 import {
   ingestIncidentEvent,
   onIncidentSummary,
@@ -599,7 +599,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (linkedUserId) targetUsers.add(linkedUserId);
 
     if (targetUsers.size === 0) {
-      const defaultTargets = await getIncidentNotificationTargets(false);
+      const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
+      const defaultTargets = orgId
+        ? await getIncidentNotificationTargetsForOrg(orgId, false)
+        : await getIncidentNotificationTargets(false);
       for (const id of defaultTargets) targetUsers.add(id);
     }
 
@@ -2674,6 +2677,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Revoke invite link error:", e);
         Sentry.captureException(e);
         res.status(500).json({ error: "Failed to revoke invite link" });
+      }
+    }
+  );
+
+  /** Get org incident notification targeting settings (owner/admin only). */
+  app.get(
+    "/api/org/incident-settings",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const row = await databaseStorage.getOrganizationIncidentSettings(orgId);
+        const payload = row
+          ? {
+              targetingMode: row.targetingMode,
+              specificUserIds: row.specificUserIds ?? null,
+              specificRoles: row.specificRoles ?? null,
+              priorityUserIds: row.priorityUserIds ?? null,
+              includeViewers: row.includeViewers,
+              updatedAt: row.updatedAt,
+            }
+          : {
+              targetingMode: "users_with_repos" as const,
+              specificUserIds: null as string[] | null,
+              specificRoles: null as string[] | null,
+              priorityUserIds: null as string[] | null,
+              includeViewers: false,
+              updatedAt: new Date().toISOString(),
+            };
+        res.status(200).json(payload);
+      } catch (e) {
+        console.error("Get incident settings error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to load incident settings" });
+      }
+    }
+  );
+
+  /** Update org incident notification targeting settings (owner/admin only). */
+  app.patch(
+    "/api/org/incident-settings",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("targetingMode").optional().isIn(["users_with_repos", "all_members", "specific_users"]),
+    body("specificUserIds").optional().isArray(),
+    body("specificUserIds.*").optional().isUUID(),
+    body("specificRoles").optional().isArray(),
+    body("specificRoles.*").optional().isIn(["owner", "admin", "developer", "viewer"]),
+    body("priorityUserIds").optional().isArray(),
+    body("priorityUserIds.*").optional().isUUID(),
+    body("includeViewers").optional().isBoolean(),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const current = await databaseStorage.getOrganizationIncidentSettings(orgId);
+        const mode = (req.body?.targetingMode as string | undefined) ?? current?.targetingMode ?? "users_with_repos";
+        const specificUserIds = req.body?.specificUserIds !== undefined ? (req.body.specificUserIds as string[] | null) : (current?.specificUserIds ?? null);
+        const specificRoles = req.body?.specificRoles !== undefined ? (req.body.specificRoles as string[] | null) : (current?.specificRoles ?? null);
+        const priorityUserIds = req.body?.priorityUserIds !== undefined ? (req.body.priorityUserIds as string[] | null) : (current?.priorityUserIds ?? null);
+        const includeViewers = req.body?.includeViewers !== undefined ? !!req.body.includeViewers : (current?.includeViewers ?? false);
+
+        if (mode === "specific_users") {
+          const hasUsers = Array.isArray(specificUserIds) && specificUserIds.length > 0;
+          const hasRoles = Array.isArray(specificRoles) && specificRoles.length > 0;
+          if (!hasUsers && !hasRoles) {
+            return res.status(400).json({ error: "When targeting mode is 'specific_users', provide at least one of specificUserIds or specificRoles" });
+          }
+        }
+
+        const merged = {
+          targetingMode: mode,
+          specificUserIds: specificUserIds ?? null,
+          specificRoles: specificRoles ?? null,
+          priorityUserIds: priorityUserIds ?? null,
+          includeViewers,
+        };
+        const updated = await databaseStorage.upsertOrganizationIncidentSettings(orgId, merged);
+        res.status(200).json({
+          targetingMode: updated.targetingMode,
+          specificUserIds: updated.specificUserIds ?? null,
+          specificRoles: updated.specificRoles ?? null,
+          priorityUserIds: updated.priorityUserIds ?? null,
+          includeViewers: updated.includeViewers,
+          updatedAt: updated.updatedAt,
+        });
+      } catch (e) {
+        console.error("Patch incident settings error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to update incident settings" });
       }
     }
   );
