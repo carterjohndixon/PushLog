@@ -5,6 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/** sessionStorage key for pending org invite token (set on /join when unauthenticated, used after signup/login to redirect to join). */
+export const PENDING_ORG_INVITE_KEY = "pending_org_invite";
+
 /** Known OpenAI (and similar) model IDs to human-readable display names. */
 const AI_MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-4o": "GPT-4o",

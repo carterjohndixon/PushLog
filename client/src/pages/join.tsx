@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { PROFILE_QUERY_KEY } from "@/lib/profile";
+import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
 
 export default function Join() {
   const [, params] = useRoute("/join/:token");
@@ -51,6 +52,11 @@ export default function Join() {
           if (res.ok && data.success) {
             setStatus("success");
             setMessage("You've joined the organization. Redirecting to dashboard...");
+            try {
+              sessionStorage.removeItem(PENDING_ORG_INVITE_KEY);
+            } catch {
+              // ignore
+            }
             queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
             setTimeout(() => setLocation("/dashboard"), 1500);
           } else {
@@ -83,6 +89,11 @@ export default function Join() {
         if (cancelled) return;
         if (res.status === 401) {
           const returnTo = encodeURIComponent(`/join/${token}`);
+          try {
+            sessionStorage.setItem(PENDING_ORG_INVITE_KEY, token);
+          } catch {
+            // ignore storage errors
+          }
           setLocation(`/login?redirect=${returnTo}`);
           return;
         }
@@ -100,6 +111,11 @@ export default function Join() {
         if (res.ok && data.success) {
           setStatus("success");
           setMessage("You've joined the organization. Redirecting to dashboard...");
+          try {
+            sessionStorage.removeItem(PENDING_ORG_INVITE_KEY);
+          } catch {
+            // ignore
+          }
           queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
           setTimeout(() => setLocation("/dashboard"), 1500);
         } else if (data?.code === "already_in_org") {

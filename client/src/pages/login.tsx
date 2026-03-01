@@ -11,6 +11,7 @@ import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AuthLayout } from "@/components/auth-layout";
+import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
 
 export default function Login() {
   const { toast } = useToast();
@@ -45,8 +46,21 @@ export default function Login() {
         });
         
         if (response.ok) {
-          const path = getRedirectPath() || "/dashboard";
-          window.location.href = path;
+          const path = getRedirectPath();
+          if (path) {
+            window.location.href = path;
+            return;
+          }
+          try {
+            const pendingToken = sessionStorage.getItem(PENDING_ORG_INVITE_KEY);
+            if (pendingToken && typeof pendingToken === "string" && pendingToken.length > 0) {
+              window.location.href = `/join/${encodeURIComponent(pendingToken)}`;
+              return;
+            }
+          } catch {
+            // ignore
+          }
+          window.location.href = "/dashboard";
           return;
         }
         if (response.status === 403) {
@@ -102,7 +116,20 @@ export default function Login() {
         }
         await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
         const redirectPath = getRedirectPath();
-        setLocation(redirectPath || "/dashboard");
+        if (redirectPath) {
+          setLocation(redirectPath);
+          return;
+        }
+        try {
+          const pendingToken = sessionStorage.getItem(PENDING_ORG_INVITE_KEY);
+          if (pendingToken && typeof pendingToken === "string" && pendingToken.length > 0) {
+            setLocation(`/join/${encodeURIComponent(pendingToken)}`);
+            return;
+          }
+        } catch {
+          // ignore
+        }
+        setLocation("/dashboard");
       },
       onError: (error: any) => {
         toast({

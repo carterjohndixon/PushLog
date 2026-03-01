@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
 import { 
   Github, 
   GitBranch, 
@@ -260,6 +261,18 @@ export default function Dashboard() {
   const userProfile = profileResponse?.user;
 
   const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
+
+  // If user landed here after signup with a pending org invite (e.g. OAuth sent them to dashboard), send them to join flow
+  useEffect(() => {
+    try {
+      const pendingToken = sessionStorage.getItem(PENDING_ORG_INVITE_KEY);
+      if (pendingToken && typeof pendingToken === "string" && pendingToken.length > 0) {
+        window.location.replace(`/join/${encodeURIComponent(pendingToken)}`);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
 
   // Fetch dashboard stats (uses session cookie via credentials: include)
   const { data: stats, isLoading: statsLoading } = useQuery<DashboardStats>({
