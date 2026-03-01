@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AuthLayout } from "@/components/auth-layout";
+import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
 
 // Safe redirect path from ?redirect= (same-origin path only, e.g. /join/TOKEN)
 function getRedirectPath(): string | null {
@@ -100,7 +101,20 @@ export default function Signup() {
           window.location.href = data.redirectTo;
         } else {
           const redirectPath = getRedirectPath();
-          window.location.href = redirectPath || "/dashboard";
+          if (redirectPath) {
+            window.location.href = redirectPath;
+          } else {
+            try {
+              const pendingToken = sessionStorage.getItem(PENDING_ORG_INVITE_KEY);
+              if (pendingToken && typeof pendingToken === "string" && pendingToken.length > 0) {
+                window.location.href = `/join/${encodeURIComponent(pendingToken)}`;
+                return;
+              }
+            } catch {
+              // ignore
+            }
+            window.location.href = "/dashboard";
+          }
         }
       },
       onError: (error: any) => {
