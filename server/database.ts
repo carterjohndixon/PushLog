@@ -1868,6 +1868,8 @@ export class DatabaseStorage implements IStorage {
       for (const org of ownedOrgs) {
         await db.delete(organizationInvites).where(eq(organizationInvites.organizationId, org.id));
         await db.delete(organizationMemberships).where(eq(organizationMemberships.organizationId, org.id));
+        // Clear users.organization_id so FK doesn't block org delete (owner and any members may reference this org)
+        await db.update(users).set({ organizationId: null }).where(eq(users.organizationId, org.id));
         await db.delete(organizations).where(eq(organizations.id, org.id));
       }
 
