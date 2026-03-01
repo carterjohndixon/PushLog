@@ -215,7 +215,22 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     if (!ev && !issue) {
       const action = String(body?.action ?? "test").trim() || "test";
-      const targetUserIds = await getIncidentNotificationTargets(true);
+      // Use org incident settings for test so configured owner/developer receive it; fallback to legacy (staging admins or users with repos)
+      let targetUserIds: string[] = [];
+      try {
+        const orgIds = await storage.getAllOrganizationIds();
+        const seen = new Set<string>();
+        for (const orgId of orgIds) {
+          const ids = await getIncidentNotificationTargetsForOrg(orgId, true);
+          ids.forEach((id) => seen.add(id));
+        }
+        targetUserIds = Array.from(seen);
+      } catch (e) {
+        console.warn("[webhooks/sentry] test: org targeting failed, using fallback:", e);
+      }
+      if (targetUserIds.length === 0) {
+        targetUserIds = await getIncidentNotificationTargets(true);
+      }
       const targetUsers = new Set<string>(targetUserIds);
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
       const directTitle = "Sentry test notification";

@@ -543,6 +543,12 @@ export class DatabaseStorage implements IStorage {
     return row as Organization | undefined;
   }
 
+  /** All organization IDs (for Sentry test notifications: notify targets from every org). */
+  async getAllOrganizationIds(): Promise<string[]> {
+    const rows = await db.select({ id: organizations.id }).from(organizations);
+    return rows.map((r) => r.id).filter(Boolean);
+  }
+
   async getOrganizationIncidentSettings(organizationId: string): Promise<OrganizationIncidentSettings | null> {
     const [row] = await db
       .select()
