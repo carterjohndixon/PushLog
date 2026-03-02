@@ -28,6 +28,7 @@ import {
   getGitHubTokenScopes,
   getGitHubUserOrgs,
   getGitHubOrgMembers,
+  getGitHubUserPublicEmail,
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -2651,6 +2652,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  /** Send an invite email to a GitHub user by login. Uses the email from their public GitHub profile (only available if they made it public). */
+  app.post(
+    "/api/org/invites/github-member",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("githubLogin").trim().notEmpty().withMessage("GitHub username is required"),
+    body("role").optional().isIn(["owner", "admin", "developer", "viewer"]),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const createdByUserId = req.user!.userId;
+        const githubLogin = String(req.body.githubLogin).trim();
+        const role = (req.body?.role as string) || "developer";
+        const user = await databaseStorage.getUserById(createdByUserId);
+        const token = (user as any)?.githubToken;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "GitHub account not connected. Connect GitHub in Settings." });
+        }
+        const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
+        const email = await getGitHubUserPublicEmail(rawToken, githubLogin);
+        if (!email) {
+          return res.status(400).json({
+            error: "This person's email is not visible on their GitHub profile. They can make it public in GitHub → Settings → Emails, or you can copy an invite link and send it to them manually.",
+            code: "EMAIL_NOT_PUBLIC",
+          });
+        }
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+        const { joinUrl } = await databaseStorage.createOrganizationInviteEmail(orgId, email, role, expiresAt, createdByUserId);
+        const inviterName = req.user?.username || req.user?.email || undefined;
+        const emailSent = await sendOrgInviteEmail(email, joinUrl, inviterName);
+        res.status(201).json({
+          success: true,
+          message: emailSent ? `Invite sent to ${email}` : "Invite created; email may not have been sent.",
+          emailSent,
+        });
+      } catch (e: any) {
+        console.error("Send invite to GitHub member error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: e?.message || "Failed to send invite" });
+      }
+    }
+  );
+
   /** Revoke an invite link. Accepts joinUrl (token extracted from path) or token. Sets usedAt so the link stops working. */
   app.post(
     "/api/org/invites/revoke-link",
@@ -2828,21 +2878,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
         const members = await getGitHubOrgMembers(rawToken, orgLogin);
-        const orgMembers = await databaseStorage.getOrganizationMembers(orgId);
-        const orgMemberUserIds = new Set(orgMembers.map((m) => (m as any).userId));
-        const orgMemberRoleByUserId = new Map(orgMembers.map((m) => [(m as any).userId, (m as any).role]));
+        const orgMemberUserIds = new Set(
+          (await databaseStorage.getOrganizationMembers(orgId)).map((m) => (m as any).userId)
+        );
         const result = await Promise.all(
           members.map(async (m) => {
             const pushlogUser = await databaseStorage.getUserByGithubId(String(m.id));
             const inPushLogOrg = !!(pushlogUser && orgMemberUserIds.has(pushlogUser.id));
-            const pushlogRole = pushlogUser && orgMemberUserIds.has(pushlogUser.id) ? (orgMemberRoleByUserId.get(pushlogUser.id) ?? null) : null;
             return {
               login: m.login,
               id: m.id,
               avatar_url: m.avatar_url,
               inPushLogOrg,
               pushlogUserId: pushlogUser && orgMemberUserIds.has(pushlogUser.id) ? pushlogUser.id : null,
-              pushlogRole: pushlogRole || null,
             };
           })
         );

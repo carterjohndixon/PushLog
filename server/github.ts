@@ -481,6 +481,23 @@ export interface GitHubOrgMember {
 }
 
 /**
+ * Get a GitHub user's public profile email (GET /users/:username).
+ * Returns email only if the user has made it public on their GitHub profile; otherwise null.
+ */
+export async function getGitHubUserPublicEmail(accessToken: string, login: string): Promise<string | null> {
+  const res = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/vnd.github.v3+json",
+    },
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { email?: string | null };
+  const email = typeof data?.email === "string" && data.email.trim() ? data.email.trim() : null;
+  return email;
+}
+
+/**
  * List organizations the authenticated user is a member of.
  * Requires GitHub OAuth scope: read:org.
  */

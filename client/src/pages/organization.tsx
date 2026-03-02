@@ -290,7 +290,44 @@ export default function OrganizationPage() {
     if (inviteLink) revokeInviteLinkMutation.mutate(inviteLink);
   };
 
-  /** Copy invite link for a GitHub org member (create link with current role if none exists). */
+  const [sendingInviteToLogin, setSendingInviteToLogin] = useState<string | null>(null);
+  const sendGitHubMemberInviteMutation = useMutation({
+    mutationFn: async (params: { githubLogin: string; role: string }) => {
+      const res = await fetch("/api/org/invites/github-member", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ githubLogin: params.githubLogin, role: params.role ?? "developer" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data.error || "Failed to send invite") as Error & { code?: string };
+        err.code = data.code;
+        throw err;
+      }
+      return data as { success: boolean; message: string; emailSent: boolean };
+    },
+    onMutate: (variables) => {
+      setSendingInviteToLogin(variables.githubLogin);
+    },
+    onSuccess: (_data, variables) => {
+      setSendingInviteToLogin(null);
+      toast({
+        title: "Invite sent",
+        description: `An invite email was sent to the address on ${variables.githubLogin}'s GitHub profile. They can join as ${ROLE_LABELS[variables.role]}.`,
+      });
+    },
+    onError: (err: Error & { code?: string }) => {
+      setSendingInviteToLogin(null);
+      toast({
+        title: err.code === "EMAIL_NOT_PUBLIC" ? "Email not visible on GitHub" : "Send failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  /** Copy invite link for a GitHub org member (create link with current role if none exists). Used when email isn't public. */
   const copyInviteLinkForGitHubMember = (memberLogin: string) => {
     if (inviteLink) {
       navigator.clipboard.writeText(inviteLink);
@@ -914,14 +951,32 @@ export default function OrganizationPage() {
                                           <Badge variant="outline" className="text-xs text-muted-foreground">Not in PushLog</Badge>
                                           <Button
                                             type="button"
-                                            variant="outline"
+                                            variant="default"
                                             size="sm"
                                             className="h-7 text-xs"
+                                            disabled={sendingInviteToLogin !== null}
+                                            onClick={() => sendGitHubMemberInviteMutation.mutate({ githubLogin: m.login, role: githubInviteRole })}
+                                          >
+                                            {sendingInviteToLogin === m.login ? (
+                                              <>
+                                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                                Sending…
+                                              </>
+                                            ) : (
+                                              <>
+                                                <Mail className="w-3 h-3 mr-1" />
+                                                Send invite
+                                              </>
+                                            )}
+                                          </Button>
+                                          <button
+                                            type="button"
+                                            className="text-xs text-muted-foreground hover:text-foreground underline"
                                             disabled={createInviteLinkMutation.isPending}
                                             onClick={() => copyInviteLinkForGitHubMember(m.login)}
                                           >
-                                            {createInviteLinkMutation.isPending ? "…" : "Copy invite link"}
-                                          </Button>
+                                            Copy link instead
+                                          </button>
                                         </>
                                       )}
                                     </div>
