@@ -75,7 +75,11 @@ export const organizationMemberships = pgTable(
     inviteType: text("invite_type"), // "link" | "email" | null
     /** When they joined via invite sent from "Invite from GitHub org": the GitHub username (so we can show them as "Already in PushLog" in the GitHub org modal). */
     invitedForGitHubLogin: text("invited_for_github_login"),
+    /** When the user used/accepted the invite link (opened the link and joined). Null if they didn't join via an invite. */
+    inviteUsedAt: timestamp("invite_used_at", { withTimezone: true, mode: "string" }),
     joinedAt: timestamp("joined_at", { withTimezone: true, mode: "string" }),
+    /** When the user used/accepted the invite link (opened link and joined). Null if they did not join via an invite. */
+    inviteUsedAt: timestamp("invite_used_at", { withTimezone: true, mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   },
   (t) => [

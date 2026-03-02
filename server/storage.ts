@@ -54,7 +54,7 @@ export interface IStorage {
   getIntegrationsByOrganizationId(organizationId: string): Promise<Integration[]>;
   getSlackWorkspacesByOrganizationId(organizationId: string): Promise<SlackWorkspace[]>;
   getOrganizationMembers(organizationId: string): Promise<OrganizationMembership[]>;
-  getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]>;
+  getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteUsedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]>;
   /** Remove a member from the org (delete membership, set user.organizationId = null). Returns false if cannot remove (e.g. last owner). */
   removeOrganizationMember(organizationId: string, userIdToRemove: string, actorRole: string): Promise<{ ok: boolean; error?: string }>;
   /** Update a member's role. Only owner/admin can do it; cannot demote last owner. */
@@ -239,7 +239,7 @@ export class MemStorage implements IStorage {
     return [];
   }
 
-  async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
+  async getOrganizationMembersWithUsers(_organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteUsedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
     return [];
   }
 

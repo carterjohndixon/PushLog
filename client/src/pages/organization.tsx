@@ -75,11 +75,11 @@ function fetchOrg() {
 
 function fetchOrgMembers() {
   return apiRequest("GET", "/api/org/members").then((r) => r.json()) as Promise<{
-    members: { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[];
+    members: { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteUsedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[];
   }>;
 }
 
-type Member = { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null };
+type Member = { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteUsedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null };
 
 const ROLE_ORDER = ["owner", "admin", "developer", "viewer"];
 const ROLE_LABELS: Record<string, string> = {
@@ -1135,6 +1135,12 @@ export default function OrganizationPage() {
                           <div>
                             <dt className="text-muted-foreground">Invitation sent</dt>
                             <dd className="text-foreground">{formatLocalDateTime(selectedMember.invitedAt)}</dd>
+                          </div>
+                        )}
+                        {selectedMember.inviteUsedAt && (
+                          <div>
+                            <dt className="text-muted-foreground">Invite used</dt>
+                            <dd className="text-foreground">{formatLocalDateTime(selectedMember.inviteUsedAt)}</dd>
                           </div>
                         )}
                         <div>

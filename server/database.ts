@@ -449,13 +449,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Organization members with user display info (username, email) for org page. */
-  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
+  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteUsedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
     const rows = await db
       .select({
         userId: organizationMemberships.userId,
         role: organizationMemberships.role,
         joinedAt: organizationMemberships.joinedAt,
         invitedAt: organizationMemberships.invitedAt,
+        inviteUsedAt: organizationMemberships.inviteUsedAt,
         inviteType: organizationMemberships.inviteType,
         username: users.username,
         email: users.email,
@@ -475,6 +476,7 @@ export class DatabaseStorage implements IStorage {
       role: r.role,
       joinedAt: r.joinedAt,
       invitedAt: r.invitedAt ?? null,
+      inviteUsedAt: r.inviteUsedAt ?? null,
       inviteType: r.inviteType ?? null,
       displayName: (r.username && String(r.username).trim()) || (r.email && String(r.email).trim()) || "Unknown",
       username: r.username ? String(r.username).trim() : null,
@@ -754,6 +756,7 @@ export class DatabaseStorage implements IStorage {
         invitedAt: invite.createdAt ?? null,
         inviteType: invite.type ?? null,
         invitedForGitHubLogin: invite.invitedForGitHubLogin ?? null,
+        inviteUsedAt: new Date().toISOString(),
         joinedAt: new Date().toISOString(),
       } as any);
 
