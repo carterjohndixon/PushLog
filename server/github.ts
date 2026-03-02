@@ -483,18 +483,22 @@ export interface GitHubOrgMember {
 /**
  * Get a GitHub user's public profile email (GET /users/:username).
  * Returns email only if the user has made it public on their GitHub profile; otherwise null.
+ * Tries both email and notification_email; uses recommended Accept header for best compatibility.
  */
 export async function getGitHubUserPublicEmail(accessToken: string, login: string): Promise<string | null> {
   const res = await fetch(`https://api.github.com/users/${encodeURIComponent(login)}`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      Accept: "application/vnd.github.v3+json",
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
     },
   });
   if (!res.ok) return null;
-  const data = (await res.json()) as { email?: string | null };
-  const email = typeof data?.email === "string" && data.email.trim() ? data.email.trim() : null;
-  return email;
+  const data = (await res.json()) as { email?: string | null; notification_email?: string | null };
+  const email =
+    (typeof data?.email === "string" && data.email.trim() ? data.email.trim() : null) ||
+    (typeof data?.notification_email === "string" && data.notification_email.trim() ? data.notification_email.trim() : null);
+  return email || null;
 }
 
 /**

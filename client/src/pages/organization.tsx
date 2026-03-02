@@ -47,6 +47,7 @@ import { Bell, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 const ORG_QUERY_KEY = ["org"];
 const ORG_MEMBERS_QUERY_KEY = ["org", "members"];
 const ORG_INCIDENT_SETTINGS_QUERY_KEY = ["org", "incident-settings"];
+const GITHUB_ORG_STORAGE_KEY = "pushlog-selected-github-org";
 
 type IncidentSettingsPayload = {
   targetingMode: "users_with_repos" | "all_members" | "specific_users";
@@ -109,7 +110,10 @@ export default function OrganizationPage() {
   const [incidentIncludeViewers, setIncidentIncludeViewers] = useState(false);
   const [incidentPriorityUserIds, setIncidentPriorityUserIds] = useState<string[]>([]);
   const [githubInviteModalOpen, setGithubInviteModalOpen] = useState(false);
-  const [selectedGitHubOrgLogin, setSelectedGitHubOrgLogin] = useState<string>("");
+  const [selectedGitHubOrgLogin, setSelectedGitHubOrgLogin] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(GITHUB_ORG_STORAGE_KEY) ?? "";
+  });
   const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
@@ -155,6 +159,17 @@ export default function OrganizationPage() {
       ) as Promise<{ login: string; id: number; avatar_url: string | null; inPushLogOrg: boolean; pushlogUserId: string | null; pushlogRole: string | null }[]>,
     enabled: githubInviteModalOpen && !!selectedGitHubOrgLogin,
   });
+
+  useEffect(() => {
+    if (githubInviteModalOpen && githubOrgs.length > 0) {
+      if (!selectedGitHubOrgLogin) {
+        const saved = typeof window !== "undefined" ? window.localStorage.getItem(GITHUB_ORG_STORAGE_KEY) : null;
+        if (saved && githubOrgs.some((o) => o.login === saved)) setSelectedGitHubOrgLogin(saved);
+      } else if (!githubOrgs.some((o) => o.login === selectedGitHubOrgLogin)) {
+        setSelectedGitHubOrgLogin("");
+      }
+    }
+  }, [githubInviteModalOpen, githubOrgs, selectedGitHubOrgLogin]);
 
   const user = profileResponse?.user;
   const currentUserId = user?.id;
@@ -859,7 +874,6 @@ export default function OrganizationPage() {
                 open={githubInviteModalOpen}
                 onOpenChange={(open) => {
                   setGithubInviteModalOpen(open);
-                  if (!open) setSelectedGitHubOrgLogin("");
                 }}
               >
                 <DialogContent className="max-w-lg">
@@ -900,7 +914,11 @@ export default function OrganizationPage() {
                       ) : (
                         <Select
                           value={selectedGitHubOrgLogin || ""}
-                          onValueChange={(v) => setSelectedGitHubOrgLogin(v || "")}
+                          onValueChange={(v) => {
+                            const login = v || "";
+                            setSelectedGitHubOrgLogin(login);
+                            if (typeof window !== "undefined" && login) window.localStorage.setItem(GITHUB_ORG_STORAGE_KEY, login);
+                          }}
                         >
                           <SelectTrigger className="border-border/50">
                             <SelectValue placeholder="Select an organization" />
