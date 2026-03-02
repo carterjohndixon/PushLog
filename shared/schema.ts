@@ -78,8 +78,6 @@ export const organizationMemberships = pgTable(
     /** When the user used/accepted the invite link (opened the link and joined). Null if they didn't join via an invite. */
     inviteUsedAt: timestamp("invite_used_at", { withTimezone: true, mode: "string" }),
     joinedAt: timestamp("joined_at", { withTimezone: true, mode: "string" }),
-    /** When the user used/accepted the invite link (opened link and joined). Null if they did not join via an invite. */
-    inviteUsedAt: timestamp("invite_used_at", { withTimezone: true, mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   },
   (t) => [
