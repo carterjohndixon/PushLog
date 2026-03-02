@@ -24,6 +24,10 @@ rm -rf .docker-build/prebuilt
 mkdir -p .docker-build/prebuilt/bin
 cp package.json package-lock.json .docker-build/prebuilt/
 cp -r "$STAGING_BUILD/dist" .docker-build/prebuilt/
+# Ensure source map is present for stack trace symbolication in incidents (dist/index.js → server/*.ts)
+if [ ! -f ".docker-build/prebuilt/dist/index.js.map" ]; then
+  echo "Warning: dist/index.js.map missing; incident stack traces will show bundled lines. Check that npm run build uses --sourcemap."
+fi
 cp target/release/incident-engine .docker-build/prebuilt/bin/
 
 cat > .docker-build/prebuilt/Dockerfile << 'DOCKERFILE'

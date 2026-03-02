@@ -136,7 +136,7 @@ export default function OrganizationPage() {
   const { data: githubOrgs = [], isLoading: githubOrgsLoading } = useQuery({
     queryKey: ["org", "github-orgs"],
     queryFn: () => apiRequest("GET", "/api/org/github-orgs").then((r) => r.json()) as Promise<{ login: string; id: number; avatar_url: string | null; description: string | null }[]>,
-    enabled: githubInviteModalOpen && !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && !!user?.githubConnected,
+    enabled: githubInviteModalOpen && !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && !!profileResponse?.user?.githubConnected,
   });
 
   const { data: githubOrgMembers = [], isLoading: githubOrgMembersLoading } = useQuery({
