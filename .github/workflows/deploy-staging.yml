@@ -28,6 +28,7 @@ jobs:
           key: ${{ secrets.STAGING_EC2_SSH_KEY }}
           timeout: 10m
           command_timeout: 60m
+          debug: true
           script: |
             set -e
             echo "[1/5] Resolving repo path..."
