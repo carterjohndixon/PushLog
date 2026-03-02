@@ -268,6 +268,7 @@ export class DatabaseStorage implements IStorage {
       status: membership.status,
       invitedByUserId: membership.invitedByUserId ?? null,
       invitedAt: membership.invitedAt ?? null,
+      inviteType: (membership as any).inviteType ?? null,
       joinedAt: membership.joinedAt ?? null,
     } as any).returning();
     return row as OrganizationMembership;
@@ -447,12 +448,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   /** Organization members with user display info (username, email) for org page. */
-  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
+  async getOrganizationMembersWithUsers(organizationId: string): Promise<{ userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[]> {
     const rows = await db
       .select({
         userId: organizationMemberships.userId,
         role: organizationMemberships.role,
         joinedAt: organizationMemberships.joinedAt,
+        invitedAt: organizationMemberships.invitedAt,
+        inviteType: organizationMemberships.inviteType,
         username: users.username,
         email: users.email,
         lastActiveAt: users.lastActiveAt,
@@ -470,6 +473,8 @@ export class DatabaseStorage implements IStorage {
       userId: r.userId,
       role: r.role,
       joinedAt: r.joinedAt,
+      invitedAt: r.invitedAt ?? null,
+      inviteType: r.inviteType ?? null,
       displayName: (r.username && String(r.username).trim()) || (r.email && String(r.email).trim()) || "Unknown",
       username: r.username ? String(r.username).trim() : null,
       email: r.email ? String(r.email).trim() : null,
@@ -742,6 +747,9 @@ export class DatabaseStorage implements IStorage {
         userId,
         role: invite.role,
         status: "active",
+        invitedByUserId: invite.createdByUserId ?? null,
+        invitedAt: invite.createdAt ?? null,
+        inviteType: invite.type ?? null,
         joinedAt: new Date().toISOString(),
       } as any);
 

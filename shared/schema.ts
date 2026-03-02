@@ -71,6 +71,8 @@ export const organizationMemberships = pgTable(
     status: text("status").notNull(), // "active" | "pending"
     invitedByUserId: uuid("invited_by_user_id"),
     invitedAt: timestamp("invited_at", { withTimezone: true, mode: "string" }),
+    /** How they joined: "link" | "email" when they accepted an invite; null when they created the org or were added without an invite. */
+    inviteType: text("invite_type"), // "link" | "email" | null
     joinedAt: timestamp("joined_at", { withTimezone: true, mode: "string" }),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
   },

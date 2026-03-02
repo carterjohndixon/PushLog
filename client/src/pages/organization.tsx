@@ -75,11 +75,11 @@ function fetchOrg() {
 
 function fetchOrgMembers() {
   return apiRequest("GET", "/api/org/members").then((r) => r.json()) as Promise<{
-    members: { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[];
+    members: { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null }[];
   }>;
 }
 
-type Member = { userId: string; role: string; joinedAt: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null };
+type Member = { userId: string; role: string; joinedAt: string | null; invitedAt: string | null; inviteType: string | null; displayName: string; username: string | null; email: string | null; lastActiveAt: string | null };
 
 const ROLE_ORDER = ["owner", "admin", "developer", "viewer"];
 const ROLE_LABELS: Record<string, string> = {
@@ -1124,6 +1124,20 @@ export default function OrganizationPage() {
                             <dt className="text-muted-foreground">Joined</dt>
                             <dd className="text-foreground">{formatLocalDate(selectedMember.joinedAt)}</dd>
                           </div>
+                        )}
+                        {(selectedMember.inviteType === "link" || selectedMember.inviteType === "email") && (
+                          <>
+                            <div>
+                              <dt className="text-muted-foreground">Joined via</dt>
+                              <dd className="text-foreground">{selectedMember.inviteType === "link" ? "Invite link" : "Email invite"}</dd>
+                            </div>
+                            {selectedMember.invitedAt && (
+                              <div>
+                                <dt className="text-muted-foreground">Invitation sent</dt>
+                                <dd className="text-foreground">{formatLocalDate(selectedMember.invitedAt)}</dd>
+                              </div>
+                            )}
+                          </>
                         )}
                         <div>
                           <dt className="text-muted-foreground">Last active</dt>

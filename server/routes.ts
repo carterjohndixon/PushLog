@@ -2182,7 +2182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create signup for user and create user
   app.post("/api/signup", [
     body('username').trim().isLength({ min: 3, max: 30 }).withMessage('Username must be 3-30 characters'),
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('email').isEmail().normalizeEmail({ gmail_remove_dots: false }).withMessage('Valid email is required'),
     body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
   ], async (req: Request, res: Response) => {
     try {
