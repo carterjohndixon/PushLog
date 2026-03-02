@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate, formatLocalDateTime } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil, Github, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import {
   AlertDialog,
@@ -108,6 +108,9 @@ export default function OrganizationPage() {
   const [incidentSpecificRoles, setIncidentSpecificRoles] = useState<string[]>([]);
   const [incidentIncludeViewers, setIncidentIncludeViewers] = useState(false);
   const [incidentPriorityUserIds, setIncidentPriorityUserIds] = useState<string[]>([]);
+  const [githubInviteModalOpen, setGithubInviteModalOpen] = useState(false);
+  const [selectedGitHubOrgLogin, setSelectedGitHubOrgLogin] = useState<string>("");
+  const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
 
   const { data: profileResponse } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -128,6 +131,21 @@ export default function OrganizationPage() {
     queryKey: ORG_INCIDENT_SETTINGS_QUERY_KEY,
     queryFn: fetchOrgIncidentSettings,
     enabled: !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"),
+  });
+
+  const { data: githubOrgs = [], isLoading: githubOrgsLoading } = useQuery({
+    queryKey: ["org", "github-orgs"],
+    queryFn: () => apiRequest("GET", "/api/org/github-orgs").then((r) => r.json()) as Promise<{ login: string; id: number; avatar_url: string | null; description: string | null }[]>,
+    enabled: githubInviteModalOpen && !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && !!user?.githubConnected,
+  });
+
+  const { data: githubOrgMembers = [], isLoading: githubOrgMembersLoading } = useQuery({
+    queryKey: ["org", "github-orgs", selectedGitHubOrgLogin, "members"],
+    queryFn: () =>
+      apiRequest("GET", `/api/org/github-orgs/${encodeURIComponent(selectedGitHubOrgLogin)}/members`).then((r) =>
+        r.json()
+      ) as Promise<{ login: string; id: number; avatar_url: string | null; inPushLogOrg: boolean; pushlogUserId: string | null }[]>,
+    enabled: githubInviteModalOpen && !!selectedGitHubOrgLogin,
   });
 
   const user = profileResponse?.user;
@@ -462,6 +480,19 @@ export default function OrganizationPage() {
                       Invite member
                     </Button>
                   )}
+                  {canInvite && user?.githubConnected && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedGitHubOrgLogin("");
+                        setGithubInviteModalOpen(true);
+                      }}
+                    >
+                      <Github className="w-4 h-4 mr-2" />
+                      Invite from GitHub org
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -746,6 +777,121 @@ export default function OrganizationPage() {
                         </div>
                       )}
                     </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              {/* Invite from GitHub org modal */}
+              <Dialog
+                open={githubInviteModalOpen}
+                onOpenChange={(open) => {
+                  setGithubInviteModalOpen(open);
+                  if (!open) setSelectedGitHubOrgLogin("");
+                }}
+              >
+                <DialogContent className="max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Github className="w-5 h-5 text-log-green" />
+                      Invite from GitHub organization
+                    </DialogTitle>
+                    <DialogDescription>
+                      Choose a GitHub org you belong to, see who is not yet in your PushLog organization, then create an invite link to share with them.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <Label>GitHub organization</Label>
+                      <Select
+                        value={selectedGitHubOrgLogin || ""}
+                        onValueChange={(v) => setSelectedGitHubOrgLogin(v || "")}
+                        disabled={githubOrgsLoading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={githubOrgsLoading ? "Loading…" : "Select an organization"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {githubOrgs.map((org) => (
+                            <SelectItem key={org.id} value={org.login}>
+                              {org.login}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {selectedGitHubOrgLogin && (
+                      <>
+                        <div className="space-y-2">
+                          <Label>Members</Label>
+                          {githubOrgMembersLoading ? (
+                            <div className="flex items-center gap-2 text-muted-foreground py-4">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Loading members…
+                            </div>
+                          ) : (
+                            <div className="max-h-48 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+                              {githubOrgMembers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">No members returned.</p>
+                              ) : (
+                                githubOrgMembers.map((m) => (
+                                  <div key={m.id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50">
+                                    <span className="font-medium">{m.login}</span>
+                                    {m.inPushLogOrg ? (
+                                      <Badge variant="secondary" className="text-xs">Already in PushLog</Badge>
+                                    ) : (
+                                      <Badge variant="outline" className="text-xs text-muted-foreground">Not in PushLog</Badge>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                          <Label className="sr-only">Role for new members</Label>
+                          <Select value={githubInviteRole} onValueChange={setGithubInviteRole}>
+                            <SelectTrigger className="w-[130px]">
+                              <SelectValue placeholder="Role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {INVITE_ROLES.map((r) => (
+                                <SelectItem key={r} value={r}>
+                                  {ROLE_LABELS[r]}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={createInviteLinkMutation.isPending}
+                            onClick={() => createInviteLinkMutation.mutate({ role: githubInviteRole, expiresInDays: 7 })}
+                          >
+                            {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
+                          </Button>
+                        </div>
+                        {inviteLink && (
+                          <div className="space-y-2 pt-2 border-t border-border">
+                            <Label className="text-muted-foreground">Share this link with GitHub org members</Label>
+                            <div className="flex gap-2 items-center">
+                              <Input readOnly value={inviteLink} className="font-mono text-xs flex-1" />
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                title="Copy link"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(inviteLink);
+                                  toast({ title: "Copied", description: "Invite link copied to clipboard." });
+                                }}
+                              >
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Link expires in 7 days. Anyone with the link can join as {ROLE_LABELS[githubInviteRole]}.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>

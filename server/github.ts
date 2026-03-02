@@ -465,6 +465,96 @@ export async function getCommit(
   }
 }
 
+/** GitHub org (from GET /user/orgs). Requires read:org scope. */
+export interface GitHubOrg {
+  login: string;
+  id: number;
+  avatar_url: string | null;
+  description: string | null;
+}
+
+/** GitHub org member (from GET /orgs/:org/members). Minimal fields. */
+export interface GitHubOrgMember {
+  login: string;
+  id: number;
+  avatar_url: string | null;
+}
+
+/**
+ * List organizations the authenticated user is a member of.
+ * Requires GitHub OAuth scope: read:org.
+ */
+export async function getGitHubUserOrgs(accessToken: string): Promise<GitHubOrg[]> {
+  const allOrgs: GitHubOrg[] = [];
+  let page = 1;
+  while (true) {
+    const response = await fetch(
+      `https://api.github.com/user/orgs?per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = (err as any).message || response.statusText;
+      if (response.status === 403) {
+        throw new Error(`GitHub API: ${msg}. Ensure your GitHub app has the read:org scope and you have reconnected your account.`);
+      }
+      throw new Error(`GitHub API error: ${msg}`);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data)) return allOrgs;
+    if (data.length === 0) break;
+    allOrgs.push(...data);
+    if (data.length < 100) break;
+    page++;
+  }
+  return allOrgs;
+}
+
+/**
+ * List members of a GitHub organization.
+ * Requires GitHub OAuth scope: read:org.
+ * Paginated; returns all members.
+ */
+export async function getGitHubOrgMembers(accessToken: string, orgLogin: string): Promise<GitHubOrgMember[]> {
+  const org = encodeURIComponent(orgLogin);
+  const allMembers: GitHubOrgMember[] = [];
+  let page = 1;
+  while (true) {
+    const response = await fetch(
+      `https://api.github.com/orgs/${org}/members?per_page=100&page=${page}`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      }
+    );
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = (err as any).message || response.statusText;
+      if (response.status === 403) {
+        throw new Error(`GitHub API: ${msg}. Ensure read:org scope and that you are a member of the organization.`);
+      }
+      if (response.status === 404) {
+        throw new Error("GitHub organization not found or you do not have access.");
+      }
+      throw new Error(`GitHub API error: ${msg}`);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data)) return allMembers;
+    if (data.length === 0) break;
+    allMembers.push(...data.map((m: any) => ({ login: m.login, id: m.id, avatar_url: m.avatar_url ?? null })));
+    if (data.length < 100) break;
+    page++;
+  }
+  return allMembers;
+}
+
 /**
  * Verify webhook signature using the raw body buffer and exact header value.
  * GitHub sends X-Hub-Signature-256: sha256=<hex> (HMAC-SHA256 of the raw request body).

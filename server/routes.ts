@@ -25,7 +25,9 @@ import {
   createWebhook,
   deleteWebhook,
   validateGitHubToken,
-  getGitHubTokenScopes
+  getGitHubTokenScopes,
+  getGitHubUserOrgs,
+  getGitHubOrgMembers,
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -2774,6 +2776,81 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Patch incident settings error:", e);
         Sentry.captureException(e);
         res.status(500).json({ error: "Failed to update incident settings" });
+      }
+    }
+  );
+
+  /** List GitHub orgs for the connected user (owner/admin only). Requires GitHub connected and read:org scope. */
+  app.get(
+    "/api/org/github-orgs",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user!.userId;
+        const user = await databaseStorage.getUserById(userId);
+        const token = (user as any)?.githubToken;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "GitHub account not connected. Connect GitHub in Settings to invite from a GitHub organization." });
+        }
+        const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
+        const orgs = await getGitHubUserOrgs(rawToken);
+        res.status(200).json(orgs);
+      } catch (e: any) {
+        console.error("Get GitHub orgs error:", e);
+        Sentry.captureException(e);
+        const msg = e?.message || "Failed to load GitHub organizations";
+        const status = msg.includes("read:org") ? 403 : 500;
+        res.status(status).json({ error: msg });
+      }
+    }
+  );
+
+  /** List members of a GitHub org and mark which are already in the PushLog org (owner/admin only). */
+  app.get(
+    "/api/org/github-orgs/:orgLogin/members",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const orgLogin = (req.params.orgLogin || "").trim();
+        if (!orgLogin) {
+          return res.status(400).json({ error: "Organization name is required" });
+        }
+        const userId = req.user!.userId;
+        const user = await databaseStorage.getUserById(userId);
+        const token = (user as any)?.githubToken;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "GitHub account not connected." });
+        }
+        const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
+        const members = await getGitHubOrgMembers(rawToken, orgLogin);
+        const orgMemberUserIds = new Set(
+          (await databaseStorage.getOrganizationMembers(orgId)).map((m) => (m as any).userId)
+        );
+        const result = await Promise.all(
+          members.map(async (m) => {
+            const pushlogUser = await databaseStorage.getUserByGithubId(String(m.id));
+            const inPushLogOrg = !!(pushlogUser && orgMemberUserIds.has(pushlogUser.id));
+            return {
+              login: m.login,
+              id: m.id,
+              avatar_url: m.avatar_url,
+              inPushLogOrg,
+              pushlogUserId: pushlogUser && orgMemberUserIds.has(pushlogUser.id) ? pushlogUser.id : null,
+            };
+          })
+        );
+        res.status(200).json(result);
+      } catch (e: any) {
+        console.error("Get GitHub org members error:", e);
+        Sentry.captureException(e);
+        const msg = e?.message || "Failed to load GitHub organization members";
+        const status = msg.includes("read:org") || msg.includes("not found") ? 403 : 500;
+        res.status(status).json({ error: msg });
       }
     }
   );

@@ -4,9 +4,29 @@ Future features and plans. Not scheduled—captured for when we're ready.
 
 ---
 
+## Current status (code audit)
+
+Summary of what is implemented in code vs still TODO:
+
+| Item | Status | Notes |
+|------|--------|--------|
+| Stack trace: strip package code | **Partial** | `node_modules` is filtered in `sentryWebhook.ts` and `routes.ts` for display/email/metadata. |
+| Stack trace: strip Node internals | **TODO** | No filtering of `node:internal`, `node:events`, etc. |
+| OpenAI API key (bring your own) | **Done** | Schema, encrypt/save/clear, used in `ai.ts` + `githubWebhook.ts`, no credit deduction, UI in OpenAIModels. |
+| Orgs + members + roles | **Done** | Full schema, DB, routes, Organization page, Join page. |
+| Invite by link | **Done** | Create link, accept, preview, revoke. |
+| Invite by email | **Done** | Create email invite, accept with email check. |
+| GitHub org sync | **TODO** | Not in code. |
+| Solo vs Team choice | **TODO** | Everyone has a solo org; no separate "Team" account type or flow. |
+| Incident notification targeting | **Done** | `organization_incident_settings`, `getIncidentNotificationTargetsForOrg`, all modes + priority, wired for Sentry + incident-engine + test, UI on Organization page. |
+| Billing (team/seat) | **TODO** | Not in code. |
+
+---
+
 ## Quick TODOs
 
 - **Error messages / stack traces:** Filter stack traces so only user/application code is shown—strip Node internals (`node:internal/`*, `node:events`, etc.) and compiled/package code.
+  - **Current:** Package paths containing `node_modules` are already filtered (in `server/sentryWebhook.ts` and `server/routes.ts`) for culprit, source-map resolution, and the stack trace stored in notifications/emails. **Still to do:** Strip Node runtime frames (`node:internal`, `node:events`, etc.)
 
 ---
 
@@ -22,11 +42,13 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 ## OpenAI API key (bring your own)
 
-**Status:** TODO
+**Status:** Done (implemented in code)
 
 **Context:** PushLog's supported models (when using credits) are OpenAI API. Today users can either use PushLog credits (PushLog's OpenAI key) or add an OpenRouter key. But OpenRouter adds a layer—users who already have OpenAI accounts may prefer to use their own OpenAI key directly.
 
 **Goal:** Let users enter their own OpenAI API key. When set, use it for summaries instead of PushLog credits—user pays OpenAI directly, same models (GPT-4o, etc.). No credit deduction.
+
+**Implementation:** `users.openai_api_key` (encrypted), save/verify/clear via `/api/openai/key`; `githubWebhook` and `ai.ts` use it when set; no credit deduction; UI on Models/OpenAI page.
 
 **Options after implementation:**
 
@@ -38,7 +60,9 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 ## Teams & organization model
 
-**Status:** TODO | **Phase:** 1 (first)
+**Status:** Done (implemented in code) | **Phase:** 1 (first)
+
+**Not in code yet:** GitHub org sync; explicit "Solo vs Team" account choice at signup (everyone currently gets a solo org by default).
 
 **Context:** PushLog is for GitHub change logging and incident tracking. Today it's per-user: each developer manages their own repos and integrations. Some teams want a shared setup.
 
@@ -54,9 +78,9 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 ### Invite flow (preference: support all)
 
-- **Shareable link** — Admin creates a link (e.g. `pushlog.ai/join/abc123`) and sends it. Anyone with the link can join the team (role assigned by admin when they create the link, or on join).
-- **Create user + email invite** — Admin creates a placeholder user (email, name) and sends an invite. The invitee gets an email and can choose how to sign up (email/password, GitHub OAuth, etc.) to claim that account.
-- **GitHub org sync** — Connect a GitHub org; pull in members. Whoever creates/owns the org connection can delegate roles per person (admin, developer, viewer, etc.).
+- **Shareable link** — Done. Admin creates a link (e.g. `pushlog.ai/join/abc123`); accept, preview, revoke in `server/database.ts` and routes; Join page at `/join/:token`.
+- **Create user + email invite** — Done. Admin creates an email invite; invitee accepts (email check); consume in `consumeOrganizationInvite`.
+- **GitHub org sync** — TODO. Connect a GitHub org; pull in members. Whoever creates/owns the org connection can delegate roles per person (admin, developer, viewer, etc.).
 
 ### Account type at launch
 
@@ -66,6 +90,8 @@ When these features ship, users choose **Team / Business** vs **Solo**. Two diff
 - **Team** — Full team model, invites, roles, shared visibility, delegation.
 
 Existing users can stay solo or opt in to create a team.
+
+*Current code:* Everyone has an org (`organizations.type` is legacy "solo"); no separate Team account type or onboarding flow yet.
 
 ### Possible extensions
 
@@ -79,7 +105,7 @@ Existing users can stay solo or opt in to create a team.
 
 ## Incident notification targeting
 
-**Status:** TODO | **Phase:** 2 (depends on Teams)
+**Status:** Done (implemented in code) | **Phase:** 2 (depends on Teams)
 
 **Context:** Today incident notifications go to users who have at least one repo and “Receive incident notifications” on. No env override; control is in-app (Settings).
 
@@ -91,7 +117,9 @@ Existing users can stay solo or opt in to create a team.
 - **Delegation** — Admin can assign responsibility per person (e.g. who gets which types of incidents, or who owns which repos/services).
 - **Priority** — Configurable priority/ordering for who receives notifications (e.g. on-call first, then backup).
 
-**Ref:** Discussion Feb 2026; `getIncidentNotificationTargets` in `server/sentryWebhook.ts`.
+**Implementation:** `organization_incident_settings` table; `getIncidentNotificationTargetsForOrg` in `server/sentryWebhook.ts` (modes: users_with_repos, all_members, specific_users; specificUserIds, specificRoles, priorityUserIds, includeViewers). Used by Sentry webhook and incident-engine path in `server/routes.ts`. GET/PATCH `/api/org/incident-settings`; UI on Organization page (owner/admin).
+
+**Ref:** Discussion Feb 2026; `getIncidentNotificationTargets` / `getIncidentNotificationTargetsForOrg` in `server/sentryWebhook.ts`.
 
 ---
 
