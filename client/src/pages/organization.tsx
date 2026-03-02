@@ -866,7 +866,7 @@ export default function OrganizationPage() {
                           Loading…
                         </div>
                       ) : githubOrgsErrorState ? (
-                        <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                        <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">Could not load organizations</p>
                           <p className="mt-1">{githubOrgsError instanceof Error ? githubOrgsError.message : "An error occurred."}</p>
                           <p className="mt-2 text-xs">Reconnect GitHub in Settings to grant organization access.</p>
@@ -875,7 +875,7 @@ export default function OrganizationPage() {
                           </Link>
                         </div>
                       ) : githubOrgs.length === 0 ? (
-                        <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                        <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">No organization found</p>
                           <p className="mt-1 text-xs">If you belong to a GitHub organization, try disconnecting and reconnecting your GitHub account in Settings to refresh permissions.</p>
                           <Link href="/settings">
@@ -887,7 +887,7 @@ export default function OrganizationPage() {
                           value={selectedGitHubOrgLogin || ""}
                           onValueChange={(v) => setSelectedGitHubOrgLogin(v || "")}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger className="border-border/50">
                             <SelectValue placeholder="Select an organization" />
                           </SelectTrigger>
                           <SelectContent>
@@ -902,10 +902,10 @@ export default function OrganizationPage() {
                     </div>
                     {selectedGitHubOrgLogin && (
                       <>
-                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
                           <Label className="text-muted-foreground">Role for new members</Label>
                           <Select value={githubInviteRole} onValueChange={setGithubInviteRole}>
-                            <SelectTrigger className="w-[130px]">
+                            <SelectTrigger className="w-[130px] border-border/50">
                               <SelectValue placeholder="Role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -919,13 +919,14 @@ export default function OrganizationPage() {
                           <Button
                             variant="outline"
                             size="sm"
+                            className="border-border/50"
                             disabled={createInviteLinkMutation.isPending}
                             onClick={() => createInviteLinkMutation.mutate({ role: githubInviteRole, expiresInDays: 7 })}
                           >
                             {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
                           </Button>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-2 pt-5">
                           <Label>Members</Label>
                           {githubOrgMembersLoading ? (
                             <div className="flex items-center gap-2 text-muted-foreground py-4">
@@ -933,7 +934,7 @@ export default function OrganizationPage() {
                               Loading members…
                             </div>
                           ) : (
-                            <div className="max-h-56 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+                            <div className="max-h-56 overflow-y-auto rounded-md border border-border/50 p-2 space-y-1">
                               {githubOrgMembers.length === 0 ? (
                                 <p className="text-sm text-muted-foreground py-2">No members returned.</p>
                               ) : (
@@ -950,7 +951,7 @@ export default function OrganizationPage() {
                                         </>
                                       ) : (
                                         <>
-                                          <Badge variant="outline" className="text-xs text-muted-foreground">Not in PushLog</Badge>
+                                          <Badge variant="outline" className="text-xs text-muted-foreground border-border/50">Not in PushLog</Badge>
                                           <Button
                                             type="button"
                                             variant="default"
@@ -973,7 +974,7 @@ export default function OrganizationPage() {
                                           </Button>
                                           <button
                                             type="button"
-                                            className="text-xs text-muted-foreground hover:text-foreground underline"
+                                            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                                             disabled={createInviteLinkMutation.isPending}
                                             onClick={() => copyInviteLinkForGitHubMember(m.login)}
                                           >
@@ -989,13 +990,14 @@ export default function OrganizationPage() {
                           )}
                         </div>
                         {inviteLink && (
-                          <div className="space-y-2 pt-2 border-t border-border">
+                          <div className="space-y-2 pt-2 border-t border-border/50">
                             <Label className="text-muted-foreground">Share this link with GitHub org members</Label>
                             <div className="flex gap-2 items-center">
-                              <Input readOnly value={inviteLink} className="font-mono text-xs flex-1" />
+                              <Input readOnly value={inviteLink} className="font-mono text-xs flex-1 border-border/50" />
                               <Button
                                 variant="outline"
                                 size="icon"
+                                className="border-border/50"
                                 title="Copy link"
                                 onClick={() => {
                                   navigator.clipboard.writeText(inviteLink);
