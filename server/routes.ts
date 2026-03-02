@@ -3110,19 +3110,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
-      const getConnectedRepos = orgId
-        ? () => databaseStorage.getRepositoriesByOrganizationId(orgId)
-        : () => databaseStorage.getRepositoriesByUserId(userId);
+      // Always use user-scoped repo list so per-repo team filtering applies (org members only see repos they're on the team for)
+      const getConnectedRepos = () => databaseStorage.getRepositoriesByUserId(userId);
       const getIntegrations = orgId
         ? () => databaseStorage.getIntegrationsByOrganizationId(orgId)
         : () => storage.getIntegrationsByUserId(userId);
 
       // If no GitHub token, still return connected repos from DB so the dashboard list matches the stats
       if (!user.githubId || !user.githubToken) {
-        const [connectedRepos, userIntegrations] = await Promise.all([
+        const [connectedRepos, allIntegrations] = await Promise.all([
           getConnectedRepos(),
           getIntegrations(),
         ]);
+        const userRepoIds = new Set(connectedRepos.map((r) => r.id));
+        const userIntegrations = Array.isArray(allIntegrations) ? allIntegrations.filter((i: any) => userRepoIds.has(i.repositoryId)) : [];
         const integrationCountByRepoId = new Map<string, number>();
         for (const i of userIntegrations) {
           const rid = i.repositoryId;
@@ -3178,11 +3179,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         // Fetch GitHub repos and DB data in parallel so we don't wait for GitHub before starting DB (or vice versa)
-        const [repositories, connectedRepos, userIntegrations] = await Promise.all([
+        const [repositories, connectedRepos, allIntegrations] = await Promise.all([
           getUserRepositories(user.githubToken),
           getConnectedRepos(),
           getIntegrations(),
         ]);
+        const userRepoIds = new Set(connectedRepos.map((r) => r.id));
+        const userIntegrations = Array.isArray(allIntegrations) ? allIntegrations.filter((i: any) => userRepoIds.has(i.repositoryId)) : [];
 
         // Precompute integration count per repo (O(n) instead of O(repos × integrations))
         const integrationCountByRepoId = new Map<string, number>();
@@ -3951,18 +3954,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
-      const getConnectedRepos = orgId
-        ? () => databaseStorage.getRepositoriesByOrganizationId(orgId)
-        : () => databaseStorage.getRepositoriesByUserId(userId);
+      // Always use user-scoped repo list so per-repo team filtering applies
+      const getConnectedRepos = () => databaseStorage.getRepositoriesByUserId(userId);
       const getIntegrations = orgId
         ? () => databaseStorage.getIntegrationsByOrganizationId(orgId)
         : () => storage.getIntegrationsByUserId(userId);
 
       if (!user.githubId || !user.githubToken) {
-        const [connectedRepos, integrations] = await Promise.all([
+        const [connectedRepos, allIntegrations] = await Promise.all([
           getConnectedRepos(),
           getIntegrations(),
         ]);
+        const userRepoIds = new Set(connectedRepos.map((r) => r.id));
+        const integrations = Array.isArray(allIntegrations) ? allIntegrations.filter((i: any) => userRepoIds.has(i.repositoryId)) : [];
         const integrationCountByRepoId = new Map<string, number>();
         for (const i of integrations) {
           const rid = i.repositoryId;
@@ -4015,11 +4019,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "GitHub token has expired. Please reconnect your GitHub account.", redirectTo: "/login" });
       }
 
-      const [repositoriesFromGitHub, connectedRepos, integrations] = await Promise.all([
+      const [repositoriesFromGitHub, connectedRepos, allIntegrations] = await Promise.all([
         getUserRepositories(user.githubToken),
         getConnectedRepos(),
         getIntegrations(),
       ]);
+      const userRepoIds = new Set(connectedRepos.map((r) => r.id));
+      const integrations = Array.isArray(allIntegrations) ? allIntegrations.filter((i: any) => userRepoIds.has(i.repositoryId)) : [];
       const integrationCountByRepoId = new Map<string, number>();
       for (const i of integrations) {
         const rid = i.repositoryId;

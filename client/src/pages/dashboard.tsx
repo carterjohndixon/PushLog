@@ -26,6 +26,7 @@ import {
   Activity,
   MessageSquare,
   CreditCard,
+  Users,
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
@@ -34,6 +35,7 @@ import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integratio
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
 import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
+import { RepositoryTeamModal } from "@/components/repository-team-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { AiCreditsModal } from "@/components/ai-credits-modal";
 import { Link } from "wouter";
@@ -60,6 +62,8 @@ export default function Dashboard() {
   const [isDeleteRepoConfirmationOpen, setIsDeleteRepoConfirmationOpen] = useState(false);
   const [isIntegrationSettingsOpen, setIsIntegrationSettingsOpen] = useState(false);
   const [isRepositorySettingsOpen, setIsRepositorySettingsOpen] = useState(false);
+  const [isRepositoryTeamOpen, setIsRepositoryTeamOpen] = useState(false);
+  const [repositoryForTeam, setRepositoryForTeam] = useState<RepositoryCardData | null>(null);
   const [isAiCreditsModalOpen, setIsAiCreditsModalOpen] = useState(false);
   const [selectedIntegration, setSelectedIntegration] = useState<ActiveIntegration | null>(null);
   const [selectedRepository, setSelectedRepository] = useState<RepositoryCardData | null>(null);
@@ -714,6 +718,11 @@ export default function Dashboard() {
     setIsRepositorySettingsOpen(true);
   };
 
+  const handleRepositoryTeam = (repository: RepositoryCardData) => {
+    setRepositoryForTeam(repository);
+    setIsRepositoryTeamOpen(true);
+  };
+
   const handleDeleteRepository = (repository: RepositoryCardData) => {
     setIsDeleteRepoConfirmationOpen(true);
     setRepositoryToDelete(repository);
@@ -1025,6 +1034,15 @@ export default function Dashboard() {
                             </Badge>
                             {canManageRepos && (
                             <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRepositoryTeam(repo)}
+                              className="text-muted-foreground hover:text-foreground"
+                              title="Manage who can see this repo"
+                            >
+                              <Users className="w-4 h-4" />
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -1412,6 +1430,15 @@ export default function Dashboard() {
           incidentServiceName: selectedRepository.incidentServiceName ?? null,
         } : null}
         updateRepositoryMutation={updateRepositoryMutation}
+      />
+
+      <RepositoryTeamModal
+        open={isRepositoryTeamOpen}
+        onOpenChange={(open) => {
+          setIsRepositoryTeamOpen(open);
+          if (!open) setRepositoryForTeam(null);
+        }}
+        repository={repositoryForTeam}
       />
 
       {/* Analytics Detail Modals */}
