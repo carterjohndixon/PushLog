@@ -2620,10 +2620,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const repo = await databaseStorage.getRepository(repositoryId);
         if (!repo) return res.status(404).json({ error: "Repository not found" });
         if ((repo as any).organizationId !== orgId) return res.status(404).json({ error: "Repository not found" });
-        const memberUserIds = Array.isArray(req.body?.memberUserIds) ? req.body.memberUserIds : [];
+        const memberUserIds = Array.isArray(req.body?.memberUserIds) ? req.body.memberUserIds as string[] : [];
         const orgMembers = await databaseStorage.getOrganizationMembers(orgId);
         const orgUserIds = new Set(orgMembers.map((m) => (m as any).userId));
-        const invalid = memberUserIds.filter((id) => !orgUserIds.has(id));
+        const invalid = memberUserIds.filter((id: string) => !orgUserIds.has(id));
         if (invalid.length > 0) {
           return res.status(400).json({ error: "All memberUserIds must be members of the organization", invalid });
         }

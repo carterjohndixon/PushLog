@@ -48,7 +48,7 @@ export function RepositoryTeamModal({
   const queryClient = useQueryClient();
   const repositoryId = repository?.id ?? "";
 
-  const { data: orgMembers = {}, isLoading: membersLoading } = useQuery<{ members: OrgMember[] }>({
+  const { data: orgMembers, isLoading: membersLoading } = useQuery<{ members: OrgMember[] }>({
     queryKey: ["/api/org/members"],
     queryFn: () => fetch("/api/org/members", { credentials: "include" }).then((r) => r.json()),
     enabled: open,
@@ -87,7 +87,7 @@ export function RepositoryTeamModal({
   const [mode, setMode] = useState<"all" | "selected">("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const members = orgMembers.members ?? [];
+  const members: OrgMember[] = orgMembers?.members ?? [];
   const memberUserIds = repoMembers?.memberUserIds ?? [];
 
   useEffect(() => {
@@ -114,7 +114,7 @@ export function RepositoryTeamModal({
     if (mode === "all") {
       saveMutation.mutate([]);
     } else {
-      saveMutation.mutate([...selectedIds]);
+      saveMutation.mutate(Array.from(selectedIds));
     }
   };
 
@@ -169,7 +169,7 @@ export function RepositoryTeamModal({
                 </div>
                 {mode === "selected" && (
                   <div className="pl-6 max-h-48 overflow-y-auto rounded-md border border-border p-3 space-y-2">
-                    {members.map((m) => (
+                    {members.map((m: OrgMember) => (
                       <div key={m.userId} className="flex items-center space-x-2">
                         <Checkbox
                           id={`team-member-${m.userId}`}

@@ -893,7 +893,7 @@ export class DatabaseStorage implements IStorage {
   async setRepositoryMembers(repositoryId: string, userIds: string[]): Promise<void> {
     await db.delete(repositoryMembers).where(eq(repositoryMembers.repositoryId, repositoryId));
     if (userIds.length > 0) {
-      const unique = [...new Set(userIds)];
+      const unique = Array.from(new Set(userIds));
       await db.insert(repositoryMembers).values(
         unique.map((userId) => ({ repositoryId, userId }))
       );
