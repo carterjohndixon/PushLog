@@ -61,7 +61,7 @@ export interface IStorage {
   updateOrganizationMemberRole(organizationId: string, userId: string, newRole: string, actorRole: string): Promise<{ ok: boolean; error?: string }>;
   createOrganizationInviteLink(organizationId: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ rawToken: string; joinUrl: string }>;
   revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean>;
-  createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string): Promise<{ joinUrl: string }>;
+  createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string, options?: { invitedForGitHubLogin?: string }): Promise<{ joinUrl: string }>;
   consumeOrganizationInvite(token: string, userId: string, options?: { leaveCurrentOrg?: boolean }): Promise<{ organizationId: string; role: string } | { error: string; code?: string }>;
   getOrganizationIncidentSettings(organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null>;
   upsertOrganizationIncidentSettings(organizationId: string, settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }>;
@@ -269,7 +269,8 @@ export class MemStorage implements IStorage {
     _email: string,
     _role: string,
     _expiresAt: Date,
-    _createdByUserId: string
+    _createdByUserId: string,
+    _options?: { invitedForGitHubLogin?: string }
   ): Promise<{ joinUrl: string }> {
     throw new Error("MemStorage: createOrganizationInviteEmail not implemented");
   }

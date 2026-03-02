@@ -269,6 +269,7 @@ export class DatabaseStorage implements IStorage {
       invitedByUserId: membership.invitedByUserId ?? null,
       invitedAt: membership.invitedAt ?? null,
       inviteType: (membership as any).inviteType ?? null,
+      invitedForGitHubLogin: (membership as any).invitedForGitHubLogin ?? null,
       joinedAt: membership.joinedAt ?? null,
     } as any).returning();
     return row as OrganizationMembership;
@@ -645,7 +646,8 @@ export class DatabaseStorage implements IStorage {
     email: string,
     role: string,
     expiresAt: Date,
-    createdByUserId: string
+    createdByUserId: string,
+    options?: { invitedForGitHubLogin?: string }
   ): Promise<{ joinUrl: string }> {
     const rawToken = generateJoinToken();
     const tokenHash = hashToken(rawToken);
@@ -655,6 +657,7 @@ export class DatabaseStorage implements IStorage {
       tokenHash,
       role,
       email: email.trim().toLowerCase(),
+      invitedForGitHubLogin: options?.invitedForGitHubLogin?.trim() || null,
       expiresAt: expiresAt.toISOString(),
       createdByUserId,
     } as any);
@@ -750,6 +753,7 @@ export class DatabaseStorage implements IStorage {
         invitedByUserId: invite.createdByUserId ?? null,
         invitedAt: invite.createdAt ?? null,
         inviteType: invite.type ?? null,
+        invitedForGitHubLogin: invite.invitedForGitHubLogin ?? null,
         joinedAt: new Date().toISOString(),
       } as any);
 

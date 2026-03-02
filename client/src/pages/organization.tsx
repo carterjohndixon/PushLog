@@ -1126,18 +1126,16 @@ export default function OrganizationPage() {
                           </div>
                         )}
                         {(selectedMember.inviteType === "link" || selectedMember.inviteType === "email") && (
-                          <>
-                            <div>
-                              <dt className="text-muted-foreground">Joined via</dt>
-                              <dd className="text-foreground">{selectedMember.inviteType === "link" ? "Invite link" : "Email invite"}</dd>
-                            </div>
-                            {selectedMember.invitedAt && (
-                              <div>
-                                <dt className="text-muted-foreground">Invitation sent</dt>
-                                <dd className="text-foreground">{formatLocalDate(selectedMember.invitedAt)}</dd>
-                              </div>
-                            )}
-                          </>
+                          <div>
+                            <dt className="text-muted-foreground">Joined via</dt>
+                            <dd className="text-foreground">{selectedMember.inviteType === "link" ? "Invite link" : "Email invite"}</dd>
+                          </div>
+                        )}
+                        {selectedMember.invitedAt && (
+                          <div>
+                            <dt className="text-muted-foreground">Invitation sent</dt>
+                            <dd className="text-foreground">{formatLocalDateTime(selectedMember.invitedAt)}</dd>
+                          </div>
                         )}
                         <div>
                           <dt className="text-muted-foreground">Last active</dt>
