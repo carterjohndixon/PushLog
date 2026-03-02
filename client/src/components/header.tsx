@@ -88,7 +88,7 @@ export function Header() {
             </Link>
             {user && (
               <>
-                <div className="hidden lg:block min-w-0 flex-1 overflow-x-auto">
+                <div className="hidden lg:block min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                   <nav className="flex items-center space-x-6 xl:space-x-8 ml-2 xl:ml-6 pr-2" aria-label="Main">
                     {navLinks.map(({ href, label }) => {
                       const isActive = location === href;
