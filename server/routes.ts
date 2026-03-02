@@ -2828,19 +2828,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
         const members = await getGitHubOrgMembers(rawToken, orgLogin);
-        const orgMemberUserIds = new Set(
-          (await databaseStorage.getOrganizationMembers(orgId)).map((m) => (m as any).userId)
-        );
+        const orgMembers = await databaseStorage.getOrganizationMembers(orgId);
+        const orgMemberUserIds = new Set(orgMembers.map((m) => (m as any).userId));
+        const orgMemberRoleByUserId = new Map(orgMembers.map((m) => [(m as any).userId, (m as any).role]));
         const result = await Promise.all(
           members.map(async (m) => {
             const pushlogUser = await databaseStorage.getUserByGithubId(String(m.id));
             const inPushLogOrg = !!(pushlogUser && orgMemberUserIds.has(pushlogUser.id));
+            const pushlogRole = pushlogUser && orgMemberUserIds.has(pushlogUser.id) ? (orgMemberRoleByUserId.get(pushlogUser.id) ?? null) : null;
             return {
               login: m.login,
               id: m.id,
               avatar_url: m.avatar_url,
               inPushLogOrg,
               pushlogUserId: pushlogUser && orgMemberUserIds.has(pushlogUser.id) ? pushlogUser.id : null,
+              pushlogRole: pushlogRole || null,
             };
           })
         );

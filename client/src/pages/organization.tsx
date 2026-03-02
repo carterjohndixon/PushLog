@@ -144,7 +144,7 @@ export default function OrganizationPage() {
     queryFn: () =>
       apiRequest("GET", `/api/org/github-orgs/${encodeURIComponent(selectedGitHubOrgLogin)}/members`).then((r) =>
         r.json()
-      ) as Promise<{ login: string; id: number; avatar_url: string | null; inPushLogOrg: boolean; pushlogUserId: string | null }[]>,
+      ) as Promise<{ login: string; id: number; avatar_url: string | null; inPushLogOrg: boolean; pushlogUserId: string | null; pushlogRole: string | null }[]>,
     enabled: githubInviteModalOpen && !!selectedGitHubOrgLogin,
   });
 
@@ -288,6 +288,25 @@ export default function OrganizationPage() {
 
   const revokeInviteLink = () => {
     if (inviteLink) revokeInviteLinkMutation.mutate(inviteLink);
+  };
+
+  /** Copy invite link for a GitHub org member (create link with current role if none exists). */
+  const copyInviteLinkForGitHubMember = (memberLogin: string) => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      toast({ title: "Copied", description: `Send this link to ${memberLogin} to join as ${ROLE_LABELS[githubInviteRole]}.` });
+      return;
+    }
+    createInviteLinkMutation.mutate(
+      { role: githubInviteRole, expiresInDays: 7 },
+      {
+        onSuccess: (data) => {
+          setInviteLink(data.joinUrl);
+          navigator.clipboard.writeText(data.joinUrl);
+          toast({ title: "Copied", description: `Send this link to ${memberLogin} to join as ${ROLE_LABELS[githubInviteRole]}.` });
+        },
+      }
+    );
   };
 
   const removeMemberMutation = useMutation({
@@ -844,34 +863,8 @@ export default function OrganizationPage() {
                     </div>
                     {selectedGitHubOrgLogin && (
                       <>
-                        <div className="space-y-2">
-                          <Label>Members</Label>
-                          {githubOrgMembersLoading ? (
-                            <div className="flex items-center gap-2 text-muted-foreground py-4">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Loading members…
-                            </div>
-                          ) : (
-                            <div className="max-h-48 overflow-y-auto rounded-md border border-border p-2 space-y-1">
-                              {githubOrgMembers.length === 0 ? (
-                                <p className="text-sm text-muted-foreground py-2">No members returned.</p>
-                              ) : (
-                                githubOrgMembers.map((m) => (
-                                  <div key={m.id} className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-muted/50">
-                                    <span className="font-medium">{m.login}</span>
-                                    {m.inPushLogOrg ? (
-                                      <Badge variant="secondary" className="text-xs">Already in PushLog</Badge>
-                                    ) : (
-                                      <Badge variant="outline" className="text-xs text-muted-foreground">Not in PushLog</Badge>
-                                    )}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </div>
                         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border">
-                          <Label className="sr-only">Role for new members</Label>
+                          <Label className="text-muted-foreground">Role for new members</Label>
                           <Select value={githubInviteRole} onValueChange={setGithubInviteRole}>
                             <SelectTrigger className="w-[130px]">
                               <SelectValue placeholder="Role" />
@@ -892,6 +885,51 @@ export default function OrganizationPage() {
                           >
                             {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
                           </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Members</Label>
+                          {githubOrgMembersLoading ? (
+                            <div className="flex items-center gap-2 text-muted-foreground py-4">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              Loading members…
+                            </div>
+                          ) : (
+                            <div className="max-h-56 overflow-y-auto rounded-md border border-border p-2 space-y-1">
+                              {githubOrgMembers.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-2">No members returned.</p>
+                              ) : (
+                                githubOrgMembers.map((m) => (
+                                  <div key={m.id} className="flex items-center justify-between gap-2 text-sm py-2 px-2 rounded hover:bg-muted/50">
+                                    <span className="font-medium shrink-0">{m.login}</span>
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      {m.inPushLogOrg ? (
+                                        <>
+                                          <Badge variant="secondary" className="text-xs">Already in PushLog</Badge>
+                                          {m.pushlogRole && (
+                                            <span className="text-muted-foreground text-xs">{ROLE_LABELS[m.pushlogRole] ?? m.pushlogRole}</span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Badge variant="outline" className="text-xs text-muted-foreground">Not in PushLog</Badge>
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-7 text-xs"
+                                            disabled={createInviteLinkMutation.isPending}
+                                            onClick={() => copyInviteLinkForGitHubMember(m.login)}
+                                          >
+                                            {createInviteLinkMutation.isPending ? "…" : "Copy invite link"}
+                                          </Button>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
                         </div>
                         {inviteLink && (
                           <div className="space-y-2 pt-2 border-t border-border">
