@@ -112,11 +112,19 @@ export default function OrganizationPage() {
   const [selectedGitHubOrgLogin, setSelectedGitHubOrgLogin] = useState<string>("");
   const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
 
-  const { data: profileResponse } = useQuery({
+  const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: fetchProfile,
     retry: false,
   });
+  const [noOrgMessageReady, setNoOrgMessageReady] = useState(false);
+  useEffect(() => {
+    if (profileResponse?.user && !profileResponse.user.organizationId) {
+      const t = window.setTimeout(() => setNoOrgMessageReady(true), 2000);
+      return () => window.clearTimeout(t);
+    }
+    setNoOrgMessageReady(false);
+  }, [profileResponse?.user?.organizationId]);
   const { data: orgData, isLoading: orgLoading, error: orgError } = useQuery({
     queryKey: ORG_QUERY_KEY,
     queryFn: fetchOrg,
@@ -432,10 +440,17 @@ export default function OrganizationPage() {
     });
   };
 
-  if (!user) {
+  const showOrgLoading = !user || (profileLoading || (!user.organizationId && !noOrgMessageReady));
+  if (showOrgLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Skeleton className="h-8 w-48" />
+      <div className="min-h-screen bg-background flex flex-col">
+        <main className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading organization…</p>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
