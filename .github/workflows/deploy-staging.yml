@@ -26,7 +26,7 @@ jobs:
           host: ${{ secrets.STAGING_EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.STAGING_EC2_SSH_KEY }}
-          script_timeout: 30m
+          command_timeout: 30m
           script: |
             set -e
             REPO_PATH="${{ secrets.STAGING_EC2_REPO_PATH }}"
