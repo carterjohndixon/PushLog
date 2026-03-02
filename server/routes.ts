@@ -1779,7 +1779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Build the GitHub OAuth URL (use OAuth App, not GitHub App)
       const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : "https://pushlog.ai/auth/github/callback";
-      const scope = "repo user:email admin:org_hook";
+      const scope = "repo user:email read:org admin:org_hook";
       
       const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
       
@@ -2801,7 +2801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Get GitHub orgs error:", e);
         Sentry.captureException(e);
         const msg = e?.message || "Failed to load GitHub organizations";
-        const status = msg.includes("read:org") ? 403 : 500;
+        const status = msg.includes("read:org") ? 400 : 500;
         res.status(status).json({ error: msg });
       }
     }
@@ -2849,7 +2849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Get GitHub org members error:", e);
         Sentry.captureException(e);
         const msg = e?.message || "Failed to load GitHub organization members";
-        const status = msg.includes("read:org") || msg.includes("not found") ? 403 : 500;
+        const status = msg.includes("read:org") || msg.includes("not found") ? 400 : 500;
         res.status(status).json({ error: msg });
       }
     }

@@ -133,7 +133,7 @@ export default function OrganizationPage() {
     enabled: !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"),
   });
 
-  const { data: githubOrgs = [], isLoading: githubOrgsLoading } = useQuery({
+  const { data: githubOrgs = [], isLoading: githubOrgsLoading, isError: githubOrgsErrorState, error: githubOrgsError } = useQuery({
     queryKey: ["org", "github-orgs"],
     queryFn: () => apiRequest("GET", "/api/org/github-orgs").then((r) => r.json()) as Promise<{ login: string; id: number; avatar_url: string | null; description: string | null }[]>,
     enabled: githubInviteModalOpen && !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && !!profileResponse?.user?.githubConnected,
@@ -802,22 +802,39 @@ export default function OrganizationPage() {
                   <div className="space-y-4 pt-2">
                     <div className="space-y-2">
                       <Label>GitHub organization</Label>
-                      <Select
-                        value={selectedGitHubOrgLogin || ""}
-                        onValueChange={(v) => setSelectedGitHubOrgLogin(v || "")}
-                        disabled={githubOrgsLoading}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder={githubOrgsLoading ? "Loading…" : "Select an organization"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {githubOrgs.map((org) => (
-                            <SelectItem key={org.id} value={org.login}>
-                              {org.login}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {githubOrgsLoading ? (
+                        <div className="flex items-center gap-2 text-muted-foreground py-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Loading…
+                        </div>
+                      ) : githubOrgsErrorState ? (
+                        <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground">Could not load organizations</p>
+                          <p className="mt-1">{githubOrgsError instanceof Error ? githubOrgsError.message : "An error occurred."}</p>
+                          <p className="mt-2 text-xs">Reconnect GitHub in Settings to grant organization access.</p>
+                          <Link href="/settings">
+                            <Button variant="outline" size="sm" className="mt-2">Open Settings</Button>
+                          </Link>
+                        </div>
+                      ) : githubOrgs.length === 0 ? (
+                        <p className="text-muted-foreground py-2">No organization found</p>
+                      ) : (
+                        <Select
+                          value={selectedGitHubOrgLogin || ""}
+                          onValueChange={(v) => setSelectedGitHubOrgLogin(v || "")}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an organization" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {githubOrgs.map((org) => (
+                              <SelectItem key={org.id} value={org.login}>
+                                {org.login}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                     {selectedGitHubOrgLogin && (
                       <>

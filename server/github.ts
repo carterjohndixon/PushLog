@@ -501,7 +501,7 @@ export async function getGitHubUserOrgs(accessToken: string): Promise<GitHubOrg[
       const err = await response.json().catch(() => ({}));
       const msg = (err as any).message || response.statusText;
       if (response.status === 403) {
-        throw new Error(`GitHub API: ${msg}. Ensure your GitHub app has the read:org scope and you have reconnected your account.`);
+        throw new Error(`GitHub API: ${msg}. PushLog requests read:org when you connect GitHub—disconnect and reconnect GitHub in Settings to grant organization access.`);
       }
       throw new Error(`GitHub API error: ${msg}`);
     }
@@ -538,7 +538,7 @@ export async function getGitHubOrgMembers(accessToken: string, orgLogin: string)
       const err = await response.json().catch(() => ({}));
       const msg = (err as any).message || response.statusText;
       if (response.status === 403) {
-        throw new Error(`GitHub API: ${msg}. Ensure read:org scope and that you are a member of the organization.`);
+        throw new Error(`GitHub API: ${msg}. PushLog requests read:org when you connect GitHub—disconnect and reconnect in Settings if needed.`);
       }
       if (response.status === 404) {
         throw new Error("GitHub organization not found or you do not have access.");
