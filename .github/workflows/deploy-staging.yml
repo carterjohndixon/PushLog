@@ -26,16 +26,18 @@ jobs:
           host: ${{ secrets.STAGING_EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.STAGING_EC2_SSH_KEY }}
-          command_timeout: 30m
+          timeout: 10m
+          command_timeout: 60m
           script: |
             set -e
+            echo "[1/5] Resolving repo path..."
             REPO_PATH="${{ secrets.STAGING_EC2_REPO_PATH }}"
             [ -z "$REPO_PATH" ] && REPO_PATH=/home/ec2-user/pushlog
-            cd "$REPO_PATH"
-            echo ">>> git fetch origin && git merge origin/main"
+            cd "$REPO_PATH" && echo "  cd $REPO_PATH OK"
+            echo "[2/5] git fetch origin && git merge origin/main"
             git fetch origin && git merge origin/main
-            echo ">>> ./scripts/build-for-docker.sh"
+            echo "[3/5] ./scripts/build-for-docker.sh (this can take 10–20 min)..."
             ./scripts/build-for-docker.sh
-            echo ">>> docker compose up -d --build"
+            echo "[4/5] docker compose up -d --build..."
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
-            echo ">>> Done."
+            echo "[5/5] Done."
