@@ -817,7 +817,13 @@ export default function OrganizationPage() {
                           </Link>
                         </div>
                       ) : githubOrgs.length === 0 ? (
-                        <p className="text-muted-foreground py-2">No organization found</p>
+                        <div className="rounded-md border border-border bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
+                          <p className="font-medium text-foreground">No organization found</p>
+                          <p className="mt-1 text-xs">If you belong to a GitHub organization, try disconnecting and reconnecting your GitHub account in Settings to refresh permissions.</p>
+                          <Link href="/settings">
+                            <Button variant="outline" size="sm" className="mt-2">Open Settings</Button>
+                          </Link>
+                        </div>
                       ) : (
                         <Select
                           value={selectedGitHubOrgLogin || ""}
