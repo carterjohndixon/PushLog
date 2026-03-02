@@ -21,9 +21,11 @@ import {
   Calendar,
   Activity,
   ChevronDown,
+  Users,
 } from "lucide-react";
 import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
+import { RepositoryTeamModal } from "@/components/repository-team-modal";
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
 
 interface RepositoryCardData {
@@ -75,6 +77,7 @@ interface RepositoryCardProps {
   handleToggleRepository: (repository: RepositoryCardData) => void;
   toggleRepositoryIsPending: boolean;
   handleRepositorySettings: (repository: RepositoryCardData) => void;
+  handleRepositoryTeam?: (repository: RepositoryCardData) => void;
   handleDeleteRepository: (repository: RepositoryCardData) => void;
   deleteRepositoryIsPending: boolean;
   getRepositoryEvents: (repository: RepositoryCardData) => { count: number; events: any[] };
@@ -93,6 +96,7 @@ const RepositoryCard = ({
   handleToggleRepository,
   toggleRepositoryIsPending,
   handleRepositorySettings,
+  handleRepositoryTeam,
   handleDeleteRepository,
   deleteRepositoryIsPending,
   getRepositoryEvents,
@@ -285,6 +289,18 @@ const RepositoryCard = ({
               <Settings className="w-4 h-4" />
             </Button>
             
+            {handleRepositoryTeam && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleRepositoryTeam(repository)}
+              className="text-steel-gray hover:text-graphite"
+              title="Manage who can see this repo"
+            >
+              <Users className="w-4 h-4" />
+            </Button>
+            )}
+            
             <Button
               size="sm"
               variant="ghost"
@@ -305,6 +321,8 @@ const RepositoryCard = ({
 export default function Repositories({ userProfile }: RepositoriesProps) {
   const [isRepoModalOpen, setIsRepoModalOpen] = useState(false);
   const [isRepositorySettingsOpen, setIsRepositorySettingsOpen] = useState(false);
+  const [isRepositoryTeamOpen, setIsRepositoryTeamOpen] = useState(false);
+  const [repositoryForTeam, setRepositoryForTeam] = useState<RepositoryCardData | null>(null);
   const [isDeleteRepoConfirmationOpen, setIsDeleteRepoConfirmationOpen] = useState(false);
   const [selectedRepository, setSelectedRepository] = useState<RepositoryCardData | null>(null);
   const [repositoryToDelete, setRepositoryToDelete] = useState<RepositoryCardData | null>(null);
@@ -521,6 +539,11 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const handleRepositorySettings = (repository: RepositoryCardData) => {
     setSelectedRepository(repository);
     setIsRepositorySettingsOpen(true);
+  };
+
+  const handleRepositoryTeam = (repository: RepositoryCardData) => {
+    setRepositoryForTeam(repository);
+    setIsRepositoryTeamOpen(true);
   };
 
   const handleDeleteRepository = (repository: RepositoryCardData) => {
@@ -880,6 +903,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
+                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -930,6 +954,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
+                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -965,6 +990,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
+                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -1000,6 +1026,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
+                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -1036,6 +1063,15 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
         }}
         repository={selectedRepository}
         updateRepositoryMutation={updateRepositoryMutation}
+      />
+
+      <RepositoryTeamModal
+        open={isRepositoryTeamOpen}
+        onOpenChange={(open) => {
+          setIsRepositoryTeamOpen(open);
+          if (!open) setRepositoryForTeam(null);
+        }}
+        repository={repositoryForTeam}
       />
 
       <ConfirmRepositoryDeletionModal 

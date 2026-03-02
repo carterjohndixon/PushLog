@@ -120,12 +120,29 @@ export async function getIncidentNotificationTargetsForOrg(
       });
     }
   } else {
-    // users_with_repos (default): members who have at least one repo in the org
+    // users_with_repos (default): members who have access to at least one repo (per-repo team aware)
     const orgRepos = await storage.getRepositoriesByOrganizationId(orgId);
-    const userIdsWithRepos = new Set<string>(orgRepos.map((r) => (r as any).userId));
+    const repoMembersList = await storage.getRepositoryMembersForOrganization(orgId);
+    const memberIdsByRepoId = new Map<string, Set<string>>();
+    for (const { repositoryId, userId } of repoMembersList) {
+      if (!memberIdsByRepoId.has(repositoryId)) memberIdsByRepoId.set(repositoryId, new Set());
+      memberIdsByRepoId.get(repositoryId)!.add(userId);
+    }
+    const repoIdsWithExplicitMembers = new Set(memberIdsByRepoId.keys());
+    const orgMemberIds = new Set(members.map((m) => m.userId));
+    const userIdsWithAccess = new Set<string>();
+    // Org owners/admins always have access to all repos
+    members.filter((m) => m.role === "owner" || m.role === "admin").forEach((m) => userIdsWithAccess.add(m.userId));
+    for (const repo of orgRepos) {
+      if (!repoIdsWithExplicitMembers.has(repo.id)) {
+        orgMemberIds.forEach((id) => userIdsWithAccess.add(id));
+      } else {
+        memberIdsByRepoId.get(repo.id)?.forEach((id) => userIdsWithAccess.add(id));
+      }
+    }
     for (const m of members) {
       if (m.role === "viewer" && !includeViewers) continue;
-      if (userIdsWithRepos.has(m.userId)) candidateUserIds.push(m.userId);
+      if (userIdsWithAccess.has(m.userId)) candidateUserIds.push(m.userId);
     }
   }
 

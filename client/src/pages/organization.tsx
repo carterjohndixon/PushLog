@@ -91,6 +91,47 @@ const ROLE_LABELS: Record<string, string> = {
 
 const INVITE_ROLES = ["admin", "developer", "viewer"] as const;
 
+function MemberReposSection({ userId }: { userId: string }) {
+  const { data, isLoading, error } = useQuery<{ repos: { id: string; name: string; fullName: string }[] }>({
+    queryKey: ["/api/org/members", userId, "repos"],
+    queryFn: () =>
+      fetch(`/api/org/members/${encodeURIComponent(userId)}/repos`, { credentials: "include" }).then((r) => {
+        if (!r.ok) throw new Error("Failed to load repos");
+        return r.json();
+      }),
+    enabled: !!userId,
+  });
+  const repos = data?.repos ?? [];
+  return (
+    <div>
+      <dt className="text-muted-foreground flex items-center gap-1.5">
+        <Github className="w-3.5 h-3.5" />
+        Repos this user has access to
+      </dt>
+      <dd className="text-foreground mt-1">
+        {isLoading ? (
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Loading…
+          </span>
+        ) : error ? (
+          <span className="text-muted-foreground">Could not load repos.</span>
+        ) : repos.length === 0 ? (
+          <span className="text-muted-foreground">None</span>
+        ) : (
+          <ul className="list-disc list-inside space-y-0.5 text-sm">
+            {repos.map((r) => (
+              <li key={r.id}>
+                <span className="font-mono">{r.fullName || r.name}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </dd>
+    </div>
+  );
+}
+
 export default function OrganizationPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -595,7 +636,7 @@ export default function OrganizationPage() {
                   Incident notifications
                 </CardTitle>
                 <CardDescription>
-                  Choose who in the organization receives Sentry and incident alerts. Per-user &quot;Receive incident notifications&quot; in Settings still applies.
+                  Choose who in the organization receives Sentry and incident alerts. Per-repo teams (Repositories → Team) control who can see each repo; &quot;Users with access to repos&quot; uses that. Per-user &quot;Receive incident notifications&quot; in Settings still applies.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -608,11 +649,17 @@ export default function OrganizationPage() {
                   >
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="users_with_repos" id="incident-users-with-repos" />
-                      <Label htmlFor="incident-users-with-repos" className="font-normal cursor-pointer">Users with repos</Label>
+                      <div className="grid gap-0.5">
+                        <Label htmlFor="incident-users-with-repos" className="font-normal cursor-pointer">Users with access to repos</Label>
+                        <p className="text-xs text-muted-foreground">Only members who can see at least one repository (repos they added or were added to via the repo&apos;s team). Owners and admins always see all repos.</p>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="all_members" id="incident-all-members" />
-                      <Label htmlFor="incident-all-members" className="font-normal cursor-pointer">All members</Label>
+                      <div className="grid gap-0.5">
+                        <Label htmlFor="incident-all-members" className="font-normal cursor-pointer">All members</Label>
+                        <p className="text-xs text-muted-foreground">Every member in the org can receive incidents (subject to their own Settings).</p>
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="specific_users" id="incident-specific-users" />
@@ -1149,6 +1196,7 @@ export default function OrganizationPage() {
                             {selectedMember.lastActiveAt ? formatLocalDateTime(selectedMember.lastActiveAt) : "Never"}
                           </dd>
                         </div>
+                        <MemberReposSection userId={selectedMember.userId} />
                       </dl>
                       {selectedMember.userId !== String(currentUserId) && (
                         <div className="flex flex-col gap-3 pt-2 border-t border-border">

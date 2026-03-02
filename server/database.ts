@@ -5,6 +5,7 @@ import {
   favoriteModels, loginLockout, oauthSessions, oauthIdentities,
   aiModelPricing,
   organizations, organizationMemberships, organizationInvites, organizationIncidentSettings,
+  repositoryMembers,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -869,14 +870,63 @@ export class DatabaseStorage implements IStorage {
     return result[0] as any;
   }
 
+  /** All repository_members rows for repos in this org. Used to filter who can see which repos (empty = all org members). */
+  async getRepositoryMembersForOrganization(organizationId: string): Promise<{ repositoryId: string; userId: string }[]> {
+    const rows = await db
+      .select({ repositoryId: repositoryMembers.repositoryId, userId: repositoryMembers.userId })
+      .from(repositoryMembers)
+      .innerJoin(repositories, eq(repositoryMembers.repositoryId, repositories.id))
+      .where(eq(repositories.organizationId, organizationId));
+    return rows.map((r) => ({ repositoryId: r.repositoryId, userId: r.userId }));
+  }
+
+  /** Member user IDs for a single repo. Empty = repo uses "all org members" (no restriction). */
+  async getRepositoryMemberUserIds(repositoryId: string): Promise<string[]> {
+    const rows = await db
+      .select({ userId: repositoryMembers.userId })
+      .from(repositoryMembers)
+      .where(eq(repositoryMembers.repositoryId, repositoryId));
+    return rows.map((r) => r.userId);
+  }
+
+  /** Set which org members have access to this repo. Empty array = repo is visible to all org members. */
+  async setRepositoryMembers(repositoryId: string, userIds: string[]): Promise<void> {
+    await db.delete(repositoryMembers).where(eq(repositoryMembers.repositoryId, repositoryId));
+    if (userIds.length > 0) {
+      const unique = [...new Set(userIds)];
+      await db.insert(repositoryMembers).values(
+        unique.map((userId) => ({ repositoryId, userId }))
+      );
+    }
+  }
+
   async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
     const user = await this.getUser(userId);
     if (!user) return [];
     const orgId = (user as any).organizationId;
     // Repos in the user's org (primary path)
-    const byOrg = orgId
-      ? await db.select().from(repositories).where(eq(repositories.organizationId, orgId))
-      : [];
+    let byOrg: Repository[] = [];
+    if (orgId) {
+      byOrg = await db.select().from(repositories).where(eq(repositories.organizationId, orgId)) as Repository[];
+      // Per-repo team: repos with explicit repository_members are visible only to those members (and org owners/admins)
+      const repoMembersList = await this.getRepositoryMembersForOrganization(orgId);
+      const repoIdsWithExplicitMembers = new Set<string>();
+      const memberIdsByRepoId = new Map<string, Set<string>>();
+      for (const { repositoryId, userId } of repoMembersList) {
+        repoIdsWithExplicitMembers.add(repositoryId);
+        if (!memberIdsByRepoId.has(repositoryId)) memberIdsByRepoId.set(repositoryId, new Set());
+        memberIdsByRepoId.get(repositoryId)!.add(userId);
+      }
+      const members = await this.getOrganizationMembers(orgId);
+      const myMembership = members.find((m) => (m as any).userId === userId);
+      const myRole = (myMembership as any)?.role ?? null;
+      const canManageRepos = myRole === "owner" || myRole === "admin";
+      byOrg = byOrg.filter((repo) => {
+        if (!repoIdsWithExplicitMembers.has(repo.id)) return true; // no restriction = all org see it
+        if (canManageRepos) return true; // owners/admins always see all repos
+        return memberIdsByRepoId.get(repo.id)?.has(userId) ?? false;
+      });
+    }
     // Repos owned by this user but with null organizationId (e.g. created before backfill or before user had org) — include them and backfill
     const withNullOrg = await db
       .select()
@@ -888,19 +938,19 @@ export class DatabaseStorage implements IStorage {
       }
     }
     const byOrgIds = new Set(byOrg.map((r) => r.id));
-    const combined = [...byOrg];
+    const combined: Repository[] = [...byOrg];
     for (const r of withNullOrg) {
-      if (!byOrgIds.has(r.id)) combined.push(r);
+      if (!byOrgIds.has(r.id)) combined.push(r as Repository);
     }
     // Fallback: include any repos owned by this user that we might have missed (e.g. org mismatch or backfill not run)
     const byUserId = await db.select().from(repositories).where(eq(repositories.userId, userId));
     for (const r of byUserId) {
       if (!byOrgIds.has(r.id)) {
-        combined.push(r);
+        combined.push(r as Repository);
         byOrgIds.add(r.id);
       }
     }
-    return combined as Repository[];
+    return combined;
   }
 
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {

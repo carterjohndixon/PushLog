@@ -2544,6 +2544,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   );
 
+  /** Repos this org member has access to (for member modal). */
+  app.get(
+    "/api/org/members/:userId/repos",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const userId = String(req.params.userId ?? "").trim();
+        if (!userId) return res.status(400).json({ error: "userId is required" });
+        const members = await databaseStorage.getOrganizationMembers(orgId);
+        if (!members.some((m) => (m as any).userId === userId)) {
+          return res.status(404).json({ error: "Member not found" });
+        }
+        const repos = await databaseStorage.getRepositoriesByUserId(userId);
+        const orgRepos = repos.filter((r) => (r as any).organizationId === orgId);
+        res.status(200).json({
+          repos: orgRepos.map((r) => ({
+            id: r.id,
+            name: (r as any).name,
+            fullName: (r as any).fullName ?? (r as any).name,
+          })),
+        });
+      } catch (e) {
+        console.error("Get member repos error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to load member repos" });
+      }
+    }
+  );
+
+  /** Get which org members have access to this repo (per-repo team). Empty = all org members. */
+  app.get(
+    "/api/org/repositories/:repositoryId/members",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const repositoryId = String(req.params.repositoryId ?? "").trim();
+        if (!repositoryId) return res.status(400).json({ error: "repositoryId is required" });
+        const repo = await databaseStorage.getRepository(repositoryId);
+        if (!repo) return res.status(404).json({ error: "Repository not found" });
+        if ((repo as any).organizationId !== orgId) return res.status(404).json({ error: "Repository not found" });
+        const userIds = await databaseStorage.getRepositoryMemberUserIds(repositoryId);
+        res.status(200).json({ memberUserIds: userIds });
+      } catch (e) {
+        console.error("Get repo members error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to load repository members" });
+      }
+    }
+  );
+
+  /** Set which org members have access to this repo. Send { memberUserIds: string[] }. Empty = all org members. */
+  app.put(
+    "/api/org/repositories/:repositoryId/members",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("memberUserIds").isArray(),
+    body("memberUserIds.*").isUUID(),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const repositoryId = String(req.params.repositoryId ?? "").trim();
+        if (!repositoryId) return res.status(400).json({ error: "repositoryId is required" });
+        const repo = await databaseStorage.getRepository(repositoryId);
+        if (!repo) return res.status(404).json({ error: "Repository not found" });
+        if ((repo as any).organizationId !== orgId) return res.status(404).json({ error: "Repository not found" });
+        const memberUserIds = Array.isArray(req.body?.memberUserIds) ? req.body.memberUserIds : [];
+        const orgMembers = await databaseStorage.getOrganizationMembers(orgId);
+        const orgUserIds = new Set(orgMembers.map((m) => (m as any).userId));
+        const invalid = memberUserIds.filter((id) => !orgUserIds.has(id));
+        if (invalid.length > 0) {
+          return res.status(400).json({ error: "All memberUserIds must be members of the organization", invalid });
+        }
+        await databaseStorage.setRepositoryMembers(repositoryId, memberUserIds);
+        res.status(200).json({ success: true, memberUserIds });
+      } catch (e) {
+        console.error("Set repo members error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to update repository members" });
+      }
+    }
+  );
+
   app.patch(
     "/api/org",
     authenticateToken,

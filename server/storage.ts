@@ -75,6 +75,11 @@ export interface IStorage {
   createRepository(repository: InsertRepository): Promise<Repository>;
   updateRepository(id: string, updates: Partial<Repository>): Promise<Repository | undefined>;
   deleteRepository(id: string): Promise<boolean>;
+  /** Per-repo team: user IDs who have access. Empty = all org members. */
+  getRepositoryMemberUserIds(repositoryId: string): Promise<string[]>;
+  setRepositoryMembers(repositoryId: string, userIds: string[]): Promise<void>;
+  /** All repo-member rows for repos in this org (for incident targeting). */
+  getRepositoryMembersForOrganization(organizationId: string): Promise<{ repositoryId: string; userId: string }[]>;
 
   // Integration methods
   getIntegration(id: string): Promise<Integration | undefined>;
@@ -344,6 +349,18 @@ export class MemStorage implements IStorage {
 
   async deleteRepository(id: string): Promise<boolean> {
     return this.repositories.delete(id);
+  }
+
+  async getRepositoryMemberUserIds(_repositoryId: string): Promise<string[]> {
+    return [];
+  }
+
+  async setRepositoryMembers(_repositoryId: string, _userIds: string[]): Promise<void> {
+    // no-op for MemStorage
+  }
+
+  async getRepositoryMembersForOrganization(_organizationId: string): Promise<{ repositoryId: string; userId: string }[]> {
+    return [];
   }
 
   // Integration methods

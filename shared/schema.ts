@@ -141,6 +141,22 @@ export const repositories = pgTable("repositories", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+/** Per-repo team: which org members can see/use this repo. Empty = all org members. Non-empty = only these users (plus org owners/admins always see all). */
+export const repositoryMembers = pgTable(
+  "repository_members",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    repositoryId: uuid("repository_id").notNull(),
+    userId: uuid("user_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+  },
+  (t) => [
+    { name: "repository_members_repo_user_unique", unique: true, columns: [t.repositoryId, t.userId] },
+    { name: "repository_members_repository_id_idx", columns: [t.repositoryId] },
+    { name: "repository_members_user_id_idx", columns: [t.userId] },
+  ]
+);
+
 export const integrations = pgTable("integrations", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull(),
@@ -460,6 +476,8 @@ export type InsertUser = {
 
 export type Repository = typeof repositories.$inferSelect;
 export type InsertRepository = z.infer<typeof insertRepositorySchema>;
+export type RepositoryMember = typeof repositoryMembers.$inferSelect;
+export type InsertRepositoryMember = typeof repositoryMembers.$inferInsert;
 export type Organization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
 export type OrganizationMembership = typeof organizationMemberships.$inferSelect;
