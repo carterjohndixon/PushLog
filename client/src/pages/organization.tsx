@@ -156,8 +156,10 @@ export default function OrganizationPage() {
     (a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role)
   );
 
+  const isSolo = (orgData?.memberCount ?? 0) <= 1;
   const showSetupPrompt =
-    !!canInvite &&
+    !isSolo &&
+    canInvite &&
     orgData?.memberCount === 1 &&
     !!orgData?.isDefaultOrgName &&
     !!orgData?.id &&
@@ -554,8 +556,8 @@ export default function OrganizationPage() {
             </CardHeader>
           </Card>
 
-          {/* Incident notifications (owner/admin only) */}
-          {canInvite && (
+          {/* Incident notifications (owner/admin only; hide when solo) */}
+          {canInvite && !isSolo && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
