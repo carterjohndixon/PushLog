@@ -1,0 +1,41 @@
+# Deploy to staging EC2 on push to main.
+# Your "dedicated window" = GitHub Actions tab: each run shows pending → success/failure + full logs.
+#
+# Required secrets (Settings → Secrets and variables → Actions):
+#   STAGING_EC2_HOST     — EC2 hostname or IP (e.g. ec2-xx-xx-xx-xx.compute.amazonaws.com)
+#   STAGING_EC2_SSH_KEY  — Private key for ec2-user (paste the whole key including -----BEGIN ... -----END-----)
+#
+# If your repo path on EC2 is not /home/ec2-user/pushlog, set:
+#   STAGING_EC2_REPO_PATH — e.g. /home/ec2-user/pushlog
+
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # allow manual "Run workflow" from Actions tab
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2 (fetch, merge, build, docker up)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.STAGING_EC2_SSH_KEY }}
+          script_timeout: 30m
+          script: |
+            set -e
+            REPO_PATH="${{ secrets.STAGING_EC2_REPO_PATH }}"
+            [ -z "$REPO_PATH" ] && REPO_PATH=/home/ec2-user/pushlog
+            cd "$REPO_PATH"
+            echo ">>> git fetch origin && git merge origin/main"
+            git fetch origin && git merge origin/main
+            echo ">>> ./scripts/build-for-docker.sh"
+            ./scripts/build-for-docker.sh
+            echo ">>> docker compose up -d --build"
+            docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
+            echo ">>> Done."
