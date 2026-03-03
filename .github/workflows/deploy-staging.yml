@@ -46,6 +46,7 @@ jobs:
             export SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}"
             export SENTRY_RELEASE="$(git rev-parse HEAD)"
             export VITE_SENTRY_RELEASE="$SENTRY_RELEASE"
+            if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "  WARNING: SENTRY_AUTH_TOKEN is not set — source maps will NOT be uploaded to Sentry (add repo secret SENTRY_AUTH_TOKEN to fix)"; else echo "  SENTRY_AUTH_TOKEN is set — plugin will upload source maps"; fi
             ./scripts/build-for-docker.sh
             echo "[4/5] docker compose up -d --build..."
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
