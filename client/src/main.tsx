@@ -10,6 +10,8 @@ if (dsn) {
   Sentry.init({
     dsn,
     tunnel: "/api/sentry/tunnel", // Proxy via our server — avoids ad-blockers
+    // Must match the release used when uploading source maps (set in CI via VITE_SENTRY_RELEASE)
+    ...(import.meta.env.VITE_SENTRY_RELEASE && { release: import.meta.env.VITE_SENTRY_RELEASE }),
     enableLogs: true,
     ignoreErrors: [
       // Chunk load failures during deploys — stale app requests old chunk URLs; we auto-reload
