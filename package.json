@@ -117,6 +117,7 @@
   "devDependencies": {
     "@replit/vite-plugin-cartographer": "^0.2.7",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",
+    "@sentry/vite-plugin": "^5.1.1",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.13",
     "@types/compression": "^1.8.1",

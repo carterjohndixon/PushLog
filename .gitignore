@@ -9,6 +9,7 @@ yarn-error.log*
 .env.local
 .env.staging
 .env.production
+.env.sentry-build-plugin
 client/.env.local
 
 
@@ -32,6 +33,9 @@ coverage
 
 # NYC test coverage
 .nyc_output
+
+# TypeScript incremental build cache
+.tsbuildinfo
 
 # IDE and editor files
 .vscode

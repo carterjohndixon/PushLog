@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -9,6 +10,17 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
   plugins: [
     react(),
+    // Upload client source maps to Sentry so frontend errors show original file:line.
+    // Set SENTRY_ORG, SENTRY_PROJECT, SENTRY_AUTH_TOKEN when building (e.g. in CI or .env.sentry-build-plugin).
+    sentryVitePlugin({
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      disable: !process.env.SENTRY_AUTH_TOKEN,
+      sourcemaps: {
+        filesToDeleteAfterUpload: ["dist/public/**/*.map"],
+      },
+    }),
   ],
   resolve: {
       alias: {
@@ -47,7 +59,7 @@ export default defineConfig({
         },
       },
       minify: "esbuild",
-      sourcemap: false,
+      sourcemap: true,
       cssCodeSplit: true,
       commonjsOptions: {
         include: [/node_modules/],
