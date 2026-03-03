@@ -725,6 +725,7 @@ export default function Dashboard() {
   };
 
   const handleToggleRepository = (repository: RepositoryCardData) => {
+    if (!repository.id) return;
     updateRepositoryMutation.mutate({
       id: repository.id,
       updates: { isActive: repository.isActive === false },
