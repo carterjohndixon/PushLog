@@ -380,7 +380,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
         requiresGitHubReconnect: !!data.requiresGitHubReconnect,
       };
     },
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
   const repositories = reposAndIntegrations?.repositories ?? [];

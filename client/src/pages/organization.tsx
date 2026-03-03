@@ -174,21 +174,24 @@ export default function OrganizationPage() {
     queryKey: ORG_QUERY_KEY,
     queryFn: fetchOrg,
     enabled: !!profileResponse?.user?.organizationId,
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
   const { data: membersData, isLoading: membersLoading } = useQuery({
     queryKey: ORG_MEMBERS_QUERY_KEY,
     queryFn: fetchOrgMembers,
     enabled: !!profileResponse?.user?.organizationId,
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
   const { data: incidentSettingsData } = useQuery({
     queryKey: ORG_INCIDENT_SETTINGS_QUERY_KEY,
     queryFn: fetchOrgIncidentSettings,
     enabled: !!profileResponse?.user?.organizationId && (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"),
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 

@@ -298,7 +298,8 @@ export default function Dashboard() {
       }
       return response.json();
     },
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
 
@@ -328,7 +329,8 @@ export default function Dashboard() {
       queryClient.setQueryData(['/api/integrations'], integrations);
       return { repositories: data.repositories ?? [], integrations };
     },
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
   const repositories = reposAndIntegrations?.repositories ?? [];

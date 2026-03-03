@@ -188,7 +188,8 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       queryClient.setQueryData(['/api/integrations'], integrations);
       return { repositories: data.repositories ?? [], integrations };
     },
-    refetchInterval: 45_000,
+    refetchInterval: 25_000,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: true,
   });
   const repositories = reposAndIntegrations?.repositories ?? [];
