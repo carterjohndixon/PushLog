@@ -6,12 +6,13 @@ import { ThemeProvider } from "./lib/theme";
 
 // Client-side Sentry (set VITE_SENTRY_DSN to override or disable)
 const dsn = import.meta.env.VITE_SENTRY_DSN ?? "https://76dff591029ab7f40572c74af67aa470@o4510881753137152.ingest.us.sentry.io/4510881854521344";
+const release = import.meta.env.VITE_SENTRY_RELEASE;
 if (dsn) {
   Sentry.init({
     dsn,
     tunnel: "/api/sentry/tunnel", // Proxy via our server — avoids ad-blockers
     // Must match the release used when uploading source maps (set in CI via VITE_SENTRY_RELEASE)
-    ...(import.meta.env.VITE_SENTRY_RELEASE && { release: import.meta.env.VITE_SENTRY_RELEASE }),
+    ...(release && { release }),
     enableLogs: true,
     ignoreErrors: [
       // Chunk load failures during deploys — stale app requests old chunk URLs; we auto-reload
@@ -34,6 +35,10 @@ if (dsn) {
       return event;
     },
   });
+  // Debug: on staging, open console and type __SENTRY_DEBUG__ to see what release is being sent
+  if (typeof window !== "undefined") {
+    (window as unknown as { __SENTRY_DEBUG__?: { release: string | undefined } }).__SENTRY_DEBUG__ = { release: release || undefined };
+  }
 }
 
 createRoot(document.getElementById("root")!).render(
