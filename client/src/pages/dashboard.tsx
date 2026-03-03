@@ -1371,6 +1371,7 @@ export default function Dashboard() {
         open={isRepoModalOpen}
         onOpenChange={setIsRepoModalOpen}
         onRepositorySelect={handleRepositorySelect}
+        showReconnectBanner={canManageRepos}
       />
 
       <IntegrationSetupModal

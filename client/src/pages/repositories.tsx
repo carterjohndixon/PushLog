@@ -715,7 +715,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
           <p className="text-steel-gray mt-2">Connect and manage your GitHub repositories for monitoring</p>
         </div>
 
-        {requiresGitHubReconnect && (
+        {requiresGitHubReconnect && (canManageRepos || repositories.length === 0) && (
           <div className="mb-6 p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100">
             <p className="font-medium">GitHub connection needed to see all repos and add new ones</p>
             <p className="text-sm mt-1">Reconnect your GitHub account to list all repositories and connect new ones.</p>
@@ -1066,6 +1066,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
         open={isRepoModalOpen}
         onOpenChange={setIsRepoModalOpen}
         onRepositorySelect={handleRepositorySelect}
+        showReconnectBanner={canManageRepos}
       />
 
       <RepositorySettingsModal

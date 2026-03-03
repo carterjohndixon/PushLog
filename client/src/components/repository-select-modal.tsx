@@ -47,12 +47,15 @@ interface RepositorySelectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onRepositorySelect: (repository: RepositoryCardData) => void;
+  /** When false (e.g. developer/viewer), hide the "reconnect GitHub" banner; they rely on owner/admin's repos. */
+  showReconnectBanner?: boolean;
 }
 
 export function RepositorySelectModal({
   open,
   onOpenChange,
   onRepositorySelect,
+  showReconnectBanner = true,
 }: RepositorySelectModalProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
@@ -180,7 +183,7 @@ export function RepositorySelectModal({
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
-          {requiresGitHubReconnect && !error ? (
+          {requiresGitHubReconnect && showReconnectBanner && !error ? (
             <div className="flex flex-col items-center justify-center space-y-4 p-6">
               <Github className="w-12 h-12 text-gray-400" />
               <p className="text-center text-gray-600">
