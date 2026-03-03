@@ -5,6 +5,9 @@
 #   STAGING_EC2_HOST     — EC2 hostname or IP (e.g. ec2-xx-xx-xx-xx.compute.amazonaws.com)
 #   STAGING_EC2_SSH_KEY  — Private key for ec2-user (paste the whole key including -----BEGIN ... -----END-----)
 #
+# Optional (for frontend source maps in Sentry):
+#   SENTRY_AUTH_TOKEN    — Sentry auth token (Release: Admin, Project: Read & Write) so npm run build uploads source maps
+#
 # If your repo path on EC2 is not /home/ec2-user/pushlog, set:
 #   STAGING_EC2_REPO_PATH — e.g. /home/ec2-user/pushlog
 
@@ -38,6 +41,9 @@ jobs:
             echo "[2/5] git fetch origin && git merge origin/main"
             git fetch origin && git merge origin/main
             echo "[3/5] ./scripts/build-for-docker.sh (this can take 10–20 min)..."
+            export SENTRY_ORG=pushlog
+            export SENTRY_PROJECT=pushlog
+            export SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}"
             ./scripts/build-for-docker.sh
             echo "[4/5] docker compose up -d --build..."
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build

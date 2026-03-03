@@ -1009,6 +1009,16 @@ export default function Settings() {
                       >
                         Throw real error
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-red-500/50 text-red-700 dark:text-red-400"
+                        onClick={() => {
+                          throw new Error("Test frontent source map from app code");
+                        }}
+                      >
+                        Test source map (DEV ONLY)
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). Sentry captures → alert → webhook → notification. Add "issue seen more than 0 times" in Sentry to get a notification every test.
