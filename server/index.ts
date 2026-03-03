@@ -73,10 +73,17 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', true);
 }
 
+// Use SSL only for remote DBs that support it (e.g. Supabase). Local Docker Postgres does not.
+const databaseUrl = process.env.DATABASE_URL;
+const useDbSsl =
+  process.env.DATABASE_SSL === "true" ||
+  process.env.DATABASE_SSL === "1" ||
+  (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl));
+
 // Create PostgreSQL pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  connectionString: databaseUrl,
+  ...(useDbSsl && { ssl: { rejectUnauthorized: false } }),
 });
 
 // Configure session store

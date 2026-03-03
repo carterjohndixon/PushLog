@@ -23,8 +23,14 @@ if (!connectionString) {
   process.exit(1);
 }
 
+// Use SSL only when connecting to Supabase (or DATABASE_SSL=true). Local Docker does not support SSL.
+const useSsl =
+  process.env.DATABASE_SSL === "true" ||
+  process.env.DATABASE_SSL === "1" ||
+  /supabase\.(co|com)/i.test(connectionString);
+
 const sql = postgres(connectionString, {
-  ssl: { rejectUnauthorized: false },
+  ...(useSsl && { ssl: { rejectUnauthorized: false } }),
 });
 
 // Utility functions

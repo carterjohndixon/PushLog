@@ -76,16 +76,30 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
+// Use SSL only for remote DBs that support it (e.g. Supabase). Local Docker Postgres does not.
+const useSsl =
+  process.env.DATABASE_SSL === "true" ||
+  process.env.DATABASE_SSL === "1" ||
+  /supabase\.(co|com)/i.test(connectionString);
+
 const client = postgres(connectionString, {
-  ssl: { rejectUnauthorized: false },
+  ...(useSsl && { ssl: { rejectUnauthorized: false } }),
 });
 const db = drizzle(client);
 
 // Optional second connection for dual-write to production (e.g. staging app writes to prod DB too).
-const prodConnectionString = process.env.DATABASE_URL?.trim();
+const prodConnectionString = process.env.PROD_DATABASE_URL?.trim();
 const prodDb =
   prodConnectionString && prodConnectionString !== connectionString
-    ? drizzle(postgres(prodConnectionString, { ssl: { rejectUnauthorized: false } }))
+    ? drizzle(
+        postgres(prodConnectionString, {
+          ...((process.env.PROD_DATABASE_SSL === "true" ||
+            process.env.PROD_DATABASE_SSL === "1" ||
+            /supabase\.(co|com)/i.test(prodConnectionString)) && {
+            ssl: { rejectUnauthorized: false },
+          }),
+        })
+      )
     : null;
 
 // Helper function to convert Drizzle's inferred type to our User type
