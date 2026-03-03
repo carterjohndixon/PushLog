@@ -83,21 +83,23 @@ const useSsl =
   /supabase\.(co|com)/i.test(connectionString);
 
 const client = postgres(connectionString, {
-  ...(useSsl && { ssl: { rejectUnauthorized: false } }),
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
 const db = drizzle(client);
 
 // Optional second connection for dual-write to production (e.g. staging app writes to prod DB too).
 const prodConnectionString = process.env.PROD_DATABASE_URL?.trim();
+const prodUseSsl =
+  prodConnectionString &&
+  (process.env.PROD_DATABASE_SSL === "true" ||
+    process.env.PROD_DATABASE_SSL === "1" ||
+    /supabase\.(co|com)/i.test(prodConnectionString));
+
 const prodDb =
   prodConnectionString && prodConnectionString !== connectionString
     ? drizzle(
         postgres(prodConnectionString, {
-          ...((process.env.PROD_DATABASE_SSL === "true" ||
-            process.env.PROD_DATABASE_SSL === "1" ||
-            /supabase\.(co|com)/i.test(prodConnectionString)) && {
-            ssl: { rejectUnauthorized: false },
-          }),
+          ssl: prodUseSsl ? { rejectUnauthorized: false } : false,
         })
       )
     : null;

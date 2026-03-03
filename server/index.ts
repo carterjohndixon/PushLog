@@ -80,10 +80,10 @@ const useDbSsl =
   process.env.DATABASE_SSL === "1" ||
   (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl));
 
-// Create PostgreSQL pool
+// Create PostgreSQL pool (rejectUnauthorized: false accepts Supabase's certificate chain)
 const pool = new Pool({
   connectionString: databaseUrl,
-  ...(useDbSsl && { ssl: { rejectUnauthorized: false } }),
+  ssl: useDbSsl ? { rejectUnauthorized: false } : false,
 });
 
 // Configure session store

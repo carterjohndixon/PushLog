@@ -1,62 +1,127 @@
-export default {
+// /var/www/pushlog/ecosystem.config.cjs
+// PM2 + Node apps can use env_file reliably, but your Rust binary (streaming-stats)
+// is not receiving env_file vars. So we READ the env files ourselves and inject
+// DATABASE_URL explicitly for streaming-stats prod/staging.
+
+const fs = require("fs");
+const path = require("path");
+
+function readEnvFile(filePath) {
+  const abs = path.resolve(__dirname, filePath);
+  const out = {};
+  const text = fs.readFileSync(abs, "utf8");
+
+  for (const rawLine of text.split("\n")) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+
+    // Strip optional surrounding quotes
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+
+    out[key] = val;
+  }
+
+  return out;
+}
+
+const prodEnv = readEnvFile(".env.production");
+const stagingEnv = readEnvFile(".env.staging");
+
+if (!prodEnv.DATABASE_URL) {
+  console.error("ERROR: .env.production is missing DATABASE_URL");
+}
+if (!stagingEnv.DATABASE_URL) {
+  console.error("ERROR: .env.staging is missing DATABASE_URL");
+}
+
+module.exports = {
   apps: [
+    // -------------------------
+    // PushLog API / Web (PROD)
+    // -------------------------
     {
       name: "pushlog-prod",
+      cwd: "/var/www/pushlog",
       script: "./dist/index.js",
       instances: 1,
       exec_mode: "cluster",
+      autorestart: true,
       env_file: ".env.production",
       env: {
         NODE_ENV: "production",
         APP_ENV: "production",
-        // Must not be 3001 (staging). Use 3000 so nginx can proxy pushlog.ai to this port.
-        PORT: "3000",
-      },
-      error_file: "./logs/prod-err.log",
-      out_file: "./logs/prod-out.log",
-      log_file: "./logs/prod-combined.log",
-      time: true,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      restart_delay: 4000,
-      max_restarts: 10,
-      min_uptime: "10s",
+        PORT: 3000,
+
+        // Prefer IPv4 when DNS returns AAAA first (prevents ENETUNREACH in IPv4-only VPCs)
+        NODE_OPTIONS: "--dns-result-order=ipv4first"
+      }
     },
+
+    // -------------------------
+    // PushLog API / Web (STAGING)
+    // -------------------------
     {
       name: "pushlog-staging",
+      cwd: "/var/www/pushlog",
       script: "./dist/index.js",
       instances: 1,
       exec_mode: "cluster",
+      autorestart: true,
       env_file: ".env.staging",
       env: {
         NODE_ENV: "production",
         APP_ENV: "staging",
         PORT: 3001,
-      },
-      error_file: "./logs/staging-err.log",
-      out_file: "./logs/staging-out.log",
-      log_file: "./logs/staging-combined.log",
-      time: true,
-      autorestart: true,
-      watch: false,
-      max_memory_restart: "1G",
-      restart_delay: 4000,
-      max_restarts: 10,
-      min_uptime: "10s",
+
+        NODE_OPTIONS: "--dns-result-order=ipv4first"
+      }
     },
+
+    // -------------------------
+    // Streaming Stats (PROD)
+    // Inject DATABASE_URL explicitly so Rust always receives it.
+    // -------------------------
     {
-      name: "streaming-stats",
+      name: "streaming-stats-prod",
+      cwd: "/var/www/pushlog",
       script: "./target/release/streaming-stats",
-      cwd: ".",
+      exec_mode: "fork",
       instances: 1,
       autorestart: true,
       env: {
+        APP_ENV: "production",
         PORT: "5004",
-      },
-      env_file: ".env",
-      error_file: "./logs/stats-err.log",
-      out_file: "./logs/stats-out.log",
+        DATABASE_URL: prodEnv.DATABASE_URL
+      }
     },
-  ],
+
+    // -------------------------
+    // Streaming Stats (STAGING)
+    // Inject DATABASE_URL explicitly so Rust always receives it.
+    // -------------------------
+    {
+      name: "streaming-stats-staging",
+      cwd: "/var/www/pushlog",
+      script: "./target/release/streaming-stats",
+      exec_mode: "fork",
+      instances: 1,
+      autorestart: true,
+      env: {
+        APP_ENV: "staging",
+        PORT: "5005",
+        DATABASE_URL: stagingEnv.DATABASE_URL
+      }
+    }
+  ]
 };
