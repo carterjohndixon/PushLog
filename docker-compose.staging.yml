@@ -21,6 +21,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
+        SENTRY_ORG: ${SENTRY_ORG}
+        SENTRY_PROJECT: ${SENTRY_PROJECT}
     container_name: pushlog-staging-app
     restart: unless-stopped
     depends_on:
