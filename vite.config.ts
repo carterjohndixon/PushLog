@@ -18,7 +18,7 @@ export default defineConfig({
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       disable: !process.env.SENTRY_AUTH_TOKEN,
-      debug: true, // Log upload/release to verify source maps; set to false to reduce noise
+      debug: false, // Log upload/release to verify source maps; set to false to reduce noise
       release: {
         name: process.env.SENTRY_RELEASE,
       },
