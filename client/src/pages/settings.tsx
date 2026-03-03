@@ -498,8 +498,8 @@ export default function Settings() {
                       <ul className="text-sm space-y-1.5 text-muted-foreground">
                         <li><strong className="text-foreground">Owner</strong> — Full control: manage repos, integrations, invites, change member roles, and delete the organization.</li>
                         <li><strong className="text-foreground">Admin</strong> — Same as owner for day-to-day use: manage repos, integrations, and invite members. Cannot delete the organization.</li>
-                        <li><strong className="text-foreground">Developer</strong> — Use connected repos and integrations; view push events and notifications. Cannot invite others or change settings.</li>
-                        <li><strong className="text-foreground">Viewer</strong> — Read-only access. Cannot add repos, edit integrations, or invite. Excluded from incident notification pool.</li>
+                        <li><strong className="text-foreground">Developer</strong> — Use and configure repos they have access to: create and edit integrations, change repo settings (branch, critical paths, pause/resume). Cannot add or remove org repos, manage per-repo team, or invite.</li>
+                        <li><strong className="text-foreground">Viewer</strong> — Read-only: can see repos, push events, and notifications they have access to. Cannot add repos, create or edit integrations, or change any settings. Excluded from incident notifications unless &quot;Include viewers&quot; is enabled.</li>
                       </ul>
                     </div>
                   )}

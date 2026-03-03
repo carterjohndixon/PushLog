@@ -55,9 +55,10 @@ interface IntegrationCardProps {
   togglePending: boolean;
   deletePending: boolean;
   canManageRepos?: boolean;
+  canManageIntegrations?: boolean;
 }
 
-function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending, canManageRepos = false }: IntegrationCardProps) {
+function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePending, deletePending, canManageRepos = false, canManageIntegrations = false }: IntegrationCardProps) {
   return (
     <Card className="card-lift hover:shadow-md transition-shadow">
       <CardContent className="p-6">
@@ -88,7 +89,7 @@ function IntegrationCard({ integration, onToggle, onSettings, onDelete, togglePe
           </div>
           <div className="flex items-center justify-between mt-auto">
             <div className="flex items-center space-x-2">
-              {canManageRepos && (
+              {canManageIntegrations && (
               <>
               <Button
                 size="sm"
@@ -155,6 +156,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   });
   const userProfile = profileResponse?.user ?? userProfileProp;
   const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
+  const canManageIntegrations = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin" || userProfile.role === "developer");
   const { toast } = useToast();
 
   // Single request for repos + integrations (faster load); also populate separate caches for other components
@@ -412,7 +414,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                 {integrationsLoading ? "Loading..." : "Manage your GitHub to Slack integrations"}
               </p>
             </div>
-            {canManageRepos && (
+            {canManageIntegrations && (
             <Button 
               onClick={() => setIsIntegrationModalOpen(true)}
               variant="glow"
@@ -626,6 +628,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
@@ -640,7 +643,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                       : "Get started by creating your first integration."
                     }
                   </p>
-                  {canManageRepos && !searchTerm && statusFilter === "all" && (
+                  {canManageIntegrations && !searchTerm && statusFilter === "all" && (
                     <Button 
                       onClick={() => setIsIntegrationModalOpen(true)}
                       variant="glow"
@@ -668,6 +671,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
@@ -695,6 +699,7 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
                     togglePending={toggleIntegrationMutation.isPending}
                     deletePending={deleteIntegrationMutation.isPending}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>

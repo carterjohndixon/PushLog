@@ -39,9 +39,18 @@ export function requireOrgRole(allowedRoles: OrgRole[]) {
 
 /**
  * Whether the given role can manage repos/integrations (create, edit, delete).
+ * Owner/admin: all org repos. Developer: only repos they have access to (enforced per-route).
  */
 export function canManageRepos(role: OrgRole): boolean {
   return role === "owner" || role === "admin";
+}
+
+/**
+ * Whether the given role can manage integrations and repo-level settings (for repos they're on).
+ * Viewer cannot; developer can (with repo-access check per route).
+ */
+export function canManageIntegrations(role: OrgRole): boolean {
+  return role === "owner" || role === "admin" || role === "developer";
 }
 
 /**

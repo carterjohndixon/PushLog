@@ -953,6 +953,12 @@ export class DatabaseStorage implements IStorage {
     return combined;
   }
 
+  /** True if this user can access the repository (for developer role: must be on repo team or repo has no team). */
+  async userHasAccessToRepository(userId: string, repositoryId: string): Promise<boolean> {
+    const repos = await this.getRepositoriesByUserId(userId);
+    return repos.some((r) => r.id === repositoryId);
+  }
+
   async getRepositoryByGithubId(githubId: string): Promise<Repository | undefined> {
     const result = await db.select().from(repositories).where(eq(repositories.githubId, githubId)).limit(1);
     return result[0] as any;

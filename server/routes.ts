@@ -10,7 +10,7 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 import { authenticateToken, requireEmailVerification, requireMfaPendingSession, getSessionUserWithOrg } from './middleware/auth';
-import { requireOrgMember, requireOrgRole } from './middleware/orgAuth';
+import { requireOrgMember, requireOrgRole, canManageIntegrations } from './middleware/orgAuth';
 import {
   isProductionDeployConfigured,
   requestProductionPromote,
@@ -3470,15 +3470,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update repository
+  // Update repository (owner/admin: any org repo; developer: repos they have access to; viewer: no)
   app.patch("/api/repositories/:id", [
     body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
     body('monitorAllBranches').optional().isBoolean().withMessage('monitorAllBranches must be a boolean'),
     body('criticalPaths').optional().isArray().withMessage('criticalPaths must be an array'),
     body('criticalPaths.*').optional().isString().trim().isLength({ max: 256 }).withMessage('each critical path must be a string'),
     body('incidentServiceName').optional({ nullable: true }).custom((v) => v === null || v === undefined || (typeof v === 'string' && v.length <= 128)).withMessage('incidentServiceName must be a string up to 128 chars or null')
-  ], authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req: any, res: any) => {
+  ], authenticateToken, requireOrgMember, async (req: any, res: any) => {
     try {
+      const role = (req.user as any)?.role ?? "viewer";
+      if (!canManageIntegrations(role)) {
+        return res.status(403).json({ error: "Viewers cannot edit repository settings" });
+      }
+
       // Validate input
       const errors = validationResult(req);
       if (!errors.isEmpty()) {
@@ -3508,15 +3513,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // First verify user owns this repository or is org admin/owner
       const existingRepository = await storage.getRepository(repositoryId);
       if (!existingRepository) {
         return res.status(404).json({ error: "Repository not found" });
       }
 
       const orgId = (req.user as any).organizationId;
+      const isOwnerOrAdmin = role === "owner" || role === "admin";
       const canManage = existingRepository.userId === req.user!.userId
-        || (orgId && (existingRepository as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+        || (orgId && (existingRepository as any).organizationId === orgId && isOwnerOrAdmin)
+        || (role === "developer" && orgId && (await databaseStorage.userHasAccessToRepository(req.user!.userId, repositoryId)));
       if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
@@ -3528,15 +3534,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (updates.isActive !== undefined) {
-        const userId = req.user?.userId;
-        if (userId) {
-          const userIntegrations = await storage.getIntegrationsByUserId(userId);
-          const relatedIntegrations = userIntegrations.filter(integration => integration.repositoryId === repositoryId);
-          for (const integration of relatedIntegrations) {
-            await storage.updateIntegration(integration.id, {
-              isActive: updates.isActive as boolean,
-            });
-          }
+        const relatedIntegrations = await storage.getIntegrationsByRepositoryId(repositoryId);
+        for (const integration of relatedIntegrations) {
+          await storage.updateIntegration(integration.id, {
+            isActive: updates.isActive as boolean,
+          });
         }
       }
 
@@ -3781,10 +3783,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create integration
-  app.post("/api/integrations", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+  // Create integration (owner/admin: any org repo; developer: repos they have access to; viewer: no)
+  app.post("/api/integrations", authenticateToken, requireOrgMember, async (req, res) => {
     try {
       const userId = req.user!.userId;
+      const role = (req.user as any)?.role ?? "viewer";
+      if (!canManageIntegrations(role)) {
+        return res.status(403).json({ error: "Viewers cannot create integrations" });
+      }
+
       // Coerce numeric fields so string IDs from JSON/forms don't fail validation
       const body = req.body as Record<string, unknown>;
       const coercedBody = {
@@ -3795,15 +3802,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
       const validatedData = insertIntegrationSchema.parse(coercedBody);
       
-      // Ensure repository exists and belongs to the user's org
+      // Ensure repository exists and user has access (org member with repo access, or owner/admin)
       const repository = await storage.getRepository(validatedData.repositoryId);
       if (!repository) {
         return res.status(404).json({ error: "Repository not found", details: "The selected repository does not exist." });
       }
       const orgId = (req.user as any).organizationId;
+      const isOwnerOrAdmin = role === "owner" || role === "admin";
       const repoInOrg = orgId && (repository as any).organizationId === orgId;
       const repoOwnedByUser = repository.userId === userId;
+      const developerHasAccess = role === "developer" && repoInOrg && (await databaseStorage.userHasAccessToRepository(userId, validatedData.repositoryId));
       if (!repoInOrg && !repoOwnedByUser) {
+        return res.status(403).json({ error: "Access denied", details: "You do not have access to this repository." });
+      }
+      if (repoInOrg && !isOwnerOrAdmin && !developerHasAccess) {
         return res.status(403).json({ error: "Access denied", details: "You do not have access to this repository." });
       }
 
@@ -4095,9 +4107,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update integration
-  app.patch("/api/integrations/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+  // Update integration (owner/admin: any; developer: integrations for repos they have access to; viewer: no)
+  app.patch("/api/integrations/:id", authenticateToken, requireOrgMember, async (req, res) => {
     try {
+      const role = (req.user as any)?.role ?? "viewer";
+      if (!canManageIntegrations(role)) {
+        return res.status(403).json({ error: "Viewers cannot edit integrations" });
+      }
+
       const integrationId = req.params.id;
       const updates = { ...req.body };
       
@@ -4109,15 +4126,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       
-      // First verify user owns this integration
       const existingIntegration = await storage.getIntegration(integrationId);
       if (!existingIntegration) {
         return res.status(404).json({ error: "Integration not found" });
       }
 
       const orgId = (req.user as any).organizationId;
+      const isOwnerOrAdmin = role === "owner" || role === "admin";
       const canManage = existingIntegration.userId === req.user!.userId
-        || (orgId && (existingIntegration as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+        || (orgId && (existingIntegration as any).organizationId === orgId && isOwnerOrAdmin)
+        || (role === "developer" && orgId && (await databaseStorage.userHasAccessToRepository(req.user!.userId, existingIntegration.repositoryId)));
       if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }
@@ -5197,20 +5215,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Delete integration
-  app.delete("/api/integrations/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+  // Delete integration (owner/admin: any; developer: integrations for repos they have access to; viewer: no)
+  app.delete("/api/integrations/:id", authenticateToken, requireOrgMember, async (req, res) => {
     try {
+      const role = (req.user as any)?.role ?? "viewer";
+      if (!canManageIntegrations(role)) {
+        return res.status(403).json({ error: "Viewers cannot delete integrations" });
+      }
+
       const integrationId = req.params.id;
 
-      // First get the integration to verify ownership
       const integration = await storage.getIntegration(integrationId);
       if (!integration) {
         return res.status(404).json({ error: "Integration not found" });
       }
 
       const orgId = (req.user as any).organizationId;
+      const isOwnerOrAdmin = role === "owner" || role === "admin";
       const canManage = integration.userId === req.user!.userId
-        || (orgId && (integration as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
+        || (orgId && (integration as any).organizationId === orgId && isOwnerOrAdmin)
+        || (role === "developer" && orgId && (await databaseStorage.userHasAccessToRepository(req.user!.userId, integration.repositoryId)));
       if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
       }

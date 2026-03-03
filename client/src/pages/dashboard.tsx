@@ -265,6 +265,7 @@ export default function Dashboard() {
   const userProfile = profileResponse?.user;
 
   const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
+  const canManageIntegrations = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin" || userProfile.role === "developer");
 
   // If user landed here after signup with a pending org invite (e.g. OAuth sent them to dashboard), send them to join flow
   useEffect(() => {
@@ -1032,6 +1033,18 @@ export default function Dashboard() {
                             <Badge variant={badgeVariant} className="text-xs">
                               {statusText}
                             </Badge>
+                            {(canManageIntegrations || canManageRepos) && (
+                            <>
+                            {canManageIntegrations && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRepositorySettings(repo)}
+                              className="text-muted-foreground hover:text-foreground"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </Button>
+                            )}
                             {canManageRepos && (
                             <>
                             <Button
@@ -1046,20 +1059,14 @@ export default function Dashboard() {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => handleRepositorySettings(repo)}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
                               onClick={() => handleDeleteRepository(repo)}
                               disabled={deleteRepositoryMutation.isPending}
                               className="text-destructive hover:text-destructive hover:bg-destructive/10"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
+                            </>
+                            )}
                             </>
                             )}
                           </div>
@@ -1104,7 +1111,7 @@ export default function Dashboard() {
                       View All
                     </Button>
                   </Link>
-                  {canManageRepos && (
+                  {canManageIntegrations && (
                   <Button 
                     size="sm" 
                     variant="glow"
@@ -1169,7 +1176,7 @@ export default function Dashboard() {
                         >
                           {integration.status === 'active' ? 'Active' : 'Paused'}
                         </Badge>
-                        {canManageRepos && (
+                        {canManageIntegrations && (
                         <>
                         <Button
                           size="sm"
@@ -1241,6 +1248,7 @@ export default function Dashboard() {
                       )}
                       <div className="space-y-3">
                         <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          {canManageIntegrations && (
                           <Button
                             onClick={() => setIsIntegrationModalOpen(true)}
                             variant="glow"
@@ -1249,6 +1257,7 @@ export default function Dashboard() {
                             <Plus className="w-4 h-4 mr-2" />
                             Create Integration
                           </Button>
+                          )}
                           <Button
                             onClick={handleSlackConnect}
                             variant="outline"
@@ -1289,6 +1298,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {canManageIntegrations && (
               <Button
                 variant="outline"
                 className="flex items-center justify-center space-x-2 p-6 h-auto hover:bg-muted hover:border-log-green transition-colors"
@@ -1297,6 +1307,7 @@ export default function Dashboard() {
                 <Plus className="w-5 h-5 text-log-green" />
                 <span>Set Up New Integration</span>
               </Button>
+              )}
               
               <Link href="/analytics" className="block h-full">
               <Button 

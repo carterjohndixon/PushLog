@@ -78,6 +78,8 @@ export interface IStorage {
   /** Per-repo team: user IDs who have access. Empty = all org members. */
   getRepositoryMemberUserIds(repositoryId: string): Promise<string[]>;
   setRepositoryMembers(repositoryId: string, userIds: string[]): Promise<void>;
+  /** True if user can access this repo (for developer permission checks). */
+  userHasAccessToRepository(userId: string, repositoryId: string): Promise<boolean>;
   /** All repo-member rows for repos in this org (for incident targeting). */
   getRepositoryMembersForOrganization(organizationId: string): Promise<{ repositoryId: string; userId: string }[]>;
 
@@ -357,6 +359,11 @@ export class MemStorage implements IStorage {
 
   async setRepositoryMembers(_repositoryId: string, _userIds: string[]): Promise<void> {
     // no-op for MemStorage
+  }
+
+  async userHasAccessToRepository(userId: string, repositoryId: string): Promise<boolean> {
+    const repos = await this.getRepositoriesByUserId(userId);
+    return repos.some((r) => r.id === repositoryId);
   }
 
   async getRepositoryMembersForOrganization(_organizationId: string): Promise<{ repositoryId: string; userId: string }[]> {

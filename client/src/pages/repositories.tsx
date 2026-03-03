@@ -82,6 +82,7 @@ interface RepositoryCardProps {
   deleteRepositoryIsPending: boolean;
   getRepositoryEvents: (repository: RepositoryCardData) => { count: number; events: any[] };
   canManageRepos?: boolean;
+  canManageIntegrations?: boolean;
 }
 
 const RepositoryCard = ({
@@ -101,6 +102,7 @@ const RepositoryCard = ({
   deleteRepositoryIsPending,
   getRepositoryEvents,
   canManageRepos = true,
+  canManageIntegrations = true,
 }: RepositoryCardProps) => {
   const repoHasIntegration = integrations?.some(
     (integration) => integration.repositoryId === repository.id
@@ -264,8 +266,10 @@ const RepositoryCard = ({
             }
           </div>
           
-          {canManageRepos && (
+          {(canManageRepos || canManageIntegrations) && (
           <div className="flex items-center space-x-1">
+            {canManageIntegrations && (
+            <>
             <Button
               size="sm"
               variant="ghost"
@@ -279,7 +283,6 @@ const RepositoryCard = ({
                 <Play className="w-4 h-4" />
               )}
             </Button>
-            
             <Button
               size="sm"
               variant="ghost"
@@ -288,8 +291,9 @@ const RepositoryCard = ({
             >
               <Settings className="w-4 h-4" />
             </Button>
-            
-            {handleRepositoryTeam && (
+            </>
+            )}
+            {canManageRepos && handleRepositoryTeam && (
             <Button
               size="sm"
               variant="ghost"
@@ -300,7 +304,7 @@ const RepositoryCard = ({
               <Users className="w-4 h-4" />
             </Button>
             )}
-            
+            {canManageRepos && (
             <Button
               size="sm"
               variant="ghost"
@@ -310,6 +314,7 @@ const RepositoryCard = ({
             >
               <Trash2 className="w-4 h-4" />
             </Button>
+            )}
           </div>
           )}
         </div>
@@ -336,6 +341,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   const [connectingRepoId, setConnectingRepoId] = useState<string | null>(null);
 
   const canManageRepos = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin");
+  const canManageIntegrations = !!userProfile && (userProfile.role === "owner" || userProfile.role === "admin" || userProfile.role === "developer");
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -908,6 +914,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
@@ -959,6 +966,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
@@ -995,6 +1003,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
@@ -1031,6 +1040,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
                     canManageRepos={canManageRepos}
+                    canManageIntegrations={canManageIntegrations}
                   />
                 ))}
               </div>
