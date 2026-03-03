@@ -10,7 +10,7 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 import { authenticateToken, requireEmailVerification, requireMfaPendingSession, getSessionUserWithOrg } from './middleware/auth';
-rmport { requireOrgMember, requireOrgRole } from './middleware/orgAuth';
+import { requireOrgMember, requireOrgRole } from './middleware/orgAuth';
 import {
   isProductionDeployConfigured,
   requestProductionPromote,
