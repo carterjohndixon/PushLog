@@ -23,7 +23,9 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const sql = postgres(connectionString);
+const sql = postgres(connectionString, {
+  ssl: { rejectUnauthorized: false },
+});
 
 // Utility functions
 function log(message, data = null) {

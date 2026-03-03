@@ -76,14 +76,16 @@ if (!connectionString) {
   throw new Error("DATABASE_URL environment variable is required");
 }
 
-const client = postgres(connectionString);
+const client = postgres(connectionString, {
+  ssl: { rejectUnauthorized: false },
+});
 const db = drizzle(client);
 
 // Optional second connection for dual-write to production (e.g. staging app writes to prod DB too).
 const prodConnectionString = process.env.DATABASE_URL?.trim();
 const prodDb =
   prodConnectionString && prodConnectionString !== connectionString
-    ? drizzle(postgres(prodConnectionString))
+    ? drizzle(postgres(prodConnectionString, { ssl: { rejectUnauthorized: false } }))
     : null;
 
 // Helper function to convert Drizzle's inferred type to our User type

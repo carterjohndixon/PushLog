@@ -19,6 +19,10 @@ export default defineConfig({
       authToken: process.env.SENTRY_AUTH_TOKEN,
       disable: !process.env.SENTRY_AUTH_TOKEN,
       debug: false, // Log upload/release to verify source maps; set to false to reduce noise
+      // If upload fails (e.g. EC2 can't resolve sentry.io), log and continue so deploy still succeeds
+      errorHandler: (err) => {
+        console.warn("[sentry-vite-plugin] Source map upload failed (deploy will continue):", err?.message || err);
+      },
       release: {
         name: process.env.SENTRY_RELEASE,
       },

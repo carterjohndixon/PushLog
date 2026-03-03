@@ -75,7 +75,8 @@ if (process.env.NODE_ENV === 'production') {
 
 // Create PostgreSQL pool
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
 });
 
 // Configure session store
