@@ -44,6 +44,14 @@ if (!prodEnv.DATABASE_URL) {
 if (!stagingEnv.DATABASE_URL) {
   console.error("ERROR: .env.staging is missing DATABASE_URL");
 }
+// streaming-stats + Supabase: Rust/sqlx requires the CA cert; without it the process will error in a loop
+if (prodEnv.DATABASE_URL && /supabase\.(co|com)/i.test(prodEnv.DATABASE_URL) && !prodEnv.DATABASE_SSL_CA_PATH) {
+  console.error(
+    "WARNING: .env.production has Supabase DATABASE_URL but no DATABASE_SSL_CA_PATH. " +
+    "streaming-stats-prod will keep failing until you add the Supabase DB cert path. " +
+    "Download cert from Supabase Dashboard → Project Settings → Database, save e.g. to /var/www/pushlog/config/supabase-db.crt, set DATABASE_SSL_CA_PATH in .env.production."
+  );
+}
 
 module.exports = {
   apps: [

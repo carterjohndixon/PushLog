@@ -8,6 +8,8 @@ use tower_http::cors::CorsLayer;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use streaming_stats::AppState;
 
+const SUPABASE_SSL_HINT: &str = "\n\nFor Supabase: download the DB certificate from Project Settings → Database, save it on the server (e.g. /var/www/pushlog/config/supabase-db.crt), and set DATABASE_SSL_CA_PATH to that path in .env.production.";
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -17,11 +19,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("PORT must be a valid u16");
 
   // When connecting to Supabase (or DATABASE_SSL_CA_PATH set), use SSL.
-  // If DATABASE_SSL_CA_PATH is set, use that cert to verify; otherwise SSL is used with default verification
-  // (which can fail with "self-signed certificate" — then set DATABASE_SSL_CA_PATH to the Supabase cert path).
+  // If DATABASE_SSL_CA_PATH is set, use that cert to verify; otherwise SSL uses default verification,
+  // which fails with Supabase's cert — set DATABASE_SSL_CA_PATH to the Supabase DB cert path.
   let use_ssl = database_url.contains("supabase")
     || std::env::var("DATABASE_SSL_CA_PATH").is_ok();
   let ssl_ca_path = std::env::var("DATABASE_SSL_CA_PATH").ok();
+
+  if database_url.contains("supabase") && ssl_ca_path.is_none() {
+    eprintln!(
+      "streaming-stats: DATABASE_SSL_CA_PATH is not set. Supabase SSL will likely fail.{}",
+      SUPABASE_SSL_HINT
+    );
+  }
 
   let mut opts: PgConnectOptions = database_url.parse()?;
   if use_ssl {
@@ -30,9 +39,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
       opts = opts.ssl_root_cert(path.as_str());
     }
   }
-  let pool = PgPoolOptions::new()
-    .connect_with(opts)
-    .await?;
+
+  let pool = match PgPoolOptions::new().connect_with(opts).await {
+    Ok(p) => p,
+    Err(e) => {
+      let msg = e.to_string();
+      let hint = if msg.contains("certificate") || msg.contains("self-signed") || msg.contains("verify") {
+        SUPABASE_SSL_HINT
+      } else {
+        ""
+      };
+      eprintln!("streaming-stats: database connection failed: {}{}", msg, hint);
+      return Err(e.into());
+    }
+  };
+
   let state = Arc::new(AppState { pool });
 
   let app = Router::new()

@@ -83,9 +83,24 @@ const useDbSsl =
   (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl)) ||
   (isProduction && databaseUrl && process.env.DATABASE_SSL !== "false");
 
+// pg Pool: when using connectionString, pg merges parsed URL into config and URL's sslmode can
+// overwrite our ssl option. Use sslmode=no-verify in the URL so the parser sets rejectUnauthorized: false.
+function poolConnectionString(url: string, useSsl: boolean): string {
+  if (!useSsl) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set("sslmode", "no-verify");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+const poolConnection = databaseUrl ? poolConnectionString(databaseUrl, useDbSsl) : databaseUrl;
+
 // Create PostgreSQL pool (rejectUnauthorized: false accepts Supabase's certificate chain)
 const pool = new Pool({
-  connectionString: databaseUrl,
+  connectionString: poolConnection || databaseUrl,
   ssl: useDbSsl ? { rejectUnauthorized: false } : false,
 });
 
