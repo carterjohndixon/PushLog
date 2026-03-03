@@ -22,10 +22,13 @@ A lightweight Rust service that maintains real-time aggregate stats in PostgreSQ
 
 ## Config
 
-| Env            | Required | Default | Description       |
-|----------------|----------|---------|-------------------|
-| `DATABASE_URL` | Yes      | —       | PostgreSQL URL    |
-| `PORT`         | No       | 5004    | Listen port       |
+| Env                     | Required | Default | Description                                      |
+|-------------------------|----------|---------|--------------------------------------------------|
+| `DATABASE_URL`          | Yes      | —       | PostgreSQL URL                                   |
+| `PORT`                  | No       | 5004    | Listen port                                      |
+| `DATABASE_SSL_CA_PATH`  | Prod*    | —       | Path to CA cert file (required for Supabase SSL) |
+
+\* When connecting to Supabase, SSL is required. The Rust/sqlx stack does not support “accept invalid cert”; you must provide the Supabase DB certificate so verification succeeds. Set `DATABASE_SSL_CA_PATH` to the path of the cert file on the server (e.g. `/var/www/pushlog/config/supabase-db.crt`).
 
 ## Run
 

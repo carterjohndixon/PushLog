@@ -77,10 +77,13 @@ if (!connectionString) {
 }
 
 // Use SSL only for remote DBs that support it (e.g. Supabase). Local Docker Postgres does not.
+// Default to SSL in production so Supabase works even if DATABASE_SSL isn't set by PM2/env.
+const isProduction = (process.env.APP_ENV || process.env.NODE_ENV) === "production";
 const useSsl =
   process.env.DATABASE_SSL === "true" ||
   process.env.DATABASE_SSL === "1" ||
-  /supabase\.(co|com)/i.test(connectionString);
+  /supabase\.(co|com)/i.test(connectionString) ||
+  (isProduction && process.env.DATABASE_SSL !== "false");
 
 const client = postgres(connectionString, {
   ssl: useSsl ? { rejectUnauthorized: false } : false,

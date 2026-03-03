@@ -74,11 +74,14 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Use SSL only for remote DBs that support it (e.g. Supabase). Local Docker Postgres does not.
+// Default to SSL in production so Supabase works even if DATABASE_SSL isn't set by PM2/env.
 const databaseUrl = process.env.DATABASE_URL;
+const isProduction = (process.env.APP_ENV || process.env.NODE_ENV) === "production";
 const useDbSsl =
   process.env.DATABASE_SSL === "true" ||
   process.env.DATABASE_SSL === "1" ||
-  (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl));
+  (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl)) ||
+  (isProduction && databaseUrl && process.env.DATABASE_SSL !== "false");
 
 // Create PostgreSQL pool (rejectUnauthorized: false accepts Supabase's certificate chain)
 const pool = new Pool({
