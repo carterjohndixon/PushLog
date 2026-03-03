@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use streaming_stats::AppState;
 
 #[tokio::main]
@@ -15,7 +16,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .parse()
     .expect("PORT must be a valid u16");
 
-  let pool = sqlx::PgPool::connect(&database_url).await?;
+  // When connecting to Supabase (or DATABASE_SSL_CA_PATH set), use SSL.
+  // If DATABASE_SSL_CA_PATH is set, use that cert to verify; otherwise SSL is used with default verification
+  // (which can fail with "self-signed certificate" — then set DATABASE_SSL_CA_PATH to the Supabase cert path).
+  let use_ssl = database_url.contains("supabase")
+    || std::env::var("DATABASE_SSL_CA_PATH").is_ok();
+  let ssl_ca_path = std::env::var("DATABASE_SSL_CA_PATH").ok();
+
+  let mut opts: PgConnectOptions = database_url.parse()?;
+  if use_ssl {
+    opts = opts.ssl_mode(PgSslMode::Require);
+    if let Some(ref path) = ssl_ca_path {
+      opts = opts.ssl_root_cert(path.as_str());
+    }
+  }
+  let pool = PgPoolOptions::new()
+    .connect_with(opts)
+    .await?;
   let state = Arc::new(AppState { pool });
 
   let app = Router::new()

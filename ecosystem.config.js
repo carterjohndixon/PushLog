@@ -62,7 +62,8 @@ module.exports = {
         NODE_ENV: "production",
         APP_ENV: "production",
         PORT: 3000,
-
+        // Force SSL for Supabase (avoids "self-signed certificate" when env_file is not merged)
+        DATABASE_SSL: "true",
         // Prefer IPv4 when DNS returns AAAA first (prevents ENETUNREACH in IPv4-only VPCs)
         NODE_OPTIONS: "--dns-result-order=ipv4first"
       }
@@ -90,7 +91,7 @@ module.exports = {
 
     // -------------------------
     // Streaming Stats (PROD)
-    // Inject DATABASE_URL explicitly so Rust always receives it.
+    // Inject DATABASE_URL (and optional DATABASE_SSL_CA_PATH for Supabase) so Rust receives them.
     // -------------------------
     {
       name: "streaming-stats-prod",
@@ -102,7 +103,8 @@ module.exports = {
       env: {
         APP_ENV: "production",
         PORT: "5004",
-        DATABASE_URL: prodEnv.DATABASE_URL
+        DATABASE_URL: prodEnv.DATABASE_URL,
+        ...(prodEnv.DATABASE_SSL_CA_PATH && { DATABASE_SSL_CA_PATH: prodEnv.DATABASE_SSL_CA_PATH })
       }
     },
 
