@@ -297,7 +297,9 @@ export default function Dashboard() {
         throw error;
       }
       return response.json();
-    }
+    },
+    refetchInterval: 45_000,
+    refetchOnWindowFocus: true,
   });
 
   // Single request for repos + integrations (fast dashboard load)
@@ -326,6 +328,8 @@ export default function Dashboard() {
       queryClient.setQueryData(['/api/integrations'], integrations);
       return { repositories: data.repositories ?? [], integrations };
     },
+    refetchInterval: 45_000,
+    refetchOnWindowFocus: true,
   });
   const repositories = reposAndIntegrations?.repositories ?? [];
   const integrations = reposAndIntegrations?.integrations ?? [];
