@@ -3382,6 +3382,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = {
         ...req.body,
         userId,
+        // Tie repo to org so all org members see it by default (no per-repo team = visible to everyone)
         organizationId: (req.user as any).organizationId ?? undefined,
         githubId: req.body.githubId != null ? String(req.body.githubId) : undefined,
       };
@@ -3904,7 +3905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get user integrations (single round-trip: integrations + repos in parallel, enrich in memory — no N+1)
+  // Get user integrations (filtered by repos the user can see — all org members see org repos by default; per-repo team restricts)
   app.get("/api/integrations", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
@@ -3914,16 +3915,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const user = await databaseStorage.getUserById(userId).catch(() => null);
       const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
-      const [integrations, repos] = await Promise.all([
-        orgId ? databaseStorage.getIntegrationsByOrganizationId(orgId) : storage.getIntegrationsByUserId(userId),
-        orgId ? databaseStorage.getRepositoriesByOrganizationId(orgId) : storage.getRepositoriesByUserId(userId),
-      ]);
-      if (!Array.isArray(integrations)) {
-        console.error("getIntegrations did not return an array:", typeof integrations);
+      // User-scoped repo list: all org repos when no per-repo team, else only repos user is on (so all org members are "connected" to owner's repos by default)
+      const userRepos = await databaseStorage.getRepositoriesByUserId(userId);
+      const userRepoIds = new Set(userRepos.map((r) => r.id));
+
+      const allIntegrations = orgId
+        ? await databaseStorage.getIntegrationsByOrganizationId(orgId)
+        : await storage.getIntegrationsByUserId(userId);
+      if (!Array.isArray(allIntegrations)) {
+        console.error("getIntegrations did not return an array:", typeof allIntegrations);
         return res.status(200).json([]);
       }
 
-      const repoById = new Map(repos.map((r) => [r.id, r]));
+      const integrations = allIntegrations.filter((i: any) => userRepoIds.has(i.repositoryId));
+      const repoById = new Map(userRepos.map((r) => [r.id, r]));
       const repoIds = Array.from(new Set((integrations as any[]).map((i: any) => i.repositoryId).filter(Boolean)));
       const lastPushByRepo = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIds);
       const enrichedIntegrations = integrations.map((integration: any) => {

@@ -900,6 +900,7 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  /** Repos this user can see. Org repos with no per-repo team are visible to all org members (so everyone is "connected" to repos added by owner/admin). */
   async getRepositoriesByUserId(userId: string): Promise<Repository[]> {
     const user = await this.getUser(userId);
     if (!user) return [];
