@@ -724,6 +724,13 @@ export default function Dashboard() {
     setIsRepositoryTeamOpen(true);
   };
 
+  const handleToggleRepository = (repository: RepositoryCardData) => {
+    updateRepositoryMutation.mutate({
+      id: repository.id,
+      updates: { isActive: repository.isActive === false },
+    });
+  };
+
   const handleDeleteRepository = (repository: RepositoryCardData) => {
     setIsDeleteRepoConfirmationOpen(true);
     setRepositoryToDelete(repository);
@@ -1036,6 +1043,21 @@ export default function Dashboard() {
                             {(canManageIntegrations || canManageRepos) && (
                             <>
                             {canManageIntegrations && (
+                            <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleToggleRepository(repo)}
+                              disabled={updateRepositoryMutation.isPending}
+                              className="text-muted-foreground hover:text-foreground"
+                              title={isRepositoryActive ? 'Pause repository' : 'Resume repository'}
+                            >
+                              {isRepositoryActive ? (
+                                <Pause className="w-4 h-4" />
+                              ) : (
+                                <Play className="w-4 h-4" />
+                              )}
+                            </Button>
                             <Button
                               size="sm"
                               variant="ghost"
@@ -1044,6 +1066,7 @@ export default function Dashboard() {
                             >
                               <MoreVertical className="w-4 h-4" />
                             </Button>
+                            </>
                             )}
                             {canManageRepos && (
                             <>
