@@ -10,6 +10,8 @@ export interface IncidentAlertMetadata {
   stackFrame?: string;
   requestUrl?: string;
   stacktrace?: Array<{ file: string; function?: string; line?: number }>;
+  /** When true, stack trace is from bundled/minified build; show hint to upload source maps to Sentry. */
+  stackTraceIsBundled?: boolean;
   sourceUrl?: string;
   createdAt?: string;
   /** Actual error message that triggered the incident (from Sentry/engine). */
@@ -59,6 +61,7 @@ export function getIncidentAlertEmailTemplate(
     : "just now";
   const hasLocation = metadata?.route || metadata?.stackFrame || metadata?.requestUrl;
   const hasStacktrace = metadata?.stacktrace && metadata.stacktrace.length > 0;
+  const stackTraceIsBundled = metadata?.stackTraceIsBundled === true;
   const hasErrorMessage = metadata?.errorMessage != null && String(metadata.errorMessage).trim().length > 0;
   const errorMessageEscaped = hasErrorMessage ? escapeHtml(String(metadata!.errorMessage!).trim()).replace(/\n/g, "<br>") : "";
   const exceptionType = metadata?.exceptionType != null ? escapeHtml(String(metadata.exceptionType)) : "";
@@ -155,6 +158,7 @@ export function getIncidentAlertEmailTemplate(
         ${hasStacktrace ? `
         <!-- STACK TRACE -->
         <div>
+          ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
           <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
           <div style="padding: 12px; background: #141a18; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #9ca3a8; line-height: 1.7; border: 1px solid #2d3d35;">${stackTraceHtml}</div>
         </div>

@@ -319,7 +319,7 @@ export function NotificationDetailsModal() {
                             {metadata.culpritSource ?? metadata.culprit}
                           </code>
                           {metadata.culprit && !metadata.culpritSource && (
-                            <p className="text-xs text-muted-foreground mt-1">Bundled build — use View in Sentry for source map.</p>
+                            <p className="text-xs text-muted-foreground mt-1">Bundled build — upload source maps to Sentry to see original source.</p>
                           )}
                         </div>
                       )}
@@ -417,6 +417,11 @@ export function NotificationDetailsModal() {
 
                   {Array.isArray(metadata?.stacktrace) && metadata.stacktrace.length > 0 && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
+                      {metadata.stackTraceIsBundled && (
+                        <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-500/10 border border-amber-500/30 rounded-md px-3 py-2">
+                          This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.
+                        </p>
+                      )}
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
                         {metadata.stacktrace.map((f: { file?: string; function?: string; line?: number }, i: number) => (

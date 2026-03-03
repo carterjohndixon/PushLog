@@ -54,6 +54,7 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 import { resolveToSource } from "./helper/sourceMapResolve";
+import { isStacktraceBundled } from "./helper/stackTraceBundled";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
 import { handleSentryWebhook, getIncidentNotificationTargets, getIncidentNotificationTargetsForOrg, wasRecentSentryNotification } from "./sentryWebhook";
 import {
@@ -643,6 +644,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return { file, function: f?.function, line };
     };
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
+    const stackTraceIsBundled = isStacktraceBundled(resolvedStacktraceForMeta);
 
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
@@ -658,6 +660,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       suspectedCauses: (summary as any).suspected_causes ?? [],
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
       stacktrace: resolvedStacktraceForMeta,
+      stackTraceIsBundled,
       links: summary.links || {},
     });
 
@@ -701,6 +704,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   : firstResolved.file
                 : undefined;
 
+            const stackTraceIsBundledEmail = isStacktraceBundled(resolvedStacktrace);
             void sendIncidentAlertEmail(user.email, summary.title, message, {
               service: summary.service,
               environment: summary.environment,
@@ -709,6 +713,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               stackFrame,
               requestUrl: (summary as any).request_url,
               stacktrace: resolvedStacktrace,
+              stackTraceIsBundled: stackTraceIsBundledEmail,
               sourceUrl: summary.links?.source_url,
               createdAt: summary.last_seen || summary.start_time,
               errorMessage: actualErrorMessage ?? undefined,

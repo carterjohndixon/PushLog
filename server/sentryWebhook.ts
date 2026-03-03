@@ -9,6 +9,7 @@ import { storage } from "./storage";
 import broadcastNotification from "./helper/broadcastNotification";
 import { sendIncidentAlertEmail } from "./email";
 import { resolveToSource } from "./helper/sourceMapResolve";
+import { isStacktraceBundled } from "./helper/stackTraceBundled";
 import {
   ingestIncidentEvent,
   type IncidentEventInput,
@@ -451,6 +452,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       return { file, function: f?.function, line };
     };
     const resolvedStacktrace = await Promise.all(appStacktrace.map(resolveFrame));
+    const stackTraceIsBundled = isStacktraceBundled(resolvedStacktrace);
     const directMeta = JSON.stringify({
       source: ev ? "sentry_event_alert" : "sentry_issue_alert",
       service,
@@ -462,6 +464,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       culprit,
       culpritSource,
       stacktrace: resolvedStacktrace,
+      stackTraceIsBundled,
     });
 
     await Promise.all(
