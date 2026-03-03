@@ -44,6 +44,7 @@ jobs:
             export SENTRY_ORG=pushlog
             export SENTRY_PROJECT=pushlog
             export SENTRY_AUTH_TOKEN="${{ secrets.SENTRY_AUTH_TOKEN }}"
+            export SENTRY_RELEASE="$(git rev-parse HEAD)"
             ./scripts/build-for-docker.sh
             echo "[4/5] docker compose up -d --build..."
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build

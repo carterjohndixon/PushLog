@@ -12,11 +12,15 @@ export default defineConfig({
     react(),
     // Upload client source maps to Sentry so frontend errors show original file:line.
     // Set SENTRY_ORG, SENTRY_PROJECT, SENTRY_AUTH_TOKEN when building (e.g. in CI or .env.sentry-build-plugin).
+    // Set SENTRY_RELEASE to match what the client sends (e.g. git SHA in CI) so Sentry can symbolicate.
     sentryVitePlugin({
       org: process.env.SENTRY_ORG,
       project: process.env.SENTRY_PROJECT,
       authToken: process.env.SENTRY_AUTH_TOKEN,
       disable: !process.env.SENTRY_AUTH_TOKEN,
+      release: {
+        name: process.env.SENTRY_RELEASE,
+      },
       sourcemaps: {
         filesToDeleteAfterUpload: ["dist/public/**/*.map"],
       },
