@@ -1,0 +1,25 @@
+[Unit]
+Description=PushLog Agent — server log collector
+Documentation=https://pushlog.ai/docs/agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pushlog-agent run
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=pushlog-agent
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/pushlog-agent
+ReadOnlyPaths=/etc/pushlog-agent
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
