@@ -217,7 +217,7 @@ function AgentsSection() {
                 <AlertDialogTitle>{newToken ? "Agent Created" : "Create Agent"}</AlertDialogTitle>
                 <AlertDialogDescription asChild>
                   {newToken ? (
-                    <div className="space-y-3">
+                    <div className="space-y-3 pt-2">
                       <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
                         Save this token now -- it will not be shown again.
                       </p>
@@ -229,7 +229,7 @@ function AgentsSection() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3 pt-2">
+                    <div className="space-y-3 pt-4">
                       <div>
                         <Label htmlFor="agent-name">Agent name</Label>
                         <Input
