@@ -229,7 +229,7 @@ function AgentsSection() {
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-3 pt-4">
+                    <div className="space-y-3 pt-4 mt-4">
                       <div>
                         <Label htmlFor="agent-name">Agent name</Label>
                         <Input
