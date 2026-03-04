@@ -338,6 +338,25 @@ export const userSessions = pgTable("user_sessions", {
   expire: timestamp("expire", { withTimezone: true, mode: "date" }).notNull(),
 });
 
+/** Agents installed on customer servers that stream runtime errors to PushLog. */
+export const organizationAgents = pgTable("organization_agents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id").notNull(),
+  name: text("name").notNull(),
+  tokenHash: text("token_hash").notNull(),
+  createdByUserId: uuid("created_by_user_id").notNull(),
+  lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "string" }),
+  hostname: text("hostname"),
+  arch: text("arch"),
+  environment: text("environment"),
+  sources: jsonb("sources").$type<string[]>(),
+  status: text("status").notNull().default("active"), // "active" | "revoked"
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  { name: "organization_agents_org_id_idx", columns: [t.organizationId] },
+  { name: "organization_agents_token_hash_unique", unique: true, columns: [t.tokenHash] },
+]);
+
 /** Streaming stats engine aggregates (one row per user per day). */
 export const userDailyStats = pgTable("user_daily_stats", {
     userId: uuid("user_id").notNull(),
@@ -414,6 +433,11 @@ export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit
 });
 
 export const insertUserDailyStatsSchema = createInsertSchema(userDailyStats);
+
+export const insertOrganizationAgentSchema = createInsertSchema(organizationAgents).omit({
+  id: true,
+  createdAt: true,
+});
 
 export type OAuthIdentity = {
   id: string;
@@ -510,3 +534,5 @@ export type FavoriteModel = typeof favoriteModels.$inferSelect;
 export type InsertFavoriteModel = z.infer<typeof insertFavoriteModelSchema>;
 export type UserDailyStats = typeof userDailyStats.$inferSelect;
 export type InsertUserDailyStats = z.infer<typeof insertUserDailyStatsSchema>;
+export type OrganizationAgent = typeof organizationAgents.$inferSelect;
+export type InsertOrganizationAgent = z.infer<typeof insertOrganizationAgentSchema>;

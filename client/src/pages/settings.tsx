@@ -32,6 +32,10 @@ import {
   Users,
   FlaskConical,
   User,
+  Server,
+  Wifi,
+  WifiOff,
+  Plus,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -113,6 +117,213 @@ function AccountTypeSection({
         <p className="text-sm text-muted-foreground">Only owners and admins can change account type.</p>
       )}
     </div>
+  );
+}
+
+interface Agent {
+  id: string;
+  name: string;
+  hostname: string | null;
+  arch: string | null;
+  environment: string | null;
+  sources: string[] | null;
+  status: string;
+  connected: boolean;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+
+function AgentsSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [agentName, setAgentName] = useState("");
+  const [newToken, setNewToken] = useState<string | null>(null);
+  const [revokeId, setRevokeId] = useState<string | null>(null);
+
+  const { data: agents = [], isLoading } = useQuery<Agent[]>({
+    queryKey: ["agents"],
+    queryFn: async () => {
+      const res = await fetch("/api/agents", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch agents");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await fetch("/api/agents", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create agent");
+      }
+      return res.json() as Promise<{ id: string; name: string; token: string }>;
+    },
+    onSuccess: (data) => {
+      setNewToken(data.token);
+      setAgentName("");
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const revokeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/agents/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to revoke agent");
+    },
+    onSuccess: () => {
+      setRevokeId(null);
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+      toast({ title: "Agent revoked" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const copyToken = () => {
+    if (newToken) {
+      navigator.clipboard.writeText(newToken);
+      toast({ title: "Token copied to clipboard" });
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Server className="w-5 h-5 text-log-green" />
+            Agents
+          </CardTitle>
+          <AlertDialog open={createOpen || !!newToken} onOpenChange={(open) => {
+            if (!open) { setCreateOpen(false); setNewToken(null); setAgentName(""); }
+          }}>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" /> Create Agent
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{newToken ? "Agent Created" : "Create Agent"}</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  {newToken ? (
+                    <div className="space-y-3">
+                      <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                        Save this token now -- it will not be shown again.
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <Input readOnly value={newToken} className="font-mono text-xs" />
+                        <Button size="sm" variant="outline" onClick={copyToken}>
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 pt-2">
+                      <div>
+                        <Label htmlFor="agent-name">Agent name</Label>
+                        <Input
+                          id="agent-name"
+                          placeholder="e.g. production-api-1"
+                          value={agentName}
+                          onChange={(e) => setAgentName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter" && agentName.trim()) createMutation.mutate(agentName.trim()); }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{newToken ? "Done" : "Cancel"}</AlertDialogCancel>
+                {!newToken && (
+                  <AlertDialogAction
+                    disabled={!agentName.trim() || createMutation.isPending}
+                    onClick={() => createMutation.mutate(agentName.trim())}
+                  >
+                    {createMutation.isPending ? "Creating..." : "Create"}
+                  </AlertDialogAction>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <CardDescription>
+          Install agents on your servers to stream runtime errors to PushLog.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading agents...</p>
+        ) : agents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No agents configured yet. Create one to get started.</p>
+        ) : (
+          <div className="space-y-3">
+            {agents.map((agent) => (
+              <div key={agent.id} className="flex items-center justify-between border rounded-lg px-4 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {agent.status === "revoked" ? (
+                    <Badge variant="secondary" className="shrink-0">Revoked</Badge>
+                  ) : agent.connected ? (
+                    <Badge className="bg-log-green/15 text-log-green border-log-green/30 shrink-0">
+                      <Wifi className="w-3 h-3 mr-1" /> Connected
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground shrink-0">
+                      <WifiOff className="w-3 h-3 mr-1" /> Offline
+                    </Badge>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{agent.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {[agent.hostname, agent.environment, agent.arch].filter(Boolean).join(" · ") || "No metadata yet"}
+                      {agent.lastSeenAt && ` · Last seen ${formatLocalDate(agent.lastSeenAt)}`}
+                    </p>
+                  </div>
+                </div>
+                {agent.status === "active" && (
+                  <AlertDialog open={revokeId === agent.id} onOpenChange={(open) => { if (!open) setRevokeId(null); }}>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => setRevokeId(agent.id)}>
+                        Revoke
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Revoke agent "{agent.name}"?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This agent will no longer be able to send events to PushLog. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-red-600 hover:bg-red-700"
+                          disabled={revokeMutation.isPending}
+                          onClick={() => revokeMutation.mutate(agent.id)}
+                        >
+                          {revokeMutation.isPending ? "Revoking..." : "Revoke"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1166,6 +1377,11 @@ export default function Settings() {
               </Collapsible>
             </CardContent>
           </Card>
+
+          {/* Agents */}
+          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+            <AgentsSection />
+          )}
 
           {/* Danger Zone */}
           <Card className="border-red-200 dark:border-red-900/60 bg-card">

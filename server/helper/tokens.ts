@@ -44,3 +44,11 @@ export function hashToken(token: string): string {
 export function generateJoinToken(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
+
+/**
+ * Generate a PushLog agent token with `plg_` prefix (24 random bytes, base64url).
+ * Return raw token once to caller; store only hashToken(rawToken) in the database.
+ */
+export function generateAgentToken(): string {
+  return `plg_${crypto.randomBytes(24).toString("base64url")}`;
+}

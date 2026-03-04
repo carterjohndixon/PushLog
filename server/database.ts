@@ -6,6 +6,7 @@ import {
   aiModelPricing,
   organizations, organizationMemberships, organizationInvites, organizationIncidentSettings,
   repositoryMembers,
+  organizationAgents,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -1002,6 +1003,94 @@ export class DatabaseStorage implements IStorage {
     const oid = (row as { organizationId: string | null } | undefined)?.organizationId;
     return oid ?? null;
   }
+
+  // ── Agent CRUD ──
+
+  async createOrganizationAgent(
+    orgId: string,
+    name: string,
+    tokenHash: string,
+    createdByUserId: string,
+  ): Promise<{ id: string; organizationId: string; name: string; status: string; createdAt: string }> {
+    const [row] = await db
+      .insert(organizationAgents)
+      .values({ organizationId: orgId, name, tokenHash, createdByUserId, status: "active" })
+      .returning();
+    return row as any;
+  }
+
+  async getOrganizationAgentByTokenHash(
+    tokenHash: string,
+  ): Promise<{ id: string; organizationId: string; name: string; status: string } | null> {
+    const [row] = await db
+      .select({
+        id: organizationAgents.id,
+        organizationId: organizationAgents.organizationId,
+        name: organizationAgents.name,
+        status: organizationAgents.status,
+      })
+      .from(organizationAgents)
+      .where(and(eq(organizationAgents.tokenHash, tokenHash), eq(organizationAgents.status, "active")))
+      .limit(1);
+    return (row as any) ?? null;
+  }
+
+  async listOrganizationAgents(
+    orgId: string,
+  ): Promise<
+    {
+      id: string;
+      name: string;
+      hostname: string | null;
+      arch: string | null;
+      environment: string | null;
+      sources: string[] | null;
+      status: string;
+      lastSeenAt: string | null;
+      createdAt: string;
+      createdByUserId: string;
+    }[]
+  > {
+    const rows = await db
+      .select({
+        id: organizationAgents.id,
+        name: organizationAgents.name,
+        hostname: organizationAgents.hostname,
+        arch: organizationAgents.arch,
+        environment: organizationAgents.environment,
+        sources: organizationAgents.sources,
+        status: organizationAgents.status,
+        lastSeenAt: organizationAgents.lastSeenAt,
+        createdAt: organizationAgents.createdAt,
+        createdByUserId: organizationAgents.createdByUserId,
+      })
+      .from(organizationAgents)
+      .where(eq(organizationAgents.organizationId, orgId))
+      .orderBy(desc(organizationAgents.createdAt));
+    return rows as any;
+  }
+
+  async revokeOrganizationAgent(orgId: string, agentId: string): Promise<boolean> {
+    const result = await db
+      .update(organizationAgents)
+      .set({ status: "revoked" })
+      .where(and(eq(organizationAgents.id, agentId), eq(organizationAgents.organizationId, orgId)));
+    return (result as any).rowCount > 0;
+  }
+
+  async updateAgentHeartbeat(
+    agentId: string,
+    meta: { hostname?: string; arch?: string; environment?: string; sources?: string[] },
+  ): Promise<void> {
+    const updates: Record<string, unknown> = { lastSeenAt: new Date().toISOString() };
+    if (meta.hostname !== undefined) updates.hostname = meta.hostname;
+    if (meta.arch !== undefined) updates.arch = meta.arch;
+    if (meta.environment !== undefined) updates.environment = meta.environment;
+    if (meta.sources !== undefined) updates.sources = meta.sources;
+    await db.update(organizationAgents).set(updates).where(eq(organizationAgents.id, agentId));
+  }
+
+  // ── Repositories ──
 
   async createRepository(repository: InsertRepository): Promise<Repository> {
     const result = await db.insert(repositories).values(repository).returning();

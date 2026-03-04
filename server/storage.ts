@@ -68,6 +68,13 @@ export interface IStorage {
   getOrganizationIdByIncidentServiceName(service: string): Promise<string | null>;
   getAllOrganizationIds(): Promise<string[]>;
 
+  // Agent methods
+  createOrganizationAgent(orgId: string, name: string, tokenHash: string, createdByUserId: string): Promise<{ id: string; organizationId: string; name: string; status: string; createdAt: string }>;
+  getOrganizationAgentByTokenHash(tokenHash: string): Promise<{ id: string; organizationId: string; name: string; status: string } | null>;
+  listOrganizationAgents(orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]>;
+  revokeOrganizationAgent(orgId: string, agentId: string): Promise<boolean>;
+  updateAgentHeartbeat(agentId: string, meta: { hostname?: string; arch?: string; environment?: string; sources?: string[] }): Promise<void>;
+
   // Repository methods
   getRepository(id: string): Promise<Repository | undefined>;
   getRepositoriesByUserId(userId: string): Promise<Repository[]>;
@@ -309,6 +316,21 @@ export class MemStorage implements IStorage {
   async getAllOrganizationIds(): Promise<string[]> {
     return [];
   }
+
+  // Agent stubs (MemStorage — not used in production)
+  async createOrganizationAgent(_orgId: string, _name: string, _tokenHash: string, _createdByUserId: string): Promise<{ id: string; organizationId: string; name: string; status: string; createdAt: string }> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getOrganizationAgentByTokenHash(_tokenHash: string): Promise<{ id: string; organizationId: string; name: string; status: string } | null> {
+    return null;
+  }
+  async listOrganizationAgents(_orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]> {
+    return [];
+  }
+  async revokeOrganizationAgent(_orgId: string, _agentId: string): Promise<boolean> {
+    return false;
+  }
+  async updateAgentHeartbeat(_agentId: string, _meta: { hostname?: string; arch?: string; environment?: string; sources?: string[] }): Promise<void> {}
 
   // Repository methods
   async getRepository(id: string): Promise<Repository | undefined> {

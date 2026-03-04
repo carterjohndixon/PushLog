@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -65,6 +66,10 @@ import {
   type IncidentSummaryOutput,
 } from "./incidentEngine";
 import * as Sentry from "@sentry/node";
+import { authenticateAgentToken } from "./middleware/agentAuth";
+import { agentRateLimit } from "./middleware/agentRateLimit";
+import { bufferAgentEvent } from "./helper/agentBuffer";
+import { hashToken, generateAgentToken } from "./helper/tokens";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -805,6 +810,153 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Sentry webhook is mounted in index.ts with express.raw() so signature is verified against raw body.
+
+  // ── Agent Ingest API ──
+
+  const ingestEventSchema = z.object({
+    source: z.string().min(1).max(64),
+    service: z.string().min(1).max(128),
+    environment: z.string().min(1).max(64),
+    timestamp: z.string().min(1).max(64),
+    severity: z.enum(["warning", "error", "critical"]),
+    exception_type: z.string().min(1).max(512),
+    message: z.string().min(1).max(8192),
+    stacktrace: z
+      .array(
+        z.object({
+          file: z.string().min(1).max(1024),
+          function: z.string().max(512).optional(),
+          line: z.number().int().positive().optional(),
+        })
+      )
+      .min(1)
+      .max(200),
+    tags: z.record(z.string().max(128), z.string().max(512)).optional(),
+    links: z.record(z.string().max(128), z.string().max(2048)).optional(),
+    change_window: z
+      .object({
+        deploy_time: z.string().min(1).max(64),
+        commits: z.array(
+          z.object({
+            id: z.string().min(1).max(128),
+            timestamp: z.string().max(64).optional(),
+            files: z.array(z.string().max(1024)).max(500),
+          })
+        ).max(100),
+      })
+      .optional(),
+  });
+
+  const ingestJsonParser = express.json({ limit: "1mb" });
+
+  app.post("/api/ingest/events", ingestJsonParser, authenticateAgentToken, agentRateLimit, async (req, res) => {
+    try {
+      const parsed = ingestEventSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Invalid event payload",
+          details: parsed.error.issues.map((i) => ({
+            path: i.path.join("."),
+            message: i.message,
+          })),
+        });
+      }
+
+      const event = parsed.data as IncidentEventInput;
+      if (!event.source || event.source === "agent") event.source = "agent";
+      bufferAgentEvent(event);
+      return res.status(202).json({ accepted: true });
+    } catch (error) {
+      console.error("Agent ingest error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to ingest event" });
+    }
+  });
+
+  app.post("/api/ingest/heartbeat", ingestJsonParser, authenticateAgentToken, async (req, res) => {
+    try {
+      const { hostname, arch, environment, sources } = req.body || {};
+      await databaseStorage.updateAgentHeartbeat(req.agentId!, {
+        hostname: hostname ? String(hostname) : undefined,
+        arch: arch ? String(arch) : undefined,
+        environment: environment ? String(environment) : undefined,
+        sources: Array.isArray(sources) ? sources.map(String) : undefined,
+      });
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("Agent heartbeat error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to process heartbeat" });
+    }
+  });
+
+  // ── Agent Management API ──
+
+  app.post("/api/agents", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+    try {
+      const { name } = req.body || {};
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ error: "Agent name is required" });
+      }
+      const rawToken = generateAgentToken();
+      const tokenHashValue = hashToken(rawToken);
+      const agent = await databaseStorage.createOrganizationAgent(
+        req.user!.organizationId,
+        name.trim(),
+        tokenHashValue,
+        req.user!.userId,
+      );
+      return res.status(201).json({ id: agent.id, name: agent.name, token: rawToken });
+    } catch (error) {
+      console.error("Create agent error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to create agent" });
+    }
+  });
+
+  app.get("/api/agents", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+    try {
+      const agents = await databaseStorage.listOrganizationAgents(req.user!.organizationId);
+      const CONNECTED_THRESHOLD_MS = 5 * 60 * 1000;
+      const now = Date.now();
+      const result = agents.map((a) => {
+        const lastSeen = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+        const connected = a.status === "active" && lastSeen > 0 && now - lastSeen < CONNECTED_THRESHOLD_MS;
+        return {
+          id: a.id,
+          name: a.name,
+          hostname: a.hostname,
+          arch: a.arch,
+          environment: a.environment,
+          sources: a.sources,
+          status: a.status,
+          connected,
+          lastSeenAt: a.lastSeenAt,
+          createdAt: a.createdAt,
+        };
+      });
+      return res.json(result);
+    } catch (error) {
+      console.error("List agents error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to list agents" });
+    }
+  });
+
+  app.delete("/api/agents/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const revoked = await databaseStorage.revokeOrganizationAgent(req.user!.organizationId, id);
+      if (!revoked) {
+        return res.status(404).json({ error: "Agent not found" });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("Revoke agent error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to revoke agent" });
+    }
+  });
 
   // Production webhook: trigger host-side production promotion script.
   // Intended to be called by staging admin flow with x-promote-secret.
