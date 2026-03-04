@@ -1,4 +1,4 @@
-import { ingestIncidentEvent, type IncidentEventInput } from "../incidentEngine";
+import { ingestIncidentEvent, isNoiseEvent, type IncidentEventInput } from "../incidentEngine";
 
 const FLUSH_INTERVAL_MS = 200;
 const FLUSH_BATCH_SIZE = 50;
@@ -31,6 +31,7 @@ function ensureTimer(): void {
  * Flushes every 200ms or when 50 events accumulate, whichever comes first.
  */
 export function bufferAgentEvent(event: IncidentEventInput): void {
+  if (isNoiseEvent(event)) return;
   ensureTimer();
   if (buffer.length >= MAX_BUFFER_SIZE) {
     console.warn(`[agentBuffer] backpressure: dropping oldest event (buffer at ${MAX_BUFFER_SIZE})`);

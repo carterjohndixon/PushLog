@@ -35,6 +35,18 @@ var (
 		{"warning", regexp.MustCompile(`(?i)\b(warn(ing)?)\b`)},
 	}
 
+	// Expected/auth errors that should never be tracked or alerted on.
+	ignorePatterns = []*regexp.Regexp{
+		regexp.MustCompile(`\b401\b`),
+		regexp.MustCompile(`\b403\b`),
+		regexp.MustCompile(`(?i)not authenticated`),
+		regexp.MustCompile(`(?i)unauthorized`),
+		regexp.MustCompile(`(?i)forbidden`),
+		regexp.MustCompile(`(?i)authentication required`),
+		regexp.MustCompile(`(?i)invalid token`),
+		regexp.MustCompile(`(?i)not authorized`),
+	}
+
 	exceptionPattern = regexp.MustCompile(`(?i)^(\w+(?:\.\w+)*(?:Error|Exception|Panic|Fault))`)
 
 	// file.py:123 or file.go:123
@@ -53,6 +65,9 @@ type JournaldEntry struct {
 func ParseLine(line, service, environment string) *InboundEvent {
 	line = strings.TrimSpace(line)
 	if line == "" {
+		return nil
+	}
+	if matchesIgnorePattern(line) {
 		return nil
 	}
 
@@ -98,6 +113,9 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 	if msg == "" {
 		return nil
 	}
+	if matchesIgnorePattern(msg) {
+		return nil
+	}
 
 	severity := classifySeverity(msg)
 	if severity == "" {
@@ -133,6 +151,15 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 		Message:       msg,
 		Stacktrace:    frames,
 	}
+}
+
+func matchesIgnorePattern(line string) bool {
+	for _, re := range ignorePatterns {
+		if re.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
 
 func classifySeverity(line string) string {

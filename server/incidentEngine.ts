@@ -192,8 +192,28 @@ export function onIncidentSummary(listener: IncidentListener): () => void {
   };
 }
 
+/** Expected/non-critical patterns that should not trigger incidents or alerts. */
+const NOISE_PATTERNS = [
+  /\b401\b/,
+  /\b403\b/,
+  /not authenticated/i,
+  /unauthorized/i,
+  /forbidden/i,
+  /authentication required/i,
+  /invalid token/i,
+  /not authorized/i,
+  /invalid code/i,
+  /mfa not configured/i,
+];
+
+export function isNoiseEvent(event: IncidentEventInput): boolean {
+  const text = `${event.message ?? ""} ${event.exception_type ?? ""}`;
+  return NOISE_PATTERNS.some((re) => re.test(text));
+}
+
 export function ingestIncidentEvent(event: IncidentEventInput): void {
   try {
+    if (isNoiseEvent(event)) return;
     ensureIncidentEngineStarted();
 
     // If engine not ready, queue the event instead of dropping it
