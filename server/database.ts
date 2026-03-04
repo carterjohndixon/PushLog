@@ -311,6 +311,7 @@ export class DatabaseStorage implements IStorage {
         name: orgName,
         type: "solo",
         ownerId: u.id,
+        accountTypeChosenAt: new Date().toISOString(), // backfilled users skip account-type step
       }).returning();
       await db.insert(organizationMemberships).values({
         organizationId: org.id,
@@ -573,6 +574,19 @@ export class DatabaseStorage implements IStorage {
     return row as Organization | undefined;
   }
 
+  async updateOrganization(
+    organizationId: string,
+    updates: { name?: string; domain?: string | null; type?: "solo" | "team"; accountTypeChosenAt?: string | null }
+  ): Promise<void> {
+    const set: Record<string, unknown> = {};
+    if (updates.name !== undefined) set.name = updates.name;
+    if (updates.domain !== undefined) set.domain = updates.domain === "" ? null : updates.domain;
+    if (updates.type !== undefined) set.type = updates.type;
+    if (updates.accountTypeChosenAt !== undefined) set.accountTypeChosenAt = updates.accountTypeChosenAt;
+    if (Object.keys(set).length === 0) return;
+    await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
+  }
+
   /** All organization IDs (for Sentry test notifications: notify targets from every org). */
   async getAllOrganizationIds(): Promise<string[]> {
     const rows = await db.select({ id: organizations.id }).from(organizations);
@@ -616,14 +630,6 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return row as OrganizationIncidentSettings;
-  }
-
-  async updateOrganization(organizationId: string, updates: { name?: string; domain?: string | null }): Promise<void> {
-    const set: Record<string, unknown> = {};
-    if (updates.name !== undefined) set.name = updates.name;
-    if (updates.domain !== undefined) set.domain = updates.domain === "" ? null : updates.domain;
-    if (Object.keys(set).length === 0) return;
-    await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
   }
 
   async createOrganizationInviteLink(

@@ -1,5 +1,6 @@
 import React, { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile, ProfileError, type ProfileResponse } from "@/lib/profile";
 
 interface ProtectedRouteProps {
@@ -9,6 +10,7 @@ interface ProtectedRouteProps {
 
 export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const queryClient = useQueryClient();
+  const [location, setLocation] = useLocation();
 
   // After GitHub connect/reconnect (redirect with ?github_connected=1), invalidate repo queries once and clean URL
   useEffect(() => {
@@ -70,6 +72,12 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   if (isError && error instanceof ProfileError) {
     const target = error.redirectTo || "/login";
     window.location.href = target;
+    return null;
+  }
+
+  // Require account-type onboarding step when profile says so (new signups)
+  if (isAuthenticated && userProfile?.needsAccountTypeStep === true && location !== "/onboarding/account-type") {
+    setLocation("/onboarding/account-type");
     return null;
   }
 

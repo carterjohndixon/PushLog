@@ -56,7 +56,7 @@ export function Header() {
     { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "Models" },
-    { href: "/organization", label: "Organization" },
+    ...(user?.accountType !== "solo" ? [{ href: "/organization", label: "Organization" }] : []),
     ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
 

@@ -2645,6 +2645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireOrgRole(["owner", "admin"]),
     body("name").optional().trim().isLength({ min: 1, max: 60 }),
     body("domain").optional().trim(),
+    body("type").optional().isIn(["solo", "team"]),
     async (req: Request, res: Response) => {
       try {
         const errors = validationResult(req);
@@ -2652,7 +2653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "Validation failed", details: errors.array() });
         }
         const orgId = (req as any).orgId as string;
-        const updates: { name?: string; domain?: string | null } = {};
+        const updates: { name?: string; domain?: string | null; type?: "solo" | "team" } = {};
         if (typeof req.body?.name === "string" && req.body.name.trim()) {
           updates.name = req.body.name.trim();
         }
@@ -2667,6 +2668,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
           updates.domain = domain || null;
         }
+        if (req.body?.type === "solo" || req.body?.type === "team") {
+          updates.type = req.body.type;
+        }
         if (Object.keys(updates).length === 0) {
           return res.status(400).json({ error: "No valid updates" });
         }
@@ -2674,7 +2678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const org = await databaseStorage.getOrganization(orgId);
         res.status(200).json({
           success: true,
-          org: org ? { id: org.id, name: (org as any).name, domain: (org as any).domain ?? null } : undefined,
+          org: org ? { id: org.id, name: (org as any).name, domain: (org as any).domain ?? null, type: (org as any).type ?? "solo" } : undefined,
         });
       } catch (e) {
         console.error("Update org error:", e);
@@ -5961,10 +5965,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const organizationId = (req.user as any)?.organizationId ?? (user as any).organizationId ?? null;
       // Always load role from DB for current org so Settings shows source of truth (session can be stale)
       let role: string | null = null;
+      let accountType: "solo" | "team" | undefined;
+      let needsAccountTypeStep = false;
       if (organizationId) {
         const membership = await databaseStorage.getMembershipByOrganizationAndUser(organizationId, user.id);
         if (membership && ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')) {
           role = (membership as any).role;
+        }
+        const org = await databaseStorage.getOrganization(organizationId);
+        if (org) {
+          accountType = ((org as any).type === "team" ? "team" : "solo") as "solo" | "team";
+          needsAccountTypeStep = (org as any).accountTypeChosenAt == null;
         }
       }
       if (!role) role = (req.user as any)?.role ?? null;
@@ -5989,6 +6000,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
           organizationId: organizationId ?? undefined,
           role: role ?? undefined,
+          accountType: accountType ?? undefined,
+          needsAccountTypeStep: needsAccountTypeStep ?? false,
         }
       };
       res.status(200).json(payload);
@@ -5999,6 +6012,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Profile failed: users table is missing open_router_api_key. Run: migrations/add-openrouter-api-key-users.sql");
       }
       res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // Onboarding: set account type (Solo vs Organization). Shown once when accountTypeChosenAt is null.
+  app.post("/api/onboarding/account-type", authenticateToken, async (req, res) => {
+    try {
+      const type = req.body?.type === "team" ? "team" : "solo";
+      const organizationId = (req.user as any)?.organizationId ?? null;
+      if (!organizationId) {
+        return res.status(400).json({ error: "No organization" });
+      }
+      const org = await databaseStorage.getOrganization(organizationId);
+      if (!org) return res.status(404).json({ error: "Organization not found" });
+      const alreadyChosen = (org as any).accountTypeChosenAt != null;
+      if (!alreadyChosen) {
+        const now = new Date().toISOString();
+        await databaseStorage.updateOrganization(organizationId, { type, accountTypeChosenAt: now });
+      }
+      res.status(200).json({ success: true, type });
+    } catch (e) {
+      console.error("Onboarding account-type error:", e);
+      Sentry.captureException(e);
+      res.status(500).json({ error: "Failed to set account type" });
     }
   });
 

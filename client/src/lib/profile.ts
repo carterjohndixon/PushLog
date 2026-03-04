@@ -32,6 +32,10 @@ export interface ProfileUser {
   /** Organization role: owner | admin | developer | viewer */
   role?: "owner" | "admin" | "developer" | "viewer";
   organizationId?: string;
+  /** "solo" | "team" — set from org type. Used for Solo vs Organization choice and nav. */
+  accountType?: "solo" | "team";
+  /** True when the user has not yet chosen Solo vs Organization (show onboarding step). */
+  needsAccountTypeStep?: boolean;
 }
 
 export interface ProfileResponse {

@@ -53,8 +53,10 @@ export const organizations = pgTable("organizations", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
   domain: text("domain"), // optional company domain (e.g. acme.com)
-  type: text("type").notNull(), // legacy — always "solo"; not read at runtime
+  type: text("type").notNull(), // "solo" | "team" — used for Solo vs Organization choice and future billing
   ownerId: uuid("owner_id").notNull(),
+  /** When the account type (Solo vs Organization) was chosen. Null = show onboarding step. */
+  accountTypeChosenAt: timestamp("account_type_chosen_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (t) => [
   { name: "organizations_owner_id_idx", columns: [t.ownerId] },

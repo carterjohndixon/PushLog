@@ -63,6 +63,7 @@ const GitHubCallback = lazy(() => import("@/pages/GitHubCallBack"));
 const SetupMfa = lazy(() => import("@/pages/setup-mfa"));
 const VerifyMfa = lazy(() => import("@/pages/verify-mfa"));
 const FinishSetup = lazy(() => import("@/pages/finish-setup"));
+const OnboardingAccountType = lazy(() => import("@/pages/onboarding-account-type"));
 const Join = lazy(() => import("@/pages/join"));
 const Organization = lazy(() => import("@/pages/organization"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
@@ -117,6 +118,11 @@ function Router() {
       <Route path="/finish-setup">
         <ProtectedRoute pageName="finish-setup">
           <FinishSetup />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/onboarding/account-type">
+        <ProtectedRoute pageName="account-type">
+          <OnboardingAccountType />
         </ProtectedRoute>
       </Route>
       <Route path="/join/:token" component={Join} />

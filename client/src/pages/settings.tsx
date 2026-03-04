@@ -31,6 +31,7 @@ import {
   UserPlus,
   Users,
   FlaskConical,
+  User,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -47,6 +48,73 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+
+type AccountType = "solo" | "team";
+
+function AccountTypeSection({
+  currentType,
+  canEdit,
+  onSuccess,
+}: {
+  currentType: AccountType;
+  canEdit: boolean;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState<AccountType | null>(null);
+
+  const setType = async (type: AccountType) => {
+    if (!canEdit || saving) return;
+    setSaving(type);
+    try {
+      const res = await fetch("/api/org", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: "Update failed", description: data.error || "Could not update account type.", variant: "destructive" });
+        return;
+      }
+      toast({ title: "Account type updated", description: type === "team" ? "Your account is now set as Organization." : "Your account is now set as Solo." });
+      onSuccess();
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      <Button
+        variant={currentType === "solo" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setType("solo")}
+        disabled={!canEdit || saving !== null}
+      >
+        {saving === "solo" && (
+          <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-1.5" />
+        )}
+        Solo
+      </Button>
+      <Button
+        variant={currentType === "team" ? "default" : "outline"}
+        size="sm"
+        onClick={() => setType("team")}
+        disabled={!canEdit || saving !== null}
+      >
+        {saving === "team" && (
+          <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-1.5" />
+        )}
+        Organization
+      </Button>
+      {!canEdit && (
+        <p className="text-sm text-muted-foreground">Only owners and admins can change account type.</p>
+      )}
+    </div>
+  );
+}
 
 interface DataSummary {
   accountCreated: string;
@@ -544,6 +612,31 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+
+          {/* Account type (Solo vs Organization) */}
+          {profileResponse?.user?.organizationId && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-5 h-5 text-log-green" />
+                  Account type
+                </CardTitle>
+                <CardDescription>
+                  Choose how you use PushLog. You can change this anytime.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <AccountTypeSection
+                  currentType={profileResponse?.user?.accountType ?? "solo"}
+                  canEdit={profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"}
+                  onSuccess={() => {
+                    queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+                    queryClient.invalidateQueries({ queryKey: ["/api/org"] });
+                  }}
+                />
+              </CardContent>
+            </Card>
+          )}
 
           {/* Organization */}
           {profileResponse?.user?.organizationId && (
