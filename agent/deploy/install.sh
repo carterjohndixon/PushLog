@@ -9,7 +9,7 @@ CONFIG_DIR="/etc/pushlog-agent"
 SPOOL_DIR="/var/lib/pushlog-agent/spool"
 SERVICE_FILE="/etc/systemd/system/pushlog-agent.service"
 BINARY="pushlog-agent"
-BASE_URL="https://github.com/pushlog/pushlog-agent/releases/latest/download"
+BASE_URL="https://github.com/pushlog-ai/PushLog/releases/latest/download"
 
 echo "==> PushLog Agent installer"
 
@@ -69,7 +69,7 @@ SyslogIdentifier=pushlog-agent
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=false
-ReadWritePaths=/var/lib/pushlog-agent
+ReadWritePaths=/var/lib/pushlog-agent /var/run
 ReadOnlyPaths=/etc/pushlog-agent
 PrivateTmp=true
 
@@ -86,7 +86,7 @@ echo "Installation complete!"
 echo ""
 echo "Next steps:"
 echo "  1. Connect your agent:"
-echo "     sudo pushlog-agent connect --token plg_YOUR_TOKEN"
+echo "     sudo pushlog-agent connect --token plg_YOUR_TOKEN --endpoint https://YOUR_PUSHLOG_URL"
 echo ""
 echo "  2. Edit config to add sources:"
 echo "     sudo nano ${CONFIG_DIR}/config.yaml"
