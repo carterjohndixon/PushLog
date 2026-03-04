@@ -204,6 +204,8 @@ const NOISE_PATTERNS = [
   /not authorized/i,
   /invalid code/i,
   /mfa not configured/i,
+  // Avoid feedback loop: incident engine's own log output
+  /\[incident-engine\]\s+incident/,
 ];
 
 export function isNoiseEvent(event: IncidentEventInput): boolean {

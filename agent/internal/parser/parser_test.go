@@ -12,6 +12,7 @@ func TestParseLine_NoiseFiltered(t *testing.T) {
 		`Authentication required`,
 		`403 Forbidden`,
 		`Not authorized to access resource`,
+		`Error: [incident-engine] incident inc-abc123 (new_issue) app/production: New issue`,
 	}
 	for _, line := range noise {
 		ev := ParseLine(line, "test", "prod")

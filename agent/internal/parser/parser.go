@@ -35,7 +35,7 @@ var (
 		{"warning", regexp.MustCompile(`(?i)\b(warn(ing)?)\b`)},
 	}
 
-	// Expected/auth errors that should never be tracked or alerted on.
+	// Expected/auth errors and self-referential logs that should never be tracked or alerted on.
 	ignorePatterns = []*regexp.Regexp{
 		regexp.MustCompile(`\b401\b`),
 		regexp.MustCompile(`\b403\b`),
@@ -45,6 +45,8 @@ var (
 		regexp.MustCompile(`(?i)authentication required`),
 		regexp.MustCompile(`(?i)invalid token`),
 		regexp.MustCompile(`(?i)not authorized`),
+		// Avoid feedback loop: incident engine's own log output
+		regexp.MustCompile(`\[incident-engine\]\s+incident`),
 	}
 
 	exceptionPattern = regexp.MustCompile(`(?i)^(\w+(?:\.\w+)*(?:Error|Exception|Panic|Fault))`)
