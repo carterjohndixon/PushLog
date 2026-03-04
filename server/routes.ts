@@ -5751,8 +5751,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Test route: verify stack filter strips node_modules and node: internals. No auth for easy curl.
-  app.get("/api/test/stack-filter", (req, res) => {
+  // Test route: verify stack filter strips node_modules and node: internals. Requires auth so it works from Settings (same-origin + session).
+  app.get("/api/test/stack-filter", authenticateToken, (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
       return res.status(404).json({ error: "Not found" });

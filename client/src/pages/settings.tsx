@@ -30,6 +30,7 @@ import {
   Copy,
   UserPlus,
   Users,
+  FlaskConical,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -82,6 +83,14 @@ export default function Settings() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [githubDisconnectModalOpen, setGithubDisconnectModalOpen] = useState(false);
   const [slackDisconnectWorkspace, setSlackDisconnectWorkspace] = useState<{ id: string; teamName: string } | null>(null);
+  const [stackFilterResult, setStackFilterResult] = useState<{
+    pass: boolean;
+    description: string;
+    originalCount: number;
+    filteredCount: number;
+    original: string[];
+    filtered: string[];
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -1019,9 +1028,45 @@ export default function Settings() {
                       >
                         Test source map (DEV ONLY)
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-sky-500/50 text-sky-700 dark:text-sky-400"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/stack-filter", { credentials: "include", headers: { Accept: "application/json" } });
+                            const data = await res.json().catch(() => ({}));
+                            if (res.ok && data.filtered != null) {
+                              setStackFilterResult({
+                                pass: data.pass === true,
+                                description: data.description ?? "",
+                                originalCount: data.originalCount ?? 0,
+                                filteredCount: data.filteredCount ?? 0,
+                                original: Array.isArray(data.original) ? data.original : [],
+                                filtered: Array.isArray(data.filtered) ? data.filtered : [],
+                              });
+                              toast({
+                                title: data.pass ? "Stack filter OK" : "Stack filter check",
+                                description: data.pass ? "Only app frames kept. See details below." : "Check the result below.",
+                              });
+                            } else {
+                              toast({
+                                title: "Test failed",
+                                description: data.error || res.status === 404 ? "Test route not available (enable developer mode / ENABLE_TEST_ROUTES)." : "Request failed.",
+                                variant: "destructive",
+                              });
+                            }
+                          } catch {
+                            toast({ title: "Request failed", description: "Network or server error.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        <FlaskConical className="w-4 h-4 mr-1" />
+                        Test stack filter API
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). Sentry captures → alert → webhook → notification. Add "issue seen more than 0 times" in Sentry to get a notification every test.
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces.
                     </p>
                   </div>
                 </CollapsibleContent>
@@ -1171,6 +1216,51 @@ export default function Settings() {
             >
               {slackDisconnectMutation.isPending ? "Disconnecting…" : "Disconnect workspace"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Stack filter API test result */}
+      <AlertDialog open={stackFilterResult !== null} onOpenChange={(open) => !open && setStackFilterResult(null)}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {stackFilterResult?.pass ? (
+                <CheckCircle className="w-5 h-5 text-log-green" />
+              ) : (
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+              )}
+              Stack filter API {stackFilterResult?.pass ? "passed" : "result"}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3 text-left">
+                {stackFilterResult && (
+                  <>
+                    <p className="text-sm text-muted-foreground">{stackFilterResult.description}</p>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="font-medium">Original frames:</span> {stackFilterResult.originalCount}
+                      </div>
+                      <div>
+                        <span className="font-medium">After filter (app only):</span> {stackFilterResult.filteredCount}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground text-xs mb-1">Filtered (shown in incidents):</p>
+                      <pre className="text-xs bg-muted rounded p-2 overflow-auto max-h-24 font-mono">
+                        {stackFilterResult.filtered.join("\n") || "(none)"}
+                      </pre>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Node internals (node:*) and node_modules are stripped so incident stack traces show only your app code.
+                    </p>
+                  </>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setStackFilterResult(null)}>Close</AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
