@@ -9,7 +9,7 @@ import { storage } from "./storage";
 import broadcastNotification from "./helper/broadcastNotification";
 import { sendIncidentAlertEmail } from "./email";
 import { resolveToSource } from "./helper/sourceMapResolve";
-import { isStacktraceBundled } from "./helper/stackTraceBundled";
+import { isStacktraceBundled, isAppStackFrame } from "./helper/stackTraceBundled";
 import {
   ingestIncidentEvent,
   type IncidentEventInput,
@@ -404,7 +404,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     let culprit: string | undefined;
     if (ev) {
-      const appFrames = stacktrace.filter((f) => f.file && !String(f.file).includes("node_modules"));
+      const appFrames = stacktrace.filter((f) => isAppStackFrame(f.file));
       const culpritFrame = appFrames.length > 0 ? appFrames[appFrames.length - 1] : undefined;
       if (culpritFrame) {
         culprit =
@@ -416,7 +416,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     let culpritSource: string | undefined;
     if (culprit && ev) {
-      const appFrames = stacktrace.filter((f) => f.file && !String(f.file).includes("node_modules"));
+      const appFrames = stacktrace.filter((f) => isAppStackFrame(f.file));
       const culpritFrame = appFrames.length > 0 ? appFrames[appFrames.length - 1] : undefined;
       if (culpritFrame?.file && culpritFrame.line != null) {
         culpritSource =
@@ -425,9 +425,7 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
       }
     }
 
-    const appStacktrace = stacktrace.filter(
-      (f) => f.file && !String(f.file).includes("node_modules")
-    );
+    const appStacktrace = stacktrace.filter((f) => isAppStackFrame(f.file));
     const resolveFrame = async (f: {
       file: string;
       function?: string;

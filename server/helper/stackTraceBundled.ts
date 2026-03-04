@@ -3,6 +3,21 @@
  * so we can show a clear message: "Upload source maps to Sentry to see original source."
  */
 
+/** True if the frame file path is a Node.js built-in (e.g. node:internal, node:events). */
+export function isNodeInternalPath(file: string | undefined): boolean {
+  const path = file != null ? String(file).trim() : "";
+  return path.startsWith("node:");
+}
+
+/** True if the frame should be shown in app stack traces (excludes node_modules and Node internals). */
+export function isAppStackFrame(file: string | undefined): boolean {
+  const path = file != null ? String(file).trim() : "";
+  if (!path) return false;
+  if (path.includes("node_modules")) return false;
+  if (isNodeInternalPath(path)) return false;
+  return true;
+}
+
 /** Paths that typically indicate bundled output, not original source. */
 const BUNDLED_PATTERNS = [
   /\/js\/vendor/i,

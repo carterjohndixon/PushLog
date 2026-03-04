@@ -54,6 +54,7 @@ import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from '.
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
 import { resolveToSource } from "./helper/sourceMapResolve";
+import { isAppStackFrame } from "./helper/stackTraceBundled";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
 import { handleSentryWebhook, getIncidentNotificationTargets, getIncidentNotificationTargetsForOrg, wasRecentSentryNotification } from "./sentryWebhook";
 import {
@@ -621,7 +622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
     const rawStacktraceForMeta = (summary as any).stacktrace ?? [];
     const appStacktraceForMeta = rawStacktraceForMeta.filter(
-      (f: any) => f?.file && !String(f.file).includes("node_modules")
+      (f: any) => isAppStackFrame(f?.file)
     );
 
     const resolveFrame = async (f: any): Promise<{ file: string; function?: string; line?: number }> => {
@@ -690,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (user?.email && (user as any).incidentEmailEnabled !== false) {
             const rawStacktrace = (summary as any).stacktrace ?? [];
             const appFrames = rawStacktrace.filter(
-              (f: any) => f?.file && !String(f.file).includes("node_modules")
+              (f: any) => isAppStackFrame(f?.file)
             );
             const resolvedStacktrace = await Promise.all(appFrames.map(resolveFrame));
             const firstResolved = resolvedStacktrace[0];
