@@ -1033,7 +1033,7 @@ export default function OrganizationPage() {
                                     <div className="flex items-center gap-2 shrink-0">
                                       {m.inPushLogOrg ? (
                                         <>
-                                          <Badge variant="secondary" className="text-xs">Already in PushLog</Badge>
+                                          <Badge variant="secondary bg-log-green:" className="text-xs">Already in PushLog</Badge>
                                           {m.pushlogRole && (
                                             <span className="text-muted-foreground text-xs">{ROLE_LABELS[m.pushlogRole] ?? m.pushlogRole}</span>
                                           )}
