@@ -5751,6 +5751,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Test route: verify stack filter strips node_modules and node: internals. No auth for easy curl.
+  app.get("/api/test/stack-filter", (req, res) => {
+    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
+    if (!allow) {
+      return res.status(404).json({ error: "Not found" });
+    }
+    const mockStack = [
+      { file: "node:internal/errors", function: "triggerUncaughtException", line: 1 },
+      { file: "node:events", function: "emit", line: 2 },
+      { file: "/app/node_modules/express/lib/router/index.js", function: "next", line: 3 },
+      { file: "/app/server/routes.ts", function: "registerRoutes", line: 99 },
+      { file: "/app/server/index.ts", function: "default", line: 50 },
+    ];
+    const filtered = mockStack.filter((f: { file?: string }) => isAppStackFrame(f?.file));
+    res.status(200).json({
+      description: "Stack filter: only app frames should remain (no node:*, no node_modules)",
+      originalCount: mockStack.length,
+      filteredCount: filtered.length,
+      original: mockStack.map((f) => f.file),
+      filtered: filtered.map((f) => f.file),
+      pass: filtered.length === 2 && filtered.every((f) => f.file?.includes("server/")),
+    });
+  });
+
   // Test route: simulate Sentry-style production incident. Creates notification immediately so the
   // incident toast shows right away; also sends to incident engine for full pipeline.
   app.post("/api/test/simulate-incident", authenticateToken, async (req, res) => {

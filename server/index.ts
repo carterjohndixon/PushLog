@@ -77,11 +77,12 @@ if (process.env.NODE_ENV === 'production') {
 // Default to SSL in production so Supabase works even if DATABASE_SSL isn't set by PM2/env.
 const databaseUrl = process.env.DATABASE_URL;
 const isProduction = (process.env.APP_ENV || process.env.NODE_ENV) === "production";
-const useDbSsl =
+const useDbSsl = Boolean(
   process.env.DATABASE_SSL === "true" ||
   process.env.DATABASE_SSL === "1" ||
   (databaseUrl && /supabase\.(co|com)/i.test(databaseUrl)) ||
-  (isProduction && databaseUrl && process.env.DATABASE_SSL !== "false");
+  (isProduction && databaseUrl && process.env.DATABASE_SSL !== "false")
+);
 
 // pg Pool: when using connectionString, pg merges parsed URL into config and URL's sslmode can
 // overwrite our ssl option. Use sslmode=no-verify in the URL so the parser sets rejectUnauthorized: false.
