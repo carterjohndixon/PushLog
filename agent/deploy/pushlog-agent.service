@@ -14,9 +14,10 @@ StandardError=journal
 SyslogIdentifier=pushlog-agent
 
 # Hardening (ReadWritePaths=/var/run for Docker socket when using docker source)
+# ProtectHome=false needed when file sources are in /home (e.g. ~/.pm2/logs)
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=false
 ReadWritePaths=/var/lib/pushlog-agent /var/run
 ReadOnlyPaths=/etc/pushlog-agent
 PrivateTmp=true

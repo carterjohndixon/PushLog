@@ -56,9 +56,9 @@ impl Engine {
     // GitPush (deploy) events always emit an incident report.
     let trigger = if event.exception_type == "GitPush" {
       Some(TriggerReason::Deploy)
-    } else if is_new && event.environment == "prod" {
+    } else if is_new && (event.environment == "prod" || event.environment == "production") {
       Some(TriggerReason::NewIssue)
-    } else if is_regression && event.environment == "prod" {
+    } else if is_regression && (event.environment == "prod" || event.environment == "production") {
       Some(TriggerReason::Regression)
     } else if spike_factor >= self.config.spike_threshold {
       Some(TriggerReason::Spike)
