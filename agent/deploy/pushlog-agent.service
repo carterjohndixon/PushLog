@@ -13,11 +13,11 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pushlog-agent
 
-# Hardening
+# Hardening (ReadWritePaths=/var/run for Docker socket when using docker source)
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/pushlog-agent
+ReadWritePaths=/var/lib/pushlog-agent /var/run
 ReadOnlyPaths=/etc/pushlog-agent
 PrivateTmp=true
 

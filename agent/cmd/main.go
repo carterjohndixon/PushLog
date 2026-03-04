@@ -169,6 +169,9 @@ func cmdRun() {
 		case "journald":
 			log.Printf("Starting journald source: unit=%s", src.Unit)
 			go source.TailJournald(ctx, src.Unit, cfg.Service, cfg.Environment, eventCh)
+		case "docker":
+			log.Printf("Starting docker source: container=%s", src.Container)
+			go source.TailDocker(ctx, src.Container, cfg.Service, cfg.Environment, eventCh)
 		default:
 			log.Printf("Unknown source type %q, skipping", src.Type)
 		}

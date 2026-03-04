@@ -15,9 +15,10 @@ const (
 )
 
 type SourceConfig struct {
-	Type  string `yaml:"type"`            // "file" or "journald"
-	Path  string `yaml:"path,omitempty"`  // file path (glob ok for future)
-	Unit  string `yaml:"unit,omitempty"`  // systemd unit for journald
+	Type      string `yaml:"type"`               // "file", "journald", or "docker"
+	Path      string `yaml:"path,omitempty"`     // file path for file source
+	Unit      string `yaml:"unit,omitempty"`     // systemd unit for journald
+	Container string `yaml:"container,omitempty"` // container name or ID for docker source
 }
 
 type Config struct {

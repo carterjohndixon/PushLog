@@ -36,6 +36,8 @@ func Run(ctx context.Context, cfg *config.Config) {
 			sourceNames = append(sourceNames, s.Path)
 		case "journald":
 			sourceNames = append(sourceNames, "journald:"+s.Unit)
+		case "docker":
+			sourceNames = append(sourceNames, "docker:"+s.Container)
 		}
 	}
 
