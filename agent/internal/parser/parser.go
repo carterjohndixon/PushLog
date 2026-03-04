@@ -67,7 +67,7 @@ func ParseLine(line, service, environment string) *InboundEvent {
 	if line == "" {
 		return nil
 	}
-	if matchesIgnorePattern(line) {
+	if MatchesIgnorePattern(line) {
 		return nil
 	}
 
@@ -113,7 +113,7 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 	if msg == "" {
 		return nil
 	}
-	if matchesIgnorePattern(msg) {
+	if MatchesIgnorePattern(msg) {
 		return nil
 	}
 
@@ -153,7 +153,8 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 	}
 }
 
-func matchesIgnorePattern(line string) bool {
+// MatchesIgnorePattern returns true if the line matches noise patterns (401, 403, auth errors) and would not be shipped.
+func MatchesIgnorePattern(line string) bool {
 	for _, re := range ignorePatterns {
 		if re.MatchString(line) {
 			return true

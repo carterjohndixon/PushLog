@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -46,6 +47,8 @@ func main() {
 		fmt.Printf("pushlog-agent %s\n", version)
 	case "paths":
 		cmdPaths()
+	case "parse":
+		cmdParse()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -63,6 +66,7 @@ Usage:
   pushlog-agent run [--config <path>]
   pushlog-agent test [--config <path>]
   pushlog-agent paths [--config <path>]
+  pushlog-agent parse [--config <path>] [--file <path>]
   pushlog-agent version
 
 Commands:
@@ -70,6 +74,7 @@ Commands:
   run       Start watching sources and shipping events
   test      Send a test event and heartbeat to verify connectivity
   paths     Show paths to config, spool, and other agent files
+  parse     Parse log lines (stdin or file) and show what would be shipped or filtered
   version   Print version`)
 }
 
@@ -307,4 +312,75 @@ func cmdPaths() {
 	fmt.Println("    Agent stdout/stderr when run as a systemd service")
 	fmt.Println()
 	fmt.Println("Override config path:  pushlog-agent paths --config /path/to/config.yaml")
+}
+
+func cmdParse() {
+	cfgPath := config.DefaultConfigPath
+	filePath := ""
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--config" && i+1 < len(os.Args) {
+			cfgPath = os.Args[i+1]
+			i++
+		} else if os.Args[i] == "--file" && i+1 < len(os.Args) {
+			filePath = os.Args[i+1]
+			i++
+		}
+	}
+
+	service, env := "app", "production"
+	if cfg, err := config.Load(cfgPath); err == nil {
+		service = cfg.Service
+		env = cfg.Environment
+	}
+
+	var input io.Reader
+	if filePath != "" {
+		f, err := os.Open(filePath)
+		if err != nil {
+			log.Fatalf("Open %s: %v", filePath, err)
+		}
+		defer f.Close()
+		input = f
+	} else {
+		input = os.Stdin
+	}
+
+	fmt.Printf("Parsing as service=%q environment=%q\n", service, env)
+	fmt.Println("Legend: FILTERED = noise (401/403/auth), SKIP = no severity, SHIP = would be sent to server")
+	fmt.Println()
+
+	scanner := bufio.NewScanner(input)
+	lineNum := 0
+	for scanner.Scan() {
+		lineNum++
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		ev := parser.ParseLine(line, service, env)
+		if ev == nil {
+			// Could be filtered (noise) or no severity
+			if parser.MatchesIgnorePattern(line) {
+				fmt.Printf("%d: FILTERED (noise)  %s\n", lineNum, truncate(line, 80))
+			} else {
+				fmt.Printf("%d: SKIP (no severity) %s\n", lineNum, truncate(line, 80))
+			}
+		} else {
+			summary := fmt.Sprintf("severity=%s exception=%s", ev.Severity, ev.ExceptionType)
+			fmt.Printf("%d: SHIP %s\n", lineNum, summary)
+			j, _ := json.MarshalIndent(ev, "    ", "  ")
+			fmt.Printf("    %s\n", strings.ReplaceAll(string(j), "\n", "\n    "))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Read error: %v", err)
+	}
+}
+
+func truncate(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= max {
+		return s
+	}
+	return s[:max] + "..."
 }
