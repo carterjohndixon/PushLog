@@ -12,6 +12,9 @@ yarn-error.log*
 .env.sentry-build-plugin
 client/.env.local
 
+# Supabase DB cert (copy here locally; upload to EC2 separately — do not commit)
+config/supabase-db.crt
+
 
 # Build outputs
 dist
