@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -43,6 +44,8 @@ func main() {
 		cmdTest()
 	case "version":
 		fmt.Printf("pushlog-agent %s\n", version)
+	case "paths":
+		cmdPaths()
 	case "help", "--help", "-h":
 		printUsage()
 	default:
@@ -59,12 +62,14 @@ Usage:
   pushlog-agent connect --token <plg_xxx> [--endpoint <url>] [--config <path>]
   pushlog-agent run [--config <path>]
   pushlog-agent test [--config <path>]
+  pushlog-agent paths [--config <path>]
   pushlog-agent version
 
 Commands:
   connect   Save token and endpoint to config file
   run       Start watching sources and shipping events
   test      Send a test event and heartbeat to verify connectivity
+  paths     Show paths to config, spool, and other agent files
   version   Print version`)
 }
 
@@ -263,4 +268,43 @@ func cmdTest() {
 	}
 
 	fmt.Println("\nAgent connectivity verified. Ready to run.")
+}
+
+func cmdPaths() {
+	cfgPath := config.DefaultConfigPath
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--config" && i+1 < len(os.Args) {
+			cfgPath = os.Args[i+1]
+			break
+		}
+	}
+
+	cfgDir := filepath.Dir(cfgPath)
+	if cfgDir == "." {
+		cfgDir, _ = filepath.Abs(cfgDir)
+	}
+
+	spoolDir := config.DefaultSpoolDir
+	if cfg, err := config.Load(cfgPath); err == nil && cfg.SpoolDir != "" {
+		spoolDir = cfg.SpoolDir
+	}
+
+	fmt.Println("pushlog-agent — file paths")
+	fmt.Println()
+	fmt.Printf("  %-40s %s\n", "Config file", cfgPath)
+	fmt.Println("    Main config: endpoint, token, service, environment, sources (file/journald/docker)")
+	fmt.Println()
+	fmt.Printf("  %-40s %s\n", "Config directory", cfgDir)
+	fmt.Println("    Where config.yaml lives; systemd grants read-only access here")
+	fmt.Println()
+	fmt.Printf("  %-40s %s\n", "Spool directory", spoolDir)
+	fmt.Println("    Failed events are written here when the server is unreachable; retried on next run")
+	fmt.Println()
+	fmt.Printf("  %-40s %s\n", "Systemd unit (if installed)", "/etc/systemd/system/pushlog-agent.service")
+	fmt.Println("    Service file; use systemctl status/restart pushlog-agent")
+	fmt.Println()
+	fmt.Printf("  %-40s %s\n", "Journal logs", "journalctl -u pushlog-agent -f")
+	fmt.Println("    Agent stdout/stderr when run as a systemd service")
+	fmt.Println()
+	fmt.Println("Override config path:  pushlog-agent paths --config /path/to/config.yaml")
 }
