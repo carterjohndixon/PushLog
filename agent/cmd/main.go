@@ -318,12 +318,37 @@ func cmdParse() {
 	cfgPath := config.DefaultConfigPath
 	filePath := ""
 	for i := 2; i < len(os.Args); i++ {
-		if os.Args[i] == "--config" && i+1 < len(os.Args) {
-			cfgPath = os.Args[i+1]
-			i++
-		} else if os.Args[i] == "--file" && i+1 < len(os.Args) {
-			filePath = os.Args[i+1]
-			i++
+		switch os.Args[i] {
+		case "--config":
+			if i+1 < len(os.Args) {
+				cfgPath = os.Args[i+1]
+				i++
+			}
+		case "--file":
+			if i+1 < len(os.Args) {
+				filePath = os.Args[i+1]
+				i++
+			}
+		case "--help", "-h":
+			fmt.Println(`parse — Preview how the agent would interpret your logs (no data is sent)
+
+  Run this to verify your log format is understood and that noise (401s, auth errors)
+  is filtered correctly before you rely on the live agent.
+
+Options:
+  --file <path>    Parse lines from this file (default: read from stdin)
+  --config <path>  Use service/env from config (default: app, production)
+
+Output legend:
+  FILTERED (noise)   Line matches 401/403/auth patterns — never shipped
+  SKIP (no severity) Line has no error/warn/critical — ignored
+  SHIP               Line would be sent to PushLog (shows full event JSON)
+
+Examples:
+  echo "Error: 401 Not authenticated" | pushlog-agent parse
+  pushlog-agent parse --file /var/log/myapp.log
+  tail -f /var/log/app.log | pushlog-agent parse`)
+			return
 		}
 	}
 
