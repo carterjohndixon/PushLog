@@ -1,4 +1,5 @@
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# Exact tag when on a tag with no extra commits/dirty; otherwise git describe. Override: VERSION=v0.1.0 make
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 BINARY  := pushlog-agent
 GOFLAGS := -trimpath
