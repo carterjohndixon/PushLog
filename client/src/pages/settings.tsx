@@ -59,17 +59,21 @@ type AccountType = "solo" | "team";
 function AccountTypeSection({
   currentType,
   canEdit,
+  memberCount,
   onSuccess,
 }: {
   currentType: AccountType;
   canEdit: boolean;
+  memberCount?: number;
   onSuccess: () => void;
 }) {
   const { toast } = useToast();
   const [saving, setSaving] = useState<AccountType | null>(null);
+  const hasOtherMembers = typeof memberCount === "number" && memberCount > 1;
 
   const setType = async (type: AccountType) => {
     if (!canEdit || saving) return;
+    if (type === "solo" && hasOtherMembers) return;
     setSaving(type);
     try {
       const res = await fetch("/api/org", {
@@ -96,7 +100,8 @@ function AccountTypeSection({
         variant={currentType === "solo" ? "default" : "outline"}
         size="sm"
         onClick={() => setType("solo")}
-        disabled={!canEdit || saving !== null}
+        disabled={!canEdit || saving !== null || hasOtherMembers}
+        title={hasOtherMembers ? "Remove other members from the Organization page first to switch to Solo." : undefined}
       >
         {saving === "solo" && (
           <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-1.5" />
@@ -114,6 +119,9 @@ function AccountTypeSection({
         )}
         Organization
       </Button>
+      {hasOtherMembers && canEdit && (
+        <p className="text-sm text-muted-foreground w-full">To switch to Solo, remove other members from the Organization page first (or have them leave).</p>
+      )}
       {!canEdit && (
         <p className="text-sm text-muted-foreground">Only owners and admins can change account type.</p>
       )}
@@ -378,6 +386,11 @@ export default function Settings() {
     queryKey: PROFILE_QUERY_KEY,
     queryFn: fetchProfile,
     refetchOnMount: "always",
+  });
+  const { data: orgResponse } = useQuery<{ id: string; name: string; domain: string | null; type: string; memberCount: number }>({
+    queryKey: ["/api/org"],
+    queryFn: () => fetch("/api/org", { credentials: "include", headers: { Accept: "application/json" } }).then((r) => { if (!r.ok) throw new Error("Failed to load org"); return r.json(); }),
+    enabled: !!profileResponse?.user?.organizationId,
   });
   const devMode = profileResponse?.user?.devMode ?? false;
   const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
@@ -842,6 +855,7 @@ export default function Settings() {
                 <AccountTypeSection
                   currentType={profileResponse?.user?.accountType ?? "solo"}
                   canEdit={profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin"}
+                  memberCount={orgResponse?.memberCount}
                   onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
                     queryClient.invalidateQueries({ queryKey: ["/api/org"] });

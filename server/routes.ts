@@ -2826,6 +2826,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (Object.keys(updates).length === 0) {
           return res.status(400).json({ error: "No valid updates" });
         }
+        if (updates.type === "solo") {
+          const members = await databaseStorage.getOrganizationMembers(orgId);
+          if (members.length > 1) {
+            return res.status(400).json({
+              error: "Cannot switch to Solo while your organization has other members. Remove other members from the Organization page first, or have them leave.",
+            });
+          }
+        }
         await databaseStorage.updateOrganization(orgId, updates);
         const org = await databaseStorage.getOrganization(orgId);
         res.status(200).json({
