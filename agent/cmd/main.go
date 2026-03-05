@@ -80,7 +80,7 @@ Commands:
 
 func cmdConnect() {
 	var token, endpoint, cfgPath string
-	endpoint = "https://app.pushlog.ai"
+	endpoint = "https://pushlog.ai"
 	cfgPath = config.DefaultConfigPath
 
 	args := os.Args[2:]
