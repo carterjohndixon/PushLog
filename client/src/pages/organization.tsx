@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PageLoadingOverlay } from "@/components/page-loading";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
@@ -505,17 +506,36 @@ export default function OrganizationPage() {
     });
   };
 
-  const showOrgLoading = !user || (profileLoading || (!user.organizationId && !noOrgMessageReady));
+  const showOrgLoading = !user || profileLoading || (user.organizationId && orgLoading) || (!user.organizationId && !noOrgMessageReady);
   if (showOrgLoading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
-        <main className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Loading organization…</p>
+      <div className="min-h-screen bg-background flex flex-col relative">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="space-y-8">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-12 w-12 rounded-xl" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                </div>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardContent className="py-8">
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </main>
         <Footer />
+        <PageLoadingOverlay isVisible message="Loading organization…" />
       </div>
     );
   }

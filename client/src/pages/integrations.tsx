@@ -28,6 +28,7 @@ import { IntegrationSetupModal } from "@/components/integration-setup-modal";
 import { ConfirmIntegrationDeletionModal } from "@/components/confirm-integration-deletion-modal";
 import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { PageLoadingOverlay } from "@/components/page-loading";
 import { ActiveIntegration, RepositoryCardData } from "@/lib/types";
 
 interface IntegrationsProps {
@@ -404,7 +405,8 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
   };
 
   return (
-    <div className="min-h-screen bg-forest-gradient">
+    <div className="min-h-screen bg-forest-gradient relative">
+      <PageLoadingOverlay isVisible={integrationsLoading} message="Loading integrations..." />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Email Verification Banner – only when profile is loaded and not verified */}
         {userProfile && !userProfile.emailVerified && <EmailVerificationBanner />}

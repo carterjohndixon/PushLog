@@ -38,6 +38,7 @@ import { RepositorySettingsModal } from "@/components/repository-settings-modal"
 import { RepositoryTeamModal } from "@/components/repository-team-modal";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { AiCreditsModal } from "@/components/ai-credits-modal";
+import { PageLoadingOverlay } from "@/components/page-loading";
 import { Link } from "wouter";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DashboardStats, RepositoryCardData, ActiveIntegration } from "@/lib/types";
@@ -746,8 +747,11 @@ export default function Dashboard() {
   const [integrationToDelete, setIntegrationToDelete] = useState<ActiveIntegration | null>(null);
   const [repositoryToDelete, setRepositoryToDelete] = useState<RepositoryCardData | null>(null);
 
+  const pageLoading = statsLoading || reposAndIntegrationsLoading;
+
   return (
-    <div className="min-h-screen bg-forest-gradient">
+    <div className="min-h-screen bg-forest-gradient relative">
+      <PageLoadingOverlay isVisible={pageLoading} message="Loading dashboard..." />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Email Verification Banner – only when profile is loaded and not verified */}
         {userProfile && !userProfile.emailVerified && <EmailVerificationBanner />}

@@ -27,6 +27,7 @@ import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
 import { RepositoryTeamModal } from "@/components/repository-team-modal";
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
+import { PageLoadingOverlay } from "@/components/page-loading";
 
 interface RepositoryCardData {
   id?: string;
@@ -708,7 +709,8 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
   };
 
   return (
-    <div className="min-h-screen bg-forest-gradient">
+    <div className="min-h-screen bg-forest-gradient relative">
+      <PageLoadingOverlay isVisible={repositoriesLoading} message="Loading repositories..." />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-graphite">Repositories</h1>

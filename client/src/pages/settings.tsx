@@ -52,6 +52,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { PageLoadingOverlay } from "@/components/page-loading";
 
 type AccountType = "solo" | "team";
 
@@ -725,7 +726,8 @@ export default function Settings() {
   });
 
   return (
-    <div className="min-h-screen flex flex-col bg-forest-gradient">
+    <div className="min-h-screen flex flex-col bg-forest-gradient relative">
+      <PageLoadingOverlay isVisible={profileLoading} message="Loading settings..." />
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-graphite mb-2">Account Settings</h1>
