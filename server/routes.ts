@@ -54,6 +54,7 @@ import { body, validationResult } from "express-validator";
 import { verifySlackRequest, parseSlackCommandBody, handleSlackCommand } from './slack-commands';
 import { getSlackConnectedPopupHtml, getSlackErrorPopupHtml } from './templates/slack-popups';
 import broadcastNotification from "./helper/broadcastNotification";
+import { startTimer, perfLog } from "./helper/perf";
 import { resolveToSource } from "./helper/sourceMapResolve";
 import { isAppStackFrame } from "./helper/stackTraceBundled";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
@@ -2600,6 +2601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // --- Org invite (share link + accept) ---
   app.get("/api/org", authenticateToken, requireOrgMember, async (req: Request, res: Response) => {
+    const orgTimer = startTimer();
     try {
       const orgId = (req as any).orgId as string;
       const org = await databaseStorage.getOrganization(orgId);
@@ -2614,6 +2616,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const defaultName = `${ownerLabel}'s workspace`;
         isDefaultOrgName = (org as any).name === defaultName;
       }
+      perfLog("/api/org total", orgTimer.elapsed());
       res.status(200).json({
         id: org.id,
         name: (org as any).name,
@@ -3094,12 +3097,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     authenticateToken,
     requireOrgMember,
     requireOrgRole(["owner", "admin"]),
-    body("name").trim().isLength({ min: 1, max: 60 }),
+    body("name").trim().isLength({ min: 1, max: 60 }).withMessage("App name must be 1-60 characters"),
     body("appUrl").optional().trim(),
     async (req: Request, res: Response) => {
       try {
+        if (!req.body || typeof req.body !== "object") {
+          return res.status(400).json({
+            error: "Invalid request body. Ensure Content-Type is application/json.",
+            details: [{ msg: "Request body must be valid JSON", path: "body" }],
+          });
+        }
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
+          console.warn("[sentry-apps] validation failed", { body: req.body, errors: errors.array() });
           return res.status(400).json({ error: "Validation failed", details: errors.array() });
         }
         const orgId = (req as any).orgId as string;
@@ -6133,6 +6143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Protected route example - Get user profile
   app.get("/api/profile", authenticateToken, async (req, res) => {
+    const timer = startTimer();
     try {
       // Refresh session expiration (rolling sessions)
       // This ensures the cookie expiration is reset on every request
@@ -6153,8 +6164,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         });
       }
+      let lastMs = timer.elapsed();
+      perfLog("/api/profile sessionSave", lastMs);
 
       const user = await databaseStorage.getUserById(req.user!.userId);
+      perfLog("/api/profile getUser", timer.elapsed() - lastMs);
+      lastMs = timer.elapsed();
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
@@ -6164,6 +6179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.save((err) => { if (err) console.error('Session save error:', err); });
       }
 
+      const t0 = Date.now();
       // Validate GitHub token if user has GitHub connected (non-blocking)
       let githubConnected = false;
       if (user.githubId && user.githubToken) {
@@ -6174,7 +6190,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             validateGitHubToken(user.githubToken),
             new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000))
           ]);
-          
+          perfLog("/api/profile githubValidation", Date.now() - t0);
+
           // If token is invalid, clear the GitHub connection
           if (!githubConnected) {
             await databaseStorage.updateUser(user.id, {
@@ -6201,11 +6218,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let accountType: "solo" | "team" | undefined;
       let needsAccountTypeStep = false;
       if (organizationId) {
+        const t1 = Date.now();
         const membership = await databaseStorage.getMembershipByOrganizationAndUser(organizationId, user.id);
+        const org = await databaseStorage.getOrganization(organizationId);
+        perfLog("/api/profile membership+org", Date.now() - t1);
         if (membership && ((membership as any).role === 'owner' || (membership as any).role === 'admin' || (membership as any).role === 'developer' || (membership as any).role === 'viewer')) {
           role = (membership as any).role;
         }
-        const org = await databaseStorage.getOrganization(organizationId);
         if (org) {
           accountType = ((org as any).type === "team" ? "team" : "solo") as "solo" | "team";
           needsAccountTypeStep = (org as any).accountTypeChosenAt == null;
@@ -6237,6 +6256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           needsAccountTypeStep: needsAccountTypeStep ?? false,
         }
       };
+      perfLog("/api/profile total", timer.elapsed());
       res.status(200).json(payload);
     } catch (error: any) {
       console.error("Profile error:", error?.message ?? error);
@@ -7040,22 +7060,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get account data summary (for settings page)
   app.get("/api/account/data-summary", authenticateToken, async (req, res) => {
+    const dsTimer = startTimer();
     try {
       const userId = req.user!.userId;
-      
+
       const user = await databaseStorage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
       }
+      perfLog("/api/account/data-summary getUser", dsTimer.elapsed());
 
-      const repos = await databaseStorage.getRepositoriesByUserId(userId);
-      const integrations = await databaseStorage.getIntegrationsByUserId(userId);
-      const workspaces = await databaseStorage.getSlackWorkspacesByUserId(userId);
-      const payments = await databaseStorage.getPaymentsByUserId(userId);
+      const [repos, integrations, workspaces, payments] = await Promise.all([
+        databaseStorage.getRepositoriesByUserId(userId),
+        databaseStorage.getIntegrationsByUserId(userId),
+        databaseStorage.getSlackWorkspacesByUserId(userId),
+        databaseStorage.getPaymentsByUserId(userId),
+      ]);
+      perfLog("/api/account/data-summary repos+integrations+workspaces+payments", dsTimer.elapsed());
 
-      const pushEventCount = await databaseStorage.getPushEventCountForUser(userId);
-      const notificationCount = await databaseStorage.getNotificationCountForUser(userId);
-      const aiUsageCount = await databaseStorage.getAiUsageCountForUser(userId);
+      const [pushEventCount, notificationCount, aiUsageCount] = await Promise.all([
+        databaseStorage.getPushEventCountForUser(userId),
+        databaseStorage.getNotificationCountForUser(userId),
+        databaseStorage.getAiUsageCountForUser(userId),
+      ]);
+      perfLog("/api/account/data-summary total", dsTimer.elapsed());
 
       res.status(200).json({
         accountCreated: user.createdAt,

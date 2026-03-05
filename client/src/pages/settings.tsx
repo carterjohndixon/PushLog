@@ -375,7 +375,10 @@ function SentryWebhooksSection() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create Sentry webhook app");
+        const msg = data.details?.length
+          ? data.details.map((d: { msg?: string }) => d.msg).join("; ")
+          : data.error || "Failed to create Sentry webhook app";
+        throw new Error(msg);
       }
       return res.json() as Promise<{ webhookUrl: string; webhookSecret: string }>;
     },
