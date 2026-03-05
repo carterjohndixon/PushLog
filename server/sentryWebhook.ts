@@ -223,9 +223,12 @@ export async function getIncidentNotificationTargets(
   return usersWithRepos;
 }
 
-export async function handleSentryWebhook(req: Request, res: Response): Promise<void> {
+export type SentryWebhookOptions = { orgId: string };
+
+export async function handleSentryWebhook(req: Request, res: Response, options?: SentryWebhookOptions): Promise<void> {
   const body = req.body as Record<string, unknown>;
   const bodyKeys = body ? Object.keys(body) : [];
+  const orgId = options?.orgId;
   try {
     const data = body?.data as Record<string, unknown> | undefined;
     const ev = data?.event as Record<string, unknown> | undefined;
@@ -233,21 +236,25 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
 
     if (!ev && !issue) {
       const action = String(body?.action ?? "test").trim() || "test";
-      // Use org incident settings for test so configured owner/developer receive it; fallback to legacy (staging admins or users with repos)
+      // When orgId provided (per-app webhook), only notify that org. Otherwise fallback to all orgs or legacy.
       let targetUserIds: string[] = [];
-      try {
-        const orgIds = await storage.getAllOrganizationIds();
-        const seen = new Set<string>();
-        for (const orgId of orgIds) {
-          const ids = await getIncidentNotificationTargetsForOrg(orgId, true);
-          ids.forEach((id) => seen.add(id));
+      if (orgId) {
+        targetUserIds = await getIncidentNotificationTargetsForOrg(orgId, true);
+      } else {
+        try {
+          const orgIds = await storage.getAllOrganizationIds();
+          const seen = new Set<string>();
+          for (const oid of orgIds) {
+            const ids = await getIncidentNotificationTargetsForOrg(oid, true);
+            ids.forEach((id) => seen.add(id));
+          }
+          targetUserIds = Array.from(seen);
+        } catch (e) {
+          console.warn("[webhooks/sentry] test: org targeting failed, using fallback:", e);
         }
-        targetUserIds = Array.from(seen);
-      } catch (e) {
-        console.warn("[webhooks/sentry] test: org targeting failed, using fallback:", e);
-      }
-      if (targetUserIds.length === 0) {
-        targetUserIds = await getIncidentNotificationTargets(true);
+        if (targetUserIds.length === 0) {
+          targetUserIds = await getIncidentNotificationTargets(true);
+        }
       }
       const targetUsers = new Set<string>(targetUserIds);
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
@@ -391,8 +398,9 @@ export async function handleSentryWebhook(req: Request, res: Response): Promise<
     }
 
     const targetUserIds = await (async (): Promise<string[]> => {
-      const orgId = await storage.getOrganizationIdByIncidentServiceName(service);
       if (orgId) return getIncidentNotificationTargetsForOrg(orgId, false);
+      const resolvedOrgId = await storage.getOrganizationIdByIncidentServiceName(service);
+      if (resolvedOrgId) return getIncidentNotificationTargetsForOrg(resolvedOrgId, false);
       return getIncidentNotificationTargets(false);
     })();
     const targetUsers = new Set<string>(targetUserIds);

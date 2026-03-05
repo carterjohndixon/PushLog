@@ -338,6 +338,21 @@ export const userSessions = pgTable("user_sessions", {
   expire: timestamp("expire", { withTimezone: true, mode: "date" }).notNull(),
 });
 
+/** Per-org Sentry webhook apps: each has a unique URL and optional secret for HMAC verification. */
+export const organizationSentryApps = pgTable("organization_sentry_apps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: uuid("organization_id").notNull(),
+  name: text("name").notNull(),
+  appUrl: text("app_url"),
+  webhookToken: text("webhook_token").notNull(),
+  webhookSecretEncrypted: text("webhook_secret_encrypted"),
+  createdByUserId: uuid("created_by_user_id").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (t) => [
+  { name: "organization_sentry_apps_org_id_idx", columns: [t.organizationId] },
+  { name: "organization_sentry_apps_webhook_token_unique", unique: true, columns: [t.webhookToken] },
+]);
+
 /** Agents installed on customer servers that stream runtime errors to PushLog. */
 export const organizationAgents = pgTable("organization_agents", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -433,6 +448,11 @@ export const insertFavoriteModelSchema = createInsertSchema(favoriteModels).omit
 });
 
 export const insertUserDailyStatsSchema = createInsertSchema(userDailyStats);
+
+export const insertOrganizationSentryAppSchema = createInsertSchema(organizationSentryApps).omit({
+  id: true,
+  createdAt: true,
+});
 
 export const insertOrganizationAgentSchema = createInsertSchema(organizationAgents).omit({
   id: true,
@@ -534,5 +554,6 @@ export type FavoriteModel = typeof favoriteModels.$inferSelect;
 export type InsertFavoriteModel = z.infer<typeof insertFavoriteModelSchema>;
 export type UserDailyStats = typeof userDailyStats.$inferSelect;
 export type InsertUserDailyStats = z.infer<typeof insertUserDailyStatsSchema>;
+export type OrganizationSentryApp = typeof organizationSentryApps.$inferSelect;
 export type OrganizationAgent = typeof organizationAgents.$inferSelect;
 export type InsertOrganizationAgent = z.infer<typeof insertOrganizationAgentSchema>;

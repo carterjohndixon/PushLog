@@ -52,3 +52,11 @@ export function generateJoinToken(): string {
 export function generateAgentToken(): string {
   return `plg_${crypto.randomBytes(24).toString("base64url")}`;
 }
+
+/**
+ * Generate a PushLog Sentry webhook token with `pls_` prefix (24 random bytes, base64url).
+ * Stored in plain text (in URL); used to route webhook requests to the correct org.
+ */
+export function generateSentryWebhookToken(): string {
+  return `pls_${crypto.randomBytes(24).toString("base64url")}`;
+}

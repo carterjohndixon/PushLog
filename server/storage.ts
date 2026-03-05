@@ -68,6 +68,12 @@ export interface IStorage {
   getOrganizationIdByIncidentServiceName(service: string): Promise<string | null>;
   getAllOrganizationIds(): Promise<string[]>;
 
+  // Sentry webhook apps
+  createOrganizationSentryApp(orgId: string, createdByUserId: string, input: { name: string; appUrl?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret: string; webhookUrl: string }>;
+  getSentryAppByWebhookToken(token: string): Promise<{ id: string; organizationId: string; name: string; appUrl: string | null; webhookSecretEncrypted: string | null } | null>;
+  listOrganizationSentryApps(orgId: string): Promise<{ id: string; name: string; appUrl: string | null; webhookUrl: string; createdAt: string }[]>;
+  deleteOrganizationSentryApp(orgId: string, appId: string): Promise<boolean>;
+
   // Agent methods
   createOrganizationAgent(orgId: string, name: string, tokenHash: string, createdByUserId: string): Promise<{ id: string; organizationId: string; name: string; status: string; createdAt: string }>;
   getOrganizationAgentByTokenHash(tokenHash: string): Promise<{ id: string; organizationId: string; name: string; status: string } | null>;
@@ -315,6 +321,20 @@ export class MemStorage implements IStorage {
 
   async getAllOrganizationIds(): Promise<string[]> {
     return [];
+  }
+
+  // Sentry webhook app stubs (MemStorage — not used in production)
+  async createOrganizationSentryApp(_orgId: string, _createdByUserId: string, _input: { name: string; appUrl?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret: string; webhookUrl: string }> {
+    throw new Error("Not implemented in MemStorage");
+  }
+  async getSentryAppByWebhookToken(_token: string): Promise<{ id: string; organizationId: string; name: string; appUrl: string | null; webhookSecretEncrypted: string | null } | null> {
+    return null;
+  }
+  async listOrganizationSentryApps(_orgId: string): Promise<{ id: string; name: string; appUrl: string | null; webhookUrl: string; createdAt: string }[]> {
+    return [];
+  }
+  async deleteOrganizationSentryApp(_orgId: string, _appId: string): Promise<boolean> {
+    return false;
   }
 
   // Agent stubs (MemStorage — not used in production)

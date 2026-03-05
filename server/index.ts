@@ -346,42 +346,53 @@ app.post(
   githubWebhookHandler
 );
 
-// Sentry webhook: must receive raw body for signature verification (Sentry signs the raw body)
+// Sentry webhook (per-app): POST /api/webhooks/sentry/:token — each org creates apps in Settings to get a unique URL
 app.post(
-  "/api/webhooks/sentry",
+  "/api/webhooks/sentry/:token",
   express.raw({ type: "application/json", limit: "1mb" }),
-  (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.log("[webhooks/sentry] POST received");
+  async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const token = (req.params as { token?: string }).token?.trim();
+    if (!token) {
+      res.status(400).json({ error: "Missing webhook token" });
+      return;
+    }
     const raw = req.body;
     if (!raw || !Buffer.isBuffer(raw)) {
       res.status(400).json({ error: "Invalid body" });
       return;
     }
-    const configuredSecret = process.env.SENTRY_WEBHOOK_SECRET?.trim();
-    if (configuredSecret) {
+    const app = await databaseStorage.getSentryAppByWebhookToken(token);
+    if (!app) {
+      res.status(404).json({ error: "Invalid webhook URL. Create a Sentry app in Settings to get your webhook URL." });
+      return;
+    }
+    const { decrypt } = await import("./encryption");
+    const secret = app.webhookSecretEncrypted ? decrypt(app.webhookSecretEncrypted) : null;
+    if (secret) {
       const sig = (req.headers["sentry-hook-signature"] as string)?.trim();
       if (!sig) {
-        console.log("[webhooks/sentry] 401 Missing Sentry-Hook-Signature");
-        res.status(401).json({ error: "Missing Sentry-Hook-Signature" });
+        res.status(401).json({ error: "Missing Sentry-Hook-Signature. Add the webhook secret to your Sentry integration." });
         return;
       }
-      const computed = crypto.createHmac("sha256", configuredSecret).update(raw).digest("hex");
+      const computed = crypto.createHmac("sha256", secret).update(raw).digest("hex");
       const expected = sig.startsWith("sha256=") ? "sha256=" + computed : computed;
       if (sig !== expected) {
-        console.log("[webhooks/sentry] 401 Invalid signature (verify SENTRY_WEBHOOK_SECRET matches Sentry integration)");
-        res.status(401).json({ error: "Invalid signature" });
+        res.status(401).json({ error: "Invalid signature. Ensure the secret in Sentry matches the one shown when you created the app." });
         return;
       }
     }
     try {
       (req as any).body = JSON.parse(raw.toString("utf8"));
+      (req as any).sentryOrgId = app.organizationId;
     } catch {
       res.status(400).json({ error: "Invalid JSON" });
       return;
     }
     next();
   },
-  sentryWebhookHandler
+  async (req: express.Request, res: express.Response) => {
+    await sentryWebhookHandler(req, res, { orgId: (req as any).sentryOrgId });
+  }
 );
 
 // Body parsing with security limits

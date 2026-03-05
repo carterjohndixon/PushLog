@@ -36,6 +36,7 @@ import {
   Wifi,
   WifiOff,
   Plus,
+  Webhook,
 } from "lucide-react";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
@@ -327,6 +328,234 @@ function AgentsSection() {
                     </AlertDialogContent>
                   </AlertDialog>
                 )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+interface SentryApp {
+  id: string;
+  name: string;
+  appUrl: string | null;
+  webhookUrl: string;
+  createdAt: string;
+}
+
+function SentryWebhooksSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [appUrl, setAppUrl] = useState("");
+  const [newApp, setNewApp] = useState<{ webhookUrl: string; webhookSecret: string } | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const { data: sentryData, isLoading } = useQuery<{ apps: SentryApp[] }>({
+    queryKey: ["/api/org/sentry-apps"],
+    queryFn: async () => {
+      const res = await fetch("/api/org/sentry-apps", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch Sentry webhook apps");
+      return res.json();
+    },
+  });
+
+  const apps = sentryData?.apps ?? [];
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/org/sentry-apps", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), appUrl: appUrl.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create Sentry webhook app");
+      }
+      return res.json() as Promise<{ webhookUrl: string; webhookSecret: string }>;
+    },
+    onSuccess: (data) => {
+      setNewApp({ webhookUrl: data.webhookUrl, webhookSecret: data.webhookSecret });
+      setName("");
+      setAppUrl("");
+      queryClient.invalidateQueries({ queryKey: ["/api/org/sentry-apps"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (appId: string) => {
+      const res = await fetch(`/api/org/sentry-apps/${appId}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to delete");
+      }
+    },
+    onSuccess: () => {
+      setDeleteId(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/org/sentry-apps"] });
+      toast({ title: "Sentry webhook app deleted" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const copyUrl = (url: string) => {
+    navigator.clipboard.writeText(url);
+    toast({ title: "Webhook URL copied" });
+  };
+
+  const copySecret = (secret: string) => {
+    navigator.clipboard.writeText(secret);
+    toast({ title: "Secret copied" });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Webhook className="w-5 h-5 text-log-green" />
+            Sentry webhooks
+          </CardTitle>
+          <AlertDialog open={createOpen || !!newApp} onOpenChange={(open) => {
+            if (!open) { setCreateOpen(false); setNewApp(null); setName(""); setAppUrl(""); }
+          }}>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" /> Add webhook
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{newApp ? "Webhook created" : "Create Sentry webhook"}</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-4">
+                    {newApp ? (
+                      <>
+                        <p className="text-sm">Copy the URL and secret now — the secret will not be shown again. Add the URL and secret to your Sentry Alert Rule or Internal Integration.</p>
+                        <div>
+                          <Label className="text-sm">Webhook URL</Label>
+                          <div className="flex gap-2 mt-1">
+                            <Input readOnly value={newApp.webhookUrl} className="font-mono text-xs" />
+                            <Button size="sm" variant="outline" onClick={() => copyUrl(newApp.webhookUrl)}>
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-amber-600 dark:text-amber-400">Secret (for Sentry signature verification)</Label>
+                          <p className="text-xs text-muted-foreground mb-1">Add this to your Sentry webhook config — it will not be shown again.</p>
+                          <div className="flex gap-2">
+                            <Input readOnly value={newApp.webhookSecret} className="font-mono text-xs" />
+                            <Button size="sm" variant="outline" onClick={() => copySecret(newApp.webhookSecret)}>
+                              <Copy className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm">Create a unique webhook URL for this app. Enter a name and optional app URL (for your reference).</p>
+                        <div>
+                          <Label htmlFor="sentry-app-name">App name</Label>
+                          <Input
+                            id="sentry-app-name"
+                            placeholder="e.g. Frontend, Backend API"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="sentry-app-url">App URL (optional)</Label>
+                          <Input
+                            id="sentry-app-url"
+                            placeholder="e.g. https://myapp.com"
+                            value={appUrl}
+                            onChange={(e) => setAppUrl(e.target.value)}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                {newApp ? (
+                  <AlertDialogAction onClick={() => { setNewApp(null); setCreateOpen(false); }}>
+                    Done
+                  </AlertDialogAction>
+                ) : (
+                  <>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={!name.trim() || createMutation.isPending}
+                      onClick={() => createMutation.mutate()}
+                    >
+                      {createMutation.isPending ? "Creating..." : "Create"}
+                    </AlertDialogAction>
+                  </>
+                )}
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+        <CardDescription>
+          Create a unique webhook URL for each Sentry project. Add the URL and secret to your Sentry Alert Rule or Internal Integration.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        ) : apps.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No Sentry webhooks yet. Add one to connect Sentry to PushLog.</p>
+        ) : (
+          <div className="space-y-3">
+            {apps.map((app) => (
+              <div key={app.id} className="flex items-center justify-between border rounded-lg px-4 py-3 gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm">{app.name}</p>
+                  {app.appUrl && <p className="text-xs text-muted-foreground truncate">{app.appUrl}</p>}
+                  <div className="flex items-center gap-2 mt-1">
+                    <code className="text-xs truncate max-w-[280px] block">{app.webhookUrl}</code>
+                    <Button size="sm" variant="ghost" className="shrink-0" onClick={() => copyUrl(app.webhookUrl)}>
+                      <Copy className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+                <AlertDialog open={deleteId === app.id} onOpenChange={(open) => { if (!open) setDeleteId(null); }}>
+                  <AlertDialogTrigger asChild>
+                    <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600 shrink-0" onClick={() => setDeleteId(app.id)}>
+                      Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete &quot;{app.name}&quot;?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This webhook URL will stop working. You will need to create a new app if you want to reconnect.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-600 hover:bg-red-700"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => deleteMutation.mutate(app.id)}
+                      >
+                        {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ))}
           </div>
@@ -1375,6 +1604,11 @@ export default function Settings() {
           {/* Agents */}
           {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
             <AgentsSection />
+          )}
+
+          {/* Sentry webhooks */}
+          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+            <SentryWebhooksSection />
           )}
 
           {/* Danger Zone */}

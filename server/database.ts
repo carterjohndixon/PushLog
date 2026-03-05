@@ -7,6 +7,7 @@ import {
   organizations, organizationMemberships, organizationInvites, organizationIncidentSettings,
   repositoryMembers,
   organizationAgents,
+  organizationSentryApps,
   type User, type InsertUser,
   type Repository, type InsertRepository,
   type Integration, type InsertIntegration,
@@ -28,11 +29,12 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, desc, asc, max, gte, isNull, isNotNull, like, or, lt } from "drizzle-orm";
 import type { IStorage, SearchPushEventsOptions, ListPushEventsFilters } from "./storage";
+import crypto from "crypto";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from "dotenv";
 import { encrypt, decrypt } from "./encryption";
-import { hashToken, generateJoinToken } from "./helper/tokens";
+import { hashToken, generateJoinToken, generateSentryWebhookToken } from "./helper/tokens";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1002,6 +1004,113 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     const oid = (row as { organizationId: string | null } | undefined)?.organizationId;
     return oid ?? null;
+  }
+
+  // ── Sentry webhook apps ──
+
+  async createOrganizationSentryApp(
+    orgId: string,
+    createdByUserId: string,
+    input: { name: string; appUrl?: string },
+  ): Promise<{
+    id: string;
+    name: string;
+    appUrl: string | null;
+    webhookToken: string;
+    webhookSecret: string;
+    webhookUrl: string;
+  }> {
+    const webhookToken = generateSentryWebhookToken();
+    const webhookSecret = crypto.randomBytes(32).toString("base64url");
+    const encryptedSecret = encrypt(webhookSecret);
+    const [row] = await db
+      .insert(organizationSentryApps)
+      .values({
+        organizationId: orgId,
+        name: input.name.trim(),
+        appUrl: input.appUrl?.trim() || null,
+        webhookToken,
+        webhookSecretEncrypted: encryptedSecret,
+        createdByUserId,
+      })
+      .returning();
+    const baseUrl = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://pushlog.ai";
+    const webhookUrl = `${baseUrl.replace(/\/$/, "")}/api/webhooks/sentry/${webhookToken}`;
+    return {
+      id: (row as any).id,
+      name: (row as any).name,
+      appUrl: (row as any).appUrl,
+      webhookToken,
+      webhookSecret,
+      webhookUrl,
+    };
+  }
+
+  async getSentryAppByWebhookToken(
+    token: string,
+  ): Promise<{
+    id: string;
+    organizationId: string;
+    name: string;
+    appUrl: string | null;
+    webhookSecretEncrypted: string | null;
+  } | null> {
+    const [row] = await db
+      .select({
+        id: organizationSentryApps.id,
+        organizationId: organizationSentryApps.organizationId,
+        name: organizationSentryApps.name,
+        appUrl: organizationSentryApps.appUrl,
+        webhookSecretEncrypted: organizationSentryApps.webhookSecretEncrypted,
+      })
+      .from(organizationSentryApps)
+      .where(eq(organizationSentryApps.webhookToken, token))
+      .limit(1);
+    return (row as any) ?? null;
+  }
+
+  async listOrganizationSentryApps(
+    orgId: string,
+  ): Promise<
+    {
+      id: string;
+      name: string;
+      appUrl: string | null;
+      webhookUrl: string;
+      createdAt: string;
+    }[]
+  > {
+    const baseUrl = process.env.APP_URL || process.env.PUBLIC_APP_URL || "https://pushlog.ai";
+    const rows = await db
+      .select({
+        id: organizationSentryApps.id,
+        name: organizationSentryApps.name,
+        appUrl: organizationSentryApps.appUrl,
+        webhookToken: organizationSentryApps.webhookToken,
+        createdAt: organizationSentryApps.createdAt,
+      })
+      .from(organizationSentryApps)
+      .where(eq(organizationSentryApps.organizationId, orgId))
+      .orderBy(desc(organizationSentryApps.createdAt));
+    return rows.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      appUrl: r.appUrl,
+      webhookUrl: `${baseUrl.replace(/\/$/, "")}/api/webhooks/sentry/${r.webhookToken}`,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async deleteOrganizationSentryApp(orgId: string, appId: string): Promise<boolean> {
+    const result = await db
+      .delete(organizationSentryApps)
+      .where(
+        and(
+          eq(organizationSentryApps.organizationId, orgId),
+          eq(organizationSentryApps.id, appId)
+        )
+      );
+    return (result as any).rowCount > 0;
   }
 
   // ── Agent CRUD ──

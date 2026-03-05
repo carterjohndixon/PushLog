@@ -592,9 +592,9 @@ export async function githubWebhookHandler(req: Request, res: Response): Promise
   return handleGitHubWebhook(req, res);
 }
 
-/** Sentry webhook handler. Delegates to sentryWebhook module. */
-export async function sentryWebhookHandler(req: Request, res: Response): Promise<void> {
-  return handleSentryWebhook(req, res);
+/** Sentry webhook handler. Delegates to sentryWebhook module. Options (e.g. orgId) when called from per-app webhook route. */
+export async function sentryWebhookHandler(req: Request, res: Response, options?: { orgId: string }): Promise<void> {
+  return handleSentryWebhook(req, res, options);
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -3084,6 +3084,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Patch incident settings error:", e);
         Sentry.captureException(e);
         res.status(500).json({ error: "Failed to update incident settings" });
+      }
+    }
+  );
+
+  /** Create a Sentry webhook app (owner/admin only). Returns webhook URL and secret (shown once). */
+  app.post(
+    "/api/org/sentry-apps",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    body("name").trim().isLength({ min: 1, max: 60 }),
+    body("appUrl").optional().trim(),
+    async (req: Request, res: Response) => {
+      try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ error: "Validation failed", details: errors.array() });
+        }
+        const orgId = (req as any).orgId as string;
+        const userId = req.user!.userId;
+        const name = (req.body?.name as string)?.trim();
+        const appUrl = (req.body?.appUrl as string)?.trim() || undefined;
+        const result = await databaseStorage.createOrganizationSentryApp(orgId, userId, { name, appUrl });
+        res.status(201).json(result);
+      } catch (e) {
+        console.error("Create Sentry app error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to create Sentry webhook app" });
+      }
+    }
+  );
+
+  /** List Sentry webhook apps for the org (owner/admin only). */
+  app.get(
+    "/api/org/sentry-apps",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const apps = await databaseStorage.listOrganizationSentryApps(orgId);
+        res.status(200).json({ apps });
+      } catch (e) {
+        console.error("List Sentry apps error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to list Sentry webhook apps" });
+      }
+    }
+  );
+
+  /** Delete a Sentry webhook app (owner/admin only). */
+  app.delete(
+    "/api/org/sentry-apps/:appId",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const orgId = (req as any).orgId as string;
+        const appId = (req.params.appId || "").trim();
+        if (!appId) {
+          return res.status(400).json({ error: "App ID is required" });
+        }
+        const deleted = await databaseStorage.deleteOrganizationSentryApp(orgId, appId);
+        if (!deleted) {
+          return res.status(404).json({ error: "Sentry webhook app not found" });
+        }
+        res.status(200).json({ success: true });
+      } catch (e) {
+        console.error("Delete Sentry app error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: "Failed to delete Sentry webhook app" });
       }
     }
   );
