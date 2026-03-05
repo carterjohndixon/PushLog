@@ -5981,6 +5981,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Sentry setup: throw a real error so Sentry receives it. No auth, works in staging/dev.
+  // Visit /debug-sentry to verify your SENTRY_DSN. Returns 404 in production.
+  app.get("/debug-sentry", (_req, res) => {
+    const allow = process.env.APP_ENV !== "production" || process.env.NODE_ENV !== "production" || process.env.ENABLE_TEST_ROUTES === "true";
+    if (!allow) return res.status(404).send("Not found");
+    throw new Error("My first Sentry error!");
+  });
+
   // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
   // We capture then return 200 so the UI doesn't see a 500; Sentry still gets the event.
   app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
