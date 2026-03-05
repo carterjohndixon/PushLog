@@ -465,7 +465,7 @@ function SentryWebhooksSection() {
                     ) : (
                       <>
                         <p className="text-sm">Create a unique webhook URL for this app. Enter a name and optional app URL (for your reference).</p>
-                        <div>
+                        <div className="space-y-3 pt-4">
                           <Label htmlFor="sentry-app-name">App name</Label>
                           <Input
                             id="sentry-app-name"
@@ -474,7 +474,7 @@ function SentryWebhooksSection() {
                             onChange={(e) => setName(e.target.value)}
                           />
                         </div>
-                        <div>
+                        <div className="space-y-3 pt-4">
                           <Label htmlFor="sentry-app-url">App URL (optional)</Label>
                           <Input
                             id="sentry-app-url"
