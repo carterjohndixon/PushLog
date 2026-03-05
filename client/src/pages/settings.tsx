@@ -849,28 +849,6 @@ export default function Settings() {
             </Card>
           )}
 
-          {/* Organization */}
-          {profileResponse?.user?.organizationId && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-log-green" />
-                  Organization
-                </CardTitle>
-                <CardDescription>
-                  Manage your organization and members.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href="/organization">
-                  <Button variant="outline" size="sm">
-                    View organization
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
-
           {/* GitHub connection */}
           <Card>
             <CardHeader>
