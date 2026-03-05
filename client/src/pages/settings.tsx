@@ -366,12 +366,12 @@ function SentryWebhooksSection() {
   const apps = sentryData?.apps ?? [];
 
   const createMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ name: n, appUrl: u }: { name: string; appUrl: string }) => {
       const res = await fetch("/api/org/sentry-apps", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), appUrl: appUrl.trim() || undefined }),
+        body: JSON.stringify({ name: n.trim(), appUrl: u.trim() || undefined }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -501,7 +501,7 @@ function SentryWebhooksSection() {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       disabled={!name.trim() || createMutation.isPending}
-                      onClick={() => createMutation.mutate()}
+                      onClick={() => createMutation.mutate({ name, appUrl })}
                     >
                       {createMutation.isPending ? "Creating..." : "Create"}
                     </AlertDialogAction>
