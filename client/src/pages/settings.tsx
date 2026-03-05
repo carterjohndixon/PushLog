@@ -54,6 +54,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { PageLoadingOverlay } from "@/components/page-loading";
+import * as Sentry from "@sentry/react";
 
 type AccountType = "solo" | "team";
 
@@ -1594,9 +1595,31 @@ export default function Settings() {
                         <FlaskConical className="w-4 h-4 mr-1" />
                         Test stack filter API
                       </Button>
+                      {typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai" && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                            onClick={() => {
+                              throw new Error("Sentry React test error");
+                            }}
+                          >
+                            Test Error (frontend)
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                            onClick={() => Sentry.captureMessage("Sentry test message", "info")}
+                          >
+                            Test Message (frontend)
+                          </Button>
+                        </>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces.
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces. <strong>Test Error / Test Message (staging only):</strong> Frontend Sentry test — throws error or captures message to your frontend Sentry project.
                     </p>
                   </div>
                 </CollapsibleContent>
