@@ -388,10 +388,12 @@ app.post(
     try {
       (req as any).body = JSON.parse(raw.toString("utf8"));
       (req as any).sentryOrgId = app.organizationId;
-    } catch {
+    } catch (parseErr) {
+      console.warn("[webhooks/sentry] 400 — JSON parse failed:", parseErr instanceof Error ? parseErr.message : parseErr);
       res.status(400).json({ error: "Invalid JSON" });
       return;
     }
+    console.log("[webhooks/sentry] middleware done, calling next()");
     next();
   },
   async (req: express.Request, res: express.Response) => {
