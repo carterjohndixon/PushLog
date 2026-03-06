@@ -1105,15 +1105,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteOrganizationSentryApp(orgId: string, appId: string): Promise<boolean> {
-    const result = await db
+    const deleted = await db
       .delete(organizationSentryApps)
       .where(
         and(
           eq(organizationSentryApps.organizationId, orgId),
           eq(organizationSentryApps.id, appId)
         )
-      );
-    return (result as any).rowCount > 0;
+      )
+      .returning({ id: organizationSentryApps.id });
+    return deleted.length > 0;
   }
 
   // ── Agent CRUD ──

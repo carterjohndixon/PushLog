@@ -492,7 +492,7 @@ function SentryWebhooksSection() {
                           />
                         </div>
                         <div className="space-y-3 pt-4">
-                          <Label htmlFor="sentry-integration-secret">Sentry Integration Secret (optional)</Label>
+                          <Label htmlFor="sentry-integration-secret">Sentry Client Secret (optional)</Label>
                           <Input
                             id="sentry-integration-secret"
                             type="password"
