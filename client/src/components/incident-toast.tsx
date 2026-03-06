@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { cn, getIncidentSourceLabel } from "@/lib/utils";
 
 interface IncidentNotification {
   id: string | number;
@@ -110,7 +110,14 @@ export function IncidentToast() {
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-semibold text-foreground">{state.incident.title}</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="font-semibold text-foreground">{state.incident.title}</p>
+              {(() => {
+                const meta = typeof state.incident.metadata === 'string' ? (() => { try { return JSON.parse(state.incident.metadata); } catch { return null; } })() : state.incident.metadata;
+                const label = getIncidentSourceLabel(meta);
+                return label ? <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground">{label}</span> : null;
+              })()}
+            </div>
             <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
               {state.incident.message}
             </p>

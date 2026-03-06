@@ -463,7 +463,7 @@ function SentryWebhooksSection() {
                             <p className="text-xs text-muted-foreground mb-1">Add this to your Sentry webhook config — it will not be shown again.</p>
                             <div className="flex gap-2">
                               <Input readOnly value={newApp.webhookSecret} className="font-mono text-xs" />
-                              <Button size="sm" variant="outline" onClick={() => copySecret(newApp.webhookSecret)}>
+                              <Button size="sm" variant="outline" onClick={() => copySecret(newApp.webhookSecret as string)}>
                                 <Copy className="w-4 h-4" />
                               </Button>
                             </div>

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Button } from "@/components/ui/button";
 import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink, UserPlus } from "lucide-react";
-import { getAiModelDisplayName } from "@/lib/utils";
+import { getAiModelDisplayName, getIncidentSourceLabel } from "@/lib/utils";
 import { formatCreatedAt } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
 
@@ -292,9 +292,14 @@ export function NotificationDetailsModal() {
               {/* Incident alert — detailed view from Rust incident engine */}
               {isIncidentAlert && (
                 <div className="border-t border-border pt-4 space-y-4 break-words">
-                  <h4 className="font-semibold text-destructive text-sm flex items-center gap-2">
+                  <h4 className="font-semibold text-destructive text-sm flex items-center gap-2 flex-wrap">
                     <AlertCircle className="w-4 h-4" />
                     Incident details
+                    {getIncidentSourceLabel(metadata) && (
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground">
+                        {getIncidentSourceLabel(metadata)}
+                      </span>
+                    )}
                   </h4>
                   <p className="text-sm text-muted-foreground break-words">
                     {selectedNotification.message}

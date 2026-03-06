@@ -195,6 +195,7 @@ impl Engine {
     IncidentSummary {
       incident_id,
       title,
+      source: Some(event.source.clone()),
       service: group.service.clone(),
       environment: group.environment.clone(),
       severity: event.severity,

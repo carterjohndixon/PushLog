@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Bell, Mail, MessageSquare, GitBranch, X, Eye, AlertCircle, UserPlus } from "lucide-react";
 import { useNotifications } from "@/hooks/use-notifications";
 import { formatRelativeOrLocal } from "@/lib/date";
+import { getIncidentSourceLabel } from "@/lib/utils";
 
 interface NotificationsDropdownProps {
   isEmailVerified: boolean;
@@ -75,6 +76,11 @@ export function NotificationsDropdown({ isEmailVerified }: NotificationsDropdown
                 }`}>
                   {(notification as { type: string }).type === 'budget_alert' ? 'Urgent: ' + (notification.title || notification.message) : (notification.title || notification.message)}
                 </span>
+                {notification.type === 'incident_alert' && (() => {
+                  const meta = typeof notification.metadata === 'string' ? (() => { try { return JSON.parse(notification.metadata); } catch { return null; } })() : notification.metadata;
+                  const label = getIncidentSourceLabel(meta);
+                  return label ? <span className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground mt-0.5">{label}</span> : null;
+                })()}
                 <span className="text-xs text-muted-foreground line-clamp-2 break-words">
                   {notification.message}
                 </span>

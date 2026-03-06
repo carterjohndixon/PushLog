@@ -8,6 +8,17 @@ export function cn(...inputs: ClassValue[]) {
 /** sessionStorage key for pending org invite token (set on /join when unauthenticated, used after signup/login to redirect to join). */
 export const PENDING_ORG_INVITE_KEY = "pending_org_invite";
 
+/** Get human-readable incident source from notification metadata (Sentry, Incident Engine, Agent). */
+export function getIncidentSourceLabel(metadata: { incidentSource?: string; source?: string } | null | undefined): string | null {
+  if (!metadata) return null;
+  const src = metadata.incidentSource ?? metadata.source;
+  if (src === "sentry") return "Sentry";
+  if (src === "agent") return "Agent";
+  if (src === "incident_engine") return "Incident Engine";
+  if (["sentry_event_alert", "sentry_issue_alert", "sentry_test"].includes(String(src ?? ""))) return "Sentry";
+  return null;
+}
+
 /** Known OpenAI (and similar) model IDs to human-readable display names. */
 const AI_MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-4o": "GPT-4o",

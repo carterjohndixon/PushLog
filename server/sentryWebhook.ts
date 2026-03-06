@@ -283,7 +283,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
               type: "incident_alert",
               title: directTitle,
               message: directMessage,
-              metadata: JSON.stringify({ source: "sentry_test", action: actionStr, appEnv }),
+              metadata: JSON.stringify({ source: "sentry_test", incidentSource: "sentry", action: actionStr, appEnv }),
             });
             broadcastNotification(userId, {
               id: notif.id,
@@ -478,6 +478,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
     const stackTraceIsBundled = isStacktraceBundled(resolvedStacktrace);
     const directMeta = JSON.stringify({
       source: ev ? "sentry_event_alert" : "sentry_issue_alert",
+      incidentSource: "sentry",
       service,
       environment,
       severity,

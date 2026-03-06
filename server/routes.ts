@@ -651,8 +651,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
 
+    const eventSource = (summary as any).source as string | undefined;
+    const incidentSource = eventSource === "agent" ? "agent" : "incident_engine";
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
+      incidentSource,
       service: summary.service,
       environment: summary.environment,
       trigger: summary.trigger,

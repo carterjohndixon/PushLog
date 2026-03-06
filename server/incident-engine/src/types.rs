@@ -257,6 +257,9 @@ pub struct StackFrameOutput {
 pub struct IncidentSummary {
   pub incident_id: String,
   pub title: String,
+  /// Original event source: "sentry" | "agent" — used to distinguish incident origins in the UI.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub source: Option<String>,
   pub service: String,
   pub environment: String,
   pub severity: Severity,

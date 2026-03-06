@@ -2,10 +2,21 @@
 
 use crate::types::{Event, Fingerprint, Frame};
 
+/// Placeholder frames from agent/log parsing when no real stack trace exists.
+/// Events with only these get grouped by message hash so different log lines
+/// don't collapse into one incident (e.g. "POST /api/sentry-apps 400" vs "throw real error").
+const GENERIC_FRAME_FILES: &[&str] = &["log", "sentry"];
+
+fn is_generic_frame(frame: &Frame) -> bool {
+  let f = frame.file.to_ascii_lowercase();
+  GENERIC_FRAME_FILES.iter().any(|&g| f == g)
+}
+
 /// Compute a stable fingerprint from an event.
 ///
 /// Key components: exception_type + top N normalized frames + service + env.
-/// Uses blake3 for a fast, deterministic hash.
+/// When frames are generic (e.g. agent's "log" placeholder), includes a hash of
+/// the message so different log lines produce different fingerprints.
 pub fn compute(event: &Event, max_frames: usize) -> Fingerprint {
   let mut hasher = blake3::Hasher::new();
   hasher.update(event.exception_type.as_bytes());
@@ -15,6 +26,8 @@ pub fn compute(event: &Event, max_frames: usize) -> Fingerprint {
   hasher.update(event.environment.as_bytes());
 
   let top_frames: Vec<&Frame> = event.frames.iter().take(max_frames).collect();
+  let all_generic = !top_frames.is_empty() && top_frames.iter().all(|f| is_generic_frame(f));
+
   for frame in &top_frames {
     hasher.update(b"|");
     hasher.update(frame.file.as_bytes());
@@ -22,8 +35,16 @@ pub fn compute(event: &Event, max_frames: usize) -> Fingerprint {
     hasher.update(frame.function.as_bytes());
   }
 
+  // When stacktrace is generic (agent log lines), include message so different
+  // errors don't get grouped together (e.g. "POST /api/sentry-apps 400" vs "throw real error").
+  if all_generic {
+    let msg = event.message.trim();
+    let truncated = if msg.len() > 512 { &msg[..512] } else { msg };
+    hasher.update(b"|msg:");
+    hasher.update(truncated.as_bytes());
+  }
+
   let hash = hasher.finalize();
-  // Use first 16 bytes (32 hex chars) for a compact but collision-resistant ID.
   let hex = hash.to_hex();
   Fingerprint(hex[..32].to_string())
 }
