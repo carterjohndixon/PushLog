@@ -363,9 +363,11 @@ app.post(
     }
     const app = await databaseStorage.getSentryAppByWebhookToken(token);
     if (!app) {
+      console.warn("[webhooks/sentry] 404 — unknown token (first 8 chars):", token.slice(0, 8) + "...");
       res.status(404).json({ error: "Invalid webhook URL. Create a Sentry app in Settings to get your webhook URL." });
       return;
     }
+    console.log("[webhooks/sentry] request received for orgId=%s", app.organizationId);
     const { decrypt } = await import("./encryption");
     const secret = app.webhookSecretEncrypted ? decrypt(app.webhookSecretEncrypted) : null;
     if (secret) {

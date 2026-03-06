@@ -227,15 +227,23 @@ export type SentryWebhookOptions = { orgId: string };
 
 export async function handleSentryWebhook(req: Request, res: Response, options?: SentryWebhookOptions): Promise<void> {
   const body = req.body as Record<string, unknown>;
-  const bodyKeys = body ? Object.keys(body) : [];
   const orgId = options?.orgId;
   try {
+    const action = String(body?.action ?? "").trim();
     const data = body?.data as Record<string, unknown> | undefined;
     const ev = data?.event as Record<string, unknown> | undefined;
     const issue = data?.issue as Record<string, unknown> | undefined;
 
-    if (!ev && !issue) {
-      const action = String(body?.action ?? "test").trim() || "test";
+    // Sentry test: installation.test, integration.test, or no event/issue
+    const isTestPayload =
+      action === "installation.test" ||
+      action === "integration.test" ||
+      (/^.*\.test$/.test(action) && !ev && !issue) ||
+      (!ev && !issue);
+
+    if (isTestPayload) {
+      const actionStr = action || "test";
+      console.log("[webhooks/sentry] test payload received", { action: actionStr, orgId: orgId ?? "none" });
       // When orgId provided (per-app webhook), only notify that org. Otherwise fallback to all orgs or legacy.
       let targetUserIds: string[] = [];
       if (orgId) {
@@ -257,9 +265,14 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
         }
       }
       const targetUsers = new Set<string>(targetUserIds);
+      if (targetUsers.size === 0) {
+        console.warn("[webhooks/sentry] test: no target users for orgId=%s — enable Receive incident notifications and ensure repo access", orgId ?? "?");
+      } else {
+        console.log("[webhooks/sentry] test: notifying %d user(s) for orgId=%s", targetUsers.size, orgId ?? "?");
+      }
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
       const directTitle = "Sentry test notification";
-      const directMessage = `Webhook received (action: ${action}). If you see this, the Sentry → PushLog integration is working. [${appEnv}]`;
+      const directMessage = `Webhook received (action: ${actionStr}). If you see this, the Sentry → PushLog integration is working. [${appEnv}]`;
 
       await Promise.all(
         Array.from(targetUsers).map(async (userId) => {
@@ -269,7 +282,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
               type: "incident_alert",
               title: directTitle,
               message: directMessage,
-              metadata: JSON.stringify({ source: "sentry_test", action, appEnv }),
+              metadata: JSON.stringify({ source: "sentry_test", action: actionStr, appEnv }),
             });
             broadcastNotification(userId, {
               id: notif.id,
