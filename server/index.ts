@@ -395,7 +395,13 @@ app.post(
     next();
   },
   async (req: express.Request, res: express.Response) => {
-    await sentryWebhookHandler(req, res, { orgId: (req as any).sentryOrgId });
+    try {
+      console.log("[webhooks/sentry] handler invoked, orgId=", (req as any).sentryOrgId);
+      await sentryWebhookHandler(req, res, { orgId: (req as any).sentryOrgId });
+    } catch (err) {
+      console.error("[webhooks/sentry] handler error:", err);
+      throw err;
+    }
   }
 );
 

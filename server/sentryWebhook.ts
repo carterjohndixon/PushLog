@@ -227,6 +227,7 @@ export type SentryWebhookOptions = { orgId: string };
 
 export async function handleSentryWebhook(req: Request, res: Response, options?: SentryWebhookOptions): Promise<void> {
   const body = req.body as Record<string, unknown>;
+  console.log("[webhooks/sentry] handleSentryWebhook entered, body keys:", body ? Object.keys(body) : "null");
   const orgId = options?.orgId;
   try {
     const action = String(body?.action ?? "").trim();
