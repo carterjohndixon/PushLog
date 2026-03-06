@@ -69,7 +69,7 @@ export interface IStorage {
   getAllOrganizationIds(): Promise<string[]>;
 
   // Sentry webhook apps
-  createOrganizationSentryApp(orgId: string, createdByUserId: string, input: { name: string; appUrl?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret: string; webhookUrl: string }>;
+  createOrganizationSentryApp(orgId: string, createdByUserId: string, input: { name: string; appUrl?: string; sentryIntegrationSecret?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret?: string; webhookUrl: string }>;
   getSentryAppByWebhookToken(token: string): Promise<{ id: string; organizationId: string; name: string; appUrl: string | null; webhookSecretEncrypted: string | null } | null>;
   listOrganizationSentryApps(orgId: string): Promise<{ id: string; name: string; appUrl: string | null; webhookUrl: string; createdAt: string }[]>;
   deleteOrganizationSentryApp(orgId: string, appId: string): Promise<boolean>;
@@ -324,7 +324,7 @@ export class MemStorage implements IStorage {
   }
 
   // Sentry webhook app stubs (MemStorage — not used in production)
-  async createOrganizationSentryApp(_orgId: string, _createdByUserId: string, _input: { name: string; appUrl?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret: string; webhookUrl: string }> {
+  async createOrganizationSentryApp(_orgId: string, _createdByUserId: string, _input: { name: string; appUrl?: string; sentryIntegrationSecret?: string }): Promise<{ id: string; name: string; appUrl: string | null; webhookToken: string; webhookSecret?: string; webhookUrl: string }> {
     throw new Error("Not implemented in MemStorage");
   }
   async getSentryAppByWebhookToken(_token: string): Promise<{ id: string; organizationId: string; name: string; appUrl: string | null; webhookSecretEncrypted: string | null } | null> {

@@ -3099,6 +3099,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     requireOrgRole(["owner", "admin"]),
     body("name").trim().isLength({ min: 1, max: 60 }).withMessage("App name must be 1-60 characters"),
     body("appUrl").optional().trim(),
+    body("sentryIntegrationSecret").optional().trim(),
     async (req: Request, res: Response) => {
       try {
         if (!req.body || typeof req.body !== "object") {
@@ -3116,7 +3117,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const userId = req.user!.userId;
         const name = (req.body?.name as string)?.trim();
         const appUrl = (req.body?.appUrl as string)?.trim() || undefined;
-        const result = await databaseStorage.createOrganizationSentryApp(orgId, userId, { name, appUrl });
+        const sentryIntegrationSecret = (req.body?.sentryIntegrationSecret as string)?.trim() || undefined;
+        const result = await databaseStorage.createOrganizationSentryApp(orgId, userId, { name, appUrl, sentryIntegrationSecret });
         res.status(201).json(result);
       } catch (e) {
         console.error("Create Sentry app error:", e);

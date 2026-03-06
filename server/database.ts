@@ -1011,17 +1011,20 @@ export class DatabaseStorage implements IStorage {
   async createOrganizationSentryApp(
     orgId: string,
     createdByUserId: string,
-    input: { name: string; appUrl?: string },
+    input: { name: string; appUrl?: string; sentryIntegrationSecret?: string },
   ): Promise<{
     id: string;
     name: string;
     appUrl: string | null;
     webhookToken: string;
-    webhookSecret: string;
+    webhookSecret?: string;
     webhookUrl: string;
   }> {
     const webhookToken = generateSentryWebhookToken();
-    const webhookSecret = crypto.randomBytes(32).toString("base64url");
+    const useUserSecret = !!input.sentryIntegrationSecret?.trim();
+    const webhookSecret = useUserSecret
+      ? input.sentryIntegrationSecret!.trim()
+      : crypto.randomBytes(32).toString("base64url");
     const encryptedSecret = encrypt(webhookSecret);
     const [row] = await db
       .insert(organizationSentryApps)
@@ -1041,7 +1044,7 @@ export class DatabaseStorage implements IStorage {
       name: (row as any).name,
       appUrl: (row as any).appUrl,
       webhookToken,
-      webhookSecret,
+      ...(useUserSecret ? {} : { webhookSecret }),
       webhookUrl,
     };
   }

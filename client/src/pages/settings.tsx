@@ -352,7 +352,8 @@ function SentryWebhooksSection() {
   const [createOpen, setCreateOpen] = useState(false);
   const [name, setName] = useState("");
   const [appUrl, setAppUrl] = useState("");
-  const [newApp, setNewApp] = useState<{ webhookUrl: string; webhookSecret: string } | null>(null);
+  const [sentryIntegrationSecret, setSentryIntegrationSecret] = useState("");
+  const [newApp, setNewApp] = useState<{ webhookUrl: string; webhookSecret?: string } | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const { data: sentryData, isLoading } = useQuery<{ apps: SentryApp[] }>({
@@ -367,12 +368,12 @@ function SentryWebhooksSection() {
   const apps = sentryData?.apps ?? [];
 
   const createMutation = useMutation({
-    mutationFn: async ({ name: n, appUrl: u }: { name: string; appUrl: string }) => {
+    mutationFn: async ({ name: n, appUrl: u, sentryIntegrationSecret: s }: { name: string; appUrl: string; sentryIntegrationSecret?: string }) => {
       const res = await fetch("/api/org/sentry-apps", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: n.trim(), appUrl: u.trim() || undefined }),
+        body: JSON.stringify({ name: n.trim(), appUrl: u.trim() || undefined, sentryIntegrationSecret: s?.trim() || undefined }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -381,12 +382,13 @@ function SentryWebhooksSection() {
           : data.error || "Failed to create Sentry webhook app";
         throw new Error(msg);
       }
-      return res.json() as Promise<{ webhookUrl: string; webhookSecret: string }>;
+      return res.json() as Promise<{ webhookUrl: string; webhookSecret?: string }>;
     },
     onSuccess: (data) => {
       setNewApp({ webhookUrl: data.webhookUrl, webhookSecret: data.webhookSecret });
       setName("");
       setAppUrl("");
+      setSentryIntegrationSecret("");
       queryClient.invalidateQueries({ queryKey: ["/api/org/sentry-apps"] });
     },
     onError: (err: Error) => {
@@ -431,7 +433,7 @@ function SentryWebhooksSection() {
             Sentry webhooks
           </CardTitle>
           <AlertDialog open={createOpen || !!newApp} onOpenChange={(open) => {
-            if (!open) { setCreateOpen(false); setNewApp(null); setName(""); setAppUrl(""); }
+            if (!open) { setCreateOpen(false); setNewApp(null); setName(""); setAppUrl(""); setSentryIntegrationSecret(""); }
           }}>
             <AlertDialogTrigger asChild>
               <Button size="sm" onClick={() => setCreateOpen(true)}>
@@ -445,7 +447,7 @@ function SentryWebhooksSection() {
                   <div className="space-y-4">
                     {newApp ? (
                       <>
-                        <p className="text-sm">Copy the URL and secret now — the secret will not be shown again. Add the URL and secret to your Sentry Alert Rule or Internal Integration.</p>
+                        <p className="text-sm">Add the Webhook URL to your Sentry integration (Settings → Developer Settings → Internal Integrations).</p>
                         <div>
                           <Label className="text-sm">Webhook URL</Label>
                           <div className="flex gap-2 mt-1">
@@ -455,16 +457,18 @@ function SentryWebhooksSection() {
                             </Button>
                           </div>
                         </div>
-                        <div>
-                          <Label className="text-sm text-amber-600 dark:text-amber-400">Secret (for Sentry signature verification)</Label>
-                          <p className="text-xs text-muted-foreground mb-1">Add this to your Sentry webhook config — it will not be shown again.</p>
-                          <div className="flex gap-2">
-                            <Input readOnly value={newApp.webhookSecret} className="font-mono text-xs" />
-                            <Button size="sm" variant="outline" onClick={() => copySecret(newApp.webhookSecret)}>
-                              <Copy className="w-4 h-4" />
-                            </Button>
+                        {newApp.webhookSecret && (
+                          <div>
+                            <Label className="text-sm text-amber-600 dark:text-amber-400">Secret (for Sentry signature verification)</Label>
+                            <p className="text-xs text-muted-foreground mb-1">Add this to your Sentry webhook config — it will not be shown again.</p>
+                            <div className="flex gap-2">
+                              <Input readOnly value={newApp.webhookSecret} className="font-mono text-xs" />
+                              <Button size="sm" variant="outline" onClick={() => copySecret(newApp.webhookSecret)}>
+                                <Copy className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -487,6 +491,17 @@ function SentryWebhooksSection() {
                             onChange={(e) => setAppUrl(e.target.value)}
                           />
                         </div>
+                        <div className="space-y-3 pt-4">
+                          <Label htmlFor="sentry-integration-secret">Sentry Integration Secret (optional)</Label>
+                          <Input
+                            id="sentry-integration-secret"
+                            type="password"
+                            placeholder="Paste webhook signing secret from Sentry"
+                            value={sentryIntegrationSecret}
+                            onChange={(e) => setSentryIntegrationSecret(e.target.value)}
+                          />
+                          <p className="text-xs text-muted-foreground">If your Sentry integration provides a webhook signing secret, paste it here for secure verification. Leave blank if not available.</p>
+                        </div>
                       </>
                     )}
                   </div>
@@ -502,7 +517,7 @@ function SentryWebhooksSection() {
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       disabled={!name.trim() || createMutation.isPending}
-                      onClick={() => createMutation.mutate({ name, appUrl })}
+                      onClick={() => createMutation.mutate({ name, appUrl, sentryIntegrationSecret })}
                     >
                       {createMutation.isPending ? "Creating..." : "Create"}
                     </AlertDialogAction>
