@@ -404,8 +404,8 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
     ingestIncidentEvent(event);
 
     const dedupeKey = getDedupeKey(issue as any, ev as any);
-    const action = body?.action != null ? String(body.action) : undefined;
-    if (shouldSkipDirectNotification(dedupeKey, action, !!ev)) {
+    const incidentAction = body?.action != null ? String(body.action) : undefined;
+    if (shouldSkipDirectNotification(dedupeKey, incidentAction, !!ev)) {
       res.status(202).json({ accepted: true });
       return;
     }
