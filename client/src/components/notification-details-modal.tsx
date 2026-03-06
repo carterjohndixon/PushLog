@@ -44,7 +44,7 @@ export function NotificationDetailsModal() {
   return (
     <>
     <Dialog open={dialogOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <ErrorBoundary fallback={
           <div className="py-4 text-center text-muted-foreground text-sm">
             <p>Couldn't load notification details.</p>
@@ -385,7 +385,14 @@ export function NotificationDetailsModal() {
                       {metadata.topSymptoms.map((s: { exception_type?: string; message?: string; count?: number; spike_factor?: number; fingerprint?: string }, i: number) => (
                         <div key={s.fingerprint ?? `symptom-${i}`} className="text-sm pl-3 border-l-2 border-destructive/50 space-y-1 break-words">
                           <div><span className="font-medium text-foreground">Type:</span> {s.exception_type}</div>
-                          {s.message && <div><span className="font-medium text-foreground">Message:</span> <span className="break-words">{s.message}</span></div>}
+                          {s.message && (
+                            <div className="min-w-0 w-full">
+                              <span className="font-medium text-foreground">Message:</span>
+                              <div className="mt-0.5 w-full min-w-0 break-all whitespace-pre-wrap text-sm overflow-x-auto overflow-y-visible" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                {s.message}
+                              </div>
+                            </div>
+                          )}
                           {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}
                           {s.spike_factor != null && <div><span className="font-medium text-foreground">Spike factor:</span> {s.spike_factor}</div>}
                           {s.fingerprint && <div className="text-xs font-mono text-muted-foreground break-words" title={s.fingerprint}>Fingerprint: {s.fingerprint}</div>}
