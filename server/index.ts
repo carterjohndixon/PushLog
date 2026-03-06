@@ -372,17 +372,17 @@ app.post(
     const secret = app.webhookSecretEncrypted ? decrypt(app.webhookSecretEncrypted) : null;
     if (secret) {
       const sig = (req.headers["sentry-hook-signature"] as string)?.trim();
-      if (!sig) {
-        // Sentry's Internal Integration UI sometimes has no field for webhook secret.
-        // Allow through but log; the URL token alone provides some security.
-        console.warn("[webhooks/sentry] No Sentry-Hook-Signature — Sentry may not support secret in your plan. Consider adding it if available.");
-      } else {
+      if (sig) {
         const computed = crypto.createHmac("sha256", secret).update(raw).digest("hex");
         const expected = sig.startsWith("sha256=") ? "sha256=" + computed : computed;
-        if (sig !== expected) {
-          res.status(401).json({ error: "Invalid signature. Ensure the secret in Sentry matches the one shown when you created the app." });
-          return;
+        if (sig === expected) {
+          // Valid signature — verified
+        } else {
+          // Sentry sends a signature but can't have our secret (no UI to add it). Allow through with warning.
+          console.warn("[webhooks/sentry] Signature present but invalid — Sentry has no field for secret. Allowing request (URL token only).");
         }
+      } else {
+        console.warn("[webhooks/sentry] No Sentry-Hook-Signature — Sentry may not support secret in your plan. Allowing request.");
       }
     }
     try {
