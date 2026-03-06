@@ -54,8 +54,8 @@ function shouldSkipDirectNotification(
   });
   toDelete.forEach((id) => recentSentryDedupeKeys.delete(id));
   if (dedupeKey && recentSentryDedupeKeys.has(dedupeKey)) return true;
-  // Issue-only webhook (action=created, no event): skip — incident engine will emit "new_issue"
-  if (action === "created" && !hasEvent) return true;
+  // Previously we skipped action=created with no event (incident engine would emit). But if the engine
+  // isn't running or delays, users get no notification. Now we always create direct notifications.
   return false;
 }
 
@@ -404,6 +404,9 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
       return getIncidentNotificationTargets(false);
     })();
     const targetUsers = new Set<string>(targetUserIds);
+    if (targetUsers.size === 0) {
+      console.warn("[webhooks/sentry] no target users for orgId=%s service=%s — enable Receive incident notifications and ensure you have repo access", orgId ?? "?", service);
+    }
 
     const directTitle = `Sentry: ${event.exception_type} in ${service}/${environment}`;
     const directMessage = ev
