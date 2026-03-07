@@ -198,6 +198,9 @@ func TestIsStackLikeLine(t *testing.T) {
 		"  File \"/app/main.py\", line 42, in foo",
 		"    at com.example.Foo.bar(Foo.java:123)",
 		"src/handler.go:123",
+		// Docker/PM2 prefixed lines (stripLogPrefix must handle these)
+		"2024-03-07T05:27:00.123456789Z     at handleRequest (src/handlers/user.ts:42:10)",
+		"0|app  | 2024-03-07T05:27:00Z     at Layer (node_modules/express/lib/router/layer.js:152)",
 	}
 	for _, line := range stackLike {
 		if !IsStackLikeLine(line) {
@@ -213,5 +216,31 @@ func TestIsStackLikeLine(t *testing.T) {
 		if IsStackLikeLine(line) {
 			t.Errorf("expected IsStackLikeLine(%q) = false", line)
 		}
+	}
+}
+
+func TestParseLines_DockerPrefixedStack(t *testing.T) {
+	// Simulate Docker/PM2 log prefixes — stack frames must be detected after stripping.
+	lines := []string{
+		"Error: Test stack trace from agent",
+		"2024-03-07T05:27:00.123456789Z     at handleRequest (src/handlers/user.ts:42:10)",
+		"0|app  | 2024-03-07T05:27:00.123Z     at Layer (node_modules/express/lib/router/layer.js:152)",
+	}
+	ev := ParseLines(lines, "app", "production")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	if len(ev.Stacktrace) < 2 {
+		t.Errorf("expected at least 2 stack frames (Docker prefix stripped), got %d: %+v", len(ev.Stacktrace), ev.Stacktrace)
+	}
+	var found bool
+	for _, f := range ev.Stacktrace {
+		if f.File == "src/handlers/user.ts" && f.Line == 42 && f.Function == "handleRequest" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected handleRequest at src/handlers/user.ts:42, got %+v", ev.Stacktrace)
 	}
 }

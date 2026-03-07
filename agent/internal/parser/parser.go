@@ -65,7 +65,17 @@ var (
 	stackGoNoExt    = regexp.MustCompile(`\b([\w/\-\.]+/[\w\-\.]+):(\d+)`)
 	// Generic: (file:line)
 	stackParens = regexp.MustCompile(`\(([\w/\-\.]+\.\w+):(\d+)\)`)
+
+	// Docker/PM2 log prefixes to strip before stack detection (order matters)
+	// Docker: 2024-03-07T05:27:00.123456789Z
+	// PM2: 0|app-name  | or 0|app-name  | 2024-03-07...
+	logPrefixRe = regexp.MustCompile(`^(?:\d+\|[^\s|]+\s*\|\s*)?(?:\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s*)?`)
 )
+
+// stripLogPrefix removes Docker/PM2 prefixes so stack detection works on the actual content.
+func stripLogPrefix(line string) string {
+	return strings.TrimSpace(logPrefixRe.ReplaceAllString(line, ""))
+}
 
 // JournaldEntry represents a subset of journalctl -o json fields.
 type JournaldEntry struct {
@@ -205,6 +215,10 @@ func parseInt(s string) int {
 }
 
 func extractStackFrames(line string) []StackFrame {
+	line = stripLogPrefix(line)
+	if line == "" {
+		return nil
+	}
 	seen := make(map[string]bool)
 	var frames []StackFrame
 	add := func(f StackFrame) {
@@ -267,7 +281,7 @@ func extractStackFrames(line string) []StackFrame {
 
 // IsStackLikeLine returns true if the line looks like a stack frame (for multi-line buffering).
 func IsStackLikeLine(line string) bool {
-	trimmed := strings.TrimSpace(line)
+	trimmed := stripLogPrefix(line)
 	if trimmed == "" {
 		return false
 	}
