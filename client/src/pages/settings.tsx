@@ -957,10 +957,18 @@ export default function Settings() {
       const res = await apiRequest("POST", "/api/test/simulate-incident", {
         fullPipeline,
       });
-      return res;
+      const data = await res.json();
+      return data as { ok: boolean; notification?: Record<string, unknown> };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/all"] });
+      // Dispatch incident-notification so IncidentToast shows immediately (SSE broadcast
+      // may fail if no stream is connected, e.g. before EventSource establishes).
+      if (data?.notification) {
+        window.dispatchEvent(
+          new CustomEvent("incident-notification", { detail: data.notification })
+        );
+      }
       toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
     },
     onError: (error: Error) => {

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -89,5 +90,128 @@ func TestMatchesIgnorePattern(t *testing.T) {
 	}
 	if MatchesIgnorePattern("Error: something broke") {
 		t.Error("generic error should not match")
+	}
+}
+
+func TestParseLine_NodeStackFrame(t *testing.T) {
+	line := `Error: Cannot read property 'id' of undefined
+    at handleRequest (src/handlers/user.ts:42:15)
+    at Layer (node_modules/express/lib/router/layer.js:123)`
+	ev := ParseLine(line, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	if len(ev.Stacktrace) == 0 {
+		t.Fatal("expected stack frames")
+	}
+	var found bool
+	for _, f := range ev.Stacktrace {
+		if f.File == "src/handlers/user.ts" && f.Line == 42 && f.Function == "handleRequest" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected handleRequest at src/handlers/user.ts:42, got %+v", ev.Stacktrace)
+	}
+}
+
+func TestParseLine_PythonStackFrame(t *testing.T) {
+	line := `Traceback (most recent call last):
+  File "/app/main.py", line 42, in handle_request
+    result = process(data)`
+	ev := ParseLine(line, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	var found bool
+	for _, f := range ev.Stacktrace {
+		if strings.Contains(f.File, "main.py") && f.Line == 42 && f.Function == "handle_request" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected handle_request at /app/main.py:42, got %+v", ev.Stacktrace)
+	}
+}
+
+func TestParseLine_GoStackFrame(t *testing.T) {
+	line := "panic: nil pointer dereference\n\t/Users/dev/app/internal/handler.go:123"
+	ev := ParseLine(line, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	var found bool
+	for _, f := range ev.Stacktrace {
+		if (f.File == "handler.go" || strings.HasSuffix(f.File, "handler.go")) && f.Line == 123 {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected handler.go:123, got %+v", ev.Stacktrace)
+	}
+}
+
+func TestParseLine_JavaStackFrame(t *testing.T) {
+	line := `Exception in thread "main" java.lang.NullPointerException
+    at com.example.Main.process(Main.java:42)
+    at com.example.App.run(App.java:100)`
+	ev := ParseLine(line, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	var found bool
+	for _, f := range ev.Stacktrace {
+		if f.File == "Main.java" && f.Line == 42 && f.Function == "process" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected process at Main.java:42, got %+v", ev.Stacktrace)
+	}
+}
+
+func TestParseLines_MultiLine(t *testing.T) {
+	lines := []string{
+		"Error: connection refused",
+		"    at connect (src/db.ts:100)",
+		"    at initDb (src/index.ts:50)",
+	}
+	ev := ParseLines(lines, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	if ev.Message != "Error: connection refused" {
+		t.Errorf("expected message 'Error: connection refused', got %q", ev.Message)
+	}
+	if len(ev.Stacktrace) < 2 {
+		t.Errorf("expected at least 2 stack frames, got %d: %+v", len(ev.Stacktrace), ev.Stacktrace)
+	}
+}
+
+func TestIsStackLikeLine(t *testing.T) {
+	stackLike := []string{
+		"    at handleRequest (src/handler.ts:42)",
+		"  File \"/app/main.py\", line 42, in foo",
+		"    at com.example.Foo.bar(Foo.java:123)",
+		"src/handler.go:123",
+	}
+	for _, line := range stackLike {
+		if !IsStackLikeLine(line) {
+			t.Errorf("expected IsStackLikeLine(%q) = true", line)
+		}
+	}
+	notStackLike := []string{
+		"",
+		"INFO request completed",
+		"Something else",
+	}
+	for _, line := range notStackLike {
+		if IsStackLikeLine(line) {
+			t.Errorf("expected IsStackLikeLine(%q) = false", line)
+		}
 	}
 }
