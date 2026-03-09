@@ -21,6 +21,9 @@ const UNMAPPABLE_PATTERNS = [
   /\/static\//i,
   /assets\//i,
   /\/assets\//i,
+  /\bdist\//i,
+  /\bbuild\//i,
+  /\bout\//i,
 ];
 
 /** Source hints: path must have at least one to be mappable. */

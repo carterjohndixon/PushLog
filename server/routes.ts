@@ -656,11 +656,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
 
-    // Incident-to-code correlation: fetch related GitHub commits for the affected file.
+    // Incident-to-code correlation: use source-mapped frames so we look up real repo paths, not dist/bundle.
     let correlation: { relatedCommits?: any[]; relevantAuthors?: any[]; correlationSource?: string | null } = {};
     try {
       correlation = await enrichIncidentWithGitHubCorrelation(
-        { service: summary.service, start_time: summary.start_time, stacktrace: rawStacktraceForMeta },
+        { service: summary.service, start_time: summary.start_time, stacktrace: resolvedStacktraceForMeta },
         orgId,
         databaseStorage as any,
         listCommitsByPath,
