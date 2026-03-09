@@ -254,20 +254,32 @@ export async function enrichIncidentWithGitHubCorrelation(
     token?: string | null
   ) => Promise<GitHubCommitForCorrelation[]>
 ): Promise<EnrichedCorrelation> {
-  if (!orgId) return emptyCorrelation();
+  if (!orgId) { console.warn("[correlation] no orgId"); return emptyCorrelation(); }
 
   const location = extractBestCodeLocation(summary.stacktrace || []);
-  if (!location || !isMappablePath(location.file)) return emptyCorrelation();
+  if (!location || !isMappablePath(location.file)) {
+    console.warn("[correlation] no mappable location from stacktrace:", summary.stacktrace?.map(f => f.file));
+    return emptyCorrelation();
+  }
+  console.log("[correlation] best location:", location.file, "line:", location.line);
 
   const repo = await resolveRepoForIncident(summary.service, orgId, storage);
-  if (!repo || !repo.token) return emptyCorrelation();
+  if (!repo || !repo.token) {
+    console.warn("[correlation] no repo resolved for service:", summary.service, "orgId:", orgId);
+    return emptyCorrelation();
+  }
+  console.log("[correlation] resolved repo:", repo.fullName);
 
   const sinceDate = new Date(summary.start_time);
   sinceDate.setDate(sinceDate.getDate() - 7);
   const since = sinceDate.toISOString();
 
   const commits = await listCommitsByPath(repo.owner, repo.repo, location.file, since, repo.token);
-  if (!commits || commits.length === 0) return emptyCorrelation();
+  if (!commits || commits.length === 0) {
+    console.warn("[correlation] no commits found for", location.file, "in", repo.fullName, "since", since);
+    return emptyCorrelation();
+  }
+  console.log("[correlation] found", commits.length, "commits for", location.file);
 
   const scored = scoreAndRankCommits(commits, location, summary.start_time, MAX_RELATED_COMMITS);
   const seen = new Set<string>();
