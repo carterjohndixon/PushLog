@@ -41,6 +41,10 @@ var (
 		regexp.MustCompile(`\b401\b`),
 		regexp.MustCompile(`\b403\b`),
 		regexp.MustCompile(`\b404\b`),
+		// 2xx = success; never create incidents for successful API responses
+		regexp.MustCompile(`\b200\b`),
+		regexp.MustCompile(`\b201\b`),
+		regexp.MustCompile(`\b204\b`),
 		regexp.MustCompile(`(?i)not authenticated`),
 		regexp.MustCompile(`(?i)unauthorized`),
 		regexp.MustCompile(`(?i)forbidden`),

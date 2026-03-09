@@ -389,8 +389,12 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
         "Unknown error"
     );
 
-    // Skip 404s — expected, noisy, low signal (Sentry and agent both can report these)
+    // Skip 404s and 2xx — expected/noise, low signal (404 = not found, 2xx = success)
     if (/\b404\b/.test(rawMessage) || / 404 in \d+ms/.test(rawMessage)) {
+      res.status(202).json({ accepted: true });
+      return;
+    }
+    if (/\b200\b/.test(rawMessage) || /\b201\b/.test(rawMessage) || /\b204\b/.test(rawMessage)) {
       res.status(202).json({ accepted: true });
       return;
     }

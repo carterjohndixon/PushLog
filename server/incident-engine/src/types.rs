@@ -208,6 +208,8 @@ pub struct IssueGroup {
   pub service: String,
   pub environment: String,
   pub stats: StatsState,
+  /// Last minute bucket we emitted for (e.g. "2025-03-09T04:32"). Prevents duplicate notifications per burst.
+  pub last_emitted_bucket: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

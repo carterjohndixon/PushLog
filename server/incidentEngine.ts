@@ -197,6 +197,10 @@ const NOISE_PATTERNS = [
   /\b401\b/,
   /\b403\b/,
   /\b404\b/,
+  // 2xx = success; never create incidents for successful API responses
+  /\b200\b/,
+  /\b201\b/,
+  /\b204\b/,
   /not authenticated/i,
   /unauthorized/i,
   /forbidden/i,

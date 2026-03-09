@@ -13,6 +13,7 @@ if (appEnv === 'production' || appEnv === 'staging') {
   dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
 } else {
   dotenv.config({ path: path.join(root, '.env') });
+  dotenv.config({ path: path.join(root, '.env.local'), override: true });
   if (appEnv && appEnv !== 'development') {
     dotenv.config({ path: path.join(root, `.env.${appEnv}`), override: true });
   }

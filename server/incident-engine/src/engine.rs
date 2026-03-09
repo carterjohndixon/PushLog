@@ -43,6 +43,7 @@ impl Engine {
       service: event.service.clone(),
       environment: event.environment.clone(),
       stats: StatsState::new(event.timestamp),
+      last_emitted_bucket: None,
     });
 
     // Track whether this is a brand-new group (first event ever).
@@ -70,6 +71,13 @@ impl Engine {
       Some(t) => t,
       None => return Ok(None),
     };
+
+    // At most one incident per fingerprint per minute bucket (prevents 14 notifications for 14 events in same burst).
+    let bucket = stats::minute_bucket(&event.timestamp);
+    if group.last_emitted_bucket.as_deref() == Some(bucket.as_str()) {
+      return Ok(None);
+    }
+    group.last_emitted_bucket = Some(bucket.clone());
 
     // Clone group to release the mutable borrow on self.groups.
     let group_snapshot = group.clone();
@@ -280,15 +288,17 @@ mod tests {
       let _ = engine.process(&event);
     }
 
-    // Burst in one minute.
+    // Burst in one minute. Cooldown limits to one emission per minute; keep the first Some.
     let mut last_result = None;
     for _ in 0..20 {
       let mut event = make_inbound("error", "staging");
       event.timestamp = "2025-01-15T10:05:00Z".into();
-      last_result = engine.process(&event).unwrap();
+      if let Some(s) = engine.process(&event).unwrap() {
+        last_result = Some(s);
+      }
     }
 
-    assert!(last_result.is_some());
+    assert!(last_result.is_some(), "spike should trigger at least once in burst");
     assert_eq!(last_result.unwrap().trigger, TriggerReason::Spike);
   }
 
