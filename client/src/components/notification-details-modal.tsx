@@ -418,6 +418,38 @@ export function NotificationDetailsModal() {
                     </div>
                   )}
 
+                  {Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0 && (
+                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Related commits</h5>
+                      <p className="text-xs text-muted-foreground">Recent changes to the affected file</p>
+                      <div className="space-y-2">
+                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string }, i: number) => (
+                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className="text-sm pl-3 border-l-2 border-log-green/50 space-y-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <a
+                                href={c.htmlUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono text-xs text-sky-blue hover:underline"
+                              >
+                                {c.shortSha ?? c.sha?.slice(0, 7) ?? "—"}
+                              </a>
+                              <span className="text-foreground">{c.message ?? ""}</span>
+                            </div>
+                            {c.author?.login && (
+                              <div className="text-xs text-muted-foreground">@{c.author.login}</div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      {Array.isArray(metadata?.relevantAuthors) && metadata.relevantAuthors.length >= 2 && (
+                        <div className="text-xs text-muted-foreground pt-2 border-t border-border">
+                          Potentially relevant authors: {metadata.relevantAuthors.map((a: { login?: string }) => a.login).filter(Boolean).join(", ")}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {Array.isArray(metadata?.recommendedFirstActions) && metadata.recommendedFirstActions.length > 0 && (
                     <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 break-words">
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Recommended actions</h5>
