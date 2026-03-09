@@ -45,7 +45,7 @@ export function normalizeStackPath(p: string): string {
   let s = p.trim();
   s = s.replace(/\\/g, "/");
   s = s.replace(/\/+/g, "/");
-  s = s.replace(/^\.\//, "");
+  s = s.replace(/^(\.\.?\/)+/, "");
   s = s.replace(/^\//, "");
   return s.toLowerCase();
 }
@@ -75,18 +75,22 @@ export interface CodeLocation {
 }
 
 /**
- * Extract the best code location from stack trace (first app frame).
+ * Extract the best code location from stack trace (first mappable app frame).
  */
 export function extractBestCodeLocation(
   stacktrace: Array<{ file?: string; line?: number }>
 ): CodeLocation | null {
   if (!Array.isArray(stacktrace) || stacktrace.length === 0) return null;
-  const frame = stacktrace.find((f) => f?.file && isAppStackFrame(String(f.file)));
-  if (!frame?.file) return null;
-  const file = normalizeStackPath(String(frame.file));
-  if (!file) return null;
-  const line = typeof frame.line === "number" && frame.line > 0 ? frame.line : undefined;
-  return { file, line };
+  for (const f of stacktrace) {
+    if (!f?.file) continue;
+    const raw = String(f.file);
+    if (!isAppStackFrame(raw)) continue;
+    const normalized = normalizeStackPath(raw);
+    if (!normalized || !isMappablePath(normalized)) continue;
+    const line = typeof f.line === "number" && f.line > 0 ? f.line : undefined;
+    return { file: normalized, line };
+  }
+  return null;
 }
 
 // --- Repo resolution ---
