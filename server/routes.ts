@@ -624,7 +624,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const actualExceptionType = topSymptom?.exception_type != null ? String(topSymptom.exception_type).trim() : undefined;
     const message =
       actualErrorMessage != null && actualErrorMessage.length > 0
-        ? (actualExceptionType ? `${actualExceptionType}: ${actualErrorMessage}` : actualErrorMessage)
+        ? (actualExceptionType && !actualErrorMessage.startsWith(actualExceptionType)
+            ? `${actualExceptionType}: ${actualErrorMessage}`
+            : actualErrorMessage)
         : `${summary.trigger.replace(/_/g, " ")} detected in ${summary.service}/${summary.environment} (priority ${summary.priority_score})`;
     const rawStacktraceForMeta = (summary as any).stacktrace ?? [];
     const appStacktraceForMeta = rawStacktraceForMeta.filter(
