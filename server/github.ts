@@ -431,6 +431,95 @@ export async function deleteWebhook(
 }
 
 /**
+ * Minimal commit shape returned by listCommitsByPath for incident correlation.
+ */
+export interface GitHubCommitForCorrelation {
+  sha: string;
+  message: string;
+  authorLogin: string;
+  authorName: string | null;
+  timestamp: string;
+  htmlUrl: string;
+}
+
+const GITHUB_COMMITS_FETCH_TIMEOUT_MS = 4000;
+
+/**
+ * List commits that touch a specific file path.
+ * Used for incident-to-code correlation. Returns [] on any error (404, 403, 500, timeout).
+ * @param owner - repo owner
+ * @param repo - repo name (no .git)
+ * @param filePath - path within repo (e.g. "src/handler.ts")
+ * @param since - ISO8601 date; only commits after this time
+ * @param accessToken - required for private repos; uses GITHUB_PERSONAL_ACCESS_TOKEN if not provided
+ * @returns Up to 20 commits, or [] on failure
+ */
+export async function listCommitsByPath(
+  owner: string,
+  repo: string,
+  filePath: string,
+  since: string,
+  accessToken?: string | null
+): Promise<GitHubCommitForCorrelation[]> {
+  const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const url = new URL(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`);
+  url.searchParams.set("path", filePath);
+  url.searchParams.set("since", since);
+  url.searchParams.set("per_page", "20");
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_COMMITS_FETCH_TIMEOUT_MS);
+    const response = await fetch(url.toString(), {
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        console.warn("[github] listCommitsByPath rate limit or forbidden:", response.status, owner, repo);
+      } else if (response.status >= 500) {
+        console.warn("[github] listCommitsByPath server error:", response.status, owner, repo);
+      }
+      return [];
+    }
+
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    return data.map((c: any) => {
+      const commit = c.commit || {};
+      const author = commit.author || {};
+      const user = c.author || {};
+      return {
+        sha: String(c.sha || ""),
+        message: String(commit.message || "")
+          .split("\n")[0]
+          .trim()
+          .slice(0, 120),
+        authorLogin: user?.login || author?.email || "unknown",
+        authorName: author?.name ? String(author.name) : null,
+        timestamp: String(author?.date || ""),
+        htmlUrl: c.html_url || `https://github.com/${owner}/${repo}/commit/${c.sha}`,
+      };
+    });
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("[github] listCommitsByPath timeout:", owner, repo, filePath);
+    } else {
+      console.warn("[github] listCommitsByPath error:", err?.message || err, owner, repo);
+    }
+    return [];
+  }
+}
+
+/**
  * Get a single commit (includes stats: additions, deletions).
  * Use for push webhooks since the push payload does not include line counts.
  * @param owner - repo owner

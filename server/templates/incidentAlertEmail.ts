@@ -2,6 +2,15 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+export interface RelatedCommitForEmail {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: { login: string; name?: string | null };
+  htmlUrl: string;
+  timestamp: string;
+}
+
 export interface IncidentAlertMetadata {
   service?: string;
   environment?: string;
@@ -18,6 +27,10 @@ export interface IncidentAlertMetadata {
   errorMessage?: string;
   /** Exception type (e.g. TypeError, Error). */
   exceptionType?: string;
+  /** Related commits from GitHub correlation. */
+  relatedCommits?: RelatedCommitForEmail[];
+  /** Potentially relevant authors from those commits. */
+  relevantAuthors?: Array<{ login: string; name?: string | null }>;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -62,6 +75,9 @@ export function getIncidentAlertEmailTemplate(
   const hasLocation = metadata?.route || metadata?.stackFrame || metadata?.requestUrl;
   const hasStacktrace = metadata?.stacktrace && metadata.stacktrace.length > 0;
   const stackTraceIsBundled = metadata?.stackTraceIsBundled === true;
+  const hasRelatedCommits = Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0;
+  const relatedCommits = metadata?.relatedCommits ?? [];
+  const relevantAuthors = metadata?.relevantAuthors ?? [];
   const hasErrorMessage = metadata?.errorMessage != null && String(metadata.errorMessage).trim().length > 0;
   const errorMessageEscaped = hasErrorMessage ? escapeHtml(String(metadata!.errorMessage!).trim()).replace(/\n/g, "<br>") : "";
   const exceptionType = metadata?.exceptionType != null ? escapeHtml(String(metadata.exceptionType)) : "";
@@ -161,6 +177,26 @@ export function getIncidentAlertEmailTemplate(
           ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
           <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
           <div style="padding: 12px; background: #141a18; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #9ca3a8; line-height: 1.7; border: 1px solid #2d3d35;">${stackTraceHtml}</div>
+        </div>
+        ` : ""}
+
+        ${hasRelatedCommits ? `
+        <!-- RELATED COMMITS -->
+        <div style="margin-top: 16px;">
+          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">RELATED COMMITS</div>
+          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 8px;">Recent changes to the affected file</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${relatedCommits.map((c) => `
+              <div style="padding: 10px 12px; background: #141a18; border-radius: 6px; border: 1px solid #2d3d35;">
+                <a href="${escapeHtml(c.htmlUrl)}" style="color: #7dd3a0; text-decoration: none; font-family: monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
+                <span style="color: #e8ece9; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
+                <div style="font-size: 11px; color: #6b7c74; margin-top: 4px;">@${escapeHtml(c.author.login)}</div>
+              </div>
+            `).join("")}
+          </div>
+          ${relevantAuthors.length >= 2 ? `
+          <div style="font-size: 11px; color: #6b7c74; margin-top: 10px;">Potentially relevant authors: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
+          ` : ""}
         </div>
         ` : ""}
       </div>

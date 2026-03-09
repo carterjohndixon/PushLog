@@ -66,6 +66,8 @@ import {
   type IncidentEventInput,
   type IncidentSummaryOutput,
 } from "./incidentEngine";
+import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
+import { listCommitsByPath } from "./github";
 import * as Sentry from "@sentry/node";
 import { authenticateAgentToken } from "./middleware/agentAuth";
 import { agentRateLimit } from "./middleware/agentRateLimit";
@@ -618,13 +620,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
 
+    const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
+
     // Route to one user when payload includes links.pushlog_user_id; otherwise users with repos + "Receive incident notifications" on.
     const targetUsers = new Set<string>();
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
 
     if (targetUsers.size === 0) {
-      const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
       const defaultTargets = orgId
         ? await getIncidentNotificationTargetsForOrg(orgId, false)
         : await getIncidentNotificationTargets(false);
@@ -632,6 +635,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     if (targetUsers.size === 0) return;
+
+    // GitHub correlation (best-effort, non-blocking, 5s timeout)
+    let enriched = { relatedCommits: [] as any[], relevantAuthors: [] as any[], correlationSource: null as string | null };
+    try {
+      const result = await Promise.race([
+        enrichIncidentWithGitHubCorrelation(
+          {
+            service: summary.service,
+            start_time: summary.start_time,
+            stacktrace: (summary as any).stacktrace ?? [],
+          },
+          orgId,
+          databaseStorage,
+          listCommitsByPath
+        ),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (result) enriched = result;
+    } catch (e) {
+      console.warn("[incident-engine] correlation failed:", (e as Error)?.message || e);
+    }
 
     const topSymptom = (summary as any).top_symptoms?.[0];
     const actualErrorMessage = topSymptom?.message != null ? String(topSymptom.message).trim() : undefined;
@@ -680,6 +704,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       peakTime: (summary as any).peak_time,
       topSymptoms: (summary as any).top_symptoms ?? [],
       suspectedCauses: (summary as any).suspected_causes ?? [],
+      relatedCommits: enriched.relatedCommits,
+      relevantAuthors: enriched.relevantAuthors,
+      correlationSource: enriched.correlationSource,
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
       stacktrace: resolvedStacktraceForMeta,
       links: summary.links || {},
@@ -737,6 +764,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               createdAt: summary.last_seen || summary.start_time,
               errorMessage: actualErrorMessage ?? undefined,
               exceptionType: actualExceptionType ?? undefined,
+              relatedCommits: enriched.relatedCommits,
+              relevantAuthors: enriched.relevantAuthors,
             });
           }
         } catch (err) {

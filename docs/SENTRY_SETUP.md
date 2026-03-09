@@ -14,26 +14,32 @@ PushLog can receive error events from Sentry and surface them as **incident aler
 
 ## Quick Setup (5 minutes)
 
-### 1. Create a Sentry Internal Integration
+### 1. Create a webhook URL in PushLog
+
+1. Go to **PushLog** → **Settings** → scroll to **Sentry webhooks**
+2. Click **Add webhook**
+3. Enter an **App name** (e.g. "Frontend", "Backend API") and optionally an **App URL** (for your reference)
+4. Click **Create**
+5. Copy the **Webhook URL** and **Secret** shown — they will not be shown again. Add both to Sentry in the next step.
+
+Each app gets a unique URL (e.g. `https://pushlog.ai/api/webhooks/sentry/pls_xxx`). Create one app per Sentry project if you have multiple.
+
+### 2. Create a Sentry Internal Integration
 
 1. Go to [Sentry](https://sentry.io) → **Settings** → **Developer Settings** → **Custom Integrations** (or **Internal Integrations**)
 2. Click **Create New Integration**
 3. Choose **Internal Integration** (not Public Integration — that's for publishing to the Sentry marketplace)
 4. Fill in the form:
    - **Name:** e.g. "PushLog Incident Alerts"
-   - **Webhook URL:**
-   ```
-   https://YOUR-PUSHLOG-DOMAIN.com/api/webhooks/sentry
-   ```
-   (Replace with your PushLog URL, e.g. `https://pushlog.ai` or `https://staging.pushlog.ai`)
+   - **Webhook URL:** Paste the URL from PushLog (e.g. `https://pushlog.ai/api/webhooks/sentry/pls_xxxxx`)
+   - **Webhook Secret:** Paste the secret from PushLog (required for signature verification)
    - **Alert Rule Action:** Enable (required)
    - **Webhooks:** Leave default; **Permissions:** Leave "No Access"
-5. Copy the **Webhook Secret** (optional — for signature verification)
-6. Click **Save Changes**
+5. Click **Save Changes**
 
 > You do *not* need to create an app or add the React SDK. The Internal Integration is enough.
 
-### 2. Create an Alert Rule
+### 3. Create an Alert Rule
 
 1. Go to **Alerts** → **Create Alert**
 2. On **Select Alert**, choose **Errors** → **Issues**
@@ -43,27 +49,19 @@ PushLog can receive error events from Sentry and surface them as **incident aler
 
 > You need both the Integration and the Alert Rule.
 
-### 3. Configure PushLog (optional)
-
-If you set a **Webhook Secret** in Sentry, add it to your PushLog environment:
-
-```bash
-SENTRY_WEBHOOK_SECRET=your_webhook_secret_from_sentry
-```
-
-This ensures only Sentry can send events to your webhook.
-
 ---
 
 ## Webhook URL Reference
 
-| Environment | Webhook URL |
-|-------------|-------------|
-| Production | `https://pushlog.ai/api/webhooks/sentry` |
-| Staging | `https://staging.pushlog.ai/api/webhooks/sentry` |
-| Self-hosted | `https://YOUR-DOMAIN/api/webhooks/sentry` |
+Webhook URLs are **per-app** and unique to your organization. Create an app in **Settings → Sentry webhooks** to get your URL. Format:
 
-The URL is also shown in-app under **Integrations** → **Incident Alerts (Sentry)**.
+```
+https://pushlog.ai/api/webhooks/sentry/pls_xxxxxxxxxxxx
+```
+
+- **Production:** `https://pushlog.ai/api/webhooks/sentry/<your-token>`
+- **Staging:** `https://staging.pushlog.ai/api/webhooks/sentry/<your-token>`
+- **Self-hosted:** `https://YOUR-DOMAIN/api/webhooks/sentry/<your-token>`
 
 ---
 
@@ -77,6 +75,36 @@ PushLog's Sentry adapter accepts Sentry's native webhook payload and transforms 
 - **Environment** from Sentry tags (e.g. `environment: production`)
 - **Severity** from `level` (error → error, warning → warning, fatal → critical)
 - **Link** to the Sentry event for quick debugging
+
+---
+
+## Stack traces: bundled vs original source
+
+**PushLog server (your app):** When an error happens in the PushLog Node server, the stack points at the bundled `index.js`. PushLog resolves those frames to **original source** (e.g. `server/routes.ts:123`) using `dist/index.js.map`. The Docker/staging build includes the source map, so incident notifications and emails show real file names and lines.
+
+**PushLog frontend (client):** The Vite build generates source maps and the **@sentry/vite-plugin** uploads them to Sentry when you build with the right env vars set. That way Sentry can symbolicate client errors (e.g. on `/organization`) and show original file:line. To enable:
+
+1. **Create an auth token** in Sentry: [Organization Settings → Auth Tokens](https://sentry.io/settings/account/api/auth-tokens/) (or Org → Auth Tokens). Use a token with "Project: Read & Write" and "Release: Admin".
+2. **Set when building** (CI or locally):
+   - `SENTRY_ORG` — your Sentry org slug (e.g. from the Sentry URL).
+   - `SENTRY_PROJECT` — your Sentry project slug (the project that receives the frontend DSN from `VITE_SENTRY_DSN`).
+   - `SENTRY_AUTH_TOKEN` — the token from step 1.
+   You can put these in a file `.env.sentry-build-plugin` in the project root (add it to `.gitignore`; it is already ignored) so `npm run build` uploads source maps. Example:
+   ```bash
+   SENTRY_ORG=your-org-slug
+   SENTRY_PROJECT=your-project-slug
+   SENTRY_AUTH_TOKEN=sntrys_...
+   ```
+3. Run `npm run build`. The plugin uploads client source maps and injects the release into the bundle so events match. If `SENTRY_AUTH_TOKEN` is not set, the plugin is disabled and the build still succeeds (but Sentry won’t have source maps for that build).
+
+**Your application (errors sent to Sentry):** Stack traces in Sentry events come from *your* app (frontend or backend). To see **original source** instead of bundled/minified code:
+
+1. **Upload source maps to Sentry** for the project that sends events. In Sentry: Project → Settings → Source Maps. Use the Sentry CLI or your build pipeline to upload the `.map` files (and optionally release artifacts). Sentry will then symbolicate and can send resolved file paths in the webhook payload.
+2. PushLog does **not** symbolicate your app’s stack traces itself; it only resolves its own server bundle (`index.js` → `server/*.ts`). So for readable traces from your codebase, use Sentry’s source map upload.
+
+If `index.js.map` is missing in production, you’ll see a warning during the Docker build (`scripts/build-for-docker.sh`). Ensure `npm run build` uses `--sourcemap` (it does) and that the built `dist/` folder is copied into the image so `dist/index.js.map` is present at runtime.
+
+If **PushLog's own frontend** stack traces in Sentry still show bundled paths (e.g. `/js/settings-xxx.js` instead of `settings.tsx:123`), see [SENTRY_SOURCEMAP_DEBUG.md](SENTRY_SOURCEMAP_DEBUG.md) for step-by-step diagnostics.
 
 ---
 
@@ -111,7 +139,8 @@ To correlate errors with recent deploys, include a **change window** when sendin
 
 In Sentry → **Settings** → **Developer Settings** → **Custom Integrations** → your PushLog integration:
 
-- Webhook URL should be: `https://pushlog.ai/api/webhooks/sentry` (or your production domain)
+- Webhook URL should be your unique per-app URL from PushLog Settings (e.g. `https://pushlog.ai/api/webhooks/sentry/pls_xxx`)
+- Webhook Secret should match the secret shown when you created the app in PushLog
 - Save if you change it
 
 ### 2. Trigger a test alert
@@ -129,10 +158,12 @@ In Sentry → **Alerts** → **Alert History** to see if the rule fired and if t
 From your terminal (to confirm the endpoint is public and accepting requests):
 
 ```bash
-curl -X POST https://pushlog.ai/api/webhooks/sentry \
+curl -X POST https://pushlog.ai/api/webhooks/sentry/YOUR_TOKEN \
   -H "Content-Type: application/json" \
   -d '{"data":{"event":{}}}'
 ```
+
+Replace `YOUR_TOKEN` with your app's token from the webhook URL (the part after `/sentry/`).
 
 - **202** or **400** = endpoint reachable (400 is expected for empty payload)
 - **Connection refused / timeout** = firewall, wrong URL, or app not running

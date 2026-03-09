@@ -10,33 +10,33 @@ Summary of what is implemented in code vs still TODO:
 
 | Item | Status | Notes |
 |------|--------|--------|
-| Stack trace: strip package code | **Partial** | `node_modules` is filtered in `sentryWebhook.ts` and `routes.ts` for display/email/metadata. |
-| Stack trace: strip Node internals | **TODO** | No filtering of `node:internal`, `node:events`, etc. |
+| Stack trace: strip package code | **Done** | `node_modules` and Node internals filtered via `isAppStackFrame` in `server/helper/stackTraceBundled.ts`. |
+| Stack trace: strip Node internals | **Done** | `isNodeInternalPath` + `isAppStackFrame` in `server/helper/stackTraceBundled.ts`; used in sentryWebhook.ts and routes.ts. |
 | OpenAI API key (bring your own) | **Done** | Schema, encrypt/save/clear, used in `ai.ts` + `githubWebhook.ts`, no credit deduction, UI in OpenAIModels. |
 | Orgs + members + roles | **Done** | Full schema, DB, routes, Organization page, Join page. |
 | Invite by link | **Done** | Create link, accept, preview, revoke. |
 | Invite by email | **Done** | Create email invite, accept with email check. |
-| GitHub org sync | **TODO** | Not in code. |
+| GitHub org sync | **Done** | Invite from GitHub org on Organization page; list orgs + members, create invite link. |
 | Solo vs Team choice | **TODO** | Everyone has a solo org; no separate "Team" account type or flow. |
 | Incident notification targeting | **Done** | `organization_incident_settings`, `getIncidentNotificationTargetsForOrg`, all modes + priority, wired for Sentry + incident-engine + test, UI on Organization page. |
+| Sentry per-app webhook URLs | **Done** | Settings → Sentry webhooks: create app (name, appUrl), get unique URL + secret. `organization_sentry_apps` table; `POST /api/webhooks/sentry/:token` routes to org. Each user creates their own webhook URL. |
 | Billing (team/seat) | **TODO** | Not in code. |
 
 ---
 
 ## Quick TODOs
 
-- **Error messages / stack traces:** Filter stack traces so only user/application code is shown—strip Node internals (`node:internal/`*, `node:events`, etc.) and compiled/package code.
-  - **Current:** Package paths containing `node_modules` are already filtered (in `server/sentryWebhook.ts` and `server/routes.ts`) for culprit, source-map resolution, and the stack trace stored in notifications/emails. **Still to do:** Strip Node runtime frames (`node:internal`, `node:events`, etc.)
+- **Error messages / stack traces:** **Done.** Stack traces strip `node_modules` and Node internals (`node:internal`, `node:events`, etc.) via `isAppStackFrame` in `server/helper/stackTraceBundled.ts`. Verified via Settings → Developer mode → **Test stack filter API**.
 
 ---
 
 ## Implementation order
 
-**Phase 1: Teams & organization model** (first)  
-Today's per-user layout doesn't support incident targeting or delegation. Teams provide the structure (admin, members, roles) needed for those features.
+**Phase 1: Teams & organization model** — **Done.** Invites, org sync, roles; everyone has a solo org by default. Not yet: explicit Solo vs Team choice at signup.
 
-**Phase 2: Incident notification targeting** (depends on Phase 1)  
-Once teams exist, the account owner can configure who receives incident notifications, set priorities, and delegate responsibility per person.
+**Phase 2: Incident notification targeting** — **Done.** Depends on Phase 1. `organization_incident_settings`, targeting modes (users_with_repos, all_members, specific_users), priority, UI on Organization page.
+
+*(Original framing: Phase 1 provided the structure (admin, members, roles) for incident targeting; Phase 2 added the setting so the account owner can choose who receives incident notifications and set priorities.)*
 
 ---
 
@@ -62,7 +62,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 **Status:** Done (implemented in code) | **Phase:** 1 (first)
 
-**Not in code yet:** GitHub org sync; explicit "Solo vs Team" account choice at signup (everyone currently gets a solo org by default).
+**Not in code yet:** Explicit "Solo vs Team" account choice at signup (everyone currently gets a solo org by default).
 
 **Context:** PushLog is for GitHub change logging and incident tracking. Today it's per-user: each developer manages their own repos and integrations. Some teams want a shared setup.
 
@@ -80,7 +80,7 @@ Once teams exist, the account owner can configure who receives incident notifica
 
 - **Shareable link** — Done. Admin creates a link (e.g. `pushlog.ai/join/abc123`); accept, preview, revoke in `server/database.ts` and routes; Join page at `/join/:token`.
 - **Create user + email invite** — Done. Admin creates an email invite; invitee accepts (email check); consume in `consumeOrganizationInvite`.
-- **GitHub org sync** — TODO. Connect a GitHub org; pull in members. Whoever creates/owns the org connection can delegate roles per person (admin, developer, viewer, etc.).
+- **GitHub org sync** — Done (v1). Connect a GitHub org from the Organization page: list orgs you belong to, list members, see who is already in PushLog, create an invite link to share. Requires GitHub connected and `read:org` scope (reconnect GitHub if you get a 403).
 
 ### Account type at launch
 
@@ -95,7 +95,7 @@ Existing users can stay solo or opt in to create a team.
 
 ### Possible extensions
 
-- Role-based permissions (admin vs developer vs viewer).
+- Role-based permissions: **Done** (owner, admin, developer, viewer implemented).
 - Billing/seat count per team.
 - Multiple teams under one organization.
 
