@@ -1561,6 +1561,31 @@ export default function Settings() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/test/agent-correlation", { credentials: "include" });
+                            const data = await res.json().catch(() => ({}));
+                            if (res.status === 500 && data.error) {
+                              toast({
+                                title: "Agent + correlation test triggered",
+                                description: "Error logged to stderr. If the agent is tailing your PM2 error log, you should get an incident with related commits (ensure a repo has incidentServiceName set).",
+                              });
+                            } else if (!res.ok) {
+                              toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
+                            } else {
+                              toast({ title: "Unexpected response", description: `${res.status}`, variant: "destructive" });
+                            }
+                          } catch {
+                            toast({ title: "Request failed", description: "Network or server error.", variant: "destructive" });
+                          }
+                        }}
+                      >
+                        Test agent + correlation
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
                         className="border-red-500/50 text-red-700 dark:text-red-400"
                         onClick={() => {
                           toast({
