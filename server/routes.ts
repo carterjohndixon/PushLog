@@ -71,6 +71,8 @@ import { authenticateAgentToken } from "./middleware/agentAuth";
 import { agentRateLimit } from "./middleware/agentRateLimit";
 import { bufferAgentEvent } from "./helper/agentBuffer";
 import { hashToken, generateAgentToken } from "./helper/tokens";
+import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
+import { listCommitsByPath } from "./github";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -609,8 +611,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
 
+    const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
+
     if (targetUsers.size === 0) {
-      const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
       const defaultTargets = orgId
         ? await getIncidentNotificationTargetsForOrg(orgId, false)
         : await getIncidentNotificationTargets(false);
@@ -653,6 +656,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
 
+    // Incident-to-code correlation: fetch related GitHub commits for the affected file.
+    let correlation: { relatedCommits?: any[]; relevantAuthors?: any[]; correlationSource?: string | null } = {};
+    try {
+      correlation = await enrichIncidentWithGitHubCorrelation(
+        { service: summary.service, start_time: summary.start_time, stacktrace: rawStacktraceForMeta },
+        orgId,
+        databaseStorage as any,
+        listCommitsByPath,
+      );
+    } catch (err) {
+      console.warn("[incident] GitHub correlation failed (non-blocking):", err);
+    }
+
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
       service: summary.service,
@@ -668,6 +684,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
       stacktrace: resolvedStacktraceForMeta,
       links: summary.links || {},
+      ...(correlation.relatedCommits?.length ? { relatedCommits: correlation.relatedCommits } : {}),
+      ...(correlation.relevantAuthors?.length ? { relevantAuthors: correlation.relevantAuthors } : {}),
+      ...(correlation.correlationSource ? { correlationSource: correlation.correlationSource } : {}),
     });
 
     // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
@@ -722,6 +741,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               createdAt: summary.last_seen || summary.start_time,
               errorMessage: actualErrorMessage ?? undefined,
               exceptionType: actualExceptionType ?? undefined,
+              relatedCommits: correlation.relatedCommits,
+              relevantAuthors: correlation.relevantAuthors,
             });
           }
         } catch (err) {
