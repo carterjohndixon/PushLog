@@ -3,6 +3,7 @@ package source
 import (
 	"bufio"
 	"context"
+	"io"
 	"log"
 	"os/exec"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 const dockerRestartDelay = 2 * time.Second
 
-// TailDocker spawns `docker logs -f <container> 2>&1` and reads stdout.
+// TailDocker spawns `docker logs -f <container>` and reads both stdout and stderr.
 // Restarts on exit (e.g. container stopped) with backoff.
 func TailDocker(ctx context.Context, container, service, env string, out chan<- *parser.InboundEvent) {
 	for {
@@ -38,11 +39,18 @@ func TailDocker(ctx context.Context, container, service, env string, out chan<- 
 
 func runDockerLogs(ctx context.Context, container, service, env string, out chan<- *parser.InboundEvent) error {
 	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", "--tail", "0", container)
-	cmd.Stderr = nil // merge stderr into stdout via 2>&1 semantics - docker logs -f already does both
-	stdout, err := cmd.StdoutPipe()
+
+	// docker logs sends container stdout and stderr on separate fd's.
+	// Pipe both into a single reader so we see console.error / process.stderr output.
+	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
 	if err := cmd.Start(); err != nil {
 		return err
 	}
@@ -51,7 +59,22 @@ func runDockerLogs(ctx context.Context, container, service, env string, out chan
 		_ = cmd.Wait()
 	}()
 
-	scanner := bufio.NewScanner(stdout)
+	// Merge stdout and stderr concurrently into a single pipe for the scanner.
+	pr, pw := io.Pipe()
+	go func() {
+		defer pw.Close()
+		done := make(chan struct{}, 2)
+		cp := func(r io.Reader) {
+			io.Copy(pw, r)
+			done <- struct{}{}
+		}
+		go cp(stdoutPipe)
+		go cp(stderrPipe)
+		<-done
+		<-done
+	}()
+
+	scanner := bufio.NewScanner(pr)
 	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
 	const maxStackLines = 50
 
