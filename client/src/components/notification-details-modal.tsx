@@ -466,6 +466,11 @@ export function NotificationDetailsModal() {
                           This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.
                         </p>
                       )}
+                      {(metadata?.stacktrace?.length === 1 && metadata.stacktrace[0]?.file === "log") && (
+                        <p className="text-xs text-muted-foreground bg-muted/50 border border-border rounded-md px-3 py-2">
+                          Captured from log output (no stack trace in log line). The error message above contains the full context.
+                        </p>
+                      )}
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
                         {metadata.stacktrace.map((f: { file?: string; function?: string; line?: number }, i: number) => (

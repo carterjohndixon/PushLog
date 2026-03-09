@@ -175,6 +175,7 @@ export function getIncidentAlertEmailTemplate(
         <!-- STACK TRACE -->
         <div>
           ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
+          ${metadata?.stacktrace?.length === 1 && metadata?.stacktrace?.[0]?.file === "log" ? `<div style="font-size: 12px; color: #6b7c74; margin-bottom: 10px; padding: 8px 12px; background: rgba(45,61,53,0.5); border-radius: 6px; border: 1px solid #2d3d35;">Captured from log output (no stack trace in log line). The error message above contains the full context.</div>` : ""}
           <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
           <div style="padding: 12px; background: #141a18; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #9ca3a8; line-height: 1.7; border: 1px solid #2d3d35;">${stackTraceHtml}</div>
         </div>

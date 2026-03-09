@@ -196,6 +196,7 @@ export function onIncidentSummary(listener: IncidentListener): () => void {
 const NOISE_PATTERNS = [
   /\b401\b/,
   /\b403\b/,
+  /\b404\b/,
   /not authenticated/i,
   /unauthorized/i,
   /forbidden/i,

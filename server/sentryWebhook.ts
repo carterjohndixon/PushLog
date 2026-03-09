@@ -380,6 +380,21 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
       }
     }
 
+    const rawMessage = String(
+      first?.value ??
+        (ev as any)?.title ??
+        evMeta?.value ??
+        issueMeta?.value ??
+        (issue as any)?.title ??
+        "Unknown error"
+    );
+
+    // Skip 404s — expected, noisy, low signal (Sentry and agent both can report these)
+    if (/\b404\b/.test(rawMessage) || / 404 in \d+ms/.test(rawMessage)) {
+      res.status(202).json({ accepted: true });
+      return;
+    }
+
     const event: IncidentEventInput = {
       source: "sentry",
       service,
@@ -387,14 +402,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
       timestamp,
       severity,
       exception_type: String(first?.type ?? evMeta?.type ?? issueMeta?.type ?? "Error"),
-      message: String(
-        first?.value ??
-          (ev as any)?.title ??
-          evMeta?.value ??
-          issueMeta?.value ??
-          (issue as any)?.title ??
-          "Unknown error"
-      ),
+      message: rawMessage,
       stacktrace,
       links: ((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink)
         ? { source_url: String((ev as any)?.web_url || (issue as any)?.webUrl || (issue as any)?.permalink) }

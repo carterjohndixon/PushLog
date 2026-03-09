@@ -488,8 +488,9 @@ app.use((req, res, next) => {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
+      // Keep full message for incident engine / agent (was 80 chars, caused truncated notifications)
+      if (logLine.length > 2048) {
+        logLine = logLine.slice(0, 2047) + "…";
       }
 
       console.log(logLine);

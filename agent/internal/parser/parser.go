@@ -40,6 +40,7 @@ var (
 	ignorePatterns = []*regexp.Regexp{
 		regexp.MustCompile(`\b401\b`),
 		regexp.MustCompile(`\b403\b`),
+		regexp.MustCompile(`\b404\b`),
 		regexp.MustCompile(`(?i)not authenticated`),
 		regexp.MustCompile(`(?i)unauthorized`),
 		regexp.MustCompile(`(?i)forbidden`),
