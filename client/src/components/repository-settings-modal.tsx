@@ -90,7 +90,7 @@ export function RepositorySettingsModal({
   if (!repository) {
     return (
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <div className="flex items-center space-x-2">
               <Settings className="w-5 h-5 text-log-green" />
@@ -107,7 +107,7 @@ export function RepositorySettingsModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="flex items-center space-x-2">
             <Settings className="w-5 h-5 text-log-green" />
