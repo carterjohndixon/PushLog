@@ -1187,8 +1187,9 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .update(organizationAgents)
       .set({ status: "revoked" })
-      .where(and(eq(organizationAgents.id, agentId), eq(organizationAgents.organizationId, orgId)));
-    return (result as any).rowCount > 0;
+      .where(and(eq(organizationAgents.id, agentId), eq(organizationAgents.organizationId, orgId)))
+      .returning({ id: organizationAgents.id });
+    return result.length > 0;
   }
 
   async updateAgentHeartbeat(
