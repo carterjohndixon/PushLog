@@ -1,11 +1,52 @@
 import { useEffect, useState, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { Button } from "@/components/ui/button";
 import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink, UserPlus } from "lucide-react";
 import { getAiModelDisplayName, getIncidentSourceLabel } from "@/lib/utils";
 import { formatCreatedAt } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
+
+const MAX_PREVIEW = 240;
+
+function ErrorMessageBlock({
+  message,
+  maxPreviewChars,
+  isIncidentAlert,
+}: {
+  message: string;
+  maxPreviewChars: number;
+  isIncidentAlert: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = message.length > maxPreviewChars;
+  const display = isLong && !expanded ? message.slice(0, maxPreviewChars) + "…" : message;
+
+  return (
+    <div className="mt-1">
+      <p
+        className={`text-sm text-muted-foreground break-words ${isIncidentAlert ? "font-mono" : ""}`}
+        style={{ wordBreak: "break-word" as const, overflowWrap: "anywhere" }}
+      >
+        {display}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="mt-1.5 text-xs text-primary hover:underline inline-flex items-center gap-1"
+        >
+          {expanded ? (
+            <>Show less <ChevronUp className="w-3 h-3" /></>
+          ) : (
+            <>Show more <ChevronDown className="w-3 h-3" /></>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function NotificationDetailsModal() {
   const { notifications, readNotification, removeNotification } = useNotifications();
@@ -95,15 +136,25 @@ export function NotificationDetailsModal() {
             ? `https://github.com/${metadata.repositoryFullName}/commit/${metadata.commitSha}`
             : null;
 
+          const title = selectedNotification.title ?? "";
+          const msg = selectedNotification.message ?? "";
+          const msgPreviewLen = 240;
+          // Show message only when it adds info (different from title, or is the main content when no title)
+          const showMessage = msg && (title !== msg || !title);
+
           return (
             <div className="space-y-4 min-w-0 break-words">
               <div className="break-words">
                 <h3 className="font-medium text-foreground text-base break-words">
-                  {selectedNotification.title || selectedNotification.message}
+                  {title || msg}
                 </h3>
-                <p className="text-sm text-muted-foreground mt-1 break-words">
-                  {selectedNotification.message}
-                </p>
+                {showMessage && (
+                  <ErrorMessageBlock
+                    message={msg}
+                    maxPreviewChars={msgPreviewLen}
+                    isIncidentAlert={isIncidentAlert}
+                  />
+                )}
               </div>
 
               {/* Push Event Details — layout matches Notification Details spec */}
@@ -289,7 +340,7 @@ export function NotificationDetailsModal() {
                 </div>
               )}
 
-              {/* Incident alert — detailed view from Rust incident engine */}
+              {/* Incident alert — detailed view from Rust incident engine (error shown once at top) */}
               {isIncidentAlert && (
                 <div className="border-t border-border pt-4 space-y-4 break-words">
                   <h4 className="font-semibold text-destructive text-sm flex items-center gap-2 flex-wrap">
@@ -301,9 +352,6 @@ export function NotificationDetailsModal() {
                       </span>
                     )}
                   </h4>
-                  <p className="text-sm text-muted-foreground break-words">
-                    {selectedNotification.message}
-                  </p>
 
                   {/* API route and file:line — shown when available (Sentry webhook) */}
                   {(metadata?.apiRoute || metadata?.culprit || metadata?.culpritSource) && (

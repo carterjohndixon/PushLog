@@ -5992,18 +5992,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test route: log an error with stack trace so the agent picks it up → incident → GitHub correlation.
-  // Logs to stderr (PM2 error log) so the agent parses it. Stack has server/routes.ts for correlation.
+  // Single line so the API middleware's log doesn't become the event. Agent extracts server/routes.ts for correlation.
   app.get("/api/test/agent-correlation", authenticateToken, (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
       return res.status(404).json({ error: "Not found" });
     }
-    // Format the agent can parse: severity in first line, stack frames in subsequent lines
-    console.error("Error: [PushLog test] Agent + correlation test — verify agent picks this up and GitHub shows related commits");
-    console.error("    at registerRoutes (server/routes.ts:6010:5)");
-    console.error("    at Layer (server/index.ts:504:15)");
-    res.status(500).json({
-      error: "Agent correlation test — check your PM2/error log. If the agent is tailing it, you should get an incident with related commits (repo must have incidentServiceName set).",
+    // Single line: error message + stack frames. Agent's stackFileLine/stackNodeAtFn extracts server/routes.ts
+    console.error(
+      'Error: [PushLog test] Agent + correlation — at registerRoutes (server/routes.ts:6010:5) at Layer (server/index.ts:504:15)'
+    );
+    res.status(200).json({
+      ok: true,
+      message: "Logged. Agent should pick it up from stderr. If incidentServiceName is set, notification will show related commits.",
     });
   });
 

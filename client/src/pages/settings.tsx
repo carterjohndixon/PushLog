@@ -1566,15 +1566,13 @@ export default function Settings() {
                           try {
                             const res = await fetch("/api/test/agent-correlation", { credentials: "include" });
                             const data = await res.json().catch(() => ({}));
-                            if (res.status === 500 && data.error) {
+                            if (res.ok) {
                               toast({
                                 title: "Agent + correlation test triggered",
-                                description: "Error logged to stderr. If the agent is tailing your PM2 error log, you should get an incident with related commits (ensure a repo has incidentServiceName set).",
+                                description: data.message || "Error logged to stderr. Agent should create incident with related commits (repo needs incidentServiceName set).",
                               });
-                            } else if (!res.ok) {
-                              toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
                             } else {
-                              toast({ title: "Unexpected response", description: `${res.status}`, variant: "destructive" });
+                              toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
                             }
                           } catch {
                             toast({ title: "Request failed", description: "Network or server error.", variant: "destructive" });
