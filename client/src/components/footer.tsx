@@ -48,7 +48,7 @@ export function Footer() {
             </p>
             <div className="flex space-x-4">
               <a 
-                href="https://github.com/carterjohndixon/PushLog" 
+                href="https://github.com/pushlog-ai/PushLog" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="text-muted-foreground dark:text-gray-400 hover:text-log-green transition-colors"

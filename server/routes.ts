@@ -376,19 +376,32 @@ function readLastLines(filePath: string, maxLines = 40): string[] {
 }
 
 // Cache GitHub commits for 60s so polling doesn't burn through rate limits or add latency
-let _ghCommitsCache: { data: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>; ts: number } | null = null;
+const _ghCommitsCacheByRepo = new Map<string, { data: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>; ts: number }>();
 const GH_CACHE_TTL = 60_000; // 60 seconds
 
-async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
-  // Return cached data if fresh and we have at least as many as requested
-  if (_ghCommitsCache && Date.now() - _ghCommitsCache.ts < GH_CACHE_TTL && _ghCommitsCache.data.length >= limit) {
-    return _ghCommitsCache.data.slice(0, limit);
+/** Options to fetch commits as a specific user and/or repo. */
+type FetchGitHubCommitsOptions = { token?: string; owner?: string; repo?: string };
+
+async function fetchRecentCommitsFromGitHub(
+  limit = 30,
+  options?: FetchGitHubCommitsOptions
+): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
+  const owner = options?.owner;
+  const repo = options?.repo;
+  if (!owner || !repo) {
+    return [];
   }
-  const fetchLimit = Math.max(limit, _ghCommitsCache?.data.length ?? 0, 30);
-  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${fetchLimit}`;
+  const token = options?.token || GITHUB_TOKEN;
+  const cacheKey = `${owner}/${repo}`;
+  const cached = _ghCommitsCacheByRepo.get(cacheKey);
+  if (cached && Date.now() - cached.ts < GH_CACHE_TTL && cached.data.length >= limit) {
+    return cached.data.slice(0, limit);
+  }
+  const fetchLimit = Math.max(limit, cached?.data.length ?? 0, 30);
+  const url = `https://api.github.com/repos/${owner}/${repo}/commits?per_page=${fetchLimit}`;
   const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
-  if (GITHUB_TOKEN) {
-    headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
   }
   const opts: RequestInit = { headers };
   const maxAttempts = 2;
@@ -397,10 +410,10 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
       const res = await fetch(url, opts);
       if (!res.ok) {
         const remaining = res.headers.get("x-ratelimit-remaining");
-        console.error(`[fetchGitHubCommits] attempt ${attempt}: HTTP ${res.status}, rate-limit-remaining: ${remaining}, token: ${GITHUB_TOKEN ? "yes" : "no"}`);
+        console.error(`[fetchGitHubCommits] attempt ${attempt}: HTTP ${res.status}, rate-limit-remaining: ${remaining}, token: ${token ? "yes" : "no"}`);
         if (attempt < maxAttempts) continue;
-        // Return stale cache if available rather than nothing
-        return _ghCommitsCache?.data || [];
+        if (cached) return cached.data.slice(0, limit);
+        return [];
       }
       const data: any[] = await res.json();
       const list = data
@@ -413,17 +426,18 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
         }))
         .filter((c) => !!c.sha);
       if (list.length > 0) {
-        _ghCommitsCache = { data: list, ts: Date.now() };
-        return list;
+        _ghCommitsCacheByRepo.set(cacheKey, { data: list, ts: Date.now() });
+        return list.slice(0, limit);
       }
       if (attempt < maxAttempts) continue;
-      return _ghCommitsCache?.data || [];
+      if (cached) return cached.data.slice(0, limit);
+      return [];
     } catch (err: any) {
       console.error(`[fetchGitHubCommits] attempt ${attempt} error:`, err?.message || err);
-      if (attempt >= maxAttempts) return _ghCommitsCache?.data || [];
+      if (attempt >= maxAttempts && cached) return cached.data.slice(0, limit);
     }
   }
-  return _ghCommitsCache?.data || [];
+  return cached?.data?.slice(0, limit) || [];
 }
 
 /** Match deployed SHA to a commit: exact, or by prefix (7-char / 40-char). */
@@ -1241,6 +1255,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const admin = await ensureStagingAdmin(req, res);
       if (!admin.ok) return;
 
+      const user = await databaseStorage.getUser(req.user!.userId);
+      const ghOwner = typeof req.query?.owner === "string" ? req.query.owner.trim() : undefined;
+      const ghRepo = typeof req.query?.repo === "string" ? req.query.repo.trim() : undefined;
+      const ghOptions: FetchGitHubCommitsOptions = {
+        token: user?.githubToken ?? undefined,
+        ...(ghOwner && ghRepo && { owner: ghOwner, repo: ghRepo }),
+      };
+
       const appDir = resolveAppDir();
       const prodShaFile = path.join(appDir, ".prod_deployed_sha");
       const prodAtFile = path.join(appDir, ".prod_deployed_at");
@@ -1296,7 +1318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always prefer canonical GitHub history for Admin timeline.
       // If GitHub is unavailable/rate-limited, fall back to local git history.
-      const githubCommits = await fetchRecentCommitsFromGitHub(100);
+      const githubCommits = await fetchRecentCommitsFromGitHub(100, ghOptions);
       if (githubCommits.length > 0) {
         recentCommits = githubCommits;
         if (!headSha && recentCommits[0]?.sha) headSha = recentCommits[0].sha;
@@ -1373,7 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Always fetch from GitHub as the canonical source — production may be on old code after rollback
       if (finalRecentCommits.length === 0) {
-        finalRecentCommits = await fetchRecentCommitsFromGitHub(100);
+        finalRecentCommits = await fetchRecentCommitsFromGitHub(100, ghOptions);
       }
       if (!finalHeadSha && finalRecentCommits[0]?.sha) {
         finalHeadSha = finalRecentCommits[0].sha;
