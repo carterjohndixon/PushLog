@@ -8,25 +8,27 @@ import { getAiModelDisplayName, getIncidentSourceLabel } from "@/lib/utils";
 import { formatCreatedAt } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
 
-const MAX_PREVIEW = 240;
+const MAX_PREVIEW = 120;
 
-function ErrorMessageBlock({
+function CollapsibleMessage({
   message,
-  maxPreviewChars,
-  isIncidentAlert,
+  maxPreviewChars = MAX_PREVIEW,
+  mono = false,
+  className = "",
 }: {
   message: string;
-  maxPreviewChars: number;
-  isIncidentAlert: boolean;
+  maxPreviewChars?: number;
+  mono?: boolean;
+  className?: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = message.length > maxPreviewChars;
   const display = isLong && !expanded ? message.slice(0, maxPreviewChars) + "…" : message;
 
   return (
-    <div className="mt-1">
+    <div className={className}>
       <p
-        className={`text-sm text-muted-foreground break-words ${isIncidentAlert ? "font-mono" : ""}`}
+        className={`text-sm text-muted-foreground break-words ${mono ? "font-mono text-xs" : ""}`}
         style={{ wordBreak: "break-word" as const, overflowWrap: "anywhere" }}
       >
         {display}
@@ -40,12 +42,20 @@ function ErrorMessageBlock({
           {expanded ? (
             <>Show less <ChevronUp className="w-3 h-3" /></>
           ) : (
-            <>Show more <ChevronDown className="w-3 h-3" /></>
+            <>Show full message <ChevronDown className="w-3 h-3" /></>
           )}
         </button>
       )}
     </div>
   );
+}
+
+/** True when `msg` is fully contained within `title` (redundant to show both). */
+function messageIsRedundant(title: string, msg: string): boolean {
+  if (!title || !msg) return false;
+  const t = title.toLowerCase().trim();
+  const m = msg.toLowerCase().trim();
+  return t === m || t.includes(m) || m.includes(t);
 }
 
 export function NotificationDetailsModal() {
@@ -138,9 +148,7 @@ export function NotificationDetailsModal() {
 
           const title = selectedNotification.title ?? "";
           const msg = selectedNotification.message ?? "";
-          const msgPreviewLen = 240;
-          // Show message only when it adds info (different from title, or is the main content when no title)
-          const showMessage = msg && (title !== msg || !title);
+          const showMessage = msg && !messageIsRedundant(title, msg);
 
           return (
             <div className="space-y-4 min-w-0 break-words">
@@ -149,10 +157,10 @@ export function NotificationDetailsModal() {
                   {title || msg}
                 </h3>
                 {showMessage && (
-                  <ErrorMessageBlock
+                  <CollapsibleMessage
                     message={msg}
-                    maxPreviewChars={msgPreviewLen}
-                    isIncidentAlert={isIncidentAlert}
+                    mono={isIncidentAlert}
+                    className="mt-1"
                   />
                 )}
               </div>
@@ -315,9 +323,6 @@ export function NotificationDetailsModal() {
                     <AlertCircle className="w-4 h-4" />
                     OpenRouter error
                   </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedNotification.message}
-                  </p>
                   {metadata?.repositoryName && (
                     <div className="text-sm">
                       <span className="font-medium text-foreground">Repository:</span>{' '}
@@ -436,9 +441,11 @@ export function NotificationDetailsModal() {
                           {s.message && (
                             <div className="min-w-0 w-full">
                               <span className="font-medium text-foreground">Message:</span>
-                              <div className="mt-0.5 w-full min-w-0 break-all whitespace-pre-wrap text-sm overflow-x-auto overflow-y-visible" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
-                                {s.message}
-                              </div>
+                              <CollapsibleMessage
+                                message={s.message}
+                                mono
+                                className="mt-0.5"
+                              />
                             </div>
                           )}
                           {s.count != null && <div><span className="font-medium text-foreground">Count:</span> {s.count}</div>}

@@ -4490,7 +4490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('❌ OpenRouter update usage error:', error);
       Sentry.captureException(error);
-      res.status(500).json({ error: 'Failed to update OpenRouter usage', details: error instanceof Error ? error.message : 'Unknown error' });
+      res.status(500).json({ error: 'Failed to update OpenRouter usage' });
     }
   });
 
@@ -5983,11 +5983,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Sentry setup: throw a real error so Sentry receives it. No auth, works in staging/dev.
-  // Visit /debug-sentry to verify your SENTRY_DSN. Returns 404 in production.
-  app.get("/debug-sentry", (_req, res) => {
-    const allow = process.env.APP_ENV !== "production" || process.env.NODE_ENV !== "production" || process.env.ENABLE_TEST_ROUTES === "true";
-    if (!allow) return res.status(404).send("Not found");
+  // Sentry setup: throw a real error so Sentry receives it. Requires auth + test routes enabled.
+  app.get("/debug-sentry", authenticateToken, (_req, res) => {
+    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
+    if (!allow) return res.status(404).json({ error: "Not found" });
     throw new Error("My first Sentry error!");
   });
 
@@ -5998,13 +5997,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!allow) {
       return res.status(404).json({ error: "Not found" });
     }
-    // Single line: error message + stack frames. Agent's stackFileLine/stackNodeAtFn extracts server/routes.ts
-    console.error(
-      'Error: [PushLog test] Agent + correlation — at registerRoutes (server/routes.ts:6010:5) at Layer (server/index.ts:504:15)'
-    );
+    // Throw a real error so Node produces a genuine multi-line stack trace on stderr.
+    // The agent's Docker/file source collects multi-line stacks and extracts real file:line frames.
+    // We catch it ourselves so the global error handler doesn't also fire.
+    try {
+      throw new Error("[PushLog test] Agent + correlation test error");
+    } catch (err) {
+      const stack = err instanceof Error ? err.stack : String(err);
+      process.stderr.write(stack + "\n");
+    }
     res.status(200).json({
       ok: true,
-      message: "Logged. Agent should pick it up from stderr. If incidentServiceName is set, notification will show related commits.",
+      message: "Real stack trace written to stderr. Agent should pick it up and create an incident with related commits.",
     });
   });
 

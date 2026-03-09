@@ -6,9 +6,9 @@ services:
     ports:
       - "127.0.0.1:5433:5432"
     environment:
-      POSTGRES_DB: pushlog_staging
-      POSTGRES_USER: pushlog
-      POSTGRES_PASSWORD: pushlog_staging_password
+      POSTGRES_DB: ${STAGING_DB_NAME:-pushlog_staging}
+      POSTGRES_USER: ${STAGING_DB_USER:-pushlog}
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:?Set STAGING_DB_PASSWORD in .env.staging}
     volumes:
       - pushlog_staging_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -36,7 +36,7 @@ services:
       NODE_ENV: production
       APP_ENV: staging
       PORT: "3001"
-      DATABASE_URL: postgresql://pushlog:pushlog_staging_password@staging-db:5432/pushlog_staging
+      DATABASE_URL: postgresql://${STAGING_DB_USER:-pushlog}:${STAGING_DB_PASSWORD}@staging-db:5432/${STAGING_DB_NAME:-pushlog_staging}
       APP_URL: https://staging.pushlog.ai
       COOKIE_DOMAIN: staging.pushlog.ai
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine

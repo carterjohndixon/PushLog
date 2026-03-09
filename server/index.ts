@@ -54,7 +54,7 @@ if (skipGitHubVerify) {
 // Initialize Sentry for error tracking (fallback DSN matches tunnel/client — pushlog project)
 // Clear SENTRY_DEBUG so SDK never logs to stdout (those logs get picked up by pushlog-agent as incidents)
 if (process.env.SENTRY_DEBUG) delete process.env.SENTRY_DEBUG;
-const sentryDsn = process.env.SENTRY_DSN || "https://76dff591029ab7f40572c74af67aa470@o4510881753137152.ingest.us.sentry.io/4510881854521344";
+const sentryDsn = process.env.SENTRY_DSN || "";
 if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
