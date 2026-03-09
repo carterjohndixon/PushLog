@@ -7,13 +7,36 @@ import (
 
 func TestParseLine_NoiseFiltered(t *testing.T) {
 	noise := []string{
+		// Auth/expected status codes
 		`Error: GET /api/notifications/all 401 in 5ms :: {"error":"Not authenticated"}`,
 		`GET /foo 403 Forbidden`,
 		`Unauthorized: invalid token`,
 		`Authentication required`,
 		`403 Forbidden`,
 		`Not authorized to access resource`,
-		`Error: [incident-engine] incident inc-abc123 (new_issue) app/production: New issue`,
+
+		// API request log lines (the #1 source of false positives)
+		`GET /api/agents 200 in 134ms :: [{"id":"09fa0c41","name":"PushLog-March-8-2026","status":"active"}]`,
+		`POST /api/test/simulate-incident 200 in 45ms :: {"ok":true}`,
+		`DELETE /api/agents/75149a0b 404 in 7ms :: {"error":"Agent not found"}`,
+		`GET /api/notifications/all 200 in 22ms :: {"count":5}`,
+		`PUT /api/repositories/abc123 200 in 30ms :: {"ok":true}`,
+		`GET /api/test/agent-correlation 500 in 5ms :: {"error":"Agent correlation test"}`,
+
+		// PushLog operational noise
+		`[incident-engine] incident inc-abc123 (new_issue) app/production: New issue`,
+		`[webhooks/sentry] test: no target users for orgId=? service=app`,
+		`[broadcastNotification] Write failed for user abc123: ERR_STREAM`,
+		`[agentBuffer] ingest failed for event: Error: engine not ready`,
+		`serving on port 5001`,
+		`⚠️ ENCRYPTION_KEY is missing. Add it to .env`,
+		`❌ Auth failed: { hasSession: true, hasUserId: false }`,
+		`[pushlog-agent] Starting pushlog-agent`,
+
+		// Session/MFA
+		`Session expired`,
+		`MFA not configured`,
+		`Invalid code`,
 	}
 	for _, line := range noise {
 		ev := ParseLine(line, "test", "prod")

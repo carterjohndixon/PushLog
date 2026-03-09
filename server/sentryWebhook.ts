@@ -389,12 +389,12 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
         "Unknown error"
     );
 
-    // Skip 404s and 2xx — expected/noise, low signal (404 = not found, 2xx = success)
-    if (/\b404\b/.test(rawMessage) || / 404 in \d+ms/.test(rawMessage)) {
+    // Skip noise: API request log lines, 404s, auth errors
+    if (/(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/\S+\s+\d{3}\s+in\s+\d+ms/.test(rawMessage)) {
       res.status(202).json({ accepted: true });
       return;
     }
-    if (/\b200\b/.test(rawMessage) || /\b201\b/.test(rawMessage) || /\b204\b/.test(rawMessage)) {
+    if (/\b404\b/.test(rawMessage) || /\b401\b/.test(rawMessage) || /\b403\b/.test(rawMessage)) {
       res.status(202).json({ accepted: true });
       return;
     }

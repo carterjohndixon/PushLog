@@ -36,23 +36,44 @@ var (
 		{"warning", regexp.MustCompile(`(?i)\b(warn(ing)?)\b`)},
 	}
 
-	// Expected/auth errors and self-referential logs that should never be tracked or alerted on.
+	// Expected/operational/auth lines that should never trigger incidents.
 	ignorePatterns = []*regexp.Regexp{
+		// HTTP API request log lines (Express middleware): "METHOD /path STATUS in Xms"
+		// These are operational logs, not errors — even if the JSON body happens to contain "error".
+		regexp.MustCompile(`(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S+\s+\d{3}\s+in\s+\d+ms`),
+
+		// Auth/expected HTTP status codes
 		regexp.MustCompile(`\b401\b`),
 		regexp.MustCompile(`\b403\b`),
 		regexp.MustCompile(`\b404\b`),
-		// 2xx = success; never create incidents for successful API responses
-		regexp.MustCompile(`\b200\b`),
-		regexp.MustCompile(`\b201\b`),
-		regexp.MustCompile(`\b204\b`),
+
+		// Expected auth messages
 		regexp.MustCompile(`(?i)not authenticated`),
 		regexp.MustCompile(`(?i)unauthorized`),
 		regexp.MustCompile(`(?i)forbidden`),
 		regexp.MustCompile(`(?i)authentication required`),
 		regexp.MustCompile(`(?i)invalid token`),
 		regexp.MustCompile(`(?i)not authorized`),
-		// Avoid feedback loop: incident engine's own log output
+		regexp.MustCompile(`(?i)invalid code`),
+		regexp.MustCompile(`(?i)session expired`),
+		regexp.MustCompile(`(?i)mfa not configured`),
+
+		// PushLog operational noise
 		regexp.MustCompile(`\[incident-engine\]\s+incident`),
+		regexp.MustCompile(`\[webhooks/sentry\]`),
+		regexp.MustCompile(`\[broadcastNotification\]`),
+		regexp.MustCompile(`\[agentBuffer\]`),
+		regexp.MustCompile(`(?i)serving\s+on\s+port`),
+		regexp.MustCompile(`(?i)ENCRYPTION_KEY is missing`),
+		regexp.MustCompile(`(?i)ENCRYPTION_KEY is invalid`),
+		regexp.MustCompile(`❌ Auth failed`),
+		regexp.MustCompile(`\[pushlog-agent\]`),
+
+		// Sentry SDK noise
+		regexp.MustCompile(`(?i)sentry.*captured|sentry.*dsn|sentry.*init`),
+
+		// PM2/process manager operational
+		regexp.MustCompile(`(?i)pm2.*restart|pm2.*stop|pm2.*reload`),
 	}
 
 	exceptionPattern = regexp.MustCompile(`(?i)^(\w+(?:\.\w+)*(?:Error|Exception|Panic|Fault))`)

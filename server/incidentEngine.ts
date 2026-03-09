@@ -194,13 +194,15 @@ export function onIncidentSummary(listener: IncidentListener): () => void {
 
 /** Expected/non-critical patterns that should not trigger incidents or alerts. */
 const NOISE_PATTERNS = [
+  // HTTP API request log lines (Express middleware): "METHOD /path STATUS in Xms"
+  /(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/\S+\s+\d{3}\s+in\s+\d+ms/,
+
+  // Auth/expected status codes
   /\b401\b/,
   /\b403\b/,
   /\b404\b/,
-  // 2xx = success; never create incidents for successful API responses
-  /\b200\b/,
-  /\b201\b/,
-  /\b204\b/,
+
+  // Expected auth/session messages
   /not authenticated/i,
   /unauthorized/i,
   /forbidden/i,
@@ -208,9 +210,19 @@ const NOISE_PATTERNS = [
   /invalid token/i,
   /not authorized/i,
   /invalid code/i,
+  /session expired/i,
   /mfa not configured/i,
-  // Avoid feedback loop: incident engine's own log output
+
+  // PushLog operational noise
   /\[incident-engine\]\s+incident/,
+  /\[webhooks\/sentry\]/,
+  /\[broadcastNotification\]/,
+  /\[agentBuffer\]/,
+  /serving\s+on\s+port/i,
+  /ENCRYPTION_KEY is missing/i,
+  /ENCRYPTION_KEY is invalid/i,
+  /❌ Auth failed/,
+  /\[pushlog-agent\]/,
 ];
 
 export function isNoiseEvent(event: IncidentEventInput): boolean {
