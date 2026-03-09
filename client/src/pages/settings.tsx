@@ -1564,7 +1564,7 @@ export default function Settings() {
                         className="border-emerald-500/50 text-emerald-700 dark:text-emerald-400"
                         onClick={async () => {
                           try {
-                            const res = await fetch("/api/test/agent-correlation", { credentials: "include" });
+                            const res = await fetch("/api/test/agent-correlation", { method: "POST", credentials: "include" });
                             const data = await res.json().catch(() => ({}));
                             if (res.ok) {
                               toast({

@@ -5992,11 +5992,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Test route: log an error with stack trace so the agent picks it up → incident → GitHub correlation.
   // Single line so the API middleware's log doesn't become the event. Agent extracts server/routes.ts for correlation.
-  app.get("/api/test/agent-correlation", authenticateToken, (req, res) => {
+  app.post("/api/test/agent-correlation", authenticateToken, (req, res) => {
     const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
     if (!allow) {
       return res.status(404).json({ error: "Not found" });
     }
+    res.set("Cache-Control", "no-store");
     // Throw a real error so Node produces a genuine multi-line stack trace on stderr.
     // The agent's Docker/file source collects multi-line stacks and extracts real file:line frames.
     // We catch it ourselves so the global error handler doesn't also fire.
