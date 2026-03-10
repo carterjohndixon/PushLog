@@ -1,22 +1,16 @@
-# Deploy to staging EC2 on push to main.
-# Your "dedicated window" = GitHub Actions tab: each run shows pending → success/failure + full logs.
+# Deploy to staging EC2 — manual only. No auto-deploy.
+# Run from Actions tab → Deploy to Staging → Run workflow after CI checks pass.
 #
 # Required secrets (Settings → Secrets and variables → Actions):
-#   STAGING_EC2_HOST     — EC2 hostname or IP (e.g. ec2-xx-xx-xx-xx.compute.amazonaws.com)
-#   STAGING_EC2_SSH_KEY  — Private key for ec2-user (paste the whole key including -----BEGIN ... -----END-----)
+#   STAGING_EC2_HOST     — EC2 hostname or IP
+#   STAGING_EC2_SSH_KEY  — Private key for ec2-user
 #
-# Optional (for frontend source maps in Sentry):
-#   SENTRY_AUTH_TOKEN    — Sentry auth token (Release: Admin, Project: Read & Write) so npm run build uploads source maps
-#
-# If your repo path on EC2 is not /home/ec2-user/pushlog, set:
-#   STAGING_EC2_REPO_PATH — e.g. /home/ec2-user/pushlog
+# Optional: SENTRY_AUTH_TOKEN, STAGING_EC2_REPO_PATH
 
 name: Deploy to Staging
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:  # allow manual "Run workflow" from Actions tab
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -49,5 +43,6 @@ jobs:
             if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "  WARNING: SENTRY_AUTH_TOKEN is not set — source maps will NOT be uploaded to Sentry (add repo secret SENTRY_AUTH_TOKEN to fix)"; else echo "  SENTRY_AUTH_TOKEN is set — plugin will upload source maps"; fi
             ./scripts/build-for-docker.sh
             echo "[4/5] docker compose up -d --build..."
+            export CACHEBUST="$(git rev-parse HEAD)"
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
             echo "[5/5] Done."

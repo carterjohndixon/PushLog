@@ -225,7 +225,7 @@ export default function Home() {
               />
             </h1>
             <p className="text-2xl font-semibold text-foreground mb-3 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
-              Stop wondering what shipped. Start seeing it.
+              Stop wondering what pushed. Start seeing it.
             </p>
             <p className="text-lg text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
               Automate your workflow with intelligent push notifications, AI code summaries, incident reports, 

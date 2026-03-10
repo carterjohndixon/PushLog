@@ -1,5 +1,6 @@
-# Run checks before pushing/merging: TypeScript and production build.
-# Blocks merge if types or build fail.
+# CI checks: validate code is good before staging.
+# Runs on push/PR to main. No deploys—only checks.
+# Staging deploy is manual (Actions → Deploy to Staging → Run workflow).
 
 name: CI
 
@@ -31,3 +32,41 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  risk-engine:
+    name: Risk engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Run risk-engine tests
+        run: cargo test -p risk-engine
+      - name: Build risk-engine release
+        run: cargo build -p risk-engine --release
+
+  streaming-stats:
+    name: Streaming stats build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Build streaming-stats
+        run: cargo build --release -p streaming-stats
+
+  incident-engine:
+    name: Incident engine build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Build incident-engine
+        run: cargo build --release -p incident-engine

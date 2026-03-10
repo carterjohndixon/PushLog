@@ -43,7 +43,7 @@ export function Footer() {
               </p>
             )}
             <p className="text-muted-foreground dark:text-gray-400 mb-4 max-w-md">
-              Stop wondering what shipped. Start seeing it. PushLog streamlines your workflow with intelligent GitHub and Slack integration, incident reports, and AI-powered code summaries.
+              Stop wondering what pushed. Start seeing it. PushLog streamlines your workflow with intelligent GitHub and Slack integration, incident reports, and AI-powered code summaries.
             </p>
             <div className="flex space-x-4">
               <a 

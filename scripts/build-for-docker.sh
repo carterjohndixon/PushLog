@@ -30,10 +30,16 @@ if [ ! -f ".docker-build/prebuilt/dist/index.js.map" ]; then
 fi
 cp target/release/incident-engine .docker-build/prebuilt/bin/
 
+# Cache-bust: use git SHA or timestamp so each deploy produces a unique build (avoids stale Docker layers)
+CACHEBUST="${CACHEBUST:-$(git rev-parse HEAD 2>/dev/null || date +%s)}"
+echo "Docker cache-bust: $CACHEBUST"
 cat > .docker-build/prebuilt/Dockerfile << 'DOCKERFILE'
 FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
+# Cache-bust so layers rebuild when code changes (pass --build-arg CACHEBUST=git-sha)
+ARG CACHEBUST
+RUN echo "Build: ${CACHEBUST:-unknown}"
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY dist ./dist
