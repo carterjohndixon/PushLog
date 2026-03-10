@@ -45,7 +45,9 @@ services:
       SLACK_NOTIFICATIONS_ENABLED: "false"
       BILLING_ENABLED: "false"
     ports:
-      - "127.0.0.1:3001:3001"
+      # Host 3002 → container 3001 (avoids conflict with PM2 pushlog-staging on 3001).
+      # If using Docker for staging, point nginx proxy_pass to 127.0.0.1:3002.
+      - "127.0.0.1:3002:3001"
 
 volumes:
   pushlog_staging_db_data:
