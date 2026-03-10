@@ -1905,9 +1905,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // When refreshOrgs=true, user wants to re-authorize to add more GitHub orgs — skip "already connected" check
+      const refreshOrgs = (req.query.refreshOrgs as string) === "true";
+
       // Check if user already has GitHub connected and validate the token
       const user = await databaseStorage.getUserById(userId);
-      if (user?.githubId && user?.githubToken) {
+      if (!refreshOrgs && user?.githubId && user?.githubToken) {
         try {
           const isValid = await validateGitHubToken(user.githubToken);
           if (isValid) {
@@ -2126,8 +2129,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             Sentry.captureException(err);
             return loginRedirectWithError( "Session error. Please try again.");
           }
+          const safeReturnPath = typeof returnPath === "string" && returnPath.startsWith("/") && !returnPath.includes("..")
+            ? returnPath
+            : null;
           const targetPath = isLinkingFlow
-            ? "/dashboard?github_connected=1"
+            ? (safeReturnPath || "/dashboard?github_connected=1")
             : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");

@@ -157,6 +157,28 @@ export default function OrganizationPage() {
     return window.localStorage.getItem(GITHUB_ORG_STORAGE_KEY) ?? "";
   });
   const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
+  const [connectNewOrgsLoading, setConnectNewOrgsLoading] = useState(false);
+
+  const handleConnectNewOrgs = async () => {
+    setConnectNewOrgsLoading(true);
+    try {
+      const response = await fetch("/api/github/connect?refreshOrgs=true", { credentials: "include", headers: { Accept: "application/json" } });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast({ title: "Connection failed", description: data.error || "Could not connect.", variant: "destructive" });
+        return;
+      }
+      if (data.url) {
+        if (data.state) localStorage.setItem("github_oauth_state", data.state);
+        localStorage.setItem("returnPath", "/organization?github_refresh=1");
+        window.location.href = data.url;
+      }
+    } catch {
+      toast({ title: "Connection failed", description: "Could not start GitHub connection.", variant: "destructive" });
+    } finally {
+      setConnectNewOrgsLoading(false);
+    }
+  };
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -210,6 +232,18 @@ export default function OrganizationPage() {
       ) as Promise<{ login: string; id: number; avatar_url: string | null; inPushLogOrg: boolean; pushlogUserId: string | null; pushlogRole: string | null }[]>,
     enabled: githubInviteModalOpen && !!selectedGitHubOrgLogin,
   });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("github_refresh") === "1") {
+      params.delete("github_refresh");
+      const clean = params.toString() ? `?${params}` : "";
+      window.history.replaceState(null, "", `${window.location.pathname}${clean}`);
+      setGithubInviteModalOpen(true);
+      queryClient.invalidateQueries({ queryKey: ["org", "github-orgs"] });
+    }
+  }, [queryClient]);
 
   useEffect(() => {
     if (githubInviteModalOpen && githubOrgs.length > 0) {
@@ -974,20 +1008,33 @@ export default function OrganizationPage() {
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">Could not load organizations</p>
                           <p className="mt-1">{githubOrgsError instanceof Error ? githubOrgsError.message : "An error occurred."}</p>
-                          <p className="mt-2 text-xs">Reconnect GitHub in Settings to grant organization access.</p>
-                          <Link href="/settings">
-                            <Button variant="outline" size="sm" className="mt-2">Open Settings</Button>
-                          </Link>
+                          <p className="mt-2 text-xs">Reconnect GitHub in Settings to grant organization access, or connect new orgs.</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
+                              {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+                              {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                            </Button>
+                            <Link href="/settings">
+                              <Button variant="outline" size="sm">Open Settings</Button>
+                            </Link>
+                          </div>
                         </div>
                       ) : githubOrgs.length === 0 ? (
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">No organization found</p>
-                          <p className="mt-1 text-xs">If you belong to a GitHub organization, try disconnecting and reconnecting your GitHub account in Settings to refresh permissions.</p>
-                          <Link href="/settings">
-                            <Button variant="outline" size="sm" className="mt-2">Open Settings</Button>
-                          </Link>
+                          <p className="mt-1 text-xs">Connect GitHub orgs you have access to, or reconnect in Settings to refresh permissions.</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button variant="outline" size="sm" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
+                              {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+                              {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                            </Button>
+                            <Link href="/settings">
+                              <Button variant="outline" size="sm">Open Settings</Button>
+                            </Link>
+                          </div>
                         </div>
                       ) : (
+                        <div className="flex flex-wrap items-center gap-2">
                         <Select
                           value={selectedGitHubOrgLogin || ""}
                           onValueChange={(v) => {
@@ -1007,6 +1054,11 @@ export default function OrganizationPage() {
                             ))}
                           </SelectContent>
                         </Select>
+                        <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
+                          {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
+                          {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                        </Button>
+                        </div>
                       )}
                     </div>
                     {selectedGitHubOrgLogin && (
