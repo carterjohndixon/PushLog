@@ -1034,30 +1034,36 @@ export default function OrganizationPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="flex flex-wrap items-center gap-2">
-                        <Select
-                          value={selectedGitHubOrgLogin || ""}
-                          onValueChange={(v) => {
-                            const login = v || "";
-                            setSelectedGitHubOrgLogin(login);
-                            if (typeof window !== "undefined" && login) window.localStorage.setItem(GITHUB_ORG_STORAGE_KEY, login);
-                          }}
-                        >
-                          <SelectTrigger className="border-border/50">
-                            <SelectValue placeholder="Select an organization" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {githubOrgs.map((org) => (
-                              <SelectItem key={org.id} value={org.login}>
-                                {org.login}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
-                          {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
-                          {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
-                        </Button>
+                        <div className="space-y-2">
+                          <Select
+                            value={selectedGitHubOrgLogin || ""}
+                            onValueChange={(v) => {
+                              const login = v || "";
+                              setSelectedGitHubOrgLogin(login);
+                              if (typeof window !== "undefined" && login) window.localStorage.setItem(GITHUB_ORG_STORAGE_KEY, login);
+                            }}
+                          >
+                            <SelectTrigger className="border-border/50">
+                              <SelectValue placeholder="Select an organization" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {githubOrgs.map((org) => (
+                                <SelectItem key={org.id} value={org.login}>
+                                  {org.login}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full sm:w-auto border-dashed"
+                            onClick={handleConnectNewOrgs}
+                            disabled={connectNewOrgsLoading}
+                          >
+                            {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
+                            {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1085,6 +1091,16 @@ export default function OrganizationPage() {
                             onClick={() => createInviteLinkMutation.mutate({ role: githubInviteRole, expiresInDays: 7 })}
                           >
                             {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-dashed ml-auto"
+                            onClick={handleConnectNewOrgs}
+                            disabled={connectNewOrgsLoading}
+                          >
+                            {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
+                            {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
                           </Button>
                         </div>
                         <div className="space-y-2 pt-5">
