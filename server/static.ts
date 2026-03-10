@@ -7,21 +7,34 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/** Asset path prefixes (Vite output: js/, css/, images/, assets/) */
+/** Asset path prefixes (Vite output: js/, css/, images/, assets/) + root-level asset files */
 const ASSET_PREFIXES = ["/js/", "/css/", "/images/", "/assets/"];
 
 /** File extensions that are always static assets (never SPA routes) */
 const ASSET_EXTENSIONS = /\.(js|css|map|png|jpe?g|gif|svg|ico|webp|woff2?|ttf|eot)$/i;
 
 function isAssetRequest(reqPath: string): boolean {
-  const p = reqPath.split("?")[0];
+  const p = (reqPath.split("?")[0] || "").trim();
+  if (!p) return false;
   if (ASSET_EXTENSIONS.test(p)) return true;
   return ASSET_PREFIXES.some((prefix) => p.startsWith(prefix));
 }
 
+/** Safely resolve a request path to a file under root. Returns null if invalid or outside root. */
+function resolveAssetPath(root: string, reqPath: string): string | null {
+  const raw = (reqPath.split("?")[0] || "").trim().replace(/^\//, "");
+  if (!raw) return null;
+  const decoded = decodeURIComponent(raw);
+  if (decoded.startsWith("..") || decoded.includes("\0")) return null;
+  const resolved = path.resolve(root, decoded);
+  const rootResolved = path.resolve(root);
+  if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) return null;
+  return resolved;
+}
+
 const staticOptions = {
   redirect: false,
-  index: false, // Disable directory index so we never serve index.html by accident
+  index: false,
   fallthrough: true,
 };
 
@@ -52,21 +65,28 @@ export function serveStatic(app: Express) {
           : fs.existsSync(mainIndexInDist)
             ? mainIndexInDist
             : null;
-    const isAsset = isAssetRequest(req.path || req.url || "/");
+
+    const reqPath = (req.path ?? req.url ?? "/").split("?")[0] || "/";
+    const isAsset = isAssetRequest(reqPath);
 
     if (isCarterHost && !hasCarterBuild) {
       console.warn("[static] carter.pushlog.ai requested but no carter build was found; falling back to main app.");
     }
 
-    const staticMiddleware = express.static(staticPath, staticOptions);
-    staticMiddleware(req, res, () => {
-      // Asset requests: 404 if file not found (no SPA fallback)
-      if (isAsset) {
+    // Asset requests: resolve file path ourselves and serve or 404. Never fall back to index.html.
+    if (isAsset) {
+      const filePath = resolveAssetPath(staticPath, reqPath);
+      if (!filePath || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         res.status(404).send("Not found");
         return;
       }
+      res.sendFile(filePath);
+      return;
+    }
 
-      // Non-asset: SPA fallback to index.html
+    // Non-asset: try express.static first, then SPA fallback to index.html
+    const staticMiddleware = express.static(staticPath, staticOptions);
+    staticMiddleware(req, res, () => {
       if (!indexPath) {
         console.error(
           `ENOENT: no such file or directory, stat '${mainIndexInPublic}' (also tried '${mainIndexInDist}')`,
