@@ -2,6 +2,23 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+/** Strip duplicate "Error: " (or similar) from the start of a string so we don't show "Error: Error: message". */
+function stripDuplicateErrorPrefix(s: string): string {
+  const t = s.trim();
+  const m = t.match(/^(\w+):\s*(.+)$/);
+  if (!m) return t;
+  const [, prefix, rest] = m;
+  const restTrim = rest.trim();
+  if (restTrim.startsWith(prefix + ":") || restTrim.startsWith(prefix + ": ")) {
+    return stripDuplicateErrorPrefix(restTrim);
+  }
+  return t;
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export interface RelatedCommitForEmail {
   sha: string;
   shortSha: string;
@@ -83,8 +100,8 @@ export function getIncidentAlertEmailTemplate(
   metadata?: IncidentAlertMetadata,
   useEmbeddedLogo: boolean = true
 ) {
-  const escapedTitle = escapeHtml(title);
-  const escapedMessage = escapeHtml(message).replace(/\n/g, "<br>");
+  const escapedTitle = escapeHtml(stripDuplicateErrorPrefix(title));
+  const escapedMessage = escapeHtml(stripDuplicateErrorPrefix(message)).replace(/\n/g, "<br>");
   const baseUrl = dashboardUrl.replace(/\/dashboard\/?$/, "") || "https://pushlog.ai";
   const logoSrc = useEmbeddedLogo ? "cid:pushlog-logo" : `${baseUrl}/PushLog.png`;
 
@@ -103,8 +120,14 @@ export function getIncidentAlertEmailTemplate(
   const relatedCommits = metadata?.relatedCommits ?? [];
   const relevantAuthors = metadata?.relevantAuthors ?? [];
   const hasErrorMessage = metadata?.errorMessage != null && String(metadata.errorMessage).trim().length > 0;
-  const errorMessageEscaped = hasErrorMessage ? escapeHtml(String(metadata!.errorMessage!).trim()).replace(/\n/g, "<br>") : "";
-  const exceptionType = metadata?.exceptionType != null ? escapeHtml(String(metadata.exceptionType)) : "";
+  const rawExceptionType = metadata?.exceptionType != null ? String(metadata.exceptionType).trim() : "";
+  const rawErrorMessage = hasErrorMessage ? String(metadata!.errorMessage!).trim() : "";
+  const displayErrorMessage =
+    rawErrorMessage && rawExceptionType
+      ? rawErrorMessage.replace(new RegExp(`^${escapeRegex(rawExceptionType)}:\\s*`, "i"), "").trim() || rawErrorMessage
+      : rawErrorMessage;
+  const errorMessageEscaped = hasErrorMessage ? escapeHtml(displayErrorMessage).replace(/\n/g, "<br>") : "";
+  const exceptionType = rawExceptionType ? escapeHtml(rawExceptionType) : "";
 
   const isNoiseFrame = (file: string) =>
     /^log$/i.test(file) || /^test$/i.test(file) || /^\d{1,2}\/\w{3}\/\d{4}/.test(file) || /^\d{4}-\d{2}-\d{2}/.test(file) || /^<\w+>$/.test(file);
@@ -214,7 +237,7 @@ export function getIncidentAlertEmailTemplate(
                 <tr>
                   <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
                     <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
-                    <div style="padding: 12px; background-color: ${C.redBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 13px; color: ${C.redText}; line-height: 1.6; border: 1px solid ${C.redBorder}; word-break: break-word;">${exceptionType ? `<span style="color: ${C.amber};">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
+                    <div style="padding: 12px; background-color: ${C.redBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 13px; color: ${C.redText}; line-height: 1.6; border: 1px solid ${C.redBorder}; word-break: break-word; overflow-wrap: break-word;">${exceptionType ? `<span style="color: ${C.amber};">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
                   </td>
                 </tr>
                 ` : ""}
@@ -255,7 +278,7 @@ export function getIncidentAlertEmailTemplate(
                   <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
                     ${stackTraceIsBundled ? `<div style="font-size: 12px; color: ${C.amber}; margin-bottom: 10px; padding: 8px 12px; background-color: #2b2418; border-radius: 6px; border: 1px solid #4a3d28;">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines.</div>` : ""}
                     <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
-                    <div style="padding: 12px; background-color: ${C.codeBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: ${C.muted}; line-height: 1.7; border: 1px solid ${C.border}; word-break: break-word; overflow: hidden;">${stackTraceHtml}</div>
+                    <div style="padding: 12px; background-color: ${C.codeBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: ${C.muted}; line-height: 1.7; border: 1px solid ${C.border}; word-break: break-word; overflow-wrap: break-word;">${stackTraceHtml}</div>
                   </td>
                 </tr>
                 ` : ""}
