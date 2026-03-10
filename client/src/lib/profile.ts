@@ -36,6 +36,8 @@ export interface ProfileUser {
   accountType?: "solo" | "team";
   /** True when the user has not yet chosen Solo vs Organization (show onboarding step). */
   needsAccountTypeStep?: boolean;
+  /** True when on staging and user is in STAGING_ADMIN_EMAILS/USERNAMES (can use dev testing). */
+  isStagingAdmin?: boolean;
 }
 
 export interface ProfileResponse {

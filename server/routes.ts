@@ -494,6 +494,13 @@ async function getCurrentUser(req: any) {
   return await storage.getUser(userId);
 }
 
+function isStagingAdminUser(user: { email?: string | null; username?: string | null } | null): boolean {
+  if (!user || APP_ENV !== "staging") return false;
+  const email = String(user.email || "").toLowerCase();
+  const username = String(user.username || "").toLowerCase();
+  return (!!email && STAGING_ADMIN_EMAILS.includes(email)) || (!!username && STAGING_ADMIN_USERNAMES.includes(username));
+}
+
 async function ensureStagingAdmin(req: any, res: any): Promise<{ ok: true; user: any } | { ok: false }> {
   if (APP_ENV !== "staging") {
     res.status(404).json({ error: "Not found" });
@@ -506,12 +513,7 @@ async function ensureStagingAdmin(req: any, res: any): Promise<{ ok: true; user:
     return { ok: false };
   }
 
-  const email = String(user.email || "").toLowerCase();
-  const username = String(user.username || "").toLowerCase();
-  const allowedByEmail = email && STAGING_ADMIN_EMAILS.includes(email);
-  const allowedByUsername = username && STAGING_ADMIN_USERNAMES.includes(username);
-
-  if (!allowedByEmail && !allowedByUsername) {
+  if (!isStagingAdminUser(user)) {
     res.status(403).json({ error: "Admin access required" });
     return { ok: false };
   }
@@ -1883,6 +1885,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         devMode: !!((user as any).devMode),
         incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
         receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
+        ...(APP_ENV === "staging" && { isStagingAdmin: isStagingAdminUser(user) }),
       };
       res.status(200).json({ success: true, user: profileUser });
     } catch (err) {
@@ -5813,12 +5816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GitHub webhook is mounted in index.ts with express.raw() so signature is verified against raw body.
   // Do not register it here so index can mount it with raw body parser first.
 
-  // Test route: simulate push → AI summary → Slack (same code path as webhook). Enable with ENABLE_TEST_ROUTES=true.
+  // Test route: simulate push → AI summary → Slack. Staging + admin only.
   app.post("/api/test/simulate-push", authenticateToken, async (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.APP_ENV === "staging";
-    if (!allow) {
-      return res.status(404).json({ error: "Not found" });
-    }
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     try {
       const userId = req.user!.userId;
       const integrationId = typeof req.body?.integrationId === "string" ? req.body.integrationId : null;
@@ -5979,20 +5980,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // You'll see a 500. Flow: throw → Sentry → (if new issue) alert → webhook → PushLog notification.
   // To get a notification every time: add "issue seen more than 0 times" to your Sentry alert, or
   // resolve the issue in Sentry before each test so it counts as a new issue.
-  app.get("/api/test/throw", authenticateToken, (req, res) => {
-    if (process.env.ENABLE_TEST_ROUTES !== "true" && process.env.NODE_ENV !== "development") {
-      return res.status(404).json({ error: "Not found" });
-    }
+  app.get("/api/test/throw", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     throw new Error(`[PushLog test] Real uncaught error from server/routes.ts — Sentry captures this (${Date.now()})`);
   });
 
-  // Test route: trigger process-level crash handlers to test crash emails (unhandledRejection or uncaughtException).
-  // Requires ENABLE_TEST_ROUTES=true or NODE_ENV=development. ?type=rejection (default, app stays up) or ?type=exception (exits process).
-  app.get("/api/test/crash", authenticateToken, (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) {
-      return res.status(404).json({ error: "Not found" });
-    }
+  // Test route: trigger crash handlers. Staging + admin only.
+  app.get("/api/test/crash", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     const type = (req.query.type as string)?.toLowerCase() || "rejection";
     if (type === "exception") {
       res.status(200).json({
@@ -6014,20 +6011,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Sentry setup: throw a real error so Sentry receives it. Requires auth + test routes enabled.
-  app.get("/debug-sentry", authenticateToken, (_req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) return res.status(404).json({ error: "Not found" });
+  // Sentry setup: throw a real error. Staging + admin only.
+  app.get("/debug-sentry", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     throw new Error("My first Sentry error!");
   });
 
-  // Test route: log an error with stack trace so the agent picks it up → incident → GitHub correlation.
-  // Single line so the API middleware's log doesn't become the event. Agent extracts server/routes.ts for correlation.
-  app.post("/api/test/agent-correlation", authenticateToken, (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) {
-      return res.status(404).json({ error: "Not found" });
-    }
+  // Test route: log an error for agent correlation. Staging + admin only.
+  app.post("/api/test/agent-correlation", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     res.set("Cache-Control", "no-store");
     // Throw a real error so Node produces a genuine multi-line stack trace on stderr.
     // The agent's Docker/file source collects multi-line stacks and extracts real file:line frames.
@@ -6044,14 +6038,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Test route: report a real error to Sentry so it creates an issue → alert → webhook → PushLog.
-  // We capture then return 200 so the UI doesn't see a 500; Sentry still gets the event.
-  app.get("/api/test/trigger-error", authenticateToken, (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) {
-      console.warn("[trigger-error] 404 — ENABLE_TEST_ROUTES not set and not development");
-      return res.status(404).json({ error: "Not found" });
-    }
+  // Test route: report a real error to Sentry. Staging + admin only.
+  app.get("/api/test/trigger-error", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     const err = new Error("[PushLog test] Intentional incident: trigger-error — used to verify Sentry → webhook → incident alerts");
     Sentry.captureException(err);
     console.warn("[trigger-error] 200 — test error sent to Sentry");
@@ -6061,12 +6051,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Test route: verify stack filter strips node_modules and node: internals. Requires auth so it works from Settings (same-origin + session).
-  app.get("/api/test/stack-filter", authenticateToken, (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) {
-      return res.status(404).json({ error: "Not found" });
-    }
+  // Test route: verify stack filter. Staging + admin only.
+  app.get("/api/test/stack-filter", authenticateToken, async (req, res) => {
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     const mockStack = [
       { file: "node:internal/errors", function: "triggerUncaughtException", line: 1 },
       { file: "node:events", function: "emit", line: 2 },
@@ -6085,13 +6073,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Test route: simulate Sentry-style production incident. Creates notification immediately so the
-  // incident toast shows right away; also sends to incident engine for full pipeline.
+  // Test route: simulate Sentry-style incident. Staging + admin only.
   app.post("/api/test/simulate-incident", authenticateToken, async (req, res) => {
-    const allow = process.env.ENABLE_TEST_ROUTES === "true" || process.env.NODE_ENV === "development";
-    if (!allow) {
-      return res.status(404).json({ error: "Not found" });
-    }
+    const admin = await ensureStagingAdmin(req, res);
+    if (!admin.ok) return;
     try {
       const userId = (req as any).user?.userId as string;
       if (!userId) {
@@ -6317,6 +6302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: role ?? undefined,
           accountType: accountType ?? undefined,
           needsAccountTypeStep: needsAccountTypeStep ?? false,
+          ...(APP_ENV === "staging" && { isStagingAdmin: isStagingAdminUser(user) }),
         }
       };
       perfLog("/api/profile total", timer.elapsed());
@@ -6367,6 +6353,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updates.preferredAiModel = body.preferredAiModel;
       }
       if (typeof body.devMode === "boolean") {
+        if (APP_ENV !== "staging") {
+          return res.status(403).json({ error: "Developer mode is only available on staging" });
+        }
+        const userForCheck = await databaseStorage.getUserById(userId);
+        if (!isStagingAdminUser(userForCheck)) {
+          return res.status(403).json({ error: "Admin access required" });
+        }
         updates.devMode = body.devMode;
       }
       if (typeof body.incidentEmailEnabled === "boolean") {

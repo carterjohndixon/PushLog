@@ -643,6 +643,9 @@ export default function Settings() {
   const devMode = profileResponse?.user?.devMode ?? false;
   const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
   const receiveIncidentNotifications = profileResponse?.user?.receiveIncidentNotifications !== false;
+  const isStagingHost = typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai";
+  const isStagingAdmin = !!(profileResponse?.user as { isStagingAdmin?: boolean })?.isStagingAdmin;
+  const showDevTesting = isStagingHost && isStagingAdmin;
 
   const updateDevModeMutation = useMutation({
     mutationFn: async (checked: boolean) => {
@@ -1395,30 +1398,32 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Developer mode */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Code2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                Developer Mode
-              </CardTitle>
-              <CardDescription>
-                Enable test features such as incident simulation. Useful for testing Sentry webhooks and incident notifications.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <Label htmlFor="dev-mode" className="cursor-pointer font-medium">
-                  Enable developer mode
-                </Label>
-                <Switch
-                  id="dev-mode"
-                  checked={devMode}
-                  onCheckedChange={(checked) => updateDevModeMutation.mutate(checked)}
-                />
-              </div>
-            </CardContent>
-          </Card>
+          {/* Developer mode — staging + admin only */}
+          {showDevTesting && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Code2 className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  Developer Mode
+                </CardTitle>
+                <CardDescription>
+                  Enable test features such as incident simulation. Staging admins only.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="dev-mode" className="cursor-pointer font-medium">
+                    Enable developer mode
+                  </Label>
+                  <Switch
+                    id="dev-mode"
+                    checked={devMode}
+                    onCheckedChange={(checked) => updateDevModeMutation.mutate(checked)}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Incident alerts — in-app toast + optional browser notifications */}
           <Card className="border-amber-500/20 bg-amber-500/[0.03]">
@@ -1500,7 +1505,8 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Incident Test — revealed when dev mode is on */}
+          {/* Incident Test — staging + admin only, revealed when dev mode is on */}
+          {showDevTesting && (
           <Card className="border-amber-500/20 bg-amber-500/[0.03]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1641,28 +1647,24 @@ export default function Settings() {
                         <FlaskConical className="w-4 h-4 mr-1" />
                         Test stack filter API
                       </Button>
-                      {typeof window !== "undefined" && window.location.hostname === "staging.pushlog.ai" && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-amber-500/50 text-amber-700 dark:text-amber-400"
-                            onClick={() => {
-                              throw new Error("Sentry React test error");
-                            }}
-                          >
-                            Test Error (frontend)
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-amber-500/50 text-amber-700 dark:text-amber-400"
-                            onClick={() => Sentry.captureMessage("Sentry test message", "info")}
-                          >
-                            Test Message (frontend)
-                          </Button>
-                        </>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                        onClick={() => {
+                          throw new Error("Sentry React test error");
+                        }}
+                      >
+                        Test Error (frontend)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-500/50 text-amber-700 dark:text-amber-400"
+                        onClick={() => Sentry.captureMessage("Sentry test message", "info")}
+                      >
+                        Test Message (frontend)
+                      </Button>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces. <strong>Test Error / Test Message (staging only):</strong> Frontend Sentry test — throws error or captures message to your frontend Sentry project.
@@ -1672,6 +1674,7 @@ export default function Settings() {
               </Collapsible>
             </CardContent>
           </Card>
+          )}
 
           {/* Agents */}
           {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
