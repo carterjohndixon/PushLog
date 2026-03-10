@@ -6,11 +6,20 @@
 const fs = require("fs");
 const path = require("path");
 
-function readEnvFile(filePath) {
-  const abs = path.resolve(__dirname, filePath);
-  const out = {};
-  const text = fs.readFileSync(abs, "utf8");
+// App deployment root — where .env.production / .env.staging live.
+// Prefer explicit path; else deployment dir; else same dir as this config.
+const APP_ROOT = process.env.PUSHLOG_APP_ROOT || "/var/www/pushlog" || path.resolve(__dirname);
 
+function readEnvFile(filePath) {
+  const abs = path.resolve(APP_ROOT, filePath);
+  const out = {};
+  if (!fs.existsSync(abs)) return out;
+  let text;
+  try {
+    text = fs.readFileSync(abs, "utf8");
+  } catch {
+    return out;
+  }
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -31,12 +40,15 @@ function readEnvFile(filePath) {
 
     out[key] = val;
   }
-
   return out;
 }
 
 const prodEnv = readEnvFile(".env.production");
 const stagingEnv = readEnvFile(".env.staging");
+
+// Fallback: if file parsing returned no DATABASE_URL, use process.env (e.g. from shell/systemd)
+if (!prodEnv.DATABASE_URL && process.env.DATABASE_URL) prodEnv.DATABASE_URL = process.env.DATABASE_URL;
+if (!stagingEnv.DATABASE_URL && process.env.STAGING_DATABASE_URL) stagingEnv.DATABASE_URL = process.env.STAGING_DATABASE_URL;
 
 if (!prodEnv.DATABASE_URL) {
   console.error("ERROR: .env.production is missing DATABASE_URL");

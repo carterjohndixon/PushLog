@@ -6,37 +6,32 @@
 const fs = require("fs");
 const path = require("path");
 
+const APP_ROOT = process.env.PUSHLOG_APP_ROOT || "/var/www/pushlog" || path.resolve(__dirname);
+
 function readEnvFile(filePath) {
-  const abs = path.resolve(__dirname, filePath);
+  const abs = path.resolve(APP_ROOT, filePath);
   const out = {};
-  const text = fs.readFileSync(abs, "utf8");
-
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-
-    const eq = line.indexOf("=");
-    if (eq === -1) continue;
-
-    const key = line.slice(0, eq).trim();
-    let val = line.slice(eq + 1).trim();
-
-    // Strip optional surrounding quotes
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
+  if (!fs.existsSync(abs)) return out;
+  try {
+    const text = fs.readFileSync(abs, "utf8");
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith("#")) continue;
+      const eq = line.indexOf("=");
+      if (eq === -1) continue;
+      const key = line.slice(0, eq).trim();
+      let val = line.slice(eq + 1).trim();
+      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+      out[key] = val;
     }
-
-    out[key] = val;
-  }
-
+  } catch {}
   return out;
 }
 
 const prodEnv = readEnvFile(".env.production");
 const stagingEnv = readEnvFile(".env.staging");
+if (!prodEnv.DATABASE_URL && process.env.DATABASE_URL) prodEnv.DATABASE_URL = process.env.DATABASE_URL;
+if (!stagingEnv.DATABASE_URL && process.env.STAGING_DATABASE_URL) stagingEnv.DATABASE_URL = process.env.STAGING_DATABASE_URL;
 
 if (!prodEnv.DATABASE_URL) {
   console.error("ERROR: .env.production is missing DATABASE_URL");
