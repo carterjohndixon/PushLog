@@ -211,7 +211,7 @@ export function getIncidentAlertEmailTemplate(
                   ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px;">touches error line</span>` : ""}
                   ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
                 </div>
-                <div style="font-size: 11px; color: #6b7c74; margin-top: 4px;">@${escapeHtml(c.author.login)}</div>
+                <div style="font-size: 11px; color: #6b7c74; margin-top: 4px;">@${escapeHtml(c.author.login)}${c.timestamp ? ` · ${formatRelativeTime(c.timestamp)}` : ""}</div>
               </div>
             `).join("")}
           </div>

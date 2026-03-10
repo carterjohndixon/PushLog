@@ -5,7 +5,7 @@ import { ErrorBoundary } from "@/components/error-boundary";
 import { Button } from "@/components/ui/button";
 import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink, UserPlus } from "lucide-react";
 import { getAiModelDisplayName, getIncidentSourceLabel } from "@/lib/utils";
-import { formatCreatedAt } from "@/lib/date";
+import { formatCreatedAt, formatRelativeOrLocal } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
 
 const MAX_PREVIEW = 120;
@@ -485,7 +485,7 @@ export function NotificationDetailsModal() {
                         </p>
                       )}
                       <div className="space-y-2">
-                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; touchesErrorLine?: boolean; lineDistance?: number; score?: number }, i: number) => (
+                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; timestamp?: string; touchesErrorLine?: boolean; lineDistance?: number; score?: number }, i: number) => (
                           <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <a
@@ -508,9 +508,11 @@ export function NotificationDetailsModal() {
                                 </span>
                               )}
                             </div>
-                            {c.author?.login && (
-                              <div className="text-xs text-muted-foreground">@{c.author.login}</div>
-                            )}
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              {c.author?.login && <span>@{c.author.login}</span>}
+                              {c.author?.login && c.timestamp && <span className="text-border">·</span>}
+                              {c.timestamp && <span>{formatRelativeOrLocal(c.timestamp)}</span>}
+                            </div>
                           </div>
                         ))}
                       </div>
