@@ -114,6 +114,8 @@ fi
 log "Building incident-engine (Rust)..."
 cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-engine build skipped (cargo/rust not available)"
 cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare build skipped (cargo/rust not available)"
+log "Building streaming-stats (Rust, requires tls-rustls for Supabase/cloud DB)..."
+cargo build --release -p streaming-stats 2>/dev/null || log "Warning: streaming-stats build skipped (cargo/rust not available)"
 
 log "Building production bundle..."
 npm run build:production
@@ -152,6 +154,9 @@ log "Using PM2: $PM2_BIN"
 # Fire-and-forget: background the restart, sleep to let it take effect, then verify.
 nohup "$PM2_BIN" restart pushlog-prod --update-env </dev/null >/dev/null 2>&1 &
 PM2_PID=$!
+
+# Restart streaming-stats (prod + staging) so they pick up the rebuilt binary
+"$PM2_BIN" restart streaming-stats-prod streaming-stats-staging --update-env 2>/dev/null || log "Note: streaming-stats not in PM2 (optional)"
 
 # Wait up to 15 seconds for PM2 restart to finish
 for i in $(seq 1 15); do
