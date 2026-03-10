@@ -158,6 +158,7 @@ export default function OrganizationPage() {
   });
   const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
   const [connectNewOrgsLoading, setConnectNewOrgsLoading] = useState(false);
+  const [pendingOrgSwitch, setPendingOrgSwitch] = useState<string | null>(null);
 
   const handleConnectNewOrgs = async () => {
     setConnectNewOrgsLoading(true);
@@ -979,10 +980,37 @@ export default function OrganizationPage() {
                 </DialogContent>
               </Dialog>
 
+              {/* Confirm switch GitHub org */}
+              <AlertDialog open={!!pendingOrgSwitch} onOpenChange={(open) => { if (!open) setPendingOrgSwitch(null); }}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Switch GitHub organization?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You&apos;ll now view and invite from <strong>{pendingOrgSwitch}</strong>. Current members stay in your PushLog organization—nothing is removed. Switch to invite from this org?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel onClick={() => setPendingOrgSwitch(null)}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => {
+                        if (pendingOrgSwitch) {
+                          setSelectedGitHubOrgLogin(pendingOrgSwitch);
+                          if (typeof window !== "undefined") window.localStorage.setItem(GITHUB_ORG_STORAGE_KEY, pendingOrgSwitch);
+                          setPendingOrgSwitch(null);
+                        }
+                      }}
+                    >
+                      Switch
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+
               {/* Invite from GitHub org modal */}
               <Dialog
                 open={githubInviteModalOpen}
                 onOpenChange={(open) => {
+                  if (!open) setPendingOrgSwitch(null);
                   setGithubInviteModalOpen(open);
                 }}
               >
@@ -995,6 +1023,18 @@ export default function OrganizationPage() {
                     <DialogDescription>
                       Choose a GitHub org you belong to, see who is not yet in your PushLog organization, then create an invite link to share with them.
                     </DialogDescription>
+                    {!githubOrgsLoading && !githubOrgsErrorState && githubOrgs.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto mt-3 border-dashed"
+                        onClick={handleConnectNewOrgs}
+                        disabled={connectNewOrgsLoading}
+                      >
+                        {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
+                        {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                      </Button>
+                    )}
                   </DialogHeader>
                   <div className="space-y-4 pt-2">
                     <div className="space-y-2">
@@ -1034,37 +1074,30 @@ export default function OrganizationPage() {
                           </div>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          <Select
-                            value={selectedGitHubOrgLogin || ""}
-                            onValueChange={(v) => {
-                              const login = v || "";
+                        <Select
+                          value={selectedGitHubOrgLogin || ""}
+                          onValueChange={(v) => {
+                            const login = v || "";
+                            const isSwitch = !!selectedGitHubOrgLogin && login !== selectedGitHubOrgLogin;
+                            if (isSwitch && members.length > 1) {
+                              setPendingOrgSwitch(login);
+                            } else {
                               setSelectedGitHubOrgLogin(login);
                               if (typeof window !== "undefined" && login) window.localStorage.setItem(GITHUB_ORG_STORAGE_KEY, login);
-                            }}
-                          >
-                            <SelectTrigger className="border-border/50">
-                              <SelectValue placeholder="Select an organization" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {githubOrgs.map((org) => (
-                                <SelectItem key={org.id} value={org.login}>
-                                  {org.login}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="w-full sm:w-auto border-dashed"
-                            onClick={handleConnectNewOrgs}
-                            disabled={connectNewOrgsLoading}
-                          >
-                            {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
-                            {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
-                          </Button>
-                        </div>
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="border-border/50">
+                            <SelectValue placeholder="Select an organization" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {githubOrgs.map((org) => (
+                              <SelectItem key={org.id} value={org.login}>
+                                {org.login}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                     </div>
                     {selectedGitHubOrgLogin && (
