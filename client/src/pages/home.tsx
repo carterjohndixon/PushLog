@@ -25,7 +25,8 @@ import {
   Pause,
   Settings,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  AlertCircle
 } from "lucide-react";
 import { SiSlack } from "react-icons/si";
 import { useQuery } from "@tanstack/react-query";
@@ -223,9 +224,12 @@ export default function Home() {
                 className="text-brand-gradient"
               />
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
-              Automate your development workflow with intelligent push notifications, code summaries, 
-              and team collaboration tools that keep everyone in sync.
+            <p className="text-2xl font-semibold text-foreground mb-3 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
+              Stop wondering what shipped. Start seeing it.
+            </p>
+            <p className="text-lg text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
+              Automate your workflow with intelligent push notifications, AI code summaries, incident reports, 
+              and team collaboration—all in one place.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <Button 
@@ -732,6 +736,19 @@ export default function Home() {
                 <h3 className="text-xl font-bold text-foreground mb-3">Analytics & Insights</h3>
                 <p className="text-muted-foreground">
                   Detailed analytics on push frequency, team activity, and integration performance metrics.
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Incident Reports */}
+            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-6">
+              <CardContent className="p-8">
+                <div className="w-12 h-12 bg-amber-500/20 rounded-lg flex items-center justify-center mb-4">
+                  <AlertCircle className="text-amber-600 dark:text-amber-500 text-xl w-6 h-6" />
+                </div>
+                <h3 className="text-xl font-bold text-foreground mb-3">Incident Reports</h3>
+                <p className="text-muted-foreground">
+                  Connect Sentry webhooks or run the pushlog-agent on your EC2 servers to stream runtime errors into PushLog—with correlated commits and authors so you know exactly what changed.
                 </p>
               </CardContent>
             </Card>
