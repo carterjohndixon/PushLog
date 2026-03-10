@@ -61,13 +61,14 @@ export function serveStatic(app: Express) {
 
   const hasCarterBuild = fs.existsSync(carterIndexPath);
 
-  app.use("*", (req, res) => {
+  app.use("/", (req, res) => {
     const host = (req.hostname || "").toLowerCase();
     const isCarterHost = host === "carter.pushlog.ai";
     const staticPath = isCarterHost && hasCarterBuild ? carterDistPath : mainDistPath;
     const indexPath = isCarterHost && hasCarterBuild ? carterIndexPath : mainIndexPath;
 
-    const reqPath = (req.path ?? req.url ?? "/").split("?")[0] || "/";
+    // req.originalUrl preserves the full path; req.url/req.path are stripped when mounted at "*"
+    const reqPath = (req.originalUrl ?? req.url ?? req.path ?? "/").split("?")[0] || "/";
     const isAsset = isAssetRequest(reqPath);
 
     if (isCarterHost && !hasCarterBuild) {
