@@ -7,6 +7,15 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/** Resolve main app static root (dist/public). Handles both __dirname = dist/ and __dirname = project root. */
+function resolveMainDistPath(): string {
+  const distPublic = path.join(__dirname, "public");
+  if (fs.existsSync(path.join(distPublic, "index.html"))) return path.resolve(distPublic);
+  const alt = path.join(__dirname, "dist", "public");
+  if (fs.existsSync(path.join(alt, "index.html"))) return path.resolve(alt);
+  return path.resolve(distPublic);
+}
+
 /** Asset path prefixes (Vite output: js/, css/, images/, assets/) + root-level asset files */
 const ASSET_PREFIXES = ["/js/", "/css/", "/images/", "/assets/"];
 
@@ -39,13 +48,12 @@ const staticOptions = {
 };
 
 export function serveStatic(app: Express) {
-  const mainDistPath = path.resolve(__dirname, "public");
+  const mainDistPath = resolveMainDistPath();
   const carterDistPath = path.resolve(__dirname, "..", "carter.pushlog.ai", "dist");
-  const mainIndexInPublic = path.resolve(mainDistPath, "index.html");
-  const mainIndexInDist = path.resolve(__dirname, "index.html");
-  const carterIndexPath = path.resolve(carterDistPath, "index.html");
+  const mainIndexPath = path.join(mainDistPath, "index.html");
+  const carterIndexPath = path.join(carterDistPath, "index.html");
 
-  if (!fs.existsSync(mainDistPath)) {
+  if (!fs.existsSync(mainDistPath) || !fs.existsSync(mainIndexPath)) {
     throw new Error(
       `Could not find the build directory: ${mainDistPath}, make sure to build the client first`,
     );
@@ -57,14 +65,7 @@ export function serveStatic(app: Express) {
     const host = (req.hostname || "").toLowerCase();
     const isCarterHost = host === "carter.pushlog.ai";
     const staticPath = isCarterHost && hasCarterBuild ? carterDistPath : mainDistPath;
-    const indexPath =
-      isCarterHost && hasCarterBuild
-        ? carterIndexPath
-        : fs.existsSync(mainIndexInPublic)
-          ? mainIndexInPublic
-          : fs.existsSync(mainIndexInDist)
-            ? mainIndexInDist
-            : null;
+    const indexPath = isCarterHost && hasCarterBuild ? carterIndexPath : mainIndexPath;
 
     const reqPath = (req.path ?? req.url ?? "/").split("?")[0] || "/";
     const isAsset = isAssetRequest(reqPath);
@@ -87,10 +88,8 @@ export function serveStatic(app: Express) {
     // Non-asset: try express.static first, then SPA fallback to index.html
     const staticMiddleware = express.static(staticPath, staticOptions);
     staticMiddleware(req, res, () => {
-      if (!indexPath) {
-        console.error(
-          `ENOENT: no such file or directory, stat '${mainIndexInPublic}' (also tried '${mainIndexInDist}')`,
-        );
+      if (!indexPath || !fs.existsSync(indexPath)) {
+        console.error(`ENOENT: index.html not found at ${indexPath}`);
         res.status(404).send(
           "Client build not found. Run: npm run build (vite build + server bundle).",
         );
