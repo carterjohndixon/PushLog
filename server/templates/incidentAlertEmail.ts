@@ -22,21 +22,14 @@ export interface IncidentAlertMetadata {
   stackFrame?: string;
   requestUrl?: string;
   stacktrace?: Array<{ file: string; function?: string; line?: number }>;
-  /** When true, stack trace is from bundled/minified build; show hint to upload source maps to Sentry. */
   stackTraceIsBundled?: boolean;
   sourceUrl?: string;
   createdAt?: string;
-  /** Actual error message that triggered the incident (from Sentry/engine). */
   errorMessage?: string;
-  /** Exception type (e.g. TypeError, Error). */
   exceptionType?: string;
-  /** Related commits from GitHub correlation. */
   relatedCommits?: RelatedCommitForEmail[];
-  /** Potentially relevant authors from those commits. */
   relevantAuthors?: Array<{ login: string; name?: string | null }>;
-  /** The file path that was correlated. */
   correlatedFile?: string;
-  /** The line number that was correlated. */
   correlatedLine?: number;
 }
 
@@ -58,12 +51,36 @@ function formatRelativeTime(isoString: string): string {
   }
 }
 
+// Solid hex colors only — rgba() is unreliable across email clients.
+const C = {
+  bodyBg: "#111614",
+  cardBg: "#1b2721",
+  innerBg: "#1b2b24",
+  codeBg: "#141a18",
+  border: "#2d3d35",
+  title: "#e8ece9",
+  body: "#c5ccc8",
+  muted: "#8a9590",
+  dim: "#6b7c74",
+  green: "#7dd3a0",
+  amber: "#e8a74c",
+  red: "#ef4444",
+  redBg: "#2d1f1f",
+  redBorder: "#4a3535",
+  redText: "#f0a0a0",
+  commitGreenBg: "#152218",
+  commitGreenBorder: "#2a4a37",
+  badgeRedBg: "#2b1818",
+  badgeRedBorder: "#5a2828",
+  badgeAmberBg: "#2b2418",
+  badgeAmberBorder: "#5a4a28",
+};
+
 export function getIncidentAlertEmailTemplate(
   title: string,
   message: string,
   dashboardUrl: string,
   metadata?: IncidentAlertMetadata,
-  /** When true, use cid:pushlog-logo (embedded). When false, use external URL. */
   useEmbeddedLogo: boolean = true
 ) {
   const escapedTitle = escapeHtml(title);
@@ -101,7 +118,7 @@ export function getIncidentAlertEmailTemplate(
           const filePart = escapeHtml(f.file);
           const linePart =
             f.line != null
-              ? `<span style="color: #e8a74c;">:${f.line}</span>`
+              ? `<span style="color: ${C.amber};">:${f.line}</span>`
               : "";
           const fnPart = f.function ? ` (${escapeHtml(f.function)})` : "";
           return `at ${filePart}${linePart}${fnPart}`;
@@ -113,133 +130,216 @@ export function getIncidentAlertEmailTemplate(
     subject: `[PushLog] ${title}`,
     html: `
 <!DOCTYPE html>
-<html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Notification Details - PushLog</title>
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <title>${escapedTitle} - PushLog</title>
+  <!--[if mso]>
+  <style>body,table,td{font-family:Arial,Helvetica,sans-serif!important;}</style>
+  <![endif]-->
+  <style>
+    :root { color-scheme: dark; supported-color-schemes: dark; }
+    body, .body-wrap { background-color: ${C.bodyBg} !important; }
+    u + .body-wrap { /* Gmail hack */ }
+    .body-wrap { width: 100% !important; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    @media only screen and (max-width: 640px) {
+      .email-container { padding: 12px !important; }
+      .card-main { border-radius: 8px !important; }
+      .card-inner { margin: 0 10px 10px !important; padding: 14px !important; }
+      .header-td { padding: 16px 16px 12px !important; }
+      .footer-td { padding: 12px 16px 16px !important; }
+      .commit-row { padding: 8px 10px !important; }
+    }
+  </style>
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #1a1d1e;">
-  <div style="max-width: 600px; margin: 0 auto; padding: 24px;">
-    <div style="background: linear-gradient(145deg, #1e2a24 0%, #1a2520 100%); border-radius: 12px; border: 1px solid #2d3d35; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.4);">
-      <!-- Logo (embedded via cid: for Outlook compatibility) -->
-      <div style="text-align: center; padding: 20px 24px 0;">
-        <img src="${logoSrc}" alt="PushLog" width="48" height="48" style="display: block; margin: 0 auto; max-width: 48px; height: auto;" />
-      </div>
-      <!-- Header -->
-      <div style="padding: 24px 24px 16px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse;">
+<body class="body-wrap" style="margin: 0; padding: 0; background-color: ${C.bodyBg}; -webkit-font-smoothing: antialiased; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <!--[if mso]><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${C.bodyBg}"><tr><td><![endif]-->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: ${C.bodyBg};">
+    <tr>
+      <td align="center" class="email-container" style="padding: 24px;">
+        <table role="presentation" class="card-main" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; width: 100%; background-color: ${C.cardBg}; border-radius: 12px; border: 1px solid ${C.border};">
+
+          <!-- Logo -->
           <tr>
-            <td style="width: 46px; padding-right: 18px; vertical-align: middle;">
-              <div style="width: 28px; height: 28px; border-radius: 14px; background: #dc3545; text-align: center; line-height: 28px; font-size: 16px; font-weight: bold; color: white;">!</div>
-            </td>
-            <td style="vertical-align: middle;">
-              <h1 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #e8ece9;">Notification Details</h1>
-              <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #e8ece9;">${escapedTitle}</p>
-              <p style="margin: 0; font-size: 14px; color: #9ca3a8;">${escapedMessage}</p>
+            <td align="center" style="padding: 20px 24px 0; background-color: ${C.cardBg};">
+              <img src="${logoSrc}" alt="PushLog" width="48" height="48" style="display: block; max-width: 48px; height: auto; border: 0;" />
             </td>
           </tr>
-        </table>
-      </div>
 
-      <!-- Incident details card -->
-      <div style="margin: 0 16px 16px; padding: 20px; background: rgba(45, 61, 53, 0.5); border: 1px solid #2d3d35; border-radius: 8px;">
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; border-collapse: collapse; margin-bottom: 16px;">
+          <!-- Header -->
           <tr>
-            <td style="width: 36px; padding-right: 14px; vertical-align: middle;">
-              <div style="width: 20px; height: 20px; border-radius: 10px; background: #dc3545; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; color: white;">!</div>
-            </td>
-            <td style="vertical-align: middle;">
-              <span style="font-size: 14px; font-weight: 600; color: #e8ece9;">Incident details</span>
+            <td class="header-td" style="padding: 24px 24px 16px; background-color: ${C.cardBg};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
+                <tr>
+                  <td width="46" style="padding-right: 18px; vertical-align: middle;">
+                    <div style="width: 28px; height: 28px; border-radius: 14px; background-color: ${C.red}; text-align: center; line-height: 28px; font-size: 16px; font-weight: bold; color: #ffffff;">!</div>
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <p style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: ${C.title};">Notification Details</p>
+                    <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: ${C.title};">${escapedTitle}</p>
+                    <p style="margin: 0; font-size: 14px; color: ${C.body}; line-height: 1.5;">${escapedMessage}</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
-        </table>
-        <p style="margin: 0 0 16px; font-size: 13px; color: #9ca3a8;">${escapedMessage}</p>
 
-        ${hasErrorMessage ? `
-        <!-- ERROR MESSAGE (actual error that triggered the incident) -->
-        <div style="margin-bottom: 16px;">
-          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
-          <div style="padding: 12px; background: #2d1f1f; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 13px; color: #f0a0a0; line-height: 1.6; border: 1px solid #4a3535;">${exceptionType ? `<span style="color: #e8a74c;">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
-        </div>
-        ` : ""}
+          <!-- Incident details card -->
+          <tr>
+            <td class="card-inner" style="padding: 0 16px 16px; background-color: ${C.cardBg};">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background-color: ${C.innerBg}; border: 1px solid ${C.border}; border-radius: 8px;">
 
-        ${hasLocation ? `
-        <!-- LOCATION -->
-        <div style="margin-bottom: 16px;">
-          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">LOCATION</div>
-          ${metadata?.route ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background: #2d3d35; border-radius: 4px; font-family: monospace; font-size: 13px; color: #7dd3a0;">${escapeHtml(metadata.route)}</span></div>` : ""}
-          ${metadata?.stackFrame ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background: #2d3d35; border-radius: 4px; font-family: monospace; font-size: 13px; color: #7dd3a0;">${escapeHtml(metadata.stackFrame)}</span></div>` : ""}
-          ${metadata?.requestUrl ? `<div style="font-size: 13px;"><a href="${escapeHtml(metadata.requestUrl)}" style="color: #7dd3a0; text-decoration: none;">${escapeHtml(metadata.requestUrl)}</a></div>` : ""}
-        </div>
-        ` : ""}
+                <!-- Incident details heading -->
+                <tr>
+                  <td style="padding: 20px 20px 0; background-color: ${C.innerBg};">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-bottom: 16px;">
+                      <tr>
+                        <td width="36" style="padding-right: 14px; vertical-align: middle;">
+                          <div style="width: 20px; height: 20px; border-radius: 10px; background-color: ${C.red}; text-align: center; line-height: 20px; font-size: 12px; font-weight: bold; color: #ffffff;">!</div>
+                        </td>
+                        <td style="vertical-align: middle;">
+                          <span style="font-size: 14px; font-weight: 600; color: ${C.title};">Incident details</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin: 0 0 16px; font-size: 13px; color: ${C.body}; line-height: 1.5;">${escapedMessage}</p>
+                  </td>
+                </tr>
 
-        <!-- SUMMARY -->
-        <div style="margin-bottom: 16px;">
-          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">SUMMARY</div>
-          <div style="font-size: 13px; color: #e8ece9;">
-            <strong>Service:</strong> ${escapeHtml(String(service))} &nbsp;|&nbsp;
-            <strong>Environment:</strong> ${escapeHtml(String(environment))} &nbsp;|&nbsp;
-            <strong>Severity:</strong> ${escapeHtml(String(severity))}
-          </div>
-        </div>
+                ${hasErrorMessage ? `
+                <!-- ERROR MESSAGE -->
+                <tr>
+                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
+                    <div style="padding: 12px; background-color: ${C.redBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 13px; color: ${C.redText}; line-height: 1.6; border: 1px solid ${C.redBorder}; word-break: break-word;">${exceptionType ? `<span style="color: ${C.amber};">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
+                  </td>
+                </tr>
+                ` : ""}
 
-        ${hasStacktrace ? `
-        <!-- STACK TRACE -->
-        <div>
-          ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
-          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
-          <div style="padding: 12px; background: #141a18; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #9ca3a8; line-height: 1.7; border: 1px solid #2d3d35;">${stackTraceHtml}</div>
-        </div>
-        ` : ""}
+                ${hasLocation ? `
+                <!-- LOCATION -->
+                <tr>
+                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">LOCATION</div>
+                    ${metadata?.route ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.route)}</span></div>` : ""}
+                    ${metadata?.stackFrame ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.stackFrame)}</span></div>` : ""}
+                    ${metadata?.requestUrl ? `<div style="font-size: 13px;"><a href="${escapeHtml(metadata.requestUrl)}" style="color: ${C.green}; text-decoration: none;">${escapeHtml(metadata.requestUrl)}</a></div>` : ""}
+                  </td>
+                </tr>
+                ` : ""}
 
-        ${hasRelatedCommits ? `
-        <!-- CORRELATED COMMITS -->
-        <div style="margin-top: 16px; padding: 14px; background: rgba(125,211,160,0.05); border-radius: 8px; border: 1px solid rgba(125,211,160,0.25);">
-          <div style="font-size: 11px; font-weight: 600; color: #7dd3a0; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
-          ${metadata?.correlatedFile ? `
-          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 10px;">
-            Commits that changed <code style="background: #141a18; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; color: #e8ece9;">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>
-          </div>` : `
-          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 10px;">Changes to the affected file</div>`}
-          <div style="display: flex; flex-direction: column; gap: 8px;">
-            ${relatedCommits.map((c) => `
-              <div style="padding: 10px 12px; background: #141a18; border-radius: 6px; border-left: 3px solid ${c.touchesErrorLine ? "#ef4444" : "#7dd3a0"}; border-right: 1px solid #2d3d35; border-top: 1px solid #2d3d35; border-bottom: 1px solid #2d3d35;">
-                <div>
-                  <a href="${escapeHtml(c.htmlUrl)}" style="color: #7dd3a0; text-decoration: none; font-family: monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
-                  <span style="color: #e8ece9; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
-                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px;">touches error line</span>` : ""}
-                  ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
-                </div>
-                <div style="font-size: 11px; color: #6b7c74; margin-top: 4px;">@${escapeHtml(c.author.login)}${c.timestamp ? ` · ${formatRelativeTime(c.timestamp)}` : ""}</div>
+                <!-- SUMMARY -->
+                <tr>
+                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">SUMMARY</div>
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
+                      <tr>
+                        <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Service:</strong> <span style="color: ${C.body};">${escapeHtml(String(service))}</span></td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Environment:</strong> <span style="color: ${C.body};">${escapeHtml(String(environment))}</span></td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 13px; color: ${C.title};"><strong>Severity:</strong> <span style="color: ${C.body};">${escapeHtml(String(severity))}</span></td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                ${hasStacktrace ? `
+                <!-- STACK TRACE -->
+                <tr>
+                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    ${stackTraceIsBundled ? `<div style="font-size: 12px; color: ${C.amber}; margin-bottom: 10px; padding: 8px 12px; background-color: #2b2418; border-radius: 6px; border: 1px solid #4a3d28;">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines.</div>` : ""}
+                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
+                    <div style="padding: 12px; background-color: ${C.codeBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: ${C.muted}; line-height: 1.7; border: 1px solid ${C.border}; word-break: break-word; overflow: hidden;">${stackTraceHtml}</div>
+                  </td>
+                </tr>
+                ` : ""}
+
+                ${hasRelatedCommits ? `
+                <!-- CORRELATED COMMITS -->
+                <tr>
+                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background-color: ${C.commitGreenBg}; border-radius: 8px; border: 1px solid ${C.commitGreenBorder};">
+                      <tr>
+                        <td style="padding: 14px; background-color: ${C.commitGreenBg};">
+                          <div style="font-size: 11px; font-weight: 600; color: ${C.green}; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
+                          ${metadata?.correlatedFile ? `
+                          <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">
+                            Commits that changed <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>
+                          </div>` : `
+                          <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">Changes to the affected file</div>`}
+
+                          <!-- Commit rows -->
+                          ${relatedCommits.map((c) => `
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-bottom: 8px;">
+                            <tr>
+                              <td class="commit-row" style="padding: 10px 12px; background-color: ${C.codeBg}; border-radius: 6px; border-left: 3px solid ${c.touchesErrorLine ? C.red : C.green}; border-right: 1px solid ${C.border}; border-top: 1px solid ${C.border}; border-bottom: 1px solid ${C.border};">
+                                <div>
+                                  <a href="${escapeHtml(c.htmlUrl)}" style="color: ${C.green}; text-decoration: none; font-family: 'Courier New', monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
+                                  <span style="color: ${C.title}; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
+                                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">touches error line</span>` : ""}
+                                  ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background-color: ${C.badgeAmberBg}; border: 1px solid ${C.badgeAmberBorder}; border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
+                                </div>
+                                <div style="font-size: 11px; color: ${C.dim}; margin-top: 4px;">@${escapeHtml(c.author.login)}${c.timestamp ? ` &middot; ${formatRelativeTime(c.timestamp)}` : ""}</div>
+                              </td>
+                            </tr>
+                          </table>
+                          `).join("")}
+
+                          ${relevantAuthors.length >= 2 ? `
+                          <div style="font-size: 11px; color: ${C.dim}; margin-top: 4px;">Potentially relevant: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
+                          ` : ""}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                ` : ""}
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="footer-td" style="padding: 16px 24px 24px; border-top: 1px solid ${C.border}; background-color: ${C.cardBg};">
+              <a href="${escapeHtml(viewUrl)}" style="display: inline-block; padding: 10px 20px; background-color: ${C.green}; color: ${C.bodyBg}; text-decoration: none; font-size: 14px; font-weight: 600; border-radius: 6px; margin-bottom: 12px;">
+                ${escapeHtml(viewLabel)} &rarr;
+              </a>
+              <div style="font-size: 12px; color: ${C.dim}; margin-top: 8px;">
+                <strong style="color: ${C.muted};">Type:</strong> incident alert &nbsp;&middot;&nbsp;
+                <strong style="color: ${C.muted};">Created:</strong> ${escapeHtml(createdAt)}
               </div>
-            `).join("")}
-          </div>
-          ${relevantAuthors.length >= 2 ? `
-          <div style="font-size: 11px; color: #6b7c74; margin-top: 10px;">Potentially relevant: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
-          ` : ""}
-        </div>
-        ` : ""}
-      </div>
+            </td>
+          </tr>
 
-      <!-- Footer: View link + metadata -->
-      <div style="padding: 16px 24px 24px; border-top: 1px solid #2d3d35;">
-        <a href="${escapeHtml(viewUrl)}" style="display: inline-flex; align-items: center; gap: 8px; color: #7dd3a0; text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 12px;">
-          <span style="font-size: 16px;">↗</span> ${escapeHtml(viewLabel)}
-        </a>
-        <div style="font-size: 12px; color: #6b7c74;">
-          <strong style="color: #9ca3a8;">Type:</strong> incident alert &nbsp;|&nbsp;
-          <strong style="color: #9ca3a8;">Created:</strong> ${escapeHtml(createdAt)}
-        </div>
-      </div>
-    </div>
-    <p style="margin: 16px 0 0; text-align: center; font-size: 12px; color: #6b7c74;">
-      PushLog — Seamlessly connect GitHub with Slack
-    </p>
-    <p style="margin: 8px 0 0; text-align: center; font-size: 11px; color: #6b7c74;">
-      Please do not reply to this email. For questions, contact <a href="mailto:contact@pushlog.ai" style="color: #7dd3a0; text-decoration: none;">contact@pushlog.ai</a>.
-    </p>
-  </div>
+        </table>
+
+        <!-- Below-card branding -->
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px;">
+          <tr>
+            <td align="center" style="padding: 16px 0 0;">
+              <p style="margin: 0; font-size: 12px; color: ${C.dim};">PushLog &mdash; Seamlessly connect GitHub with Slack</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding: 8px 0 0;">
+              <p style="margin: 0; font-size: 11px; color: ${C.dim};">
+                Please do not reply to this email. For questions, contact <a href="mailto:contact@pushlog.ai" style="color: ${C.green}; text-decoration: none;">contact@pushlog.ai</a>.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+      </td>
+    </tr>
+  </table>
+  <!--[if mso]></td></tr></table><![endif]-->
 </body>
 </html>
     `,
