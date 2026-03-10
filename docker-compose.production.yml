@@ -1,0 +1,51 @@
+services:
+  pushlog-prod-web:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+      args:
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
+        SENTRY_ORG: ${SENTRY_ORG:-}
+        SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+    container_name: pushlog-prod-web
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      APP_ENV: production
+      PORT: "3000"
+      INCIDENT_ENGINE_BIN: /app/bin/incident-engine
+    ports:
+      - "127.0.0.1:3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  pushlog-agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    container_name: pushlog-agent
+    restart: unless-stopped
+    depends_on:
+      pushlog-prod-web:
+        condition: service_healthy
+    command: ["run", "--config", "/etc/pushlog-agent/config.yaml"]
+    volumes:
+      - ./config/pushlog-agent.production.yaml:/etc/pushlog-agent/config.yaml:ro
+      - pushlog_agent_spool:/var/lib/pushlog-agent/spool
+      # Optional: uncomment if you use `type: docker` sources in agent config.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pidof pushlog-agent >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  pushlog_agent_spool:

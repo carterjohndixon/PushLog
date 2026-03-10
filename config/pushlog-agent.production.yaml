@@ -1,0 +1,9 @@
+endpoint: https://pushlog.ai
+token: plg_replace_with_real_agent_token
+environment: production
+service: pushlog-prod
+sources:
+  # Example: watch Docker logs for the production web container
+  - type: docker
+    container: pushlog-prod-web
+spool_dir: /var/lib/pushlog-agent/spool
