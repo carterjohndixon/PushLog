@@ -210,14 +210,14 @@ export function getIncidentAlertEmailTemplate(
             </td>
           </tr>
 
-          <!-- Incident details card -->
+          <!-- Incident details card — single-cell layout to prevent inter-row gaps in email clients -->
           <tr>
             <td class="card-inner" style="padding: 0 16px 16px; background-color: ${C.cardBg};">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background-color: ${C.innerBg}; border: 1px solid ${C.border}; border-radius: 8px;">
-
-                <!-- Incident details heading -->
                 <tr>
-                  <td style="padding: 20px 20px 0; background-color: ${C.innerBg};">
+                  <td style="padding: 20px;">
+
+                    <!-- Incident details heading -->
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-bottom: 16px;">
                       <tr>
                         <td width="36" style="padding-right: 14px; vertical-align: middle;">
@@ -228,76 +228,61 @@ export function getIncidentAlertEmailTemplate(
                         </td>
                       </tr>
                     </table>
-                    <p style="margin: 0 0 16px; font-size: 13px; color: ${C.body}; line-height: 1.5;">${escapedMessage}</p>
-                  </td>
-                </tr>
 
-                ${hasErrorMessage ? `
-                <!-- ERROR MESSAGE -->
-                <tr>
-                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
-                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
-                    <div style="padding: 12px; background-color: ${C.redBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 13px; color: ${C.redText}; line-height: 1.6; border: 1px solid ${C.redBorder}; word-break: break-word; overflow-wrap: break-word;">${exceptionType ? `<span style="color: ${C.amber};">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
-                  </td>
-                </tr>
-                ` : ""}
+                    ${hasErrorMessage ? `
+                    <!-- ERROR MESSAGE -->
+                    <div style="margin-bottom: 16px;">
+                      <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">ERROR MESSAGE</div>
+                      <div style="padding: 12px; background-color: ${C.redBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 13px; color: ${C.redText}; line-height: 1.6; border: 1px solid ${C.redBorder}; word-break: break-word; overflow-wrap: break-word;">${exceptionType ? `<span style="color: ${C.amber};">${exceptionType}</span>: ` : ""}${errorMessageEscaped}</div>
+                    </div>
+                    ` : ""}
 
-                ${hasLocation ? `
-                <!-- LOCATION -->
-                <tr>
-                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
-                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">LOCATION</div>
-                    ${metadata?.route ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.route)}</span></div>` : ""}
-                    ${metadata?.stackFrame ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.stackFrame)}</span></div>` : ""}
-                    ${metadata?.requestUrl ? `<div style="font-size: 13px;"><a href="${escapeHtml(metadata.requestUrl)}" style="color: ${C.green}; text-decoration: none;">${escapeHtml(metadata.requestUrl)}</a></div>` : ""}
-                  </td>
-                </tr>
-                ` : ""}
+                    ${hasLocation ? `
+                    <!-- LOCATION -->
+                    <div style="margin-bottom: 16px;">
+                      <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">LOCATION</div>
+                      ${metadata?.route ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.route)}</span></div>` : ""}
+                      ${metadata?.stackFrame ? `<div style="margin-bottom: 6px;"><span style="display: inline-block; padding: 4px 8px; background-color: ${C.border}; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; color: ${C.green};">${escapeHtml(metadata.stackFrame)}</span></div>` : ""}
+                      ${metadata?.requestUrl ? `<div style="font-size: 13px;"><a href="${escapeHtml(metadata.requestUrl)}" style="color: ${C.green}; text-decoration: none;">${escapeHtml(metadata.requestUrl)}</a></div>` : ""}
+                    </div>
+                    ` : ""}
 
-                <!-- SUMMARY -->
-                <tr>
-                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
-                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">SUMMARY</div>
-                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
-                      <tr>
-                        <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Service:</strong> <span style="color: ${C.body};">${escapeHtml(String(service))}</span></td>
-                      </tr>
-                      <tr>
-                        <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Environment:</strong> <span style="color: ${C.body};">${escapeHtml(String(environment))}</span></td>
-                      </tr>
-                      <tr>
-                        <td style="font-size: 13px; color: ${C.title};"><strong>Severity:</strong> <span style="color: ${C.body};">${escapeHtml(String(severity))}</span></td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
+                    <!-- SUMMARY -->
+                    <div style="margin-bottom: ${hasStacktrace || hasRelatedCommits ? "16px" : "0"};">
+                      <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">SUMMARY</div>
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%;">
+                        <tr>
+                          <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Service:</strong> <span style="color: ${C.body};">${escapeHtml(String(service))}</span></td>
+                        </tr>
+                        <tr>
+                          <td style="font-size: 13px; color: ${C.title}; padding-bottom: 4px;"><strong>Environment:</strong> <span style="color: ${C.body};">${escapeHtml(String(environment))}</span></td>
+                        </tr>
+                        <tr>
+                          <td style="font-size: 13px; color: ${C.title};"><strong>Severity:</strong> <span style="color: ${C.body};">${escapeHtml(String(severity))}</span></td>
+                        </tr>
+                      </table>
+                    </div>
 
-                ${hasStacktrace ? `
-                <!-- STACK TRACE -->
-                <tr>
-                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
-                    ${stackTraceIsBundled ? `<div style="font-size: 12px; color: ${C.amber}; margin-bottom: 10px; padding: 8px 12px; background-color: #2b2418; border-radius: 6px; border: 1px solid #4a3d28;">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines.</div>` : ""}
-                    <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
-                    <div style="padding: 12px; background-color: ${C.codeBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: ${C.muted}; line-height: 1.7; border: 1px solid ${C.border}; word-break: break-word; overflow-wrap: break-word;">${stackTraceHtml}</div>
-                  </td>
-                </tr>
-                ` : ""}
+                    ${hasStacktrace ? `
+                    <!-- STACK TRACE -->
+                    <div style="margin-bottom: ${hasRelatedCommits ? "16px" : "0"};">
+                      ${stackTraceIsBundled ? `<div style="font-size: 12px; color: ${C.amber}; margin-bottom: 10px; padding: 8px 12px; background-color: #2b2418; border-radius: 6px; border: 1px solid #4a3d28;">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines.</div>` : ""}
+                      <div style="font-size: 11px; font-weight: 600; color: ${C.dim}; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
+                      <div style="padding: 12px; background-color: ${C.codeBg}; border-radius: 6px; font-family: 'Monaco', 'Menlo', 'Courier New', monospace; font-size: 12px; color: ${C.muted}; line-height: 1.7; border: 1px solid ${C.border}; word-break: break-word; overflow-wrap: break-word;">${stackTraceHtml}</div>
+                    </div>
+                    ` : ""}
 
-                ${hasRelatedCommits ? `
-                <!-- CORRELATED COMMITS -->
-                <tr>
-                  <td style="padding: 0 20px 16px; background-color: ${C.innerBg};">
+                    ${hasRelatedCommits ? `
+                    <!-- CORRELATED COMMITS -->
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; background-color: ${C.commitGreenBg}; border-radius: 8px; border: 1px solid ${C.commitGreenBorder};">
                       <tr>
-                        <td style="padding: 14px; background-color: ${C.commitGreenBg};">
+                        <td style="padding: 14px;">
                           <div style="font-size: 11px; font-weight: 600; color: ${C.green}; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
                           ${metadata?.correlatedFile ? `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">
                             Commits that changed <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>
                           </div>` : `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">Changes to the affected file</div>`}
-
-                          <!-- Commit rows -->
                           ${relatedCommits.map((c) => `
                           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin-bottom: 8px;">
                             <tr>
@@ -313,17 +298,16 @@ export function getIncidentAlertEmailTemplate(
                             </tr>
                           </table>
                           `).join("")}
-
                           ${relevantAuthors.length >= 2 ? `
                           <div style="font-size: 11px; color: ${C.dim}; margin-top: 4px;">Potentially relevant: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
                           ` : ""}
                         </td>
                       </tr>
                     </table>
+                    ` : ""}
+
                   </td>
                 </tr>
-                ` : ""}
-
               </table>
             </td>
           </tr>
