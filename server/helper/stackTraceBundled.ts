@@ -9,12 +9,25 @@ export function isNodeInternalPath(file: string | undefined): boolean {
   return path.startsWith("node:");
 }
 
-/** True if the frame should be shown in app stack traces (excludes node_modules and Node internals). */
+/** Patterns that are clearly not source file paths. */
+const NOT_SOURCE_PATTERNS = [
+  /^\d{1,2}\/\w{3}\/\d{4}/, // nginx date: 09/Mar/2026
+  /^\d{4}-\d{2}-\d{2}/, // ISO date: 2026-03-09
+  /^log$/i, // synthetic agent "log" frame
+  /^test$/i, // synthetic agent "test" frame
+  /^<\w+>$/, // <anonymous>, <eval>, etc.
+  /^\[eval\]/, // Node eval frames
+];
+
+/** True if the frame should be shown in app stack traces (excludes noise, node_modules, Node internals). */
 export function isAppStackFrame(file: string | undefined): boolean {
   const path = file != null ? String(file).trim() : "";
   if (!path) return false;
   if (path.includes("node_modules")) return false;
   if (isNodeInternalPath(path)) return false;
+  for (const re of NOT_SOURCE_PATTERNS) {
+    if (re.test(path)) return false;
+  }
   return true;
 }
 

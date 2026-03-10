@@ -50,7 +50,10 @@ export function RepositoryTeamModal({
 
   const { data: orgMembers, isLoading: membersLoading } = useQuery<{ members: OrgMember[] }>({
     queryKey: ["/api/org/members"],
-    queryFn: () => fetch("/api/org/members", { credentials: "include" }).then((r) => r.json()),
+    queryFn: () => fetch("/api/org/members", { credentials: "include" }).then((r) => {
+      if (!r.ok) throw new Error("Failed to load members");
+      return r.json();
+    }),
     enabled: open,
   });
 

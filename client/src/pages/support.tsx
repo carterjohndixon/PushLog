@@ -55,7 +55,7 @@ export default function Support() {
                 Found a bug or have a feature request? Open an issue on GitHub:
               </p>
               <a 
-                href="https://github.com/carterjohndixon/PushLog/issues" 
+                href="https://github.com/pushlog-ai/PushLog/issues" 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-md hover:opacity-90 transition-opacity"
@@ -104,7 +104,7 @@ export default function Support() {
                 <p className="text-muted-foreground text-sm mt-1">
                   Go to Integrations → expand &quot;Incident Alerts (Sentry)&quot; for the webhook URL and steps. Full guide:{" "}
                   <a
-                    href="https://github.com/carterjohndixon/PushLog/blob/main/docs/SENTRY_SETUP.md"
+                    href="https://github.com/pushlog-ai/PushLog/blob/main/docs/SENTRY_SETUP.md"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
@@ -146,7 +146,7 @@ export default function Support() {
                 </li>
                 <li>
                   <a 
-                    href="https://github.com/carterjohndixon/PushLog" 
+                    href="https://github.com/pushlog-ai/PushLog" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"

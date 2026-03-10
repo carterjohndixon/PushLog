@@ -370,7 +370,7 @@ app.post(
       res.status(404).json({ error: "Invalid webhook URL. Create a Sentry app in Settings to get your webhook URL." });
       return;
     }
-    console.log("[webhooks/sentry] request received for orgId=%s", app.organizationId);
+    
     const { decrypt } = await import("./encryption");
     const secret = app.webhookSecretEncrypted ? decrypt(app.webhookSecretEncrypted) : null;
     if (secret) {
@@ -396,12 +396,12 @@ app.post(
       res.status(400).json({ error: "Invalid JSON" });
       return;
     }
-    console.log("[webhooks/sentry] middleware done, calling next()");
+    
     next();
   },
   async (req: express.Request, res: express.Response) => {
     try {
-      console.log("[webhooks/sentry] handler invoked, orgId=", (req as any).sentryOrgId);
+      
       await sentryWebhookHandler(req, res, { orgId: (req as any).sentryOrgId });
     } catch (err) {
       console.error("[webhooks/sentry] handler error:", err);

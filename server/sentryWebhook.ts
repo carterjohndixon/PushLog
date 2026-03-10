@@ -227,7 +227,7 @@ export type SentryWebhookOptions = { orgId: string };
 
 export async function handleSentryWebhook(req: Request, res: Response, options?: SentryWebhookOptions): Promise<void> {
   const body = req.body as Record<string, unknown>;
-  console.log("[webhooks/sentry] handleSentryWebhook entered, body keys:", body ? Object.keys(body) : "null");
+  
   const orgId = options?.orgId;
   try {
     const action = String(body?.action ?? "").trim();
@@ -244,7 +244,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
 
     if (isTestPayload) {
       const actionStr = action || "test";
-      console.log("[webhooks/sentry] test payload received", { action: actionStr, orgId: orgId ?? "none" });
+      
       // When orgId provided (per-app webhook), only notify that org. Otherwise fallback to all orgs or legacy.
       let targetUserIds: string[] = [];
       if (orgId) {
@@ -269,7 +269,7 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
       if (targetUsers.size === 0) {
         console.warn("[webhooks/sentry] test: no target users for orgId=%s — enable Receive incident notifications and ensure repo access", orgId ?? "?");
       } else {
-        console.log("[webhooks/sentry] test: notifying %d user(s) for orgId=%s", targetUsers.size, orgId ?? "?");
+        
       }
       const appEnv = process.env.APP_ENV || process.env.NODE_ENV || "production";
       const directTitle = "Sentry test notification";

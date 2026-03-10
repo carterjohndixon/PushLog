@@ -474,12 +474,19 @@ export function NotificationDetailsModal() {
                   )}
 
                   {Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0 && (
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Related commits</h5>
-                      <p className="text-xs text-muted-foreground">Recent changes to the affected file</p>
+                    <div className="rounded-lg border border-log-green/30 bg-log-green/5 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Correlated commits</h5>
+                      {metadata.correlatedFile && (
+                        <p className="text-xs text-muted-foreground">
+                          Commits that changed{" "}
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                            {metadata.correlatedFile}{metadata.correlatedLine ? `:${metadata.correlatedLine}` : ""}
+                          </code>
+                        </p>
+                      )}
                       <div className="space-y-2">
-                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string }, i: number) => (
-                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className="text-sm pl-3 border-l-2 border-log-green/50 space-y-1">
+                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; touchesErrorLine?: boolean; lineDistance?: number; score?: number }, i: number) => (
+                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <a
                                 href={c.htmlUrl}
@@ -489,7 +496,17 @@ export function NotificationDetailsModal() {
                               >
                                 {c.shortSha ?? c.sha?.slice(0, 7) ?? "—"}
                               </a>
-                              <span className="text-foreground">{c.message ?? ""}</span>
+                              <span className="text-foreground text-sm">{c.message ?? ""}</span>
+                              {c.touchesErrorLine && (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
+                                  touches error line
+                                </span>
+                              )}
+                              {!c.touchesErrorLine && c.lineDistance != null && c.lineDistance <= 30 && (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                                  {c.lineDistance} lines away
+                                </span>
+                              )}
                             </div>
                             {c.author?.login && (
                               <div className="text-xs text-muted-foreground">@{c.author.login}</div>
@@ -528,7 +545,12 @@ export function NotificationDetailsModal() {
                       )}
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Stack trace</h5>
                       <div className="font-mono text-xs space-y-1 max-h-32 overflow-y-auto break-words">
-                        {metadata.stacktrace.map((f: { file?: string; function?: string; line?: number }, i: number) => (
+                        {metadata.stacktrace
+                          .filter((f: { file?: string }) => {
+                            const file = f.file ?? "";
+                            return file && !/^log$/i.test(file) && !/^test$/i.test(file) && !/^\d{1,2}\/\w{3}\/\d{4}/.test(file) && !/^\d{4}-\d{2}-\d{2}/.test(file);
+                          })
+                          .map((f: { file?: string; function?: string; line?: number }, i: number) => (
                           <div key={`${f.file}-${i}`} className="pl-3 border-l-2 border-amber-500/30 break-words" title={`${f.file}${f.function ? ` in ${f.function}` : ''}`}>
                             <span className="text-muted-foreground">at</span> {f.file}
                             {f.line != null && <span className="text-amber-600 dark:text-amber-500">:{f.line}</span>}

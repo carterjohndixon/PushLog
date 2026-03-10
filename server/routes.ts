@@ -657,7 +657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
 
     // Incident-to-code correlation: use source-mapped frames so we look up real repo paths, not dist/bundle.
-    let correlation: { relatedCommits?: any[]; relevantAuthors?: any[]; correlationSource?: string | null } = {};
+    let correlation: { relatedCommits?: any[]; relevantAuthors?: any[]; correlationSource?: string | null; correlatedFile?: string; correlatedLine?: number } = {};
     try {
       correlation = await enrichIncidentWithGitHubCorrelation(
         { service: summary.service, start_time: summary.start_time, stacktrace: resolvedStacktraceForMeta },
@@ -687,6 +687,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ...(correlation.relatedCommits?.length ? { relatedCommits: correlation.relatedCommits } : {}),
       ...(correlation.relevantAuthors?.length ? { relevantAuthors: correlation.relevantAuthors } : {}),
       ...(correlation.correlationSource ? { correlationSource: correlation.correlationSource } : {}),
+      ...(correlation.correlatedFile ? { correlatedFile: correlation.correlatedFile } : {}),
+      ...(correlation.correlatedLine ? { correlatedLine: correlation.correlatedLine } : {}),
     });
 
     // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
@@ -1049,7 +1051,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to start production promotion webhook:", error);
       Sentry.captureException(error);
-      return res.status(500).json({ error: error?.message || "Failed to start promotion" });
+      return res.status(500).json({ error: "Failed to start promotion" });
     }
   });
 
@@ -1093,7 +1095,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to cancel production promotion:", error);
       Sentry.captureException(error);
-      return res.status(500).json({ error: error?.message || "Failed to cancel promotion" });
+      return res.status(500).json({ error: "Failed to cancel promotion" });
     }
   });
 
@@ -1251,7 +1253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to load promotion webhook status:", error);
       Sentry.captureException(error);
-      return res.status(500).json({ error: error?.message || "Failed to load promotion status" });
+      return res.status(500).json({ error: "Failed to load promotion status" });
     }
   });
 
@@ -1433,7 +1435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to load staging admin status:", error);
       Sentry.captureException(error);
-      res.status(500).json({ error: error?.message || "Failed to load status" });
+      res.status(500).json({ error: "Failed to load status" });
     }
   });
 
@@ -1497,7 +1499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to start production promotion:", error);
       Sentry.captureException(error);
-      res.status(500).json({ error: error?.message || "Failed to start promotion" });
+      res.status(500).json({ error: "Failed to start promotion" });
     }
   });
 
@@ -1539,7 +1541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Failed to cancel promotion:", error);
       Sentry.captureException(error);
-      res.status(500).json({ error: error?.message || "Failed to cancel" });
+      res.status(500).json({ error: "Failed to cancel" });
     }
   });
 
@@ -1621,7 +1623,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(503).json({
         status: "unhealthy",
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : "Unknown error"
+        error: "Service health check failed"
       });
     }
   });
@@ -1655,7 +1657,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload = {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
-        error: error instanceof Error ? error.message : "Failed to check incident engine status"
+        error: "Failed to check incident engine status"
       };
       res.setHeader("Content-Type", "application/json");
       res.status(503).send(JSON.stringify(payload) + "\n");
@@ -3870,7 +3872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test Slack connection - checks if OAuth is configured
-  app.get("/api/slack/test", async (req, res) => {
+  app.get("/api/slack/test", authenticateToken, async (req, res) => {
     try {
       // Check if Slack OAuth credentials are configured
       const isConfigured = !!(process.env.SLACK_CLIENT_ID && process.env.SLACK_CLIENT_SECRET);
@@ -4480,7 +4482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!stored || typeof stored !== "string" || stored.length === 0) {
         console.error("OpenRouter key save verification failed: user row has no open_router_api_key after update. Run migrations/add-openrouter-api-key-users.sql and ensure ENCRYPTION_KEY is set in .env");
         return res.status(500).json({
-          error: "Key did not persist. Ensure the database has the open_router_api_key column (run migrations/add-openrouter-api-key-users.sql) and ENCRYPTION_KEY is set in .env (64 hex chars).",
+          error: "Failed to save API key. Please contact support if this persists.",
         });
       }
 
@@ -4498,7 +4500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       if (msg.includes("ENCRYPTION_KEY")) {
-        return res.status(500).json({ error: msg });
+        return res.status(500).json({ error: "Server encryption not configured. Contact your administrator." });
       }
       res.status(500).json({ error: "Failed to save API key" });
     }
@@ -4815,7 +4817,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const stored = (updated as any)?.openaiApiKey;
       if (!stored || typeof stored !== "string" || stored.length === 0) {
         return res.status(500).json({
-          error: "Key did not persist. Ensure the database has the openai_api_key column (run migrations/add-openai-api-key-users.sql) and ENCRYPTION_KEY is set.",
+          error: "Failed to save API key. Please contact support if this persists.",
         });
       }
       res.status(200).json({ success: true });
@@ -4828,7 +4830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "Database missing openai_api_key column. Run: migrations/add-openai-api-key-users.sql",
         });
       }
-      if (msg.includes("ENCRYPTION_KEY")) return res.status(500).json({ error: msg });
+      if (msg.includes("ENCRYPTION_KEY")) return res.status(500).json({ error: "Server encryption not configured. Contact your administrator." });
       res.status(500).json({ error: "Failed to save API key" });
     }
   });

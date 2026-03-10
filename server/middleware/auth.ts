@@ -211,7 +211,7 @@ export async function authenticateToken(req: Request, res: Response, next: NextF
     next();
   } catch (error) {
     console.error('Authentication error:', error);
-    return res.status(401).json({ error: error instanceof Error ? error.message : 'Unauthorized' });
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 }
 

@@ -9,6 +9,9 @@ export interface RelatedCommitForEmail {
   author: { login: string; name?: string | null };
   htmlUrl: string;
   timestamp: string;
+  touchesErrorLine?: boolean;
+  lineDistance?: number;
+  score?: number;
 }
 
 export interface IncidentAlertMetadata {
@@ -31,6 +34,10 @@ export interface IncidentAlertMetadata {
   relatedCommits?: RelatedCommitForEmail[];
   /** Potentially relevant authors from those commits. */
   relevantAuthors?: Array<{ login: string; name?: string | null }>;
+  /** The file path that was correlated. */
+  correlatedFile?: string;
+  /** The line number that was correlated. */
+  correlatedLine?: number;
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -73,7 +80,7 @@ export function getIncidentAlertEmailTemplate(
     ? formatRelativeTime(metadata.createdAt)
     : "just now";
   const hasLocation = metadata?.route || metadata?.stackFrame || metadata?.requestUrl;
-  const hasStacktrace = metadata?.stacktrace && metadata.stacktrace.length > 0;
+  const rawHasStacktrace = metadata?.stacktrace && metadata.stacktrace.length > 0;
   const stackTraceIsBundled = metadata?.stackTraceIsBundled === true;
   const hasRelatedCommits = Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0;
   const relatedCommits = metadata?.relatedCommits ?? [];
@@ -82,9 +89,15 @@ export function getIncidentAlertEmailTemplate(
   const errorMessageEscaped = hasErrorMessage ? escapeHtml(String(metadata!.errorMessage!).trim()).replace(/\n/g, "<br>") : "";
   const exceptionType = metadata?.exceptionType != null ? escapeHtml(String(metadata.exceptionType)) : "";
 
+  const isNoiseFrame = (file: string) =>
+    /^log$/i.test(file) || /^test$/i.test(file) || /^\d{1,2}\/\w{3}\/\d{4}/.test(file) || /^\d{4}-\d{2}-\d{2}/.test(file) || /^<\w+>$/.test(file);
+
+  const filteredFrames = rawHasStacktrace ? metadata!.stacktrace!.filter((f) => f.file && !isNoiseFrame(f.file)) : [];
+  const hasStacktrace = filteredFrames.length > 0;
+
   const stackTraceHtml = hasStacktrace
-    ? metadata!
-        .stacktrace!.map((f) => {
+    ? filteredFrames
+        .map((f) => {
           const filePart = escapeHtml(f.file);
           const linePart =
             f.line != null
@@ -174,29 +187,36 @@ export function getIncidentAlertEmailTemplate(
         ${hasStacktrace ? `
         <!-- STACK TRACE -->
         <div>
-          ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project → Settings → Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
-          ${metadata?.stacktrace?.length === 1 && metadata?.stacktrace?.[0]?.file === "log" ? `<div style="font-size: 12px; color: #6b7c74; margin-bottom: 10px; padding: 8px 12px; background: rgba(45,61,53,0.5); border-radius: 6px; border: 1px solid #2d3d35;">Captured from log output (no stack trace in log line). The error message above contains the full context.</div>` : ""}
+          ${stackTraceIsBundled ? `<div style="font-size: 12px; color: #e8a74c; margin-bottom: 10px; padding: 8px 12px; background: rgba(232,167,76,0.1); border-radius: 6px; border: 1px solid rgba(232,167,76,0.3);">This stack trace is from your bundled/minified build. Upload source maps to Sentry (Project &rarr; Settings &rarr; Source Maps) so Sentry can show original file names and lines. Then re-deploy with a matching release.</div>` : ""}
           <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">STACK TRACE</div>
           <div style="padding: 12px; background: #141a18; border-radius: 6px; font-family: 'Monaco', 'Menlo', monospace; font-size: 12px; color: #9ca3a8; line-height: 1.7; border: 1px solid #2d3d35;">${stackTraceHtml}</div>
         </div>
         ` : ""}
 
         ${hasRelatedCommits ? `
-        <!-- RELATED COMMITS -->
-        <div style="margin-top: 16px;">
-          <div style="font-size: 11px; font-weight: 600; color: #6b7c74; letter-spacing: 0.5px; margin-bottom: 8px;">RELATED COMMITS</div>
-          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 8px;">Recent changes to the affected file</div>
+        <!-- CORRELATED COMMITS -->
+        <div style="margin-top: 16px; padding: 14px; background: rgba(125,211,160,0.05); border-radius: 8px; border: 1px solid rgba(125,211,160,0.25);">
+          <div style="font-size: 11px; font-weight: 600; color: #7dd3a0; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
+          ${metadata?.correlatedFile ? `
+          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 10px;">
+            Commits that changed <code style="background: #141a18; padding: 2px 6px; border-radius: 3px; font-family: monospace; font-size: 11px; color: #e8ece9;">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>
+          </div>` : `
+          <div style="font-size: 12px; color: #9ca3a8; margin-bottom: 10px;">Changes to the affected file</div>`}
           <div style="display: flex; flex-direction: column; gap: 8px;">
             ${relatedCommits.map((c) => `
-              <div style="padding: 10px 12px; background: #141a18; border-radius: 6px; border: 1px solid #2d3d35;">
-                <a href="${escapeHtml(c.htmlUrl)}" style="color: #7dd3a0; text-decoration: none; font-family: monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
-                <span style="color: #e8ece9; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
+              <div style="padding: 10px 12px; background: #141a18; border-radius: 6px; border-left: 3px solid ${c.touchesErrorLine ? "#ef4444" : "#7dd3a0"}; border-right: 1px solid #2d3d35; border-top: 1px solid #2d3d35; border-bottom: 1px solid #2d3d35;">
+                <div>
+                  <a href="${escapeHtml(c.htmlUrl)}" style="color: #7dd3a0; text-decoration: none; font-family: monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
+                  <span style="color: #e8ece9; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
+                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #ef4444; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); border-radius: 10px;">touches error line</span>` : ""}
+                  ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
+                </div>
                 <div style="font-size: 11px; color: #6b7c74; margin-top: 4px;">@${escapeHtml(c.author.login)}</div>
               </div>
             `).join("")}
           </div>
           ${relevantAuthors.length >= 2 ? `
-          <div style="font-size: 11px; color: #6b7c74; margin-top: 10px;">Potentially relevant authors: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
+          <div style="font-size: 11px; color: #6b7c74; margin-top: 10px;">Potentially relevant: ${relevantAuthors.map((a) => escapeHtml(a.login)).join(", ")}</div>
           ` : ""}
         </div>
         ` : ""}
