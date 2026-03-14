@@ -2142,11 +2142,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
           const redirectUrl = base ? `${base}${targetPath}` : targetPath;
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          res.status(200).send(
-            `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${redirectUrl}"></head>` +
-            `<body><p>Redirecting...</p><script>location.href=${JSON.stringify(redirectUrl)}</script></body></html>`
-          );
+          // Use 302 redirect instead of 200+HTML so Set-Cookie is more reliably stored by browsers/proxies (fixes session lost before MFA verify)
+          res.redirect(302, redirectUrl);
         });
       });
     } catch (error) {
