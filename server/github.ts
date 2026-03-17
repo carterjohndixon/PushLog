@@ -61,10 +61,12 @@ export function getGitHubOAuthConfig(requestHost?: string): { clientId: string; 
     clientId = process.env.GITHUB_OAUTH_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
   }
 
-  const redirectUri = process.env.APP_URL
-    ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback`
-    : host
-      ? `https://${host}/auth/github/callback`
+  // Prefer request host over APP_URL: when one server hosts both staging and production,
+  // APP_URL may be wrong for the current request. The host is what the user actually visited.
+  const redirectUri = host
+    ? `https://${host}/auth/github/callback`
+    : process.env.APP_URL
+      ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback`
       : "https://pushlog.ai/auth/github/callback";
 
   return { clientId, redirectUri };

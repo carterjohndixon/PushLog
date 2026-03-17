@@ -1,0 +1,19 @@
+# Promote service — runs production promotion via Docker (replaces PM2-based deploy-production.sh)
+# Uses docker:24-cli for reliable docker compose; adds node for the HTTP server.
+FROM docker:24-cli
+
+RUN apk add --no-cache nodejs git bash
+
+WORKDIR /app
+
+COPY scripts/promote-http-server.js ./
+COPY scripts/promote-production-docker.sh ./
+
+RUN chmod +x promote-production-docker.sh 2>/dev/null || true
+
+ENV PROMOTE_HTTP_PORT=3999
+ENV PROMOTE_WORKSPACE=/workspace
+
+EXPOSE 3999
+
+CMD ["node", "promote-http-server.js"]

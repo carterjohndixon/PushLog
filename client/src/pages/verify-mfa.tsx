@@ -122,14 +122,6 @@ export default function VerifyMfa() {
                 </div>
               )}
             </div>
-
-            <div className="rounded-lg border border-border bg-muted/30 p-4 flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-log-green shrink-0 mt-0.5" />
-              <div className="text-sm text-muted-foreground">
-                <p className="font-medium text-foreground mb-0.5">Don't have your phone?</p>
-                <p>Use a different account to sign in, or recover access from your account settings after you're in.</p>
-              </div>
-            </div>
           </div>
 
           <p className="text-center text-sm text-muted-foreground">

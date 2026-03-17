@@ -242,7 +242,7 @@ export default function AdminPage() {
     if (lastLine.includes("Production promotion completed.")) return "Completed!";
     if (lastLine.includes("Promotion CANCELLED")) return "Cancelled";
     if (!isPromotionRunning) return "";
-    if (lastLine.includes("Restarting")) return "Restarting PM2...";
+    if (lastLine.includes("Restarting") || lastLine.includes("Rebuilding")) return "Rebuilding Docker containers...";
     if (lastLine.includes("Building production bundle")) return "Building production bundle...";
     if (lastLine.includes("Building incident-engine")) return "Building Rust engines...";
     if (lastLine.includes("Installing dependencies")) return "Installing dependencies...";

@@ -2105,6 +2105,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const userForMfa = user as { mfaEnabled?: boolean };
       const hasMfa = !!(userForMfa.mfaEnabled ?? (user as any).mfa_enabled);
+      const targetPath = isLinkingFlow
+        ? (typeof returnPath === "string" && returnPath.startsWith("/") && !returnPath.includes("..") ? returnPath : null) || "/dashboard?github_connected=1"
+        : (hasMfa ? "/verify-mfa" : "/setup-mfa");
       req.session!.regenerate((regErr) => {
         if (regErr) {
           console.error("❌ GitHub OAuth: session regenerate failed:", regErr);
@@ -2132,12 +2135,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             Sentry.captureException(err);
             return loginRedirectWithError( "Session error. Please try again.");
           }
-          const safeReturnPath = typeof returnPath === "string" && returnPath.startsWith("/") && !returnPath.includes("..")
-            ? returnPath
-            : null;
-          const targetPath = isLinkingFlow
-            ? (safeReturnPath || "/dashboard?github_connected=1")
-            : (hasMfa ? "/verify-mfa" : "/setup-mfa");
           const host = (req.get("host") || "").split(":")[0];
           const protocol = host === "pushlog.ai" ? "https" : (req.protocol || "https");
           const base = host ? `${protocol}://${host}` : (process.env.APP_URL || "").replace(/\/$/, "") || "";
