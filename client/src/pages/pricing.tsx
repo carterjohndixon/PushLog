@@ -145,7 +145,10 @@ export default function Pricing() {
                       Current Plan
                     </Button>
                   ) : (
-                    <Link href="/signup">
+                    <Link
+                      href="/signup"
+                      className="block outline-none focus:outline-none focus-visible:ring-0 rounded-md"
+                    >
                       <Button variant="outline" className="w-full outline-none focus:outline-none focus-visible:ring-0">
                         Get Started
                       </Button>
