@@ -880,8 +880,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Link href="/billing">
-            <Card className="cursor-pointer transition-shadow card-lift hover:shadow-glow">
+          <Link href="/billing" className="outline-none focus:outline-none focus-visible:ring-0 rounded-lg block">
+            <Card className="cursor-pointer transition-shadow card-lift hover:shadow-glow border-border">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>

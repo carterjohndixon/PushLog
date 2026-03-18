@@ -57,6 +57,9 @@ router.post("/create-checkout-session", authenticateToken, async (req: Request, 
       success_url: `${appUrl}/billing?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}/pricing`,
       metadata: { organizationId: orgId, plan },
+      // Also propagate metadata to the subscription object so later subscription webhooks
+      // can update the correct org even if price->plan env mapping is missing.
+      subscription_data: { metadata: { organizationId: orgId, plan } },
     });
 
     res.json({ url: session.url });
@@ -139,18 +142,28 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
           const subscriptionId = session.subscription as string;
           const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
           const priceId = sub.items?.data?.[0]?.price?.id ?? null;
-          const plan = priceId ? stripePriceIdToPlan(priceId) : (session.metadata.plan as PlanName | undefined);
-          if (plan) {
-            const periodEnd = sub.current_period_end;
-            await databaseStorage.updateOrganization(orgId, {
-              plan,
-              stripeSubscriptionId: subscriptionId,
-              stripeSubscriptionStatus: sub.status,
-              stripePriceId: priceId,
-              currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-              stripeCustomerId: session.customer as string,
-            });
-          }
+          const mappedPlan = priceId ? stripePriceIdToPlan(priceId) : null;
+          const sessionPlan = session.metadata?.plan as PlanName | undefined;
+          const plan = (mappedPlan ?? sessionPlan) as PlanName | undefined;
+
+          const periodEnd = sub.current_period_end;
+          console.log("[Stripe webhook] checkout.session.completed", {
+            orgId,
+            subscriptionId,
+            priceId,
+            mappedPlan,
+            sessionPlan,
+            plan,
+            status: sub.status,
+          });
+          await databaseStorage.updateOrganization(orgId, {
+            ...(plan ? { plan } : {}),
+            stripeSubscriptionId: subscriptionId,
+            stripeSubscriptionStatus: sub.status,
+            stripePriceId: priceId,
+            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+            stripeCustomerId: session.customer as string,
+          });
         }
         break;
       }
@@ -158,17 +171,36 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const sub = event.data.object as any;
-        const customerId = sub.customer as string;
-        const org = await databaseStorage.getOrganizationByStripeCustomerId(customerId);
+        const priceId = sub.items?.data?.[0]?.price?.id ?? null;
+        const mappedPlan = priceId ? stripePriceIdToPlan(priceId) : null;
+        const subscriptionPlan = sub.metadata?.plan as PlanName | undefined;
+        const plan = (mappedPlan ?? subscriptionPlan) as PlanName | undefined;
+
+        // Prefer orgId from subscription metadata; fall back to customer lookup.
+        const orgIdFromMeta = sub.metadata?.organizationId as string | undefined;
+        const customerId = sub.customer as string | undefined;
+
+        const org =
+          (orgIdFromMeta ? await databaseStorage.getOrganization(orgIdFromMeta) : null) ??
+          (customerId ? await databaseStorage.getOrganizationByStripeCustomerId(customerId) : null);
+
         if (org) {
-          const priceId = sub.items?.data?.[0]?.price?.id ?? null;
-          const plan = priceId ? stripePriceIdToPlan(priceId) : null;
+          const periodEnd = sub.current_period_end;
+          console.log("[Stripe webhook] customer.subscription.created/updated", {
+            orgId: org.id,
+            subscriptionId: sub.id,
+            priceId,
+            mappedPlan,
+            subscriptionPlan,
+            plan,
+            status: sub.status,
+          });
           await databaseStorage.updateOrganization(org.id, {
             ...(plan ? { plan } : {}),
             stripeSubscriptionId: sub.id,
             stripeSubscriptionStatus: sub.status,
             ...(priceId ? { stripePriceId: priceId } : {}),
-            currentPeriodEnd: new Date(sub.current_period_end * 1000).toISOString(),
+            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
           });
         }
         break;

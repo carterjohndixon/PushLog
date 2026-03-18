@@ -22,12 +22,14 @@ const FREE_FEATURES = [
   "BYO API key",
   "Clean Summary mode only",
   "200 summaries/month",
+  "No PushLog Agent",
 ];
 
 const PRO_FEATURES = [
   "Up to 5 repositories",
   "Clean Summary, Slack-Friendly, Detailed Engineering, Executive Summary modes",
   "Sentry integration",
+  "PushLog Agent (stream logs from your server)",
   "2,000 summaries/month",
 ];
 
@@ -35,6 +37,7 @@ const TEAM_FEATURES = [
   "Up to 20 repositories",
   "All Pro modes + Incident-Aware mode",
   "Incident-related features",
+  "PushLog Agent (stream logs from your server)",
   "10,000 summaries/month",
 ];
 
@@ -114,7 +117,7 @@ export default function Pricing() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Free */}
             <Card
-              className={`flex flex-col border-border ${
+              className={`flex flex-col border-border outline-none focus:outline-none focus-visible:ring-0 ${
                 isCurrentPlan("free") ? "ring-2 ring-log-green" : ""
               }`}
             >
@@ -138,12 +141,12 @@ export default function Pricing() {
                 </ul>
                 <div className="mt-auto">
                   {isCurrentPlan("free") ? (
-                    <Button variant="outline" className="w-full" disabled>
+                    <Button variant="outline" className="w-full outline-none focus:outline-none focus-visible:ring-0" disabled>
                       Current Plan
                     </Button>
                   ) : (
                     <Link href="/signup">
-                      <Button variant="outline" className="w-full">
+                      <Button variant="outline" className="w-full outline-none focus:outline-none focus-visible:ring-0">
                         Get Started
                       </Button>
                     </Link>
