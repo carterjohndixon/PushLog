@@ -118,6 +118,18 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
   const sig = req.headers["stripe-signature"] as string | undefined;
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
 
+  const contentLength = req.headers["content-length"];
+  const bodyLen = req.body?.length ?? (typeof req.body === "string" ? Buffer.byteLength(req.body) : 0);
+  console.log("[Stripe webhook] received", {
+    hasSignature: !!sig,
+    hasSecret: !!secret,
+    bodyType: typeof req.body,
+    bodyIsBuffer: Buffer.isBuffer(req.body),
+    contentLengthHeader: contentLength,
+    bodyLength: bodyLen,
+    lengthsMatch: contentLength != null && String(bodyLen) === String(contentLength),
+  });
+
   if (!secret) {
     console.error("STRIPE_WEBHOOK_SECRET not configured");
     res.status(500).json({ error: "Webhook secret not configured" });
@@ -133,6 +145,8 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
     return;
   }
 
+  console.log("[Stripe webhook] event type:", event.type);
+
   try {
     switch (event.type) {
       case "checkout.session.completed": {
@@ -143,8 +157,8 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
           const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
           const priceId = sub.items?.data?.[0]?.price?.id ?? null;
           const mappedPlan = priceId ? stripePriceIdToPlan(priceId) : null;
-          const sessionPlan = session.metadata?.plan as PlanName | undefined;
-          const plan = (mappedPlan ?? sessionPlan) as PlanName | undefined;
+          const sessionPlan = (session.metadata?.plan as string)?.toLowerCase() as PlanName | undefined;
+          const plan: PlanName = (mappedPlan ?? (sessionPlan === "pro" || sessionPlan === "team" ? sessionPlan : undefined)) ?? "pro";
 
           const periodEnd = sub.current_period_end;
           console.log("[Stripe webhook] checkout.session.completed", {
@@ -157,12 +171,18 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
             status: sub.status,
           });
           await databaseStorage.updateOrganization(orgId, {
-            ...(plan ? { plan } : {}),
+            plan,
             stripeSubscriptionId: subscriptionId,
             stripeSubscriptionStatus: sub.status,
             stripePriceId: priceId,
             currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
             stripeCustomerId: session.customer as string,
+          });
+          console.log("[Stripe webhook] updated org", orgId, "to plan", plan);
+        } else {
+          console.log("[Stripe webhook] checkout.session.completed skipped (no subscription or metadata)", {
+            mode: session?.mode,
+            hasOrgId: !!session?.metadata?.organizationId,
           });
         }
         break;
@@ -223,8 +243,8 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
       }
     }
   } catch (err: any) {
-    console.error("Stripe webhook handler error:", err?.message ?? err);
-    res.status(500).json({ error: "Webhook handler error" });
+    console.error("Stripe webhook handler error:", err?.message ?? err, err?.stack);
+    res.status(500).json({ error: err?.message ?? "Webhook handler error" });
     return;
   }
 
