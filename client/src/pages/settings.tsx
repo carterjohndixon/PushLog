@@ -37,7 +37,12 @@ import {
   WifiOff,
   Plus,
   Webhook,
+  Zap,
+  Clock,
+  BarChart3,
+  ArrowUpRight,
 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { SiSlack, SiGoogle } from "react-icons/si";
 import { Link, useLocation } from "wouter";
 import {
@@ -1127,11 +1132,29 @@ export default function Settings() {
                   </div>
 
                   <div className="pt-4 border-t">
-                    <p className="text-sm text-steel-gray mb-2">AI Credits</p>
-                    <p className="font-medium flex items-center gap-2">
-                      <CreditCard className="w-4 h-4" />
-                      {dataSummary.aiCredits.toLocaleString()} credits remaining
-                    </p>
+                    <p className="text-sm text-steel-gray mb-2">Current Plan</p>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={
+                          (profileResponse?.user?.plan ?? "free") === "free"
+                            ? "text-sm px-3 py-1"
+                            : "bg-log-green text-white border-0 text-sm px-3 py-1"
+                        }
+                        variant={(profileResponse?.user?.plan ?? "free") === "free" ? "secondary" : "default"}
+                      >
+                        {(profileResponse?.user?.plan ?? "free").charAt(0).toUpperCase() + (profileResponse?.user?.plan ?? "free").slice(1)}
+                      </Badge>
+                      {profileResponse?.user?.subscriptionStatus && profileResponse.user.subscriptionStatus !== "active" && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-500/40 text-xs">
+                          {profileResponse.user.subscriptionStatus.replace(/_/g, " ")}
+                        </Badge>
+                      )}
+                      <Link href="/billing">
+                        <Button variant="ghost" size="sm" className="text-log-green h-7 text-xs gap-1">
+                          <ArrowUpRight className="w-3 h-3" /> Billing
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </>
               ) : (
@@ -1162,6 +1185,151 @@ export default function Settings() {
                     queryClient.invalidateQueries({ queryKey: ["/api/org"] });
                   }}
                 />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Plan & Subscription */}
+          {profileResponse?.user && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-log-green" />
+                  Plan & Subscription
+                </CardTitle>
+                <CardDescription>
+                  Your current plan, summary usage, and billing period
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {(() => {
+                  const plan = profileResponse.user.plan ?? "free";
+                  const status = profileResponse.user.subscriptionStatus;
+                  const periodEnd = profileResponse.user.currentPeriodEnd;
+                  const summaryCount = profileResponse.user.monthlySummaryCount ?? 0;
+                  const summaryCap = profileResponse.user.monthlySummaryCap ?? 200;
+                  const usagePercent = summaryCap > 0 ? (summaryCount / summaryCap) * 100 : 0;
+                  const daysLeft = periodEnd
+                    ? Math.max(0, Math.ceil((new Date(periodEnd).getTime() - Date.now()) / 86_400_000))
+                    : null;
+                  const planLabels: Record<string, string> = { free: "Free", pro: "Pro", team: "Team" };
+                  const planPrices: Record<string, string> = { free: "$0/mo", pro: "$12/mo", team: "$39/mo" };
+                  const planRepoLimits: Record<string, number> = { free: 1, pro: 5, team: 20 };
+
+                  return (
+                    <>
+                      {/* Plan details row */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                          <p className="text-xs text-muted-foreground mb-1">Plan</p>
+                          <Badge
+                            className={
+                              plan === "free"
+                                ? "text-sm px-3 py-1"
+                                : "bg-log-green text-white border-0 text-sm px-3 py-1"
+                            }
+                            variant={plan === "free" ? "secondary" : "default"}
+                          >
+                            {planLabels[plan] ?? "Free"}
+                          </Badge>
+                        </div>
+                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                          <p className="text-xs text-muted-foreground mb-1">Price</p>
+                          <p className="font-semibold">{planPrices[plan] ?? "$0/mo"}</p>
+                        </div>
+                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                          <p className="text-xs text-muted-foreground mb-1">Repos</p>
+                          <p className="font-semibold">
+                            {dataSummary?.dataSummary.repositories ?? 0} / {planRepoLimits[plan] ?? 1}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border bg-muted/30 p-3 text-center">
+                          <p className="text-xs text-muted-foreground mb-1">
+                            {status === "canceled" ? "Ends in" : "Renews in"}
+                          </p>
+                          <p className="font-semibold">
+                            {daysLeft !== null ? (
+                              <span className={daysLeft <= 3 ? "text-red-600" : daysLeft <= 7 ? "text-amber-600" : ""}>
+                                {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                              </span>
+                            ) : plan === "free" ? (
+                              <span className="text-muted-foreground">--</span>
+                            ) : (
+                              <span className="text-muted-foreground">Unknown</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Subscription status */}
+                      {status && status !== "active" && (
+                        <div className={`rounded-lg border px-4 py-3 text-sm flex items-center gap-2 ${
+                          status === "canceled" ? "border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-400"
+                            : status === "past_due" ? "border-amber-500/30 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+                            : "border-border bg-muted/30"
+                        }`}>
+                          <Clock className="w-4 h-4 shrink-0" />
+                          {status === "canceled" && periodEnd && (
+                            <span>Your subscription is canceled. You'll keep {planLabels[plan]} features until <strong>{new Date(periodEnd).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</strong>, then revert to Free.</span>
+                          )}
+                          {status === "past_due" && (
+                            <span>Your payment is past due. Update your payment method to avoid losing access to {planLabels[plan]} features.</span>
+                          )}
+                          {status !== "canceled" && status !== "past_due" && (
+                            <span>Subscription status: <strong>{status.replace(/_/g, " ")}</strong></span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Summary usage */}
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-sm font-medium flex items-center gap-1.5">
+                            <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                            Monthly summaries
+                          </p>
+                          <span className="text-sm text-muted-foreground">
+                            {summaryCount.toLocaleString()} / {summaryCap.toLocaleString()}
+                          </span>
+                        </div>
+                        <Progress
+                          value={Math.min(usagePercent, 100)}
+                          className={`h-2.5 ${usagePercent >= 90 ? "[&>div]:bg-red-500" : usagePercent >= 70 ? "[&>div]:bg-amber-500" : ""}`}
+                        />
+                        <div className="flex justify-between mt-1.5">
+                          <p className="text-xs text-muted-foreground">
+                            {Math.round(usagePercent)}% used
+                          </p>
+                          {usagePercent >= 90 && (
+                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">
+                              {summaryCount >= summaryCap ? "Limit reached" : "Almost at limit"}
+                            </p>
+                          )}
+                          {periodEnd && usagePercent < 90 && (
+                            <p className="text-xs text-muted-foreground">
+                              Resets {new Date(periodEnd).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        <Link href="/billing">
+                          <Button variant="outline" size="sm" className="gap-1.5">
+                            <CreditCard className="w-3.5 h-3.5" /> Manage Billing
+                          </Button>
+                        </Link>
+                        <Link href="/pricing">
+                          <Button variant="outline" size="sm" className="gap-1.5">
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            {plan === "free" ? "Upgrade Plan" : "Change Plan"}
+                          </Button>
+                        </Link>
+                      </div>
+                    </>
+                  );
+                })()}
               </CardContent>
             </Card>
           )}

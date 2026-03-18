@@ -1469,13 +1469,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headSha = req.body?.headSha?.trim() || "";
       const isRollback = !!req.body?.isRollback;
 
+      console.log("[staging/promote] Request:", { promotedBy, headSha: headSha.slice(0, 10), isRollback, webhookConfigured: isProductionDeployConfigured() });
+
       // When configured, ask the production server to start the deploy (staging doesn't run the script).
       if (isProductionDeployConfigured()) {
+        console.log("[staging/promote] Forwarding to production webhook...");
         const result = await requestProductionPromote({ promotedBy, headSha: headSha || undefined, isRollback });
         if (!result.ok) {
-          if (result.status === 502) {
-            console.error("[staging/promote] Production webhook unreachable:", result.error);
-          }
+          console.error("[staging/promote] Production webhook failed:", { status: result.status, error: result.error });
           return res.status(result.status).json({ error: result.error });
         }
         return res.json({

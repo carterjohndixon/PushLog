@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronDown, ChevronUp, ArrowUp, RotateCcw, CheckCircle2 } from "lucide-react";
+import { ChevronDown, ChevronUp, ArrowUp, RotateCcw, CheckCircle2, Bug } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
@@ -262,16 +262,26 @@ export default function AdminPage() {
   /** Build a set of pending SHAs for quick lookup */
   const pendingShaSet = new Set((data?.pendingCommits || []).map((c) => c.sha));
 
-  /** Classify a commit relative to deployed prod SHA */
+  /** Prefix-safe SHA comparison (handles full vs short SHAs) */
+  function shaMatches(commitSha: string, targetSha: string | null): boolean {
+    if (!targetSha || !commitSha) return false;
+    const a = commitSha.toLowerCase();
+    const b = targetSha.trim().toLowerCase();
+    if (a === b) return true;
+    if (a.startsWith(b) || b.startsWith(a)) return true;
+    if (b.length >= 7 && a.startsWith(b.slice(0, 7))) return true;
+    if (a.length >= 7 && b.startsWith(a.slice(0, 7))) return true;
+    return false;
+  }
+
   function commitStatus(c: CommitInfo): "deployed" | "pending" | "old" {
-    if (prodSha && c.sha === prodSha) return "deployed";
+    if (shaMatches(c.sha, prodSha)) return "deployed";
     if (pendingShaSet.has(c.sha)) return "pending";
     return "old";
   }
 
   function isStaging(c: CommitInfo): boolean {
-    if (!stagingSha) return false;
-    return c.sha === stagingSha || c.sha.startsWith(stagingSha) || stagingSha.startsWith(c.sha.slice(0, 7));
+    return shaMatches(c.sha, stagingSha);
   }
 
   return (
@@ -421,11 +431,27 @@ export default function AdminPage() {
                 </div>
 
                 {!data.promoteAvailable && (
-                  <p className="text-sm text-red-600 mt-3">
-                    Production promotion is not configured yet.
-                    {!data.promoteConfig?.webhookUrlConfigured ? " Missing PROMOTE_PROD_WEBHOOK_URL." : ""}
-                    {!data.promoteConfig?.webhookSecretConfigured ? " Missing PROMOTE_PROD_WEBHOOK_SECRET." : ""}
-                  </p>
+                  <div className="text-sm text-red-600 mt-3 space-y-1">
+                    <p className="font-medium">Production promotion is not configured.</p>
+                    {!data.promoteConfig?.webhookUrlConfigured && (
+                      <p>Missing <code className="bg-red-100 dark:bg-red-900/30 px-1 rounded">PROMOTE_PROD_WEBHOOK_URL</code> in staging environment.</p>
+                    )}
+                    {!data.promoteConfig?.webhookSecretConfigured && (
+                      <p>Missing <code className="bg-red-100 dark:bg-red-900/30 px-1 rounded">PROMOTE_PROD_WEBHOOK_SECRET</code> in staging environment.</p>
+                    )}
+                    <p className="text-muted-foreground text-xs pt-1">
+                      Set these in <code>.env.staging</code> and restart the staging container. The URL should point to the promote service (e.g. <code>http://172.17.0.1:3999</code>).
+                    </p>
+                  </div>
+                )}
+                {data.promoteRemoteStatus?.error && (
+                  <div className="text-sm text-amber-600 mt-3 rounded border border-amber-500/30 bg-amber-500/5 p-3">
+                    <p className="font-medium">Could not reach production promote service</p>
+                    <p className="text-xs mt-1 text-muted-foreground">{data.promoteRemoteStatus.error}</p>
+                    <p className="text-xs mt-1 text-muted-foreground">
+                      Check that the promote container is running (<code>docker ps | grep promote</code>) and that the staging container can reach it.
+                    </p>
+                  </div>
                 )}
 
                 {/* Live progress panel (shows during promotion and after completion) */}
@@ -639,6 +665,44 @@ export default function AdminPage() {
                 )}
               </CardContent>
             </Card>
+            {/* ── Debug ── */}
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground w-full justify-start">
+                  <Bug className="h-4 w-4" />
+                  Debug: Raw API Response
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <Card className="mt-2 border-dashed">
+                  <CardContent className="py-4">
+                    <pre className="text-xs whitespace-pre-wrap break-all max-h-96 overflow-auto rounded bg-muted p-3 font-mono">
+                      {JSON.stringify({
+                        appEnv: data.appEnv,
+                        branch: data.branch,
+                        headSha: data.headSha,
+                        stagingDeployedSha: data.stagingDeployedSha,
+                        stagingDeployedAt: data.stagingDeployedAt,
+                        prodDeployedSha: data.prodDeployedSha,
+                        prodDeployedAt: data.prodDeployedAt,
+                        remoteProdDeployedSha: data.promoteRemoteStatus?.prodDeployedSha ?? null,
+                        remoteProdDeployedAt: data.promoteRemoteStatus?.prodDeployedAt ?? null,
+                        remoteError: data.promoteRemoteStatus?.error ?? null,
+                        promoteAvailable: data.promoteAvailable,
+                        promoteViaWebhook: data.promoteViaWebhook,
+                        promoteInProgress: data.promoteInProgress,
+                        promoteConfig: data.promoteConfig,
+                        pendingCount: data.pendingCount,
+                        recentCommitsCount: data.recentCommits.length,
+                        firstCommitSha: data.recentCommits[0]?.sha?.slice(0, 10) ?? null,
+                        prodShaUsedForMatch: prodSha?.slice(0, 10) ?? null,
+                        stagingShaUsedForMatch: stagingSha?.slice(0, 10) ?? null,
+                      }, null, 2)}
+                    </pre>
+                  </CardContent>
+                </Card>
+              </CollapsibleContent>
+            </Collapsible>
           </div>
         ) : null}
       </main>

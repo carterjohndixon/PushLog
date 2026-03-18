@@ -4,13 +4,19 @@
  * without inlining HTTP calls inside route handlers.
  */
 
-const PROMOTE_PROD_WEBHOOK_URL = process.env.PROMOTE_PROD_WEBHOOK_URL || "";
-const PROMOTE_PROD_WEBHOOK_SECRET = process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
+function getWebhookUrl(): string {
+  return process.env.PROMOTE_PROD_WEBHOOK_URL || "";
+}
+
+function getWebhookSecret(): string {
+  return process.env.PROMOTE_PROD_WEBHOOK_SECRET || "";
+}
 
 function baseUrl(): string | null {
-  if (!PROMOTE_PROD_WEBHOOK_URL) return null;
+  const url = getWebhookUrl();
+  if (!url) return null;
   try {
-    const u = new URL(PROMOTE_PROD_WEBHOOK_URL);
+    const u = new URL(url);
     u.pathname = "";
     u.search = "";
     return u.toString().replace(/\/$/, "");
@@ -22,13 +28,13 @@ function baseUrl(): string | null {
 function authHeaders(): Record<string, string> {
   return {
     "Content-Type": "application/json",
-    "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET,
+    "x-promote-secret": getWebhookSecret(),
   };
 }
 
 /** Whether the production webhook is configured (staging can call production). */
 export function isProductionDeployConfigured(): boolean {
-  return !!(PROMOTE_PROD_WEBHOOK_URL && PROMOTE_PROD_WEBHOOK_SECRET);
+  return !!(getWebhookUrl() && getWebhookSecret());
 }
 
 /** Ask the production server to start a promotion. */
@@ -115,7 +121,7 @@ export async function getProductionPromotionStatus(): Promise<
   const target = `${url}/api/webhooks/promote-production/status`;
   try {
     const res = await fetch(target, {
-      headers: { "x-promote-secret": PROMOTE_PROD_WEBHOOK_SECRET },
+      headers: { "x-promote-secret": getWebhookSecret() },
     });
     const contentType = res.headers.get("content-type") || "";
     if (contentType.includes("application/json")) {
