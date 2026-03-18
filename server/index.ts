@@ -412,9 +412,10 @@ app.post(
 );
 
 // Stripe subscription webhook: must receive raw body for signature verification (before body parsers)
+// type: () => true so we always get raw body even if a proxy changes Content-Type or strips headers
 app.post(
   "/api/stripe/webhook",
-  express.raw({ type: "application/json", limit: "1mb" }),
+  express.raw({ type: () => true, limit: "1mb" }),
   (req: express.Request, res: express.Response) => {
     handleStripeSubscriptionWebhook(req, res);
   }

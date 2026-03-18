@@ -136,6 +136,12 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
     return;
   }
 
+  if (!req.body || !Buffer.isBuffer(req.body)) {
+    console.error("[Stripe webhook] body is not a Buffer — raw body was not preserved (proxy or middleware may have parsed it)");
+    res.status(400).json({ error: "Invalid webhook body: raw body required for signature verification" });
+    return;
+  }
+
   let event;
   try {
     event = stripe.webhooks.constructEvent(req.body, sig as string, secret);
