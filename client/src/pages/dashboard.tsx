@@ -880,37 +880,32 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Card 
-            className="cursor-pointer transition-shadow card-lift hover:shadow-glow"
-            onClick={() => setIsAiCreditsModalOpen(true)}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+          <Link href="/billing">
+            <Card className="cursor-pointer transition-shadow card-lift hover:shadow-glow">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">AI Credits</p>
+                    <p className="text-sm text-muted-foreground">
+                      Summaries ({userProfile?.plan ? userProfile.plan.charAt(0).toUpperCase() + userProfile.plan.slice(1) : "Free"})
+                    </p>
                     {statsLoading ? (
-                      <Skeleton className="h-8 w-8 mt-1" />
+                      <Skeleton className="h-8 w-20 mt-1" />
                     ) : (
-                      <p className="text-2xl font-bold text-log-green">∞</p>
+                      <p className="text-2xl font-bold text-log-green">
+                        {userProfile?.monthlySummaryCount ?? 0}
+                        <span className="text-base font-normal text-muted-foreground">
+                          {" "}/ {(userProfile?.monthlySummaryCap ?? 200).toLocaleString()}
+                        </span>
+                      </p>
                     )}
                   </div>
-                  {/* REAL PAYMENT VERSION: */}
-                  {/* {!statsLoading && userProfile?.aiCredits && userProfile.aiCredits < 50 && (
-                    <div className="group relative">
-                      <AlertTriangle className="text-red-500 w-5 h-5 cursor-default" />
-                      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
-                        Credits are low! Consider purchasing more.
-                      </div>
-                    </div>
-                  )} */}
+                  <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                    <CreditCard className="text-log-green w-6 h-6" />
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                  <CreditCard className="text-log-green w-6 h-6" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Main Content Grid */}
