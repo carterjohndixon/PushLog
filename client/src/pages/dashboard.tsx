@@ -1063,6 +1063,59 @@ export default function Dashboard() {
                         badgeVariant = isRepositoryActive ? "outline" : "secondary";
                       }
                       
+                      const repoActions = (canManageIntegrations || canManageRepos) ? (
+                        <>
+                          {canManageIntegrations && (
+                          <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleRepository(repo)}
+                            disabled={updateRepositoryMutation.isPending}
+                            className="text-muted-foreground hover:text-foreground h-8 px-2"
+                            title={isRepositoryActive ? 'Pause repository' : 'Resume repository'}
+                          >
+                            {isRepositoryActive ? (
+                              <Pause className="w-4 h-4" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRepositorySettings(repo)}
+                            className="text-muted-foreground hover:text-foreground h-8 px-2"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                          </>
+                          )}
+                          {canManageRepos && (
+                          <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleRepositoryTeam(repo)}
+                            className="text-muted-foreground hover:text-foreground h-8 px-2"
+                            title="Manage who can see this repo"
+                          >
+                            <Users className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteRepository(repo)}
+                            disabled={deleteRepositoryMutation.isPending}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          </>
+                          )}
+                        </>
+                      ) : null;
+
                       return (
                         <div key={repo.githubId} className="p-3 border border-border rounded-lg">
                           <div className="flex items-center justify-between">
@@ -1080,63 +1133,23 @@ export default function Dashboard() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center space-x-2 shrink-0 ml-2">
-                              <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-                              <Badge variant={badgeVariant} className="text-xs">
-                                {statusText}
-                              </Badge>
+                            <div className="flex items-center shrink-0 ml-2">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                                <Badge variant={badgeVariant} className="text-xs">
+                                  {statusText}
+                                </Badge>
+                              </div>
+                              {repoActions && (
+                                <div className="hidden md:flex items-center gap-1 ml-1">
+                                  {repoActions}
+                                </div>
+                              )}
                             </div>
                           </div>
-                          {(canManageIntegrations || canManageRepos) && (
-                            <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-border">
-                              {canManageIntegrations && (
-                              <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleToggleRepository(repo)}
-                                disabled={updateRepositoryMutation.isPending}
-                                className="text-muted-foreground hover:text-foreground h-8 px-2"
-                                title={isRepositoryActive ? 'Pause repository' : 'Resume repository'}
-                              >
-                                {isRepositoryActive ? (
-                                  <Pause className="w-4 h-4" />
-                                ) : (
-                                  <Play className="w-4 h-4" />
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleRepositorySettings(repo)}
-                                className="text-muted-foreground hover:text-foreground h-8 px-2"
-                              >
-                                <MoreVertical className="w-4 h-4" />
-                              </Button>
-                              </>
-                              )}
-                              {canManageRepos && (
-                              <>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleRepositoryTeam(repo)}
-                                className="text-muted-foreground hover:text-foreground h-8 px-2"
-                                title="Manage who can see this repo"
-                              >
-                                <Users className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteRepository(repo)}
-                                disabled={deleteRepositoryMutation.isPending}
-                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                              </>
-                              )}
+                          {repoActions && (
+                            <div className="flex md:hidden items-center justify-end gap-1 mt-2 pt-2 border-t border-border">
+                              {repoActions}
                             </div>
                           )}
                         </div>
@@ -1222,34 +1235,9 @@ export default function Dashboard() {
                       const bTime = b.lastUsed ? new Date(b.lastUsed).getTime() : 0;
                       return bTime - aTime;
                     })
-                    .map((integration) => (
-                    <div key={integration.id} className="p-4 bg-muted rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3 min-w-0">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
-                            integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
-                          }`}>
-                            <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-muted-foreground'}`} />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-medium text-foreground truncate">{integration.repositoryName}</p>
-                            <p className="text-sm text-muted-foreground truncate">{integration.slackChannelName} channel</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2 shrink-0 ml-2">
-                          <div className={`w-2 h-2 rounded-full ${
-                            integration.status === 'active' ? 'bg-log-green' : 'bg-steel-gray'
-                          }`} />
-                          <Badge 
-                            variant={integration.status === 'active' ? "default" : "secondary"}
-                            className="text-xs"
-                          >
-                            {integration.status === 'active' ? 'Active' : 'Paused'}
-                          </Badge>
-                        </div>
-                      </div>
-                      {canManageIntegrations && (
-                        <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-border/50">
+                    .map((integration) => {
+                      const integrationActions = canManageIntegrations ? (
+                        <>
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1280,10 +1268,50 @@ export default function Dashboard() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
+                        </>
+                      ) : null;
+
+                      return (
+                        <div key={integration.id} className="p-4 bg-muted rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                                integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
+                              }`}>
+                                <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-muted-foreground'}`} />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground truncate">{integration.repositoryName}</p>
+                                <p className="text-sm text-muted-foreground truncate">{integration.slackChannelName} channel</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center shrink-0 ml-2">
+                              <div className="flex items-center space-x-2">
+                                <div className={`w-2 h-2 rounded-full ${
+                                  integration.status === 'active' ? 'bg-log-green' : 'bg-steel-gray'
+                                }`} />
+                                <Badge 
+                                  variant={integration.status === 'active' ? "default" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {integration.status === 'active' ? 'Active' : 'Paused'}
+                                </Badge>
+                              </div>
+                              {integrationActions && (
+                                <div className="hidden md:flex items-center gap-1 ml-1">
+                                  {integrationActions}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {integrationActions && (
+                            <div className="flex md:hidden items-center justify-end gap-1 mt-2 pt-2 border-t border-border/50">
+                              {integrationActions}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                      );
+                    })}
                 </div>
               ) : (
                 <div className="text-center py-8">
