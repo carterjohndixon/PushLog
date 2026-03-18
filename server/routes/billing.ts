@@ -41,6 +41,14 @@ router.post("/create-checkout-session", authenticateToken, async (req: Request, 
     const org = await databaseStorage.getOrganization(orgId);
     if (!org) return res.status(404).json({ error: "Organization not found" });
 
+    const currentPlan = (org as any).plan as PlanName | undefined;
+    const hasActiveSubscription = !!(org as any).stripeSubscriptionId;
+    if (hasActiveSubscription && currentPlan === plan) {
+      return res.status(400).json({
+        error: `You're already on the ${plan} plan. Use Manage billing to change or cancel your subscription.`,
+      });
+    }
+
     let customerId = (org as any).stripeCustomerId;
     if (!customerId) {
       const customer = await createStripeCustomer(user.email || "", user.username || "");
