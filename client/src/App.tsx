@@ -53,6 +53,7 @@ const Search = lazy(() => import("@/pages/search"));
 const Analytics = lazy(() => import("@/pages/analytics"));
 const Models = lazy(() => import("@/pages/models"));
 const Policy = lazy(() => import("@/pages/policy"));
+const Pricing = lazy(() => import("@/pages/pricing"));
 const Terms = lazy(() => import("@/pages/terms"));
 const SubProcessors = lazy(() => import("@/pages/sub-processors"));
 const Settings = lazy(() => import("@/pages/settings"));
@@ -67,6 +68,7 @@ const OnboardingAccountType = lazy(() => import("@/pages/onboarding-account-type
 const Join = lazy(() => import("@/pages/join"));
 const Organization = lazy(() => import("@/pages/organization"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
+const Billing = lazy(() => import("@/pages/billing"));
 
 // Loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -85,7 +87,7 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/organization"];
+const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/organization", "/billing"];
 
 function Router() {
   const [location] = useLocation();
@@ -161,6 +163,7 @@ function Router() {
       </Route>
       
       <Route path="/policy" component={Policy} />
+      <Route path="/pricing" component={Pricing} />
       <Route path="/terms" component={Terms} />
       <Route path="/sub-processors" component={SubProcessors} />
       <Route path="/support" component={Support} />
@@ -177,6 +180,11 @@ function Router() {
       <Route path="/change-password">
         <ProtectedRoute pageName="change-password">
           <ChangePassword />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/billing">
+        <ProtectedRoute pageName="billing">
+          <Billing />
         </ProtectedRoute>
       </Route>
       {isStagingHost && (

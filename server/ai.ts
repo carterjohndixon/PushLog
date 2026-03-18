@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { calculateTokenCost, estimateTokenCostForDisplay, estimateTokenCostFromUsage } from './aiCost';
 import broadcastNotification from './helper/broadcastNotification';
 import { storage } from './storage';
+import { type PushlogMode, getModeConfig } from './pushlogModes';
 
 const __filenameAi = fileURLToPath(import.meta.url);
 const __dirnameAi = path.dirname(__filenameAi);
@@ -59,6 +60,8 @@ export interface GenerateCodeSummaryOptions {
   openRouterApiKey?: string;
   /** When set, use user's OpenAI API key (user pays OpenAI). No PushLog credit deduction. */
   openaiApiKey?: string;
+  /** PushLog summary mode — controls system prompt, prompt modifier, and temperature. Defaults to clean_summary. */
+  pushlogMode?: PushlogMode;
   /** When set, OpenRouter errors will create an in-app notification for this user and broadcast it. */
   notificationContext?: {
     userId: string;
@@ -312,8 +315,9 @@ export async function generateCodeSummary(
       : openai;
 
   try {
-    const prompt = `
-You are a world-class code review assistant tasked with analyzing a git push and providing a concise, helpful summary of the highest level of detail possible. Analyze this git push and provide a concise, helpful summary.
+    const modeConfig = getModeConfig(options?.pushlogMode ?? "clean_summary");
+
+    const prompt = `Analyze this git push and provide a summary.
 
 Repository: ${pushData.repositoryName}
 Branch: ${pushData.branch}
@@ -335,6 +339,8 @@ Focus on:
 - Any important technical details
 - Keep it concise but informative
 
+${modeConfig.promptModifier}
+
 Respond with only valid JSON:
 `;
     const requestParams: any = {
@@ -342,7 +348,7 @@ Respond with only valid JSON:
       messages: [
         {
           role: "system",
-          content: "You are a helpful code review assistant that provides clear, concise summaries of code changes. Always respond with valid JSON."
+          content: modeConfig.systemPrompt,
         },
         {
           role: "user",
@@ -350,7 +356,7 @@ Respond with only valid JSON:
         }
       ],
       max_completion_tokens: effectiveMaxTokens,
-      temperature: 0.3, // All supported models support temperature
+      temperature: modeConfig.temperature,
     };
 
     let openAIResult: NormalizedOpenAIResult | null = null;
@@ -468,7 +474,7 @@ Respond with only valid JSON:
         instructions: typeof systemContent === 'string' ? systemContent : String(systemContent),
         input: typeof userContent === 'string' ? userContent : String(userContent),
         max_output_tokens: effectiveMaxTokens,
-        temperature: 0.3,
+        temperature: modeConfig.temperature,
       });
     }
 

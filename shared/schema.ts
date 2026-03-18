@@ -57,6 +57,15 @@ export const organizations = pgTable("organizations", {
   ownerId: uuid("owner_id").notNull(),
   /** When the account type (Solo vs Organization) was chosen. Null = show onboarding step. */
   accountTypeChosenAt: timestamp("account_type_chosen_at", { withTimezone: true, mode: "string" }),
+  // Subscription / billing
+  plan: text("plan").notNull().default("free"), // "free" | "pro" | "team"
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripeSubscriptionStatus: text("stripe_subscription_status"), // "active" | "canceled" | "past_due" | "trialing" | etc.
+  stripePriceId: text("stripe_price_id"),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true, mode: "string" }),
+  monthlySummaryCount: integer("monthly_summary_count").notNull().default(0),
+  monthlySummaryResetAt: timestamp("monthly_summary_reset_at", { withTimezone: true, mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (t) => [
   { name: "organizations_owner_id_idx", columns: [t.ownerId] },
@@ -172,6 +181,7 @@ export const integrations = pgTable("integrations", {
   isActive: boolean("is_active").default(true),
   // AI Settings
   aiModel: text("ai_model").default("gpt-5.2"),
+  pushlogMode: text("pushlog_mode").notNull().default("clean_summary"), // clean_summary | slack_friendly | detailed_engineering | executive_summary | incident_aware
   maxTokens: integer("max_tokens").default(350), // Maximum tokens for AI response
   openRouterApiKey: text("open_router_api_key"), // Encrypted; when set, summaries use OpenRouter with this key and aiModel as OpenRouter model id
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

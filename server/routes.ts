@@ -46,6 +46,8 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail, sendOrgInviteEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
+import { isUnderRepoLimit, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
+import { isValidPushlogMode } from './pushlogModes';
 import { estimateTokenCostFromUsage } from './aiCost';
 import { encrypt, decrypt } from './encryption';
 import speakeasy from "speakeasy";
@@ -3675,6 +3677,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "GitHub not connected. Please try refreshing your GitHub connection." });
       }
 
+      // Enforce repo limit based on org plan
+      const orgIdForLimit = (req.user as any).organizationId;
+      if (orgIdForLimit) {
+        const org = await databaseStorage.getOrganization(orgIdForLimit);
+        if (org) {
+          const plan = ((org as any).plan || "free") as PlanName;
+          const existingRepos = await databaseStorage.getRepositoriesByOrganizationId(orgIdForLimit);
+          const activeRepoCount = existingRepos.filter((r: any) => r.isActive !== false).length;
+          if (!isUnderRepoLimit(plan, activeRepoCount)) {
+            const limits = getPlanLimits(plan);
+            return res.status(403).json({
+              error: `Repository limit reached (${limits.repoLimit} for ${plan} plan). Upgrade your plan to add more repositories.`,
+              code: "REPO_LIMIT_REACHED",
+            });
+          }
+        }
+      }
+
       // Create webhook URL
       const domain = process.env.APP_URL || "https://pushlog.ai";
       const webhookUrl = `${domain}/api/webhooks/github`;
@@ -4398,6 +4418,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         || (orgId && (existingIntegration as any).organizationId === orgId && ((req.user as any).role === "owner" || (req.user as any).role === "admin"));
       if (!canManage) {
         return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Enforce pushlogMode access based on org plan
+      if (updates.pushlogMode && isValidPushlogMode(updates.pushlogMode) && orgId) {
+        const org = await databaseStorage.getOrganization(orgId);
+        const plan = ((org as any)?.plan || "free") as PlanName;
+        if (!isModeAllowed(plan, updates.pushlogMode)) {
+          return res.status(403).json({
+            error: `The "${updates.pushlogMode}" mode requires a higher plan. Upgrade to access this mode.`,
+            code: "MODE_NOT_ALLOWED",
+          });
+        }
       }
 
       if (updates.isActive === true) {
@@ -6266,6 +6298,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let role: string | null = null;
       let accountType: "solo" | "team" | undefined;
       let needsAccountTypeStep = false;
+      let orgPlan: string = "free";
+      let subscriptionStatus: string | undefined;
+      let currentPeriodEnd: string | undefined;
+      let monthlySummaryCount = 0;
+      let monthlySummaryCap = 200;
       if (organizationId) {
         const t1 = Date.now();
         const membership = await databaseStorage.getMembershipByOrganizationAndUser(organizationId, user.id);
@@ -6277,6 +6314,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (org) {
           accountType = ((org as any).type === "team" ? "team" : "solo") as "solo" | "team";
           needsAccountTypeStep = (org as any).accountTypeChosenAt == null;
+          orgPlan = (org as any).plan || "free";
+          subscriptionStatus = (org as any).stripeSubscriptionStatus ?? undefined;
+          currentPeriodEnd = (org as any).currentPeriodEnd ?? undefined;
+          monthlySummaryCount = (org as any).monthlySummaryCount ?? 0;
+          const caps: Record<string, number> = { free: 200, pro: 2000, team: 10000 };
+          monthlySummaryCap = caps[orgPlan] ?? 200;
         }
       }
       if (!role) role = (req.user as any)?.role ?? null;
@@ -6303,6 +6346,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: role ?? undefined,
           accountType: accountType ?? undefined,
           needsAccountTypeStep: needsAccountTypeStep ?? false,
+          plan: orgPlan as "free" | "pro" | "team",
+          subscriptionStatus,
+          currentPeriodEnd,
+          monthlySummaryCount,
+          monthlySummaryCap,
           ...(APP_ENV === "staging" && { isStagingAdmin: isStagingAdminUser(user) }),
         }
       };

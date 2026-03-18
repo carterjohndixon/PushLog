@@ -11,7 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Settings, Github, Key, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { Settings, Github, Key, Sparkles, Lock, ChevronDown, ChevronRight, Send } from "lucide-react";
 import { getAiModelDisplayName } from "@/lib/utils";
 import { SiSlack as SlackIcon } from "react-icons/si";
 import { UseMutationResult, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -21,7 +23,18 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import type { ActiveIntegration } from "@/lib/types";
-import { Send } from "lucide-react";
+
+type PushlogMode = "clean_summary" | "slack_friendly" | "detailed_engineering" | "executive_summary" | "incident_aware";
+
+const PUSHLOG_MODE_OPTIONS: { mode: PushlogMode; label: string; requiredPlan: "free" | "pro" | "team" }[] = [
+  { mode: "clean_summary", label: "Clean Summary", requiredPlan: "free" },
+  { mode: "slack_friendly", label: "Slack-Friendly", requiredPlan: "pro" },
+  { mode: "detailed_engineering", label: "Detailed Engineering", requiredPlan: "pro" },
+  { mode: "executive_summary", label: "Executive Summary", requiredPlan: "pro" },
+  { mode: "incident_aware", label: "Incident-Aware", requiredPlan: "team" },
+];
+
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, team: 2 };
 
 interface OpenRouterModel {
   id: string;
@@ -57,6 +70,7 @@ export function IntegrationSettingsModal({
   const [notificationLevel, setNotificationLevel] = useState(integration?.notificationLevel || 'all');
   const [includeCommitSummaries, setIncludeCommitSummaries] = useState(integration?.includeCommitSummaries ?? true);
   const [isActive, setIsActive] = useState(integration?.isActive ?? true);
+  const [pushlogMode, setPushlogMode] = useState<PushlogMode>(((integration as any)?.pushlogMode || "clean_summary") as PushlogMode);
   const [useOpenRouter, setUseOpenRouter] = useState(!!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey));
   const [aiModel, setAiModel] = useState(integration?.aiModel || 'gpt-5.2');
   const [maxTokens, setMaxTokens] = useState(integration?.maxTokens || 350);
@@ -64,6 +78,7 @@ export function IntegrationSettingsModal({
   const [selectedSlackChannelId, setSelectedSlackChannelId] = useState(integration?.slackChannelId ?? '');
   const [relinkWorkspaceId, setRelinkWorkspaceId] = useState<string>("");
   const [relinkChannelId, setRelinkChannelId] = useState<string>("");
+  const [advancedAiOpen, setAdvancedAiOpen] = useState(false);
   const lastOpenRouterModelRef = useRef<string | null>(null);
   const { toast } = useToast();
 
@@ -213,6 +228,7 @@ export function IntegrationSettingsModal({
       isActive,
       notificationLevel,
       includeCommitSummaries,
+      pushlogMode,
       aiModel,
       maxTokens,
     };
@@ -254,6 +270,7 @@ export function IntegrationSettingsModal({
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
+      setPushlogMode(((integration as any)?.pushlogMode || "clean_summary") as PushlogMode);
       setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
       setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
@@ -266,10 +283,12 @@ export function IntegrationSettingsModal({
 
   const baseUseOpenRouter = !!(integration?.aiModel?.includes("/") || integration?.hasOpenRouterKey);
   const baseAiModel = integration?.aiModel || "gpt-5.2";
+  const basePushlogMode = ((integration as any)?.pushlogMode || "clean_summary") as PushlogMode;
   const hasChanges = !!integration && (
     isActive !== (integration.isActive ?? true) ||
     notificationLevel !== (integration.notificationLevel || "all") ||
     includeCommitSummaries !== (integration.includeCommitSummaries ?? true) ||
+    pushlogMode !== basePushlogMode ||
     useOpenRouter !== baseUseOpenRouter ||
     aiModel !== baseAiModel ||
     maxTokens !== (integration.maxTokens ?? 350) ||
@@ -282,6 +301,7 @@ export function IntegrationSettingsModal({
       setNotificationLevel(integration.notificationLevel || 'all');
       setIncludeCommitSummaries(integration.includeCommitSummaries ?? true);
       setIsActive(integration.isActive ?? true);
+      setPushlogMode(((integration as any)?.pushlogMode || "clean_summary") as PushlogMode);
       setUseOpenRouter(!!(integration.aiModel?.includes("/") || integration.hasOpenRouterKey));
       setAiModel(integration.aiModel || 'gpt-5.2');
       setMaxTokens(integration.maxTokens || 350);
@@ -487,168 +507,204 @@ export function IntegrationSettingsModal({
               />
             </div>
 
-            {/* AI provider: PushLog vs OpenRouter */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-6">
-                <div className="space-y-0.5 min-w-0 flex-1">
-                  <Label>AI for commit summaries</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Use PushLog&apos;s models (uses your credits) or your own OpenRouter API key (you pay OpenRouter).
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0 ml-2">
-                  <Switch
-                    checked={useOpenRouter}
-                    onCheckedChange={(checked) => {
-                      if (!checked) {
-                        if (aiModel.includes("/")) {
-                          lastOpenRouterModelRef.current = aiModel;
-                        }
-                        const fallback = preferredAiModel && !String(preferredAiModel).includes("/") ? preferredAiModel : "gpt-5.2";
-                        setAiModel(fallback);
-                      } else {
-                        if (lastOpenRouterModelRef.current) {
-                          setAiModel(lastOpenRouterModelRef.current);
-                          lastOpenRouterModelRef.current = null;
-                        }
-                      }
-                      setUseOpenRouter(checked);
-                    }}
-                  />
-                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Key className="w-3 h-3" /> OpenRouter
-                  </span>
-                </div>
-              </div>
-
-              {!useOpenRouter ? (
-                <div className="space-y-2">
-                  <Label htmlFor="ai-model">PushLog AI Model</Label>
-                  <Select
-                    value={openaiOptions.some((m) => m.id === aiModel) ? aiModel : (openaiOptions[0]?.id ?? "")}
-                    onValueChange={setAiModel}
-                  >
-                    <SelectTrigger className="w-full bg-background text-foreground border-border">
-                      <SelectValue placeholder={openaiOptions.length ? "Select AI model" : "Loading models…"}>
-                        {aiModel ? getAiModelDisplayName(aiModel) : null}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border text-foreground" position="popper">
-                      {openaiOptions.map((model) => {
-                        const displayName = model.name || getAiModelDisplayName(model.id) || model.id;
-                        return (
-                          <SelectItem
-                            key={model.id}
-                            value={model.id}
-                            className="py-2 cursor-pointer min-w-0 group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground"
-                            textValue={displayName}
-                          >
-                            <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
-                              <span className="font-medium text-sm truncate min-w-0 flex-1">{displayName}</span>
-                              <span className="text-muted-foreground group-data-[highlighted]:text-primary-foreground text-xs truncate">({model.id})</span>
-                            </span>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Same models as on the <Link href="/models" className="text-log-green hover:underline">Models</Link> page. Choose any for commit summaries.
-                  </p>
-                </div>
-              ) : (
-                /* OpenRouter: key is managed on Models page; here we only show model choice if user has key */
-                <div className="space-y-4 rounded-lg border border-border p-4 bg-muted/30">
-                  {!userHasOpenRouterKey ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Add your OpenRouter API key on the <strong className="text-foreground">Models</strong> page to use OpenRouter models here.
-                      </p>
-                      <Link href="/models">
-                        <Button type="button" variant="outline" size="sm" className="border-log-green text-log-green hover:bg-log-green/10">
-                          <Key className="w-4 h-4 mr-2" />
-                          Go to Models
-                        </Button>
-                      </Link>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <Label htmlFor="openrouter-model" className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-log-green" /> Model
-                      </Label>
-                      <Select
-                        value={openRouterModels.some((m) => m.id === aiModel) ? aiModel : ""}
-                        onValueChange={(v) => setAiModel(v)}
-                      >
-                        <SelectTrigger
-                          id="openrouter-model"
-                          className="w-full bg-background text-foreground border-border"
-                        >
-                          <SelectValue
-                            placeholder={openRouterModels.length ? "Select model" : "Loading models…"}
-                          />
-                        </SelectTrigger>
-                        <SelectContent
-                          className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border"
-                          position="popper"
-                        >
-                          {openRouterModels.map((model) => (
-                            <SelectItem
-                              key={model.id}
-                              value={model.id}
-                              className="py-2 cursor-pointer min-w-0 group"
-                              textValue={`${model.name} (${model.id})`}
-                            >
-                              <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
-                                <span className="font-medium text-sm truncate min-w-0 flex-1">{model.name}</span>
-                                <span className="text-muted-foreground group-data-[highlighted]:text-accent-foreground text-xs truncate min-w-0">({model.id})</span>
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Browse and compare models on the <Link href="/models" className="text-log-green hover:underline">Models</Link> page.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Max Tokens */}
+            {/* PushLog Summary Mode */}
             <div className="space-y-2">
-              <Label htmlFor="max-tokens">Max Response Length</Label>
-              <Input
-                id="max-tokens"
-                type="number"
-                min="50"
-                max="2000"
-                value={maxTokensInput}
-                onChange={(e) => {
-                  setMaxTokensInput(e.target.value);
-                }}
-                onBlur={(e) => {
-                  const value = e.target.value;
-                  if (value === '' || parseInt(value) < 50) {
-                    setMaxTokens(350);
-                    setMaxTokensInput('350');
-                  } else if (parseInt(value) > 2000) {
-                    setMaxTokens(2000);
-                    setMaxTokensInput('2000');
-                  } else {
-                    const numValue = parseInt(value);
-                    if (!isNaN(numValue)) {
-                      setMaxTokens(numValue);
-                    }
-                  }
-                }}
-                className="w-full bg-background text-foreground border-border"
-              />
+              <Label htmlFor="pushlog-mode">Summary Mode</Label>
+              <Select value={pushlogMode} onValueChange={(v) => setPushlogMode(v as PushlogMode)}>
+                <SelectTrigger className="bg-background text-foreground border-border">
+                  <SelectValue placeholder="Select summary mode" />
+                </SelectTrigger>
+                <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
+                  {PUSHLOG_MODE_OPTIONS.map((opt) => {
+                    const userPlan = profileResponse?.user?.plan ?? "free";
+                    const accessible = (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[opt.requiredPlan] ?? 0);
+                    return (
+                      <SelectItem key={opt.mode} value={opt.mode} disabled={!accessible}>
+                        <span className="flex items-center gap-2">
+                          {opt.label}
+                          {!accessible && <Lock className="w-3 h-3 text-muted-foreground" />}
+                          {opt.requiredPlan !== "free" && (
+                            <Badge variant="outline" className="text-[10px] capitalize px-1 py-0">{opt.requiredPlan}</Badge>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                Maximum number of tokens for AI responses (50-2000). Higher values allow for more detailed summaries but cost more.
+                Controls how PushLog summarizes commits for this integration.
               </p>
             </div>
+
+            {/* Advanced AI Settings (collapsible) */}
+            <Collapsible open={advancedAiOpen} onOpenChange={setAdvancedAiOpen}>
+              <button
+                type="button"
+                onClick={() => setAdvancedAiOpen(!advancedAiOpen)}
+                className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Advanced AI Settings
+                {advancedAiOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+              </button>
+              <CollapsibleContent>
+                <div className="space-y-4 mt-3">
+                  <div className="flex items-center justify-between gap-6">
+                    <div className="space-y-0.5 min-w-0 flex-1">
+                      <Label>AI Provider</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Use PushLog&apos;s models (uses your credits) or your own OpenRouter API key.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <Switch
+                        checked={useOpenRouter}
+                        onCheckedChange={(checked) => {
+                          if (!checked) {
+                            if (aiModel.includes("/")) {
+                              lastOpenRouterModelRef.current = aiModel;
+                            }
+                            const fallback = preferredAiModel && !String(preferredAiModel).includes("/") ? preferredAiModel : "gpt-5.2";
+                            setAiModel(fallback);
+                          } else {
+                            if (lastOpenRouterModelRef.current) {
+                              setAiModel(lastOpenRouterModelRef.current);
+                              lastOpenRouterModelRef.current = null;
+                            }
+                          }
+                          setUseOpenRouter(checked);
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Key className="w-3 h-3" /> OpenRouter
+                      </span>
+                    </div>
+                  </div>
+
+                  {!useOpenRouter ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="ai-model">PushLog AI Model</Label>
+                      <Select
+                        value={openaiOptions.some((m) => m.id === aiModel) ? aiModel : (openaiOptions[0]?.id ?? "")}
+                        onValueChange={setAiModel}
+                      >
+                        <SelectTrigger className="w-full bg-background text-foreground border-border">
+                          <SelectValue placeholder={openaiOptions.length ? "Select AI model" : "Loading models…"}>
+                            {aiModel ? getAiModelDisplayName(aiModel) : null}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border text-foreground" position="popper">
+                          {openaiOptions.map((model) => {
+                            const displayName = model.name || getAiModelDisplayName(model.id) || model.id;
+                            return (
+                              <SelectItem
+                                key={model.id}
+                                value={model.id}
+                                className="py-2 cursor-pointer min-w-0 group data-[highlighted]:bg-primary data-[highlighted]:text-primary-foreground"
+                                textValue={displayName}
+                              >
+                                <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
+                                  <span className="font-medium text-sm truncate min-w-0 flex-1">{displayName}</span>
+                                  <span className="text-muted-foreground group-data-[highlighted]:text-primary-foreground text-xs truncate">({model.id})</span>
+                                </span>
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 rounded-lg border border-border p-4 bg-muted/30">
+                      {!userHasOpenRouterKey ? (
+                        <div className="space-y-2">
+                          <p className="text-sm text-muted-foreground">
+                            Add your OpenRouter API key on the <strong className="text-foreground">Models</strong> page to use OpenRouter models here.
+                          </p>
+                          <Link href="/models">
+                            <Button type="button" variant="outline" size="sm" className="border-log-green text-log-green hover:bg-log-green/10">
+                              <Key className="w-4 h-4 mr-2" />
+                              Go to Models
+                            </Button>
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="openrouter-model" className="flex items-center gap-2">
+                            <Sparkles className="w-4 h-4 text-log-green" /> Model
+                          </Label>
+                          <Select
+                            value={openRouterModels.some((m) => m.id === aiModel) ? aiModel : ""}
+                            onValueChange={(v) => setAiModel(v)}
+                          >
+                            <SelectTrigger
+                              id="openrouter-model"
+                              className="w-full bg-background text-foreground border-border"
+                            >
+                              <SelectValue
+                                placeholder={openRouterModels.length ? "Select model" : "Loading models…"}
+                              />
+                            </SelectTrigger>
+                            <SelectContent
+                              className="max-h-[280px] max-w-[var(--radix-select-trigger-width)] bg-popover border-border"
+                              position="popper"
+                            >
+                              {openRouterModels.map((model) => (
+                                <SelectItem
+                                  key={model.id}
+                                  value={model.id}
+                                  className="py-2 cursor-pointer min-w-0 group"
+                                  textValue={`${model.name} (${model.id})`}
+                                >
+                                  <span className="flex items-center min-w-0 gap-2 overflow-hidden w-full">
+                                    <span className="font-medium text-sm truncate min-w-0 flex-1">{model.name}</span>
+                                    <span className="text-muted-foreground group-data-[highlighted]:text-accent-foreground text-xs truncate min-w-0">({model.id})</span>
+                                  </span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Max Tokens */}
+                  <div className="space-y-2">
+                    <Label htmlFor="max-tokens">Max Response Length</Label>
+                    <Input
+                      id="max-tokens"
+                      type="number"
+                      min="50"
+                      max="2000"
+                      value={maxTokensInput}
+                      onChange={(e) => {
+                        setMaxTokensInput(e.target.value);
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || parseInt(value) < 50) {
+                          setMaxTokens(350);
+                          setMaxTokensInput('350');
+                        } else if (parseInt(value) > 2000) {
+                          setMaxTokens(2000);
+                          setMaxTokensInput('2000');
+                        } else {
+                          const numValue = parseInt(value);
+                          if (!isNaN(numValue)) {
+                            setMaxTokens(numValue);
+                          }
+                        }
+                      }}
+                      className="w-full bg-background text-foreground border-border"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Maximum number of tokens for AI responses (50-2000).
+                    </p>
+                  </div>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Integration Status Indicator */}
             <div className="p-3 bg-muted rounded-lg border border-border">

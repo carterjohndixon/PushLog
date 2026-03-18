@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
-import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor, Menu } from "lucide-react";
+import { User, LogIn, LogOut, Settings, Sun, Moon, Monitor, Menu, CreditCard } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   DropdownMenu,
@@ -55,7 +55,7 @@ export function Header() {
     { href: "/repositories", label: "Repositories" },
     { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
-    { href: "/models", label: "Models" },
+    { href: "/models", label: "AI Settings" },
     ...(user?.accountType !== "solo" ? [{ href: "/organization", label: "Organization" }] : []),
     ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
@@ -177,6 +177,12 @@ export function Header() {
                       <Link href="/settings" className="cursor-pointer flex items-center">
                         <Settings className="mr-2 h-4 w-4" />
                         <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/billing" className="cursor-pointer flex items-center">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Billing</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

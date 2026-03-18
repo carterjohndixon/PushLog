@@ -10,6 +10,8 @@ import { databaseStorage } from "./database";
 import { getCommit } from "./github";
 import { decrypt } from "./encryption";
 import { generateCodeSummary, generateSlackMessage } from "./ai";
+import { type PushlogMode, isValidPushlogMode } from "./pushlogModes";
+import { isUnderSummaryCap, isModeAllowed, type PlanName } from "./billing";
 import { sendPushNotification, sendSlackMessage } from "./slack";
 import broadcastNotification from "./helper/broadcastNotification";
 import { scorePush } from "./riskEngine";
@@ -303,11 +305,48 @@ export async function runAiSummary(
   let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
   if (!opts.overBudgetSkipAi) {
     try {
-      let aiOpts: { openRouterApiKey?: string; openaiApiKey?: string; notificationContext?: { userId: string; repositoryName: string; integrationId: string; slackChannelName: string } } | undefined;
+      const rawMode = (integration as any).pushlogMode ?? (integration as any).pushlog_mode ?? "clean_summary";
+      let pushlogMode: PushlogMode = isValidPushlogMode(rawMode) ? rawMode : "clean_summary";
+
+      // Enforce plan-based summary limits and mode access
+      const orgId = (integration as any).organizationId;
+      if (orgId) {
+        try {
+          const org = await databaseStorage.getOrganization(orgId);
+          if (org) {
+            const plan = ((org as any).plan || "free") as PlanName;
+            const count = (org as any).monthlySummaryCount ?? 0;
+
+            if (!isUnderSummaryCap(plan, count)) {
+              console.log(`[Webhook] Summary limit reached for org ${orgId} (plan: ${plan}, count: ${count}). Skipping AI.`);
+              return { summary: null, aiGenerated: false, aiSummary: null, aiImpact: null, aiCategory: null, aiDetails: null };
+            }
+
+            if (!isModeAllowed(plan, pushlogMode)) {
+              console.log(`[Webhook] Mode "${pushlogMode}" not allowed for plan "${plan}". Falling back to clean_summary.`);
+              pushlogMode = "clean_summary";
+            }
+
+            // Increment monthly summary count
+            const resetAt = (org as any).monthlySummaryResetAt;
+            const needsReset = resetAt && new Date(resetAt) < new Date();
+            await databaseStorage.updateOrganization(orgId, {
+              monthlySummaryCount: needsReset ? 1 : count + 1,
+              ...(needsReset ? { monthlySummaryResetAt: new Date().toISOString() } : {}),
+            });
+          }
+        } catch (err) {
+          console.warn("[Webhook] Failed to check plan limits, proceeding with AI:", err);
+        }
+      }
+
+      let aiOpts: { openRouterApiKey?: string; openaiApiKey?: string; pushlogMode?: PushlogMode; notificationContext?: { userId: string; repositoryName: string; integrationId: string; slackChannelName: string } } | undefined;
       if (opts.useOpenRouter && opts.openRouterKeyRaw) {
-        aiOpts = { openRouterApiKey: opts.openRouterKeyRaw.trim(), notificationContext: { userId: integration.userId, repositoryName: repoDisplayName, integrationId: integration.id, slackChannelName: integration.slackChannelName } };
+        aiOpts = { openRouterApiKey: opts.openRouterKeyRaw.trim(), pushlogMode, notificationContext: { userId: integration.userId, repositoryName: repoDisplayName, integrationId: integration.id, slackChannelName: integration.slackChannelName } };
       } else if (opts.useOpenAi && opts.openAiKeyRaw) {
-        aiOpts = { openaiApiKey: opts.openAiKeyRaw.trim() };
+        aiOpts = { openaiApiKey: opts.openAiKeyRaw.trim(), pushlogMode };
+      } else {
+        aiOpts = { pushlogMode };
       }
       summary = await generateCodeSummary(
         pushData,

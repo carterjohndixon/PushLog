@@ -13,6 +13,7 @@ import morgan from "morgan";
 import * as Sentry from "@sentry/node";
 import { registerRoutes, slackCommandsHandler, githubWebhookHandler, sentryWebhookHandler } from "./routes";
 import { verifyWebhookSignature } from "./github";
+import billingRouter, { handleStripeSubscriptionWebhook } from "./routes/billing";
 import { ensureIncidentEngineStarted, stopIncidentEngine } from "./incidentEngine";
 import { sendIncidentAlertEmail } from "./email";
 import broadcastNotification from "./helper/broadcastNotification";
@@ -410,6 +411,15 @@ app.post(
   }
 );
 
+// Stripe subscription webhook: must receive raw body for signature verification (before body parsers)
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json", limit: "1mb" }),
+  (req: express.Request, res: express.Response) => {
+    handleStripeSubscriptionWebhook(req, res);
+  }
+);
+
 // Body parsing with security limits
 app.use(express.json({ 
   limit: '1mb', // Reduced from 10mb for security
@@ -499,6 +509,9 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// Billing API routes (checkout session, portal session)
+app.use("/api/billing", billingRouter);
 
 (async () => {
   const server = await registerRoutes(app);

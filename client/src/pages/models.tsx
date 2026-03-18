@@ -6,6 +6,8 @@ import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/footer";
 import { getAiModelDisplayName } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -13,7 +15,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Lock, ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { Link } from "wouter";
 import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
 
@@ -45,6 +48,29 @@ function setStoredModelsTab(tab: ModelsTab): void {
   }
 }
 
+type PushlogMode = "clean_summary" | "slack_friendly" | "detailed_engineering" | "executive_summary" | "incident_aware";
+
+interface ModeCard {
+  mode: PushlogMode;
+  label: string;
+  description: string;
+  requiredPlan: "free" | "pro" | "team";
+}
+
+const MODE_CARDS: ModeCard[] = [
+  { mode: "clean_summary", label: "Clean Summary", description: "Balanced developer-friendly summaries optimized for readability and signal.", requiredPlan: "free" },
+  { mode: "slack_friendly", label: "Slack-Friendly", description: "Short, scannable summaries designed for quick reading in Slack.", requiredPlan: "pro" },
+  { mode: "detailed_engineering", label: "Detailed Engineering", description: "Technical deep-dives with implementation details for engineers.", requiredPlan: "pro" },
+  { mode: "executive_summary", label: "Executive Summary", description: "Non-technical summaries focused on business value and user outcomes.", requiredPlan: "pro" },
+  { mode: "incident_aware", label: "Incident-Aware", description: "Risk-focused analysis highlighting potential production issues and breaking changes.", requiredPlan: "team" },
+];
+
+const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, team: 2 };
+
+function isModeAccessible(userPlan: string, requiredPlan: string): boolean {
+  return (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
+}
+
 interface IntegrationOption {
   id: string | number;
   repositoryName: string;
@@ -57,6 +83,7 @@ interface ProfileUser extends ProfileUserForModels {
   username?: string;
   hasOpenRouterKey?: boolean;
   hasOpenAiKey?: boolean;
+  plan?: "free" | "pro" | "team";
 }
 
 export default function Models() {
@@ -64,6 +91,8 @@ export default function Models() {
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const [replaceAllConfirmOpen, setReplaceAllConfirmOpen] = useState(false);
   const [replaceAllModelId, setReplaceAllModelId] = useState<string>("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [selectedMode, setSelectedMode] = useState<PushlogMode>("clean_summary");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -163,92 +192,164 @@ export default function Models() {
     },
   });
 
+  const userPlan = profileUser?.plan ?? "free";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
+        {/* PushLog Mode Selection */}
+        <div className="mb-10">
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Sparkles className="w-7 h-7 text-log-green" />
-            AI Models
+            Summary Settings
           </h1>
           <p className="text-muted-foreground mt-1">
-            Choose a provider, add your API key, and configure models for commit summaries.
+            Choose how PushLog summarizes your code changes. Each mode uses a different AI approach.
           </p>
-          <div
-            className="flex gap-2 mt-4"
-            role="tablist"
-            aria-label="AI provider"
-          >
-            <button
-              type="button"
-              id="models-tab-openrouter"
-              role="tab"
-              aria-selected={providerTab === "openrouter"}
-              onClick={() => switchProviderTab("openrouter")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                providerTab === "openrouter"
-                  ? "bg-log-green/15 border-log-green text-log-green"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              }`}
-            >
-              OpenRouter <span className="text-xs opacity-80">(recommended)</span>
-            </button>
-            <button
-              type="button"
-              id="models-tab-openai"
-              role="tab"
-              aria-selected={providerTab === "openai"}
-              onClick={() => switchProviderTab("openai")}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                providerTab === "openai"
-                  ? "bg-log-green/15 border-log-green text-log-green"
-                  : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              }`}
-            >
-              OpenAI
-            </button>
+
+          <div className="grid gap-4 mt-6 sm:grid-cols-2 lg:grid-cols-3">
+            {MODE_CARDS.map((card) => {
+              const accessible = isModeAccessible(userPlan, card.requiredPlan);
+              const isSelected = selectedMode === card.mode;
+              return (
+                <button
+                  key={card.mode}
+                  type="button"
+                  disabled={!accessible}
+                  onClick={() => accessible && setSelectedMode(card.mode)}
+                  className={`relative text-left rounded-lg border p-4 transition-colors ${
+                    isSelected
+                      ? "border-log-green bg-log-green/5"
+                      : accessible
+                        ? "border-border bg-card hover:border-muted-foreground/40"
+                        : "border-border bg-muted/30 opacity-70 cursor-not-allowed"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-foreground">{card.label}</span>
+                        {card.requiredPlan !== "free" && (
+                          <Badge variant="outline" className="text-xs capitalize">
+                            {card.requiredPlan}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{card.description}</p>
+                    </div>
+                    {!accessible && (
+                      <Lock className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                    )}
+                  </div>
+                  {!accessible && (
+                    <div className="mt-3">
+                      <Link href="/pricing" className="text-xs text-log-green hover:underline">
+                        Upgrade to {card.requiredPlan}
+                      </Link>
+                    </div>
+                  )}
+                  {isSelected && accessible && (
+                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-log-green" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {providerTab === "openrouter" && (
-          <div role="tabpanel" aria-labelledby="models-tab-openrouter">
-            <OpenRouterModels
-            userHasKey={userHasKey}
-            profileLoading={profileLoading}
-            profileUser={profileUser}
-            savedPreferredModel={savedPreferredModel}
-            recommendedOpenrouter={recommendedOpenrouter}
-            integrations={integrations}
-            applyToIntegrationId={applyToIntegrationId}
-            setApplyToIntegrationId={setApplyToIntegrationId}
-            applyToIntegrationMutation={applyToIntegrationMutation}
-            setDefaultModelMutation={setDefaultModelMutation}
-            setReplaceAllConfirmOpen={setReplaceAllConfirmOpen}
-            setReplaceAllModelId={setReplaceAllModelId}
-            replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
-          />
-          </div>
-        )}
+        {/* Advanced AI Engine Settings (collapsible) */}
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(!advancedOpen)}
+            className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors mb-4"
+          >
+            <Settings className="w-4 h-4" />
+            Advanced AI Engine Settings
+            {advancedOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          <CollapsibleContent>
+            <div className="space-y-6">
+              <p className="text-sm text-muted-foreground">
+                Choose an AI provider and model. Your API key and model selection apply to all modes.
+              </p>
+              <div
+                className="flex gap-2"
+                role="tablist"
+                aria-label="AI provider"
+              >
+                <button
+                  type="button"
+                  id="models-tab-openrouter"
+                  role="tab"
+                  aria-selected={providerTab === "openrouter"}
+                  onClick={() => switchProviderTab("openrouter")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                    providerTab === "openrouter"
+                      ? "bg-log-green/15 border-log-green text-log-green"
+                      : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }`}
+                >
+                  OpenRouter <span className="text-xs opacity-80">(recommended)</span>
+                </button>
+                <button
+                  type="button"
+                  id="models-tab-openai"
+                  role="tab"
+                  aria-selected={providerTab === "openai"}
+                  onClick={() => switchProviderTab("openai")}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
+                    providerTab === "openai"
+                      ? "bg-log-green/15 border-log-green text-log-green"
+                      : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }`}
+                >
+                  OpenAI
+                </button>
+              </div>
 
-        {providerTab === "openai" && (
-          <div role="tabpanel" aria-labelledby="models-tab-openai">
-            <OpenAIModels
-            userHasOpenAiKey={userHasOpenAiKey}
-            profileLoading={profileLoading}
-            profileUser={profileUser}
-            savedPreferredModel={savedPreferredModel}
-            recommendedOpenai={recommendedOpenai}
-            integrations={integrations}
-            applyToIntegrationId={applyToIntegrationId}
-            setApplyToIntegrationId={setApplyToIntegrationId}
-            applyToIntegrationMutation={applyToIntegrationMutation}
-            setDefaultModelMutation={setDefaultModelMutation}
-            setReplaceAllConfirmOpen={setReplaceAllConfirmOpen}
-            setReplaceAllModelId={setReplaceAllModelId}
-            replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
-          />
-          </div>
-        )}
+              {providerTab === "openrouter" && (
+                <div role="tabpanel" aria-labelledby="models-tab-openrouter">
+                  <OpenRouterModels
+                    userHasKey={userHasKey}
+                    profileLoading={profileLoading}
+                    profileUser={profileUser}
+                    savedPreferredModel={savedPreferredModel}
+                    recommendedOpenrouter={recommendedOpenrouter}
+                    integrations={integrations}
+                    applyToIntegrationId={applyToIntegrationId}
+                    setApplyToIntegrationId={setApplyToIntegrationId}
+                    applyToIntegrationMutation={applyToIntegrationMutation}
+                    setDefaultModelMutation={setDefaultModelMutation}
+                    setReplaceAllConfirmOpen={setReplaceAllConfirmOpen}
+                    setReplaceAllModelId={setReplaceAllModelId}
+                    replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
+                  />
+                </div>
+              )}
+
+              {providerTab === "openai" && (
+                <div role="tabpanel" aria-labelledby="models-tab-openai">
+                  <OpenAIModels
+                    userHasOpenAiKey={userHasOpenAiKey}
+                    profileLoading={profileLoading}
+                    profileUser={profileUser}
+                    savedPreferredModel={savedPreferredModel}
+                    recommendedOpenai={recommendedOpenai}
+                    integrations={integrations}
+                    applyToIntegrationId={applyToIntegrationId}
+                    setApplyToIntegrationId={setApplyToIntegrationId}
+                    applyToIntegrationMutation={applyToIntegrationMutation}
+                    setDefaultModelMutation={setDefaultModelMutation}
+                    setReplaceAllConfirmOpen={setReplaceAllConfirmOpen}
+                    setReplaceAllModelId={setReplaceAllModelId}
+                    replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
+                  />
+                </div>
+              )}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
 
         <Dialog
           open={replaceAllConfirmOpen}

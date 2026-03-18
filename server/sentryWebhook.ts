@@ -6,6 +6,7 @@
 
 import type { Request, Response } from "express";
 import { storage } from "./storage";
+import { databaseStorage } from "./database";
 import broadcastNotification from "./helper/broadcastNotification";
 import { sendIncidentAlertEmail } from "./email";
 import { resolveToSource } from "./helper/sourceMapResolve";
@@ -14,6 +15,7 @@ import {
   ingestIncidentEvent,
   type IncidentEventInput,
 } from "./incidentEngine";
+import { isSentryAllowed, type PlanName } from "./billing";
 
 const APP_ENV = process.env.APP_ENV || "production";
 
@@ -229,6 +231,24 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
   const body = req.body as Record<string, unknown>;
   
   const orgId = options?.orgId;
+
+  // Enforce Sentry access based on org plan
+  if (orgId) {
+    try {
+      const org = await databaseStorage.getOrganization(orgId);
+      if (org) {
+        const plan = ((org as any).plan || "free") as PlanName;
+        if (!isSentryAllowed(plan)) {
+          console.log(`[Sentry] Sentry integration not allowed for org ${orgId} (plan: ${plan}). Ignoring webhook.`);
+          res.status(200).json({ received: true, skipped: "plan_not_allowed" });
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("[Sentry] Failed to check plan for Sentry access, proceeding:", err);
+    }
+  }
+
   try {
     const action = String(body?.action ?? "").trim();
     const data = body?.data as Record<string, unknown> | undefined;

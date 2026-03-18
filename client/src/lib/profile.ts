@@ -38,6 +38,16 @@ export interface ProfileUser {
   needsAccountTypeStep?: boolean;
   /** True when on staging and user is in STAGING_ADMIN_EMAILS/USERNAMES (can use dev testing). */
   isStagingAdmin?: boolean;
+  /** Organization billing plan */
+  plan?: "free" | "pro" | "team";
+  /** Stripe subscription status (active, canceled, past_due, etc.) */
+  subscriptionStatus?: string;
+  /** ISO timestamp when current billing period ends */
+  currentPeriodEnd?: string;
+  /** Number of AI summaries generated this billing period */
+  monthlySummaryCount?: number;
+  /** Maximum summaries allowed for current plan */
+  monthlySummaryCap?: number;
 }
 
 export interface ProfileResponse {

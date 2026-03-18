@@ -446,6 +446,7 @@ export class MemStorage implements IStorage {
       notificationLevel: integration.notificationLevel || null,
       includeCommitSummaries: integration.includeCommitSummaries ?? null,
       aiModel: integration.aiModel ?? null,
+      pushlogMode: (integration as any).pushlogMode ?? "clean_summary",
       maxTokens: integration.maxTokens ?? null,
       createdAt: new Date().toISOString(),
       openRouterApiKey: integration.openRouterApiKey ?? null

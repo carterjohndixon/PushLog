@@ -579,15 +579,41 @@ export class DatabaseStorage implements IStorage {
 
   async updateOrganization(
     organizationId: string,
-    updates: { name?: string; domain?: string | null; type?: "solo" | "team"; accountTypeChosenAt?: string | null }
+    updates: {
+      name?: string;
+      domain?: string | null;
+      type?: "solo" | "team";
+      accountTypeChosenAt?: string | null;
+      plan?: string;
+      stripeCustomerId?: string | null;
+      stripeSubscriptionId?: string | null;
+      stripeSubscriptionStatus?: string | null;
+      stripePriceId?: string | null;
+      currentPeriodEnd?: string | null;
+      monthlySummaryCount?: number;
+      monthlySummaryResetAt?: string | null;
+    }
   ): Promise<void> {
     const set: Record<string, unknown> = {};
     if (updates.name !== undefined) set.name = updates.name;
     if (updates.domain !== undefined) set.domain = updates.domain === "" ? null : updates.domain;
     if (updates.type !== undefined) set.type = updates.type;
     if (updates.accountTypeChosenAt !== undefined) set.accountTypeChosenAt = updates.accountTypeChosenAt;
+    if (updates.plan !== undefined) set.plan = updates.plan;
+    if (updates.stripeCustomerId !== undefined) set.stripeCustomerId = updates.stripeCustomerId;
+    if (updates.stripeSubscriptionId !== undefined) set.stripeSubscriptionId = updates.stripeSubscriptionId;
+    if (updates.stripeSubscriptionStatus !== undefined) set.stripeSubscriptionStatus = updates.stripeSubscriptionStatus;
+    if (updates.stripePriceId !== undefined) set.stripePriceId = updates.stripePriceId;
+    if (updates.currentPeriodEnd !== undefined) set.currentPeriodEnd = updates.currentPeriodEnd;
+    if (updates.monthlySummaryCount !== undefined) set.monthlySummaryCount = updates.monthlySummaryCount;
+    if (updates.monthlySummaryResetAt !== undefined) set.monthlySummaryResetAt = updates.monthlySummaryResetAt;
     if (Object.keys(set).length === 0) return;
     await db.update(organizations).set(set as any).where(eq(organizations.id, organizationId));
+  }
+
+  async getOrganizationByStripeCustomerId(customerId: string): Promise<Organization | undefined> {
+    const [row] = await db.select().from(organizations).where(eq(organizations.stripeCustomerId, customerId)).limit(1);
+    return row as Organization | undefined;
   }
 
   /** All organization IDs (for Sentry test notifications: notify targets from every org). */
