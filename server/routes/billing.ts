@@ -62,7 +62,7 @@ router.post("/create-checkout-session", authenticateToken, async (req: Request, 
     res.json({ url: session.url });
   } catch (error: any) {
     console.error("Create checkout session error:", error?.message ?? error);
-    res.status(500).json({ error: "Failed to create checkout session" });
+    res.status(500).json({ error: error?.message ?? "Failed to create checkout session" });
   }
 });
 
@@ -102,7 +102,7 @@ router.post("/create-portal-session", authenticateToken, async (req: Request, re
     res.json({ url: session.url });
   } catch (error: any) {
     console.error("Create portal session error:", error?.message ?? error);
-    res.status(500).json({ error: "Failed to create portal session" });
+    res.status(500).json({ error: error?.message ?? "Failed to create portal session" });
   }
 });
 

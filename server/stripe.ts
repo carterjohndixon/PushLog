@@ -131,12 +131,17 @@ export const AI_MODELS: AiModel[] = [
   }
 ];
 
-export async function createStripeCustomer(email: string, name?: string): Promise<Stripe.Customer> {
+export async function createStripeCustomer(email?: string | null, name?: string): Promise<Stripe.Customer> {
   assertBillingEnabled();
-  return await stripe.customers.create({
-    email,
-    name,
-  });
+  const emailTrimmed = typeof email === "string" ? email.trim() : "";
+
+  // Stripe rejects empty-string emails; if we don't have one, omit it.
+  const payload: Record<string, unknown> = {
+    name: name?.trim() || undefined,
+  };
+  if (emailTrimmed) payload.email = emailTrimmed;
+
+  return await stripe.customers.create(payload as any);
 }
 
 export async function createPaymentIntent(
