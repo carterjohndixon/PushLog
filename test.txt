@@ -64,3 +64,5 @@ testtest
 testingtset
 
 test again to watch logs to see why AI summary not working
+
+test again with new OpenRouter API KEy
