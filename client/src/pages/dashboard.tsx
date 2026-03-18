@@ -885,7 +885,7 @@ export default function Dashboard() {
           {/* Connected Repositories */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <CardTitle className="text-lg font-semibold text-foreground">Connected Repositories</CardTitle>
                 <div className="flex items-center space-x-2">
                   <Link href="/repositories">
@@ -1031,79 +1031,81 @@ export default function Dashboard() {
                       }
                       
                       return (
-                        <div key={repo.githubId} className="flex items-center justify-between p-3 border border-border rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center">
-                              <Github className="text-white w-4 h-4" />
+                        <div key={repo.githubId} className="p-3 border border-border rounded-lg">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3 min-w-0">
+                              <div className="w-8 h-8 bg-gray-900 rounded flex items-center justify-center shrink-0">
+                                <Github className="text-white w-4 h-4" />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground truncate">{repo.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {repoHasIntegration 
+                                    ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
+                                    : 'No integration configured'
+                                  }
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <p className="font-medium text-foreground">{repo.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {repoHasIntegration 
-                                  ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
-                                  : 'No integration configured'
-                                }
-                              </p>
+                            <div className="flex items-center space-x-2 shrink-0 ml-2">
+                              <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                              <Badge variant={badgeVariant} className="text-xs">
+                                {statusText}
+                              </Badge>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-2 h-2 rounded-full ${statusColor}`} />
-                            <Badge variant={badgeVariant} className="text-xs">
-                              {statusText}
-                            </Badge>
-                            {(canManageIntegrations || canManageRepos) && (
-                            <>
-                            {canManageIntegrations && (
-                            <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleToggleRepository(repo)}
-                              disabled={updateRepositoryMutation.isPending}
-                              className="text-muted-foreground hover:text-foreground"
-                              title={isRepositoryActive ? 'Pause repository' : 'Resume repository'}
-                            >
-                              {isRepositoryActive ? (
-                                <Pause className="w-4 h-4" />
-                              ) : (
-                                <Play className="w-4 h-4" />
+                          {(canManageIntegrations || canManageRepos) && (
+                            <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-border">
+                              {canManageIntegrations && (
+                              <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleToggleRepository(repo)}
+                                disabled={updateRepositoryMutation.isPending}
+                                className="text-muted-foreground hover:text-foreground h-8 px-2"
+                                title={isRepositoryActive ? 'Pause repository' : 'Resume repository'}
+                              >
+                                {isRepositoryActive ? (
+                                  <Pause className="w-4 h-4" />
+                                ) : (
+                                  <Play className="w-4 h-4" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRepositorySettings(repo)}
+                                className="text-muted-foreground hover:text-foreground h-8 px-2"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </Button>
+                              </>
                               )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleRepositorySettings(repo)}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <MoreVertical className="w-4 h-4" />
-                            </Button>
-                            </>
-                            )}
-                            {canManageRepos && (
-                            <>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleRepositoryTeam(repo)}
-                              className="text-muted-foreground hover:text-foreground"
-                              title="Manage who can see this repo"
-                            >
-                              <Users className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteRepository(repo)}
-                              disabled={deleteRepositoryMutation.isPending}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                            </>
-                            )}
-                            </>
-                            )}
-                          </div>
+                              {canManageRepos && (
+                              <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleRepositoryTeam(repo)}
+                                className="text-muted-foreground hover:text-foreground h-8 px-2"
+                                title="Manage who can see this repo"
+                              >
+                                <Users className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteRepository(repo)}
+                                disabled={deleteRepositoryMutation.isPending}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                              </>
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1132,7 +1134,7 @@ export default function Dashboard() {
           {/* Active Integrations */}
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <CardTitle className="text-lg font-semibold text-foreground">Active Integrations</CardTitle>
                 <div className="flex items-center space-x-2">
                   <Link href="/integrations">
@@ -1149,7 +1151,7 @@ export default function Dashboard() {
                   <Button 
                     size="sm" 
                     variant="glow"
-            className="text-white"
+                    className="text-white"
                     onClick={() => setIsIntegrationModalOpen(true)}
                   >
                     <Plus className="w-4 h-4 mr-1" />
@@ -1188,62 +1190,65 @@ export default function Dashboard() {
                       return bTime - aTime;
                     })
                     .map((integration) => (
-                    <div key={integration.id} className="flex items-center justify-between p-4 bg-muted rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
-                        }`}>
-                          <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-muted-foreground'}`} />
+                    <div key={integration.id} className="p-4 bg-muted rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                            integration.status === 'active' ? 'bg-log-green bg-opacity-10' : 'bg-steel-gray bg-opacity-10'
+                          }`}>
+                            <SiSlack className={`${integration.status === 'active' ? 'text-log-green' : 'text-muted-foreground'}`} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-medium text-foreground truncate">{integration.repositoryName}</p>
+                            <p className="text-sm text-muted-foreground truncate">{integration.slackChannelName} channel</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-foreground">{integration.repositoryName}</p>
-                          <p className="text-sm text-muted-foreground">{integration.slackChannelName} channel</p>
+                        <div className="flex items-center space-x-2 shrink-0 ml-2">
+                          <div className={`w-2 h-2 rounded-full ${
+                            integration.status === 'active' ? 'bg-log-green' : 'bg-steel-gray'
+                          }`} />
+                          <Badge 
+                            variant={integration.status === 'active' ? "default" : "secondary"}
+                            className="text-xs"
+                          >
+                            {integration.status === 'active' ? 'Active' : 'Paused'}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        <div className={`w-2 h-2 rounded-full ${
-                          integration.status === 'active' ? 'bg-log-green' : 'bg-steel-gray'
-                        }`} />
-                        <Badge 
-                          variant={integration.status === 'active' ? "default" : "secondary"}
-                          className="text-xs"
-                        >
-                          {integration.status === 'active' ? 'Active' : 'Paused'}
-                        </Badge>
-                        {canManageIntegrations && (
-                        <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleToggleIntegration(integration)}
-                          disabled={toggleIntegrationMutation.isPending}
-                        >
-                          {integration.status === 'active' ? (
-                            <Pause className="w-4 h-4" />
-                          ) : (
-                            <Play className="w-4 h-4" />
-                          )}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleIntegrationSettings(integration)}
-                          className="text-muted-foreground hover:text-foreground"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteIntegration(integration)}
-                          disabled={deleteIntegrationMutation.isPending}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                        </>
-                        )}
-                      </div>
+                      {canManageIntegrations && (
+                        <div className="flex items-center justify-end gap-1 mt-2 pt-2 border-t border-border/50">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleToggleIntegration(integration)}
+                            disabled={toggleIntegrationMutation.isPending}
+                            className="h-8 px-2"
+                          >
+                            {integration.status === 'active' ? (
+                              <Pause className="w-4 h-4" />
+                            ) : (
+                              <Play className="w-4 h-4" />
+                            )}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleIntegrationSettings(integration)}
+                            className="text-muted-foreground hover:text-foreground h-8 px-2"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteIntegration(integration)}
+                            disabled={deleteIntegrationMutation.isPending}
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
