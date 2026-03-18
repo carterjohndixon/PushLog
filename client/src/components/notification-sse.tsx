@@ -127,6 +127,10 @@ export function NotificationSSE() {
             window.dispatchEvent(
               new CustomEvent("credit-notification", { detail: data.data }),
             );
+          } else if (notifType === "slack_workspace_missing") {
+            window.dispatchEvent(
+              new CustomEvent("slack-workspace-missing", { detail: data.data }),
+            );
           }
         }
       } catch {

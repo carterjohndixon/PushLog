@@ -797,6 +797,48 @@ export default function Settings() {
     },
   });
 
+  // Slack connect: open popup for OAuth
+  const handleSlackConnect = async () => {
+    try {
+      const response = await fetch("/api/slack/connect?popup=true", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to connect Slack");
+      if (data.url) {
+        const width = 600;
+        const height = 700;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        const popup = window.open(
+          data.url,
+          "slack-oauth",
+          `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`,
+        );
+        const checkClosed = setInterval(() => {
+          if (popup?.closed) {
+            clearInterval(checkClosed);
+            queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
+          }
+        }, 500);
+        window.addEventListener("message", (event) => {
+          if (event.origin !== window.location.origin || event.data !== "slack-connected") return;
+          queryClient.invalidateQueries({ queryKey: ["/api/slack/workspaces"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
+          if (popup) popup.close();
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Connection Failed",
+        description: "Failed to connect to Slack. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // GitHub connect/reconnect: get OAuth URL and redirect
   const [isGithubConnectLoading, setIsGithubConnectLoading] = useState(false);
   const handleGitHubConnect = async () => {
@@ -1182,27 +1224,47 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               {slackWorkspaces.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No Slack workspaces connected. Connect one from the Dashboard.</p>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">No Slack workspaces connected.</p>
+                  <Button
+                    variant="glow"
+                    className="text-white"
+                    onClick={handleSlackConnect}
+                  >
+                    <SiSlack className="w-4 h-4 mr-2" />
+                    Connect Slack Workspace
+                  </Button>
+                </div>
               ) : (
-                <ul className="space-y-2">
-                  {slackWorkspaces.map((ws) => (
-                    <li key={ws.id} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-border bg-muted/30">
-                      <div className="flex items-center gap-2">
-                        <SiSlack className="w-4 h-4 text-log-green shrink-0" />
-                        <span className="font-medium text-foreground">{ws.teamName}</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
-                        onClick={() => setSlackDisconnectWorkspace({ id: ws.id, teamName: ws.teamName })}
-                        disabled={slackDisconnectMutation.isPending}
-                      >
-                        Disconnect
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+                <div className="space-y-3">
+                  <ul className="space-y-2">
+                    {slackWorkspaces.map((ws) => (
+                      <li key={ws.id} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-border bg-muted/30">
+                        <div className="flex items-center gap-2">
+                          <SiSlack className="w-4 h-4 text-log-green shrink-0" />
+                          <span className="font-medium text-foreground">{ws.teamName}</span>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-300 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/30"
+                          onClick={() => setSlackDisconnectWorkspace({ id: ws.id, teamName: ws.teamName })}
+                          disabled={slackDisconnectMutation.isPending}
+                        >
+                          Disconnect
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSlackConnect}
+                  >
+                    <SiSlack className="w-4 h-4 mr-2" />
+                    Add Workspace
+                  </Button>
+                </div>
               )}
             </CardContent>
           </Card>

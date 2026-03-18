@@ -185,8 +185,43 @@ export async function getSlackWorkspaceToken(integration: any, res: Response): P
     workspaceToken = workspace?.accessToken ?? null;
   }
   if (!workspaceToken) {
-    console.error(`⚠️ [Webhook] No Slack workspace token for integration ${integration.id}.`);
-    res.status(200).json({ message: "Slack workspace not configured" });
+    console.error(`⚠️ [Webhook] No Slack workspace token for integration ${integration.id}. Auto-pausing.`);
+
+    // Auto-pause the integration so it doesn't keep failing on every push
+    try {
+      await storage.updateIntegration(integration.id, { isActive: false });
+    } catch (pauseErr) {
+      console.warn("⚠️ [Webhook] Failed to auto-pause integration:", pauseErr);
+    }
+
+    // Notify the user so they can reconnect their Slack workspace
+    try {
+      const repoName = integration.repositoryName ?? "Unknown repository";
+      const notif = await storage.createNotification({
+        userId: integration.userId,
+        type: "slack_workspace_missing",
+        title: "Integration Paused — Slack Workspace Disconnected",
+        message: `The integration for ${repoName} has been paused because the Slack workspace is no longer connected. Reconnect your Slack workspace and unpause the integration to resume notifications.`,
+        metadata: JSON.stringify({
+          repositoryName: repoName,
+          integrationId: integration.id,
+          slackChannelName: integration.slackChannelName ?? null,
+        }),
+      });
+      broadcastNotification(integration.userId, {
+        id: notif.id,
+        type: "slack_workspace_missing",
+        title: notif.title,
+        message: notif.message,
+        metadata: notif.metadata,
+        createdAt: notif.createdAt,
+        isRead: false,
+      });
+    } catch (notifErr) {
+      console.warn("⚠️ [Webhook] Failed to create slack_workspace_missing notification:", notifErr);
+    }
+
+    res.status(200).json({ message: "Slack workspace not configured — integration paused" });
     return null;
   }
   return workspaceToken;

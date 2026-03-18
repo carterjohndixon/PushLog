@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
@@ -405,6 +406,38 @@ export default function Dashboard() {
       });
     }
   };
+
+  // Handle Slack workspace missing notifications (webhook paused the integration)
+  useEffect(() => {
+    const handleSlackWorkspaceMissing = (event: CustomEvent) => {
+      const detail = event.detail;
+      const metadata = typeof detail?.metadata === "string" ? JSON.parse(detail.metadata) : detail?.metadata;
+      const repoName = metadata?.repositoryName ?? "a repository";
+      const channelName = metadata?.slackChannelName;
+
+      // Refresh integration list so the UI shows the paused state
+      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+
+      toast({
+        title: "Integration Paused — Slack Disconnected",
+        description: `The integration for ${repoName}${channelName ? ` (→ #${channelName})` : ""} was paused because the Slack workspace is no longer connected. Reconnect to resume.`,
+        variant: "destructive",
+        duration: 15000,
+        action: (
+          <ToastAction altText="Reconnect Slack" onClick={handleSlackConnect}>
+            Reconnect
+          </ToastAction>
+        ),
+      });
+    };
+
+    window.addEventListener("slack-workspace-missing", handleSlackWorkspaceMissing as EventListener);
+    return () => {
+      window.removeEventListener("slack-workspace-missing", handleSlackWorkspaceMissing as EventListener);
+    };
+  }, [toast, handleSlackConnect, queryClient]);
 
   // Toggle integration status mutation
   const toggleIntegrationMutation = useMutation({

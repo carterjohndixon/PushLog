@@ -4401,10 +4401,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (updates.isActive === true) {
-        const hasSlack = existingIntegration.slackWorkspaceId && existingIntegration.slackChannelId;
-        if (!hasSlack) {
+        const workspaceId = updates.slackWorkspaceId || existingIntegration.slackWorkspaceId;
+        const channelId = updates.slackChannelId || existingIntegration.slackChannelId;
+        if (!workspaceId || !channelId) {
           return res.status(400).json({
             error: "Re-link this integration before unpausing. Open Integration Settings (⋮), select a workspace and channel, then Save.",
+          });
+        }
+        const workspace = await databaseStorage.getSlackWorkspace(workspaceId);
+        if (!workspace || !workspace.accessToken) {
+          return res.status(400).json({
+            error: "The Slack workspace for this integration is no longer connected. Reconnect it in Settings or the Dashboard, then try again.",
           });
         }
       }
