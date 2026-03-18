@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -274,30 +274,37 @@ export default function OrganizationPage() {
     !!orgData?.id &&
     !isSetupOrgDismissed(orgData.id);
 
-  useEffect(() => {
-    if (showSetupPrompt && orgData?.id) {
-      setSetupModalMode("setup");
-      setSetupModalOpen(true);
+  const setupPromptShownRef = useRef(false);
+  if (showSetupPrompt && orgData?.id && !setupPromptShownRef.current) {
+    setupPromptShownRef.current = true;
+    setSetupModalMode("setup");
+    setSetupModalOpen(true);
+  }
+
+  const prevIncidentSettingsRef = useRef<string | null>(null);
+  if (incidentSettingsData) {
+    const key = incidentSettingsData.updatedAt;
+    if (key !== prevIncidentSettingsRef.current) {
+      prevIncidentSettingsRef.current = key;
+      // Batch these together — React will batch them in the same render
+      if (incidentMode !== incidentSettingsData.targetingMode) setIncidentMode(incidentSettingsData.targetingMode);
+      const newSpecificIds = incidentSettingsData.specificUserIds ?? [];
+      if (JSON.stringify(incidentSpecificUserIds) !== JSON.stringify(newSpecificIds)) setIncidentSpecificUserIds(newSpecificIds);
+      const newSpecificRoles = incidentSettingsData.specificRoles ?? [];
+      if (JSON.stringify(incidentSpecificRoles) !== JSON.stringify(newSpecificRoles)) setIncidentSpecificRoles(newSpecificRoles);
+      if (incidentIncludeViewers !== incidentSettingsData.includeViewers) setIncidentIncludeViewers(incidentSettingsData.includeViewers);
+      const newPriorityIds = incidentSettingsData.priorityUserIds ?? [];
+      if (JSON.stringify(incidentPriorityUserIds) !== JSON.stringify(newPriorityIds)) setIncidentPriorityUserIds(newPriorityIds);
     }
-  }, [showSetupPrompt, orgData?.id]);
+  }
 
-  useEffect(() => {
-    if (!incidentSettingsData) return;
-    setIncidentMode(incidentSettingsData.targetingMode);
-    setIncidentSpecificUserIds(incidentSettingsData.specificUserIds ?? []);
-    setIncidentSpecificRoles(incidentSettingsData.specificRoles ?? []);
-    setIncidentIncludeViewers(incidentSettingsData.includeViewers);
-    setIncidentPriorityUserIds(incidentSettingsData.priorityUserIds ?? []);
-  }, [incidentSettingsData]);
-
-  // When members list updates (e.g. after refetch on opening modal), keep selected member in sync so "Last active" is fresh
-  useEffect(() => {
-    if (!selectedMember || members.length === 0) return;
+  // Keep selected member in sync with fresh data from members list (render-time sync, no effect needed)
+  if (selectedMember && members.length > 0) {
     const fresh = members.find((m) => m.userId === selectedMember.userId);
     if (fresh && (fresh.lastActiveAt !== selectedMember.lastActiveAt || fresh.role !== selectedMember.role)) {
       setSelectedMember(fresh);
     }
-  }, [members, selectedMember?.userId]);
+  }
 
   const handleSetupSuccess = () => {
     queryClient.invalidateQueries({ queryKey: ORG_QUERY_KEY });

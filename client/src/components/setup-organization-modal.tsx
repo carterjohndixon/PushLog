@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,12 +58,16 @@ export function SetupOrganizationModal({
   const [domain, setDomain] = useState(initialDomain ?? "");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (open) {
-      setName(initialName);
-      setDomain(initialDomain ?? "");
-    }
-  }, [open, initialName, initialDomain]);
+  const prevOpenKey = useRef("");
+  const openKey = open ? `${initialName}|${initialDomain ?? ""}` : "";
+  if (openKey && openKey !== prevOpenKey.current) {
+    prevOpenKey.current = openKey;
+    setName(initialName);
+    setDomain(initialDomain ?? "");
+  }
+  if (!open && prevOpenKey.current) {
+    prevOpenKey.current = "";
+  }
 
   const handleSave = async () => {
     const trimmedName = name.trim();

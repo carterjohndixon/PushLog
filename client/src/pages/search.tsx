@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useLayoutEffect, useRef, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -74,26 +74,30 @@ export default function Search() {
   const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
   const scrollPositionRef = useRef<number | null>(null);
 
-  // Search-as-you-type: debounce submitted query when input changes
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSubmittedQ(q.trim());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleQueryChange = useCallback((value: string) => {
+    setQ(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const trimmed = value.trim();
+      setSubmittedQ((prev) => {
+        if (prev.trim().length > 0 && trimmed.length === 0) setRecentPage(0);
+        return trimmed;
+      });
     }, SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [q]);
+  }, []);
 
-  // When switching back to recent view from search, or when filters change, reset to first page
-  const prevSubmittedQ = useRef(submittedQ);
-  useEffect(() => {
-    if (prevSubmittedQ.current.trim().length > 0 && submittedQ.trim().length === 0) {
-      setRecentPage(0);
-    }
-    prevSubmittedQ.current = submittedQ;
-  }, [submittedQ]);
-
-  useEffect(() => {
+  const updateFilter = useCallback(<T,>(setter: React.Dispatch<React.SetStateAction<T>>) => (value: T) => {
+    setter(value);
     setRecentPage(0);
-  }, [repositoryId, from, to, minImpact, pageSize]);
+  }, []);
+
+  const setRepositoryIdAndReset = updateFilter(setRepositoryId);
+  const setFromAndReset = updateFilter(setFrom);
+  const setToAndReset = updateFilter(setTo);
+  const setMinImpactAndReset = updateFilter(setMinImpact);
+  const setPageSizeAndReset = updateFilter(setPageSize);
 
   // Repos for filter dropdown and name lookup
   const { data: reposData } = useQuery<{ repositories: RepoOption[] }>({
@@ -244,7 +248,7 @@ export default function Search() {
                 <Input
                   placeholder="Type to search (e.g. login, auth, fix)..."
                   value={q}
-                  onChange={(e) => setQ(e.target.value)}
+                  onChange={(e) => handleQueryChange(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                   className="pl-10"
                 />
@@ -269,7 +273,7 @@ export default function Search() {
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label htmlFor="filter-repository" className="text-xs text-muted-foreground block mb-1">Repository</label>
-                    <Select value={repositoryId || "all"} onValueChange={(v) => setRepositoryId(v === "all" ? "" : v)}>
+                    <Select value={repositoryId || "all"} onValueChange={(v) => setRepositoryIdAndReset(v === "all" ? "" : v)}>
                       <SelectTrigger
                         id="filter-repository"
                         className="h-9 w-full border-border bg-background focus:ring-2 focus:ring-log-green/50 focus:border-log-green/60 transition-colors"
@@ -304,7 +308,7 @@ export default function Search() {
                       id="filter-from"
                       type="date"
                       value={from}
-                      onChange={(e) => setFrom(e.target.value)}
+                      onChange={(e) => setFromAndReset(e.target.value)}
                       className="h-9"
                     />
                   </div>
@@ -314,7 +318,7 @@ export default function Search() {
                       id="filter-to"
                       type="date"
                       value={to}
-                      onChange={(e) => setTo(e.target.value)}
+                      onChange={(e) => setToAndReset(e.target.value)}
                       className="h-9"
                     />
                   </div>
@@ -327,7 +331,7 @@ export default function Search() {
                       max={100}
                       placeholder="0–100"
                       value={minImpact}
-                      onChange={(e) => setMinImpact(e.target.value)}
+                      onChange={(e) => setMinImpactAndReset(e.target.value)}
                       className="h-9"
                     />
                   </div>
@@ -369,7 +373,7 @@ export default function Search() {
                   <select
                     id="page-size"
                     value={pageSize}
-                    onChange={(e) => setPageSize(Math.min(MAX_PAGE_SIZE, Number(e.target.value)))}
+                    onChange={(e) => setPageSizeAndReset(Math.min(MAX_PAGE_SIZE, Number(e.target.value)))}
                     className="h-8 rounded-md border border-input bg-background px-2 text-sm"
                   >
                     {PAGE_SIZE_OPTIONS.map((n) => (

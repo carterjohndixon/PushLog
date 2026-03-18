@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+// Note: one useEffect remains for cleanup of message event listener on unmount — no alternative
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,25 +94,17 @@ export function IntegrationSetupModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Reset all form fields when the modal opens so we never show another integration's data.
-  useEffect(() => {
-    if (open) {
-      resetFormState(
-        setSelectedRepository,
-        setSelectedWorkspace,
-        setSelectedChannel,
-        setNotificationLevel,
-        setIncludeCommitSummaries
-      );
-    }
-  }, [open]);
-
-  // When workspace changes, clear channel so we don't show a channel from the previous workspace.
-  useEffect(() => {
-    if (open) {
-      setSelectedChannel("");
-    }
-  }, [open, selectedWorkspace]);
+  const prevOpenRef = useRef(false);
+  if (open && !prevOpenRef.current) {
+    resetFormState(
+      setSelectedRepository,
+      setSelectedWorkspace,
+      setSelectedChannel,
+      setNotificationLevel,
+      setIncludeCommitSummaries
+    );
+  }
+  prevOpenRef.current = open;
 
   const { data: workspaces, isLoading: workspacesLoading } = useQuery<SlackWorkspace[]>({
     queryKey: ["/api/slack/workspaces"],
@@ -427,6 +420,7 @@ export function IntegrationSetupModal({
                       handleSlackConnect();
                     } else {
                       setSelectedWorkspace(value);
+                      setSelectedChannel("");
                     }
                   }}
                 >

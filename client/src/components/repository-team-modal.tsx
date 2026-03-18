@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,16 +93,20 @@ export function RepositoryTeamModal({
   const members: OrgMember[] = orgMembers?.members ?? [];
   const memberUserIds = repoMembers?.memberUserIds ?? [];
 
-  useEffect(() => {
-    if (!open) return;
-    if (memberUserIds.length === 0) {
-      setMode("all");
-      setSelectedIds(new Set());
-    } else {
-      setMode("selected");
-      setSelectedIds(new Set(memberUserIds));
+  const prevSyncKey = useRef("");
+  const syncKey = open ? memberUserIds.join(",") : "";
+  if (syncKey !== prevSyncKey.current) {
+    prevSyncKey.current = syncKey;
+    if (open) {
+      if (memberUserIds.length === 0) {
+        setMode("all");
+        setSelectedIds(new Set());
+      } else {
+        setMode("selected");
+        setSelectedIds(new Set(memberUserIds));
+      }
     }
-  }, [open, memberUserIds.join(",")]);
+  }
 
   const handleToggle = (userId: string, checked: boolean) => {
     setSelectedIds((prev) => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -57,9 +57,15 @@ export function RepositorySettingsModal({
 }: RepositorySettingsModalProps) {
   const [form, setForm] = useState(() => getFormState(repository));
 
-  useEffect(() => {
-    if (open && repository) setForm(getFormState(repository));
-  }, [open, repository?.id]);
+  const prevFormKey = useRef("");
+  const formKey = open && repository ? repository.id ?? "" : "";
+  if (formKey && formKey !== prevFormKey.current) {
+    prevFormKey.current = formKey;
+    setForm(getFormState(repository));
+  }
+  if (!open && prevFormKey.current) {
+    prevFormKey.current = "";
+  }
 
   const handleSave = () => {
     if (!repository?.id) return;
