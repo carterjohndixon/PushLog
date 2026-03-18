@@ -5,13 +5,16 @@
  *
  * Serve at /api/webhooks/promote-production, /cancel, /status
  * Must match productionDeployClient.ts expectations.
+ *
+ * NOTE: This file uses CommonJS (require) because it runs inside a minimal
+ * docker:24-cli Alpine container that has no package.json with "type":"module".
  */
 
-import { createServer } from "http";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { readFileSync, existsSync, writeFileSync, appendFileSync, unlinkSync } from "fs";
-import { join } from "path";
+const { createServer } = require("http");
+const { exec } = require("child_process");
+const { promisify } = require("util");
+const { readFileSync, existsSync, writeFileSync, appendFileSync, unlinkSync } = require("fs");
+const { join } = require("path");
 
 const execAsync = promisify(exec);
 
@@ -115,13 +118,11 @@ async function getStatusPayload() {
     const isDetached = branchOut === "HEAD";
 
     for (const ref of ["origin/main", "origin/master", "main"]) {
-      try {
-        await runGit(`git rev-parse ${ref}`);
+      const sha = await runGit(`git rev-parse ${ref}`);
+      if (sha) {
         branchRef = ref;
         if (branch === "unknown") branch = ref.replace("origin/", "");
         break;
-      } catch {
-        continue;
       }
     }
 
@@ -192,10 +193,10 @@ async function getStatusPayload() {
 }
 
 const server = createServer(async (req, res) => {
-  const url = new URL(req.url || "/", `http://localhost`);
-  const path = url.pathname;
+  const urlObj = new URL(req.url || "/", `http://localhost`);
+  const pathname = urlObj.pathname;
 
-  if (path === "/api/webhooks/promote-production/status" && req.method === "GET") {
+  if (pathname === "/api/webhooks/promote-production/status" && req.method === "GET") {
     if (!auth(req)) return json(res, { error: "Unauthorized" }, 401);
     try {
       const data = await getStatusPayload();
@@ -205,7 +206,7 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  if (path === "/api/webhooks/promote-production/cancel" && req.method === "POST") {
+  if (pathname === "/api/webhooks/promote-production/cancel" && req.method === "POST") {
     if (!auth(req)) return json(res, { error: "Unauthorized" }, 401);
     try {
       if (!existsSync(LOCK_FILE)) {
@@ -217,7 +218,8 @@ const server = createServer(async (req, res) => {
       try {
         unlinkSync(LOCK_FILE);
       } catch {}
-      const cancelLine = `[${new Date().toISOString().replace("T", " ").slice(0, 19)}] Promotion CANCELLED by ${(await parseBody(req)).cancelledBy || "admin"}\n`;
+      const body = await parseBody(req);
+      const cancelLine = `[${new Date().toISOString().replace("T", " ").slice(0, 19)}] Promotion CANCELLED by ${body.cancelledBy || "admin"}\n`;
       appendFileSync(LOG_FILE, cancelLine);
       return json(res, { message: "Promotion cancelled", cancelledAt: new Date().toISOString() });
     } catch (e) {
@@ -225,10 +227,10 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  if (path === "/api/webhooks/promote-production" && req.method === "POST") {
+  if (pathname === "/api/webhooks/promote-production" && req.method === "POST") {
     if (!auth(req)) return json(res, { error: "Unauthorized" }, 401);
     if (!existsSync(PROMOTE_SCRIPT)) {
-      return json(res, { error: "promote-production-docker.sh not found" }, 500);
+      return json(res, { error: "promote-production-docker.sh not found at " + PROMOTE_SCRIPT }, 500);
     }
     if (existsSync(LOCK_FILE)) {
       return json(res, { error: "Promotion already in progress" }, 409);
@@ -250,6 +252,7 @@ const server = createServer(async (req, res) => {
 
     const logPath = join(WORKSPACE, "deploy-promotion-stdout.log");
     const cmd = `nohup setsid bash "${PROMOTE_SCRIPT}" </dev/null >>"${logPath}" 2>&1 &`;
+    console.log(`[promote-http] Starting promotion: sha=${targetSha.slice(0, 10) || "latest"}, by=${promotedBy}`);
     exec(cmd, {
       cwd: WORKSPACE,
       env: {
@@ -272,5 +275,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`[promote-http] Listening on ${PORT}, workspace=${WORKSPACE}`);
+  console.log(`[promote-http] Listening on ${PORT}, workspace=${WORKSPACE}, secret=${SECRET ? "configured" : "NOT SET"}`);
 });

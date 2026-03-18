@@ -440,7 +440,7 @@ export default function AdminPage() {
                       <p>Missing <code className="bg-red-100 dark:bg-red-900/30 px-1 rounded">PROMOTE_PROD_WEBHOOK_SECRET</code> in staging environment.</p>
                     )}
                     <p className="text-muted-foreground text-xs pt-1">
-                      Set these in <code>.env.staging</code> and restart the staging container. The URL should point to the promote service (e.g. <code>http://172.17.0.1:3999</code>).
+                      Set these in <code>.env.staging</code> and restart the staging container. The URL should point to the promote service (e.g. <code>http://pushlog-promote:3999</code> when using the shared Docker network).
                     </p>
                   </div>
                 )}
