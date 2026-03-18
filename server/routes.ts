@@ -1270,8 +1270,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const appDir = resolveAppDir();
       const prodShaFile = path.join(appDir, ".prod_deployed_sha");
       const prodAtFile = path.join(appDir, ".prod_deployed_at");
+      const stagingShaFile = path.join(appDir, ".staging_deployed_sha");
+      const stagingAtFile = path.join(appDir, ".staging_deployed_at");
+      // Also check inside the container at /app/ (Dockerfile writes it there at build time)
+      const containerStagingShaFile = "/app/.staging_deployed_sha";
+      const containerStagingAtFile = "/app/.staging_deployed_at";
       const promoteScript = path.join(appDir, "deploy-production.sh");
       const promoteViaWebhook = APP_ENV === "staging" && isProductionDeployConfigured();
+
+      const stagingDeployedSha =
+        (fs.existsSync(stagingShaFile) ? fs.readFileSync(stagingShaFile, "utf8").trim() : null) ||
+        (fs.existsSync(containerStagingShaFile) ? fs.readFileSync(containerStagingShaFile, "utf8").trim() : null) ||
+        null;
+      const stagingDeployedAt =
+        (fs.existsSync(stagingAtFile) ? fs.readFileSync(stagingAtFile, "utf8").trim() : null) ||
+        (fs.existsSync(containerStagingAtFile) ? fs.readFileSync(containerStagingAtFile, "utf8").trim() : null) ||
+        null;
 
       let branch = "unknown";
       let headSha = "";
@@ -1421,6 +1435,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         appEnv: APP_ENV,
         branch: finalBranch,
         headSha: finalHeadSha,
+        stagingDeployedSha: stagingDeployedSha,
+        stagingDeployedAt: stagingDeployedAt,
         prodDeployedSha: finalProdDeployedSha,
         prodDeployedAt: finalProdDeployedAt,
         pendingCount: finalPendingCount,

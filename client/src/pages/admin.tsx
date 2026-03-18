@@ -46,6 +46,8 @@ type AdminStatus = {
   appEnv: string;
   branch: string;
   headSha: string;
+  stagingDeployedSha: string | null;
+  stagingDeployedAt: string | null;
   prodDeployedSha: string | null;
   prodDeployedAt: string | null;
   pendingCount: number;
@@ -255,6 +257,7 @@ export default function AdminPage() {
 
   // ── Commit classification helpers ──
   const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
+  const stagingSha = data?.stagingDeployedSha || null;
 
   /** Build a set of pending SHAs for quick lookup */
   const pendingShaSet = new Set((data?.pendingCommits || []).map((c) => c.sha));
@@ -264,6 +267,11 @@ export default function AdminPage() {
     if (prodSha && c.sha === prodSha) return "deployed";
     if (pendingShaSet.has(c.sha)) return "pending";
     return "old";
+  }
+
+  function isStaging(c: CommitInfo): boolean {
+    if (!stagingSha) return false;
+    return c.sha === stagingSha || c.sha.startsWith(stagingSha) || stagingSha.startsWith(c.sha.slice(0, 7));
   }
 
   return (
@@ -295,18 +303,62 @@ export default function AdminPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Environment</CardTitle>
-                <CardDescription>Current staging app state.</CardDescription>
+                <CardDescription>Current deployment state across staging and production.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p><strong>App env:</strong> {data.appEnv}</p>
-                <p><strong>Branch:</strong> {data.branch}</p>
-                <p><strong>Staging HEAD:</strong> <code>{data.headSha}</code></p>
-                <p><strong>Last deployed prod SHA:</strong> <code>{prodSha || "unknown (first run)"}</code></p>
-                <p><strong>Last deployed prod at:</strong> {data.promoteRemoteStatus?.prodDeployedAt || data.prodDeployedAt || "unknown"}</p>
-                <p className="flex items-center gap-2">
-                <strong>Pending commits:</strong>
-                  <Badge variant={data.pendingCount > 0 ? "default" : "secondary"}>{data.pendingCount}</Badge>
-                </p>
+              <CardContent className="space-y-4 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Staging */}
+                  <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+                      <p className="font-semibold text-blue-600 dark:text-blue-400">Staging</p>
+                    </div>
+                    <p>
+                      <span className="text-muted-foreground">Commit:</span>{" "}
+                      <code className="text-xs">{stagingSha ? stagingSha.slice(0, 10) : "unknown"}</code>
+                      {stagingSha && data.headSha && stagingSha === data.headSha && (
+                        <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-blue-600 border-blue-500/40">UP TO DATE</Badge>
+                      )}
+                    </p>
+                    {data.stagingDeployedAt && (
+                      <p><span className="text-muted-foreground">Deployed:</span> {new Date(data.stagingDeployedAt).toLocaleString()}</p>
+                    )}
+                    {stagingSha && data.recentCommits.length > 0 && (() => {
+                      const c = data.recentCommits.find((x) => isStaging(x));
+                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>{c.subject}</p> : null;
+                    })()}
+                  </div>
+                  {/* Production */}
+                  <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-green-500" />
+                      <p className="font-semibold text-green-600 dark:text-green-400">Production</p>
+                    </div>
+                    <p>
+                      <span className="text-muted-foreground">Commit:</span>{" "}
+                      <code className="text-xs">{prodSha ? prodSha.slice(0, 10) : "unknown (first run)"}</code>
+                      {prodSha && stagingSha && prodSha === stagingSha && (
+                        <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-green-600 border-green-500/40">IN SYNC</Badge>
+                      )}
+                    </p>
+                    <p>
+                      <span className="text-muted-foreground">Deployed:</span>{" "}
+                      {data.promoteRemoteStatus?.prodDeployedAt || data.prodDeployedAt || "unknown"}
+                    </p>
+                    {prodSha && data.recentCommits.length > 0 && (() => {
+                      const c = data.recentCommits.find((x) => x.sha === prodSha);
+                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>{c.subject}</p> : null;
+                    })()}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap pt-1 border-t border-border">
+                  <p><strong>Branch:</strong> {data.branch}</p>
+                  <p><strong>Latest on main:</strong> <code className="text-xs">{data.headSha ? data.headSha.slice(0, 10) : "unknown"}</code></p>
+                  <p className="flex items-center gap-2">
+                    <strong>Pending:</strong>
+                    <Badge variant={data.pendingCount > 0 ? "default" : "secondary"}>{data.pendingCount}</Badge>
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -495,13 +547,26 @@ export default function AdminPage() {
                         const isDeployed = status === "deployed";
                         const isPending = status === "pending";
                         const isHead = i === 0;
+                        const isStagingCommit = isStaging(c);
 
                         return (
                           <div key={c.sha} className="relative flex items-start gap-3 py-2 pl-0">
                             {/* Timeline dot */}
                             <div className="relative z-10 mt-1.5 flex-shrink-0">
-                              {isDeployed ? (
+                              {isDeployed && isStagingCommit ? (
+                                <div className="h-[22px] w-[22px] rounded-full bg-green-500 border-2 border-blue-400 flex items-center justify-center">
+                                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              ) : isDeployed ? (
                                 <div className="h-[22px] w-[22px] rounded-full bg-green-500 border-2 border-green-300 flex items-center justify-center">
+                                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              ) : isStagingCommit ? (
+                                <div className="h-[22px] w-[22px] rounded-full bg-blue-500 border-2 border-blue-300 flex items-center justify-center">
                                   <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                                   </svg>
@@ -518,9 +583,11 @@ export default function AdminPage() {
                               className={`flex-1 rounded border p-3 text-sm cursor-pointer transition-colors hover:bg-muted/30 ${
                                 isDeployed
                                   ? "border-green-500/40 bg-green-500/5"
-                                  : isPending
-                                    ? "border-amber-500/40 bg-amber-500/5"
-                                    : "border-border bg-transparent opacity-60"
+                                  : isStagingCommit
+                                    ? "border-blue-500/40 bg-blue-500/5"
+                                    : isPending
+                                      ? "border-amber-500/40 bg-amber-500/5"
+                                      : "border-border bg-transparent opacity-60"
                               }`}
                               role="button"
                               tabIndex={0}
@@ -533,10 +600,13 @@ export default function AdminPage() {
                                   {isHead && (
                                     <Badge variant="outline" className="text-[10px] px-1.5 py-0">HEAD</Badge>
                                   )}
-                                  {isDeployed && (
-                                    <Badge className="bg-green-600 hover:bg-green-600 text-[10px] px-1.5 py-0">DEPLOYED</Badge>
+                                  {isStagingCommit && (
+                                    <Badge className="bg-blue-600 hover:bg-blue-600 text-[10px] px-1.5 py-0">STAGING</Badge>
                                   )}
-                                  {isPending && (
+                                  {isDeployed && (
+                                    <Badge className="bg-green-600 hover:bg-green-600 text-[10px] px-1.5 py-0">PROD</Badge>
+                                  )}
+                                  {isPending && !isStagingCommit && (
                                     <Badge className="bg-amber-600 hover:bg-amber-600 text-[10px] px-1.5 py-0">PENDING</Badge>
                                   )}
                                   {data.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && (
@@ -635,18 +705,20 @@ export default function AdminPage() {
               </div>
               <div className="pt-2">
                 <p className="text-muted-foreground text-xs mb-1">Status</p>
-                <Badge
-                  variant={commitStatus(selectedCommit) === "deployed" ? "default" : commitStatus(selectedCommit) === "pending" ? "secondary" : "outline"}
-                  className={
-                    commitStatus(selectedCommit) === "deployed"
-                      ? "bg-green-600 hover:bg-green-600"
-                      : commitStatus(selectedCommit) === "pending"
-                        ? "bg-amber-600 hover:bg-amber-600"
-                        : ""
-                  }
-                >
-                  {commitStatus(selectedCommit) === "deployed" ? "DEPLOYED" : commitStatus(selectedCommit) === "pending" ? "PENDING" : "OLDER"}
-                </Badge>
+                <div className="flex gap-1.5 flex-wrap">
+                  {isStaging(selectedCommit) && (
+                    <Badge className="bg-blue-600 hover:bg-blue-600">STAGING</Badge>
+                  )}
+                  {commitStatus(selectedCommit) === "deployed" && (
+                    <Badge className="bg-green-600 hover:bg-green-600">PROD</Badge>
+                  )}
+                  {commitStatus(selectedCommit) === "pending" && !isStaging(selectedCommit) && (
+                    <Badge className="bg-amber-600 hover:bg-amber-600">PENDING</Badge>
+                  )}
+                  {commitStatus(selectedCommit) === "old" && !isStaging(selectedCommit) && (
+                    <Badge variant="outline">OLDER</Badge>
+                  )}
+                </div>
               </div>
               {data?.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && (
                 <Button

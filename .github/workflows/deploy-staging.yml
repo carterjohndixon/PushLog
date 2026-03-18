@@ -42,7 +42,10 @@ jobs:
             export VITE_SENTRY_RELEASE="$SENTRY_RELEASE"
             if [ -z "$SENTRY_AUTH_TOKEN" ]; then echo "  WARNING: SENTRY_AUTH_TOKEN is not set — source maps will NOT be uploaded to Sentry (add repo secret SENTRY_AUTH_TOKEN to fix)"; else echo "  SENTRY_AUTH_TOKEN is set — plugin will upload source maps"; fi
             ./scripts/build-for-docker.sh
-            echo "[4/5] docker compose up -d --build..."
+            echo "[4/6] docker compose up -d --build..."
             export CACHEBUST="$(git rev-parse HEAD)"
             docker compose -f docker-compose.staging.yml -f docker-compose.prebuilt.yml up -d --build
-            echo "[5/5] Done."
+            echo "[5/6] Writing staging deploy metadata..."
+            echo "$CACHEBUST" > "$REPO_PATH/.staging_deployed_sha"
+            date -u +"%Y-%m-%dT%H:%M:%SZ" > "$REPO_PATH/.staging_deployed_at"
+            echo "[6/6] Done. Staging deployed SHA: $CACHEBUST"

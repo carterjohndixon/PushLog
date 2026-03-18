@@ -172,7 +172,11 @@ export function Header() {
                       </span>
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent
+                    align="end"
+                    className="w-48"
+                    onCloseAutoFocus={(e) => e.preventDefault()}
+                  >
                     <DropdownMenuItem asChild>
                       <Link href="/settings" className="cursor-pointer flex items-center">
                         <Settings className="mr-2 h-4 w-4" />

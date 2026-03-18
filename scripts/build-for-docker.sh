@@ -37,13 +37,13 @@ cat > .docker-build/prebuilt/Dockerfile << 'DOCKERFILE'
 FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
-# Cache-bust so layers rebuild when code changes (pass --build-arg CACHEBUST=git-sha)
 ARG CACHEBUST
 RUN echo "Build: ${CACHEBUST:-unknown}"
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY dist ./dist
 COPY bin/incident-engine /app/bin/incident-engine
+RUN echo "${CACHEBUST:-unknown}" > /app/.staging_deployed_sha && date -u +"%Y-%m-%dT%H:%M:%SZ" > /app/.staging_deployed_at
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
 DOCKERFILE
