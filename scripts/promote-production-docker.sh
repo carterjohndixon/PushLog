@@ -58,9 +58,19 @@ if [ -d .git ]; then
   fi
 fi
 
+# ── Remove orphan containers from previous compose projects ──
+log "Cleaning up any orphan containers..."
+for cname in pushlog-prod-web pushlog-agent; do
+  if docker inspect "$cname" >/dev/null 2>&1; then
+    log "  Removing existing container: $cname"
+    docker stop "$cname" >> "$LOG_FILE" 2>&1 || true
+    docker rm -f "$cname" >> "$LOG_FILE" 2>&1 || true
+  fi
+done
+
 # ── Rebuild and restart production containers ──
 log "Rebuilding and restarting Docker production containers..."
-if ! docker compose -f "$COMPOSE_FILE" up -d --build >> "$LOG_FILE" 2>&1; then
+if ! docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$LOG_FILE" 2>&1; then
   log "ERROR: docker compose up failed. Check deploy-production.log"
   exit 1
 fi

@@ -76,6 +76,7 @@ export default function AdminPage() {
   const [deployTarget, setDeployTarget] = useState<CommitInfo | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
   const prevRemoteSha = useRef<string | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
   const { data: rawData, isLoading, error } = useQuery<AdminStatus>({
     queryKey: ["/api/admin/staging/status"],
@@ -223,7 +224,7 @@ export default function AdminPage() {
   const localInProgress = Boolean(localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL);
 
   const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
-  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-12);
+  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-80);
   const lastLogLine = promoteLogTail[promoteLogTail.length - 1] || "";
   const promotionFinishedFromLogs =
     lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
@@ -238,6 +239,12 @@ export default function AdminPage() {
   }, [promotionFinishedFromLogs, localPromoteAt]);
 
   const showLogsPanel = isPromotionRunning || (remoteStatusAvailable && promoteLogTail.length > 0);
+
+  useEffect(() => {
+    if (logsOpen && logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [promoteLogTail.length, logsOpen]);
 
   const getProgressStep = useCallback((): string => {
     const lastLine = lastLogLine;
@@ -326,7 +333,7 @@ export default function AdminPage() {
                     <p>
                       <span className="text-muted-foreground">Commit:</span>{" "}
                       <code className="text-xs">{stagingSha ? stagingSha.slice(0, 10) : "unknown"}</code>
-                      {stagingSha && data.headSha && stagingSha === data.headSha && (
+                      {stagingSha && data.headSha && shaMatches(stagingSha, data.headSha) && (
                         <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-blue-600 border-blue-500/40">UP TO DATE</Badge>
                       )}
                     </p>
@@ -347,7 +354,7 @@ export default function AdminPage() {
                     <p>
                       <span className="text-muted-foreground">Commit:</span>{" "}
                       <code className="text-xs">{prodSha ? prodSha.slice(0, 10) : "unknown (first run)"}</code>
-                      {prodSha && stagingSha && prodSha === stagingSha && (
+                      {prodSha && stagingSha && shaMatches(prodSha, stagingSha) && (
                         <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-green-600 border-green-500/40">IN SYNC</Badge>
                       )}
                     </p>
@@ -356,7 +363,7 @@ export default function AdminPage() {
                       {data.promoteRemoteStatus?.prodDeployedAt || data.prodDeployedAt || "unknown"}
                     </p>
                     {prodSha && data.recentCommits.length > 0 && (() => {
-                      const c = data.recentCommits.find((x) => x.sha === prodSha);
+                      const c = data.recentCommits.find((x) => shaMatches(x.sha, prodSha));
                       return c ? <p className="text-muted-foreground truncate" title={c.subject}>{c.subject}</p> : null;
                     })()}
                   </div>
@@ -514,8 +521,9 @@ export default function AdminPage() {
                           </Button>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                          <pre className="text-xs whitespace-pre-wrap break-words max-h-56 overflow-auto rounded bg-background p-2 border border-border font-mono mt-2">
+                          <pre className="text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto rounded bg-background p-3 border border-border font-mono mt-2">
                             {promoteLogTail.join("\n")}
+                            <div ref={logsEndRef} />
                           </pre>
                         </CollapsibleContent>
                       </Collapsible>

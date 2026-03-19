@@ -1421,7 +1421,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (finalBranch === "unknown" && finalRecentCommits.length > 0) {
         finalBranch = "main";
       }
-      if (finalPendingCommits.length === 0 && finalRecentCommits.length > 0) {
+      if (finalRecentCommits.length > 0) {
+        // Always re-derive pending from the canonical commit list + prod SHA.
+        // In Docker (no local git), the git rev-list path is skipped entirely,
+        // so we must derive from the GitHub commit list every time.
         const derived = derivePendingFromRecent(finalRecentCommits, finalProdDeployedSha);
         finalPendingCount = derived.pendingCount;
         finalPendingCommits = derived.pendingCommits;
