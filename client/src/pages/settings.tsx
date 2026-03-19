@@ -632,6 +632,9 @@ export default function Settings() {
     original: string[];
     filtered: string[];
   } | null>(null);
+  const [recoveryTotpCode, setRecoveryTotpCode] = useState("");
+  const [recoveryCodesResult, setRecoveryCodesResult] = useState<string[] | null>(null);
+  const [recoveryCodesOpen, setRecoveryCodesOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -1026,6 +1029,21 @@ export default function Settings() {
     },
   })
 
+
+  const regenerateRecoveryCodesMutation = useMutation({
+    mutationFn: async (code: string) => {
+      const res = await apiRequest("POST", "/api/mfa/recovery-codes/regenerate", { code });
+      return res.json() as Promise<{ success: boolean; recoveryCodes: string[] }>;
+    },
+    onSuccess: (data) => {
+      setRecoveryCodesResult(data.recoveryCodes);
+      setRecoveryTotpCode("");
+      toast({ title: "Recovery codes generated", description: `${data.recoveryCodes.length} new codes ready. Save them now.` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to generate codes", description: error.message, variant: "destructive" });
+    },
+  });
 
   const sentTestBrowserNotificationMutation = useMutation({
     mutationFn: async () => {
@@ -1869,9 +1887,80 @@ export default function Settings() {
                       >
                         Test Message (frontend)
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-violet-500/50 text-violet-700 dark:text-violet-400"
+                        onClick={() => { setRecoveryCodesOpen(!recoveryCodesOpen); setRecoveryCodesResult(null); setRecoveryTotpCode(""); }}
+                      >
+                        <KeyRound className="w-4 h-4 mr-1" />
+                        Generate MFA recovery codes
+                      </Button>
                     </div>
+
+                    {/* MFA Recovery Code Generator */}
+                    {recoveryCodesOpen && (
+                      <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.03] p-4 space-y-3">
+                        <p className="text-sm font-medium text-foreground">Generate MFA Recovery Codes</p>
+                        {recoveryCodesResult ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+                              {recoveryCodesResult.map((c, i) => (
+                                <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-background border border-border">
+                                  <span className="text-muted-foreground text-xs w-5 text-right">{i + 1}.</span>
+                                  <span className="text-foreground tracking-wider">{c}</span>
+                                </div>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(recoveryCodesResult.join("\n"));
+                                  toast({ title: "Copied", description: "Recovery codes copied to clipboard." });
+                                }}
+                              >
+                                Copy all
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => { setRecoveryCodesOpen(false); setRecoveryCodesResult(null); }}
+                              >
+                                Done
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">These codes replace any previous codes. Each can only be used once.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground">Enter your current 6-digit authenticator code to generate new recovery codes.</p>
+                            <div className="flex gap-2">
+                              <Input
+                                type="text"
+                                placeholder="6-digit code"
+                                value={recoveryTotpCode}
+                                onChange={(e) => setRecoveryTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                className="w-32 font-mono text-center tracking-widest"
+                                autoComplete="off"
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={recoveryTotpCode.length !== 6 || regenerateRecoveryCodesMutation.isPending}
+                                onClick={() => regenerateRecoveryCodesMutation.mutate(recoveryTotpCode)}
+                              >
+                                {regenerateRecoveryCodesMutation.isPending ? "Generating..." : "Generate"}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <p className="text-xs text-muted-foreground">
-                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces. <strong>Test Error / Test Message (staging only):</strong> Frontend Sentry test — throws error or captures message to your frontend Sentry project.
+                      <strong>Sentry alert:</strong> One notification only. <strong>Full pipeline:</strong> Also runs incident engine. <strong>Capture error:</strong> Sends to Sentry, returns 200. <strong>Throw real error:</strong> Actually throws (500 response). <strong>Test stack filter API:</strong> Calls the API (works behind Cloudflare) and shows that node_modules and node: internals are stripped from incident stack traces. <strong>Test Error / Test Message (staging only):</strong> Frontend Sentry test — throws error or captures message to your frontend Sentry project. <strong>Generate MFA recovery codes:</strong> Create 10 one-time recovery codes for your account (requires TOTP verification).
                     </p>
                   </div>
                 </CollapsibleContent>
