@@ -35,9 +35,10 @@ log "Triggered by: ${PROMOTED_BY:-unknown}"
 log "Target SHA: ${PROMOTED_SHA:-<not specified, will use latest main>}"
 
 # ── Fetch and checkout target SHA ──
+GIT_LOG="${WORKSPACE}/deploy-production-git.log"
 if [ -d .git ]; then
   log "Fetching from origin..."
-  git fetch origin >> "$LOG_FILE" 2>&1 || log "Warning: git fetch failed, continuing with existing refs."
+  git fetch origin >> "$GIT_LOG" 2>&1 || log "Warning: git fetch failed, continuing with existing refs."
 
   if [ -n "${PROMOTED_SHA:-}" ]; then
     TARGET_FULL="$(git rev-parse "$PROMOTED_SHA" 2>/dev/null || true)"
@@ -48,32 +49,36 @@ if [ -d .git ]; then
     CURRENT="$(git rev-parse HEAD 2>/dev/null || true)"
     if [ "$CURRENT" != "$TARGET_FULL" ]; then
       log "Checking out target SHA: ${TARGET_FULL:0:10}..."
-      git checkout "$TARGET_FULL" >> "$LOG_FILE" 2>&1 || { log "ERROR: Failed to checkout"; exit 1; }
+      git checkout "$TARGET_FULL" >> "$GIT_LOG" 2>&1 || { log "ERROR: Failed to checkout"; exit 1; }
     else
       log "Already at target SHA ${TARGET_FULL:0:10}."
     fi
   else
     log "No target SHA; pulling latest main..."
-    git checkout main >> "$LOG_FILE" 2>&1 && git pull origin main >> "$LOG_FILE" 2>&1 || log "Warning: pull failed, building from current HEAD"
+    git checkout main >> "$GIT_LOG" 2>&1 && git pull origin main >> "$GIT_LOG" 2>&1 || log "Warning: pull failed, building from current HEAD"
   fi
+  log "Git operations complete. HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 fi
 
 # ── Remove orphan containers from previous compose projects ──
 log "Cleaning up any orphan containers..."
+DOCKER_LOG="${WORKSPACE}/deploy-production-docker.log"
 for cname in pushlog-prod-web pushlog-agent; do
   if docker inspect "$cname" >/dev/null 2>&1; then
     log "  Removing existing container: $cname"
-    docker stop "$cname" >> "$LOG_FILE" 2>&1 || true
-    docker rm -f "$cname" >> "$LOG_FILE" 2>&1 || true
+    docker stop "$cname" >> "$DOCKER_LOG" 2>&1 || true
+    docker rm -f "$cname" >> "$DOCKER_LOG" 2>&1 || true
   fi
 done
 
 # ── Rebuild and restart production containers ──
 log "Rebuilding and restarting Docker production containers..."
-if ! docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$LOG_FILE" 2>&1; then
-  log "ERROR: docker compose up failed. Check deploy-production.log"
+if ! docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$DOCKER_LOG" 2>&1; then
+  log "ERROR: docker compose up failed. See deploy-production-docker.log for details."
+  tail -20 "$DOCKER_LOG" | while IFS= read -r line; do log "  $line"; done
   exit 1
 fi
+log "Docker containers rebuilt successfully."
 
 # ── Write deployed metadata ──
 DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${PROMOTED_SHA:-unknown}")"

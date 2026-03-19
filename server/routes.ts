@@ -46,7 +46,7 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail, sendOrgInviteEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
-import { isUnderRepoLimit, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
+import { isUnderRepoLimit, isUnderSummaryCap, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
 import { isValidPushlogMode } from './pushlogModes';
 import { estimateTokenCostFromUsage } from './aiCost';
 import { encrypt, decrypt } from './encryption';
@@ -4131,6 +4131,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateRepository(validatedData.repositoryId, { isActive: true });
       }
       
+      // Enforce pushlogMode against org plan
+      const requestedMode = (validatedData as any).pushlogMode;
+      if (requestedMode && orgId) {
+        const orgForMode = await databaseStorage.getOrganization(orgId);
+        const planForMode = (((orgForMode as any)?.plan || "free") as PlanName);
+        if (!isModeAllowed(planForMode, requestedMode)) {
+          return res.status(403).json({
+            error: `The "${requestedMode}" mode requires a higher plan. Upgrade to access this mode.`,
+            code: "MODE_NOT_ALLOWED",
+          });
+        }
+      }
+
       // Use user's preferred AI model as default if not specified
       const user = await databaseStorage.getUserById(userId);
       const defaultAiModel = user?.preferredAiModel || 'gpt-5.2';
@@ -4139,7 +4152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         userId: userId,
         organizationId: (req.user as any).organizationId ?? undefined,
-        aiModel: validatedData.aiModel || defaultAiModel, // Use user's preference as default
+        aiModel: validatedData.aiModel || defaultAiModel,
       });
       
       // Send welcome message to Slack if integration is active
@@ -5738,7 +5751,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const pushEventId = req.params.pushEventId;
       const userId = req.user!.userId;
-      
+
+      // Enforce summary cap
+      const testOrgId = (req.user as any)?.organizationId;
+      if (testOrgId) {
+        const testOrg = await databaseStorage.getOrganization(testOrgId);
+        if (testOrg) {
+          const testPlan = ((testOrg as any).plan || "free") as PlanName;
+          const testCount = (testOrg as any).monthlySummaryCount ?? 0;
+          if (!isUnderSummaryCap(testPlan, testCount)) {
+            return res.status(403).json({
+              error: `Monthly summary limit reached (${getPlanLimits(testPlan).summaryCap} for ${testPlan} plan). Upgrade to generate more summaries.`,
+              code: "SUMMARY_CAP_REACHED",
+            });
+          }
+        }
+      }
+
       // Allow testing with model parameter directly (for performance tests)
       const testModel = req.body?.model;
       const testMaxTokens = req.body?.maxTokens || 350;
@@ -6340,6 +6369,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           monthlySummaryCount = (org as any).monthlySummaryCount ?? 0;
           const caps: Record<string, number> = { free: 200, pro: 2000, team: 10000 };
           monthlySummaryCap = caps[orgPlan] ?? 200;
+
+          // Backfill currentPeriodEnd from Stripe if missing (e.g. webhook was misconfigured at purchase time)
+          if (!currentPeriodEnd && (org as any).stripeSubscriptionId && isBillingEnabled()) {
+            try {
+              const sub = await stripe.subscriptions.retrieve((org as any).stripeSubscriptionId) as any;
+              if (sub.current_period_end) {
+                currentPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
+                await databaseStorage.updateOrganization(organizationId, {
+                  currentPeriodEnd,
+                  ...(sub.status ? { stripeSubscriptionStatus: sub.status } : {}),
+                });
+              }
+            } catch (e: any) {
+              console.warn("[profile] Failed to backfill currentPeriodEnd from Stripe:", e?.message);
+            }
+          }
         }
       }
       if (!role) role = (req.user as any)?.role ?? null;
