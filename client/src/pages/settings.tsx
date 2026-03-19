@@ -1130,33 +1130,7 @@ export default function Settings() {
                       </Badge>
                     </div>
                   </div>
-
-                  <div className="pt-4 border-t">
-                    <p className="text-sm text-steel-gray mb-2">Current Plan</p>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        className={
-                          (profileResponse?.user?.plan ?? "free") === "free"
-                            ? "text-sm px-3 py-1"
-                            : "bg-log-green text-white border-0 text-sm px-3 py-1"
-                        }
-                        variant={(profileResponse?.user?.plan ?? "free") === "free" ? "secondary" : "default"}
-                      >
-                        {(profileResponse?.user?.plan ?? "free").charAt(0).toUpperCase() + (profileResponse?.user?.plan ?? "free").slice(1)}
-                      </Badge>
-                      {profileResponse?.user?.subscriptionStatus && profileResponse.user.subscriptionStatus !== "active" && (
-                        <Badge variant="outline" className="text-amber-600 border-amber-500/40 text-xs">
-                          {profileResponse.user.subscriptionStatus.replace(/_/g, " ")}
-                        </Badge>
-                      )}
-                      <Link href="/billing">
-                        <Button variant="ghost" size="sm" className="text-log-green h-7 text-xs gap-1">
-                          <ArrowUpRight className="w-3 h-3" /> Billing
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </>
+                  </>
               ) : (
                 <p className="text-steel-gray">Unable to load account data</p>
               )}

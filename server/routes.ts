@@ -1971,6 +1971,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Regenerate MFA recovery codes — requires TOTP verification. Works for users who already have MFA enabled.
+  app.post("/api/mfa/recovery-codes/regenerate", authenticateToken, body("code").trim().isLength({ min: 6, max: 6 }), async (req: Request, res: Response) => {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) return res.status(400).json({ error: "Provide your current 6-digit authenticator code." });
+      const userId = req.user!.userId;
+      const user = await databaseStorage.getUserById(userId);
+      if (!user) return res.status(404).json({ error: "User not found." });
+      if (!(user as any).mfaEnabled) return res.status(400).json({ error: "MFA is not enabled on this account." });
+      const rawSecret = (user as any).totpSecret ? decrypt((user as any).totpSecret) : null;
+      if (!rawSecret) return res.status(400).json({ error: "MFA secret not found. Please contact support." });
+      const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: req.body.code, window: 2 });
+      if (!valid) return res.status(401).json({ error: "Invalid authenticator code." });
+
+      const rawCodes = generateRecoveryCodes();
+      const hashes = await Promise.all(rawCodes.map((c) => bcrypt.hash(c, 10)));
+      await databaseStorage.deleteMfaRecoveryCodesByUser(userId);
+      await databaseStorage.createMfaRecoveryCodes(userId, hashes);
+
+      res.status(200).json({ success: true, recoveryCodes: rawCodes });
+    } catch (err) {
+      console.error("Recovery codes regenerate error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to regenerate recovery codes." });
+    }
+  });
+
   // Add GitHub connection initiation endpoint
   app.get("/api/github/connect", authenticateToken, requireEmailVerification, async (req, res) => {
     try {
