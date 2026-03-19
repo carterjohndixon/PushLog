@@ -18,6 +18,7 @@ services:
     environment:
       PROMOTE_HTTP_PORT: "3999"
       PROMOTE_WORKSPACE: /workspace
+      # COMPOSE_PROJECT_NAME, DOCKER_PROMOTE_PRUNE: set in .env.production (env_file) so values aren’t lost to host-shell compose interpolation.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
     volumes:

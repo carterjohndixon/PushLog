@@ -83,10 +83,12 @@ services:
       retries: 5
       start_period: 20s
 
+# Shared prod network — create once: `docker network create pushlog_prod`
+# (promote-production-docker.sh creates it if missing). external: true avoids
+# "network exists but was not created for project …" when compose project names differ.
 networks:
   pushlog_prod:
-    name: pushlog_prod
-    driver: bridge
+    external: true
 
 volumes:
   pushlog_agent_spool:

@@ -12,6 +12,16 @@ LOCK_FILE="${WORKSPACE}/.promote-production.lock"
 SHA_FILE="${WORKSPACE}/.prod_deployed_sha"
 AT_FILE="${WORKSPACE}/.prod_deployed_at"
 COMPOSE_FILE="${WORKSPACE}/docker-compose.production.yml"
+# Must match the Compose project name you use on this host (`docker compose ls`).
+# Set COMPOSE_PROJECT_NAME in .env.production or the promote container env (e.g. workspace).
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pushlog}"
+PROD_NETWORK_NAME="${PROD_NETWORK_NAME:-pushlog_prod}"
+# Fixed container_name values from docker-compose.production.yml (remove before up to avoid name conflicts).
+PROD_FIXED_CONTAINERS=(
+  pushlog-prod-web
+  pushlog-prod-streaming-stats
+  pushlog-agent
+)
 
 cleanup() {
   rm -f "$LOCK_FILE" 2>/dev/null || true
@@ -60,25 +70,44 @@ if [ -d .git ]; then
   log "Git operations complete. HEAD: $(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 fi
 
-# ── Remove orphan containers from previous compose projects ──
-log "Cleaning up any orphan containers..."
 DOCKER_LOG="${WORKSPACE}/deploy-production-docker.log"
-for cname in pushlog-prod-web pushlog-agent; do
+
+# ── Shared prod network (compose treats it as external) ──
+log "Ensuring Docker network ${PROD_NETWORK_NAME} exists..."
+if ! docker network inspect "$PROD_NETWORK_NAME" >/dev/null 2>&1; then
+  docker network create "$PROD_NETWORK_NAME" >> "$DOCKER_LOG" 2>&1 || { log "ERROR: Could not create network $PROD_NETWORK_NAME"; exit 1; }
+  log "  Created network $PROD_NETWORK_NAME"
+else
+  log "  Network $PROD_NETWORK_NAME already exists"
+fi
+
+# ── Remove fixed-name containers (any compose project / leftover duplicates) ──
+log "Removing conflicting production containers (if any)..."
+for cname in "${PROD_FIXED_CONTAINERS[@]}"; do
   if docker inspect "$cname" >/dev/null 2>&1; then
-    log "  Removing existing container: $cname"
-    docker stop "$cname" >> "$DOCKER_LOG" 2>&1 || true
+    log "  docker rm -f $cname"
     docker rm -f "$cname" >> "$DOCKER_LOG" 2>&1 || true
   fi
 done
 
+# ── Drop compose project stack (keeps external network + named volumes) ──
+log "docker compose -p $COMPOSE_PROJECT_NAME down --remove-orphans ..."
+docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down --remove-orphans >> "$DOCKER_LOG" 2>&1 || true
+
 # ── Rebuild and restart production containers ──
-log "Rebuilding and restarting Docker production containers..."
-if ! docker compose -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$DOCKER_LOG" 2>&1; then
+log "Rebuilding and restarting (compose project=$COMPOSE_PROJECT_NAME)..."
+if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$DOCKER_LOG" 2>&1; then
   log "ERROR: docker compose up failed. See deploy-production-docker.log for details."
   tail -20 "$DOCKER_LOG" | while IFS= read -r line; do log "  $line"; done
   exit 1
 fi
 log "Docker containers rebuilt successfully."
+
+# ── Light cleanup: dangling images, stopped containers, unused networks (not volumes) ──
+if [ "${DOCKER_PROMOTE_PRUNE:-true}" = "true" ]; then
+  log "docker system prune -f (quick cleanup, preserves volumes)..."
+  docker system prune -f >> "$DOCKER_LOG" 2>&1 || true
+fi
 
 # ── Write deployed metadata ──
 DEPLOYED_SHA="$(git rev-parse HEAD 2>/dev/null || echo "${PROMOTED_SHA:-unknown}")"
