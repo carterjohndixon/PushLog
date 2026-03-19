@@ -47,7 +47,7 @@ import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail, 
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { isUnderRepoLimit, isUnderSummaryCap, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
-import { isValidPushlogMode } from './pushlogModes';
+import { isValidPushLogMode } from './pushlogModes';
 import { estimateTokenCostFromUsage } from './aiCost';
 import { encrypt, decrypt } from './encryption';
 import speakeasy from "speakeasy";
