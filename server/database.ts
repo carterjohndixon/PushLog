@@ -4,6 +4,7 @@ import {
   users, repositories, integrations, pushEvents, pushEventFiles, slackWorkspaces, notifications, aiUsage, payments,
   favoriteModels, loginLockout, oauthSessions, oauthIdentities,
   aiModelPricing,
+  mfaRecoveryCodes,
   organizations, organizationMemberships, organizationInvites, organizationIncidentSettings,
   repositoryMembers,
   organizationAgents,
@@ -2364,6 +2365,43 @@ export class DatabaseStorage implements IStorage {
         createdAt: payment.createdAt
       }))
     };
+  }
+
+  // ── MFA Recovery Codes ──────────────────────────────────────────────
+
+  async createMfaRecoveryCodes(userId: string, hashes: string[]): Promise<void> {
+    if (hashes.length === 0) return;
+    const rows = hashes.map((h) => ({ userId, codeHash: h }));
+    await db.insert(mfaRecoveryCodes).values(rows);
+  }
+
+  async deleteMfaRecoveryCodesByUser(userId: string): Promise<void> {
+    await db.delete(mfaRecoveryCodes).where(eq(mfaRecoveryCodes.userId, userId));
+  }
+
+  async getUnusedRecoveryCodeHashes(userId: string): Promise<string[]> {
+    const rows = await db
+      .select({ codeHash: mfaRecoveryCodes.codeHash })
+      .from(mfaRecoveryCodes)
+      .where(and(eq(mfaRecoveryCodes.userId, userId), isNull(mfaRecoveryCodes.usedAt)));
+    return rows.map((r) => r.codeHash);
+  }
+
+  async markRecoveryCodeUsed(codeHash: string): Promise<boolean> {
+    const result = await db
+      .update(mfaRecoveryCodes)
+      .set({ usedAt: new Date().toISOString() })
+      .where(and(eq(mfaRecoveryCodes.codeHash, codeHash), isNull(mfaRecoveryCodes.usedAt)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getUnusedRecoveryCodeCount(userId: string): Promise<number> {
+    const rows = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(mfaRecoveryCodes)
+      .where(and(eq(mfaRecoveryCodes.userId, userId), isNull(mfaRecoveryCodes.usedAt)));
+    return rows[0]?.count ?? 0;
   }
 }
 

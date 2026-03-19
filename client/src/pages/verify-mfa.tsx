@@ -1,5 +1,6 @@
 import * as React from "react";
-import { Loader2, Smartphone, ShieldCheck } from "lucide-react";
+import { Loader2, Smartphone, ShieldCheck, KeyRound } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -21,6 +22,8 @@ export default function VerifyMfa() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [code, setCode] = React.useState("");
+  const [recoveryMode, setRecoveryMode] = React.useState(false);
+  const [recoveryCode, setRecoveryCode] = React.useState("");
 
   const verifyMutation = useMutation({
     mutationFn: async (code: string) => {
@@ -28,13 +31,11 @@ export default function VerifyMfa() {
       return res.json();
     },
     onSuccess: (data: { success?: boolean; user?: import("@/lib/profile").ProfileUser }) => {
-      // Server returns profile so we can set cache and navigate immediately (no wait for GET /api/profile)
       if (data?.success && data?.user) {
         queryClient.setQueryData(PROFILE_QUERY_KEY, { success: true, user: data.user });
       }
       toast({ title: "Login successful", description: "Welcome back." });
       setLocation("/dashboard");
-      // Prefetch full profile and dashboard data in background so dashboard loads instantly
       const opts = { credentials: "include" as RequestCredentials, headers: { Accept: "application/json" }, cache: "no-store" as RequestCache };
       queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile }).catch(() => {});
       queryClient.prefetchQuery({
@@ -58,11 +59,13 @@ export default function VerifyMfa() {
         setLocation("/login");
       } else {
         toast({
-          title: "Invalid code",
-          description: err.message || "Please enter the correct 6-digit code from your authenticator app.",
+          title: recoveryMode ? "Invalid recovery code" : "Invalid code",
+          description: err.message || (recoveryMode
+            ? "That recovery code is invalid or has already been used."
+            : "Please enter the correct 6-digit code from your authenticator app."),
           variant: "destructive",
         });
-        setCode("");
+        if (recoveryMode) setRecoveryCode(""); else setCode("");
       }
     },
   });
@@ -74,53 +77,124 @@ export default function VerifyMfa() {
     }
   };
 
+  const handleRecoverySubmit = () => {
+    const trimmed = recoveryCode.toLowerCase().trim();
+    if (trimmed.length === 10 && !verifyMutation.isPending) {
+      verifyMutation.mutate(trimmed);
+    }
+  };
+
   return (
     <AuthLayout backHref="/login" backLabel="Back to login" footer={verifyFooter}>
       <div className="mx-auto w-full max-w-lg space-y-8">
           {/* Hero */}
           <div className="text-center space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
-              Enter your verification code
+              {recoveryMode ? "Enter a recovery code" : "Enter your verification code"}
             </h1>
             <p className="text-muted-foreground">
-              We need to confirm it's you. Open your authenticator app and enter the 6-digit code.
+              {recoveryMode
+                ? "Enter one of the 10-character recovery codes you saved when setting up two-factor authentication."
+                : "We need to confirm it's you. Open your authenticator app and enter the 6-digit code."}
             </p>
           </div>
 
           {/* Main card */}
           <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-10 space-y-8">
-            <div className="flex flex-col items-center text-center space-y-4">
-              <div className="rounded-full bg-primary/10 p-4">
-                <Smartphone className="w-10 h-10 text-log-green" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-foreground">Check your authenticator app</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Enter the code that's currently showing. It updates every 30 seconds.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
-                  <InputOTPGroup className="gap-2 sm:gap-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <InputOTPSlot
-                        key={i}
-                        index={i}
-                        className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
-                      />
-                    ))}
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-              {verifyMutation.isPending && (
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Verifying…</span>
+            {recoveryMode ? (
+              <>
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <KeyRound className="w-10 h-10 text-log-green" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Use a recovery code</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Each code can only be used once.
+                    </p>
+                  </div>
                 </div>
-              )}
+
+                <div className="space-y-4">
+                  <input
+                    type="text"
+                    value={recoveryCode}
+                    onChange={(e) => setRecoveryCode(e.target.value.toLowerCase().replace(/[^0-9a-z]/g, "").slice(0, 10))}
+                    placeholder="e.g. a1b2c3d4e5"
+                    className="w-full h-14 rounded-xl border-2 border-input bg-background px-4 text-center text-lg font-mono font-semibold tracking-widest transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none placeholder:text-muted-foreground/40 placeholder:tracking-normal placeholder:font-normal"
+                    autoComplete="off"
+                    autoFocus
+                  />
+                  <Button
+                    variant="glow"
+                    className="w-full font-semibold"
+                    disabled={recoveryCode.trim().length !== 10 || verifyMutation.isPending}
+                    onClick={handleRecoverySubmit}
+                  >
+                    {verifyMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Verifying…
+                      </>
+                    ) : (
+                      "Verify recovery code"
+                    )}
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col items-center text-center space-y-4">
+                  <div className="rounded-full bg-primary/10 p-4">
+                    <Smartphone className="w-10 h-10 text-log-green" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-foreground">Check your authenticator app</h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Enter the code that's currently showing. It updates every 30 seconds.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex justify-center">
+                    <InputOTP maxLength={6} value={code} onChange={handleCodeChange}>
+                      <InputOTPGroup className="gap-2 sm:gap-3">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <InputOTPSlot
+                            key={i}
+                            index={i}
+                            className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl border-2 border-input bg-background text-center text-lg font-semibold transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 focus:ring-offset-2"
+                          />
+                        ))}
+                      </InputOTPGroup>
+                    </InputOTP>
+                  </div>
+                  {verifyMutation.isPending && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying…</span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Toggle between TOTP and recovery code */}
+            <div className="border-t border-border pt-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setRecoveryMode(!recoveryMode);
+                  setCode("");
+                  setRecoveryCode("");
+                }}
+                className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center"
+              >
+                {recoveryMode
+                  ? "Back to authenticator code"
+                  : "Lost phone or can\u2019t access your MFA app? Enter recovery code"}
+              </button>
             </div>
           </div>
 

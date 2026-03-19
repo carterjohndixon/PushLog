@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Loader2, ShieldCheck, Lock, Smartphone, RefreshCw } from "lucide-react";
+import { Loader2, ShieldCheck, Lock, Smartphone, RefreshCw, Copy, Download, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +22,9 @@ export default function SetupMfa() {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [code, setCode] = React.useState("");
+  const [recoveryCodes, setRecoveryCodes] = React.useState<string[] | null>(null);
+  const [savedConfirmed, setSavedConfirmed] = React.useState(false);
+  const [copied, setCopied] = React.useState(false);
 
   const { data, isLoading: setupLoading, error: setupError } = useQuery<{ qrDataUrl: string }>({
     queryKey: ["/api/mfa/setup"],
@@ -48,10 +51,10 @@ export default function SetupMfa() {
       const res = await apiRequest("POST", "/api/mfa/setup", { code });
       return res.json();
     },
-    onSuccess: async () => {
-      await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
-      toast({ title: "MFA enabled", description: "Your account is now protected with two-factor authentication." });
-      setLocation("/dashboard");
+    onSuccess: (data: { success: boolean; recoveryCodes?: string[] }) => {
+      if (data.recoveryCodes?.length) {
+        setRecoveryCodes(data.recoveryCodes);
+      }
     },
     onError: (err: Error) => {
       const isSessionExpired =
@@ -73,11 +76,48 @@ export default function SetupMfa() {
     },
   });
 
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/mfa/setup/confirm", {});
+      return res.json();
+    },
+    onSuccess: async () => {
+      await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
+      toast({ title: "MFA enabled", description: "Your account is now protected with two-factor authentication." });
+      setLocation("/dashboard");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Setup failed", description: err.message, variant: "destructive" });
+    },
+  });
+
   const handleCodeChange = (value: string) => {
     setCode(value);
     if (value.length === 6 && !verifyMutation.isPending) {
       verifyMutation.mutate(value);
     }
+  };
+
+  const handleCopy = () => {
+    if (!recoveryCodes) return;
+    navigator.clipboard.writeText(recoveryCodes.join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const handleDownload = () => {
+    if (!recoveryCodes) return;
+    const text = "PushLog MFA Recovery Codes\n" + "=".repeat(30) + "\n\n" +
+      recoveryCodes.map((c, i) => `${String(i + 1).padStart(2, " ")}. ${c}`).join("\n") +
+      "\n\nEach code can only be used once.\nStore these somewhere safe.\n";
+    const blob = new Blob([text], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "pushlog-recovery-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (setupLoading) {
@@ -117,6 +157,88 @@ export default function SetupMfa() {
           <p className="text-sm text-muted-foreground">
             <a href="/login" className="text-primary font-medium hover:underline">Return to login</a>
           </p>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  // Recovery codes step (Step 3)
+  if (recoveryCodes) {
+    return (
+      <AuthLayout backHref="/login" backLabel="Back to login" footer={setupFooter}>
+        <div className="mx-auto max-w-2xl w-full space-y-8">
+          <div className="text-center space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground tracking-tight">
+              Save your recovery codes
+            </h1>
+            <p className="text-muted-foreground max-w-md mx-auto">
+              If you lose access to your authenticator app, you can use one of these codes to sign in. Each code can only be used once.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-card shadow-xl p-6 sm:p-8 space-y-6">
+            <div className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-log-green text-white text-sm font-bold">
+                3
+              </span>
+              <h3 className="text-lg font-semibold text-foreground">Recovery codes</h3>
+            </div>
+
+            <div className="rounded-xl border-2 border-border bg-muted/30 p-5">
+              <div className="grid grid-cols-2 gap-2 font-mono text-sm">
+                {recoveryCodes.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-background border border-border">
+                    <span className="text-muted-foreground text-xs w-5 text-right">{i + 1}.</span>
+                    <span className="text-foreground tracking-wider">{c}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={handleCopy}>
+                {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                {copied ? "Copied" : "Copy all"}
+              </Button>
+              <Button variant="outline" className="flex-1" onClick={handleDownload}>
+                <Download className="mr-2 h-4 w-4" />
+                Download
+              </Button>
+            </div>
+
+            <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4">
+              <p className="text-sm text-yellow-200 font-medium">Store these codes somewhere safe.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                These codes will not be shown again. If you lose your phone and don't have these codes, you'll be locked out of your account.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={savedConfirmed}
+                onChange={(e) => setSavedConfirmed(e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-border bg-background text-log-green focus:ring-log-green/30"
+              />
+              <span className="text-sm text-foreground">I've saved my recovery codes in a safe place</span>
+            </label>
+
+            <Button
+              variant="glow"
+              className="w-full font-semibold"
+              disabled={!savedConfirmed || confirmMutation.isPending}
+              onClick={() => confirmMutation.mutate()}
+            >
+              {confirmMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Completing setup…
+                </>
+              ) : (
+                "Complete setup"
+              )}
+            </Button>
+          </div>
         </div>
       </AuthLayout>
     );
@@ -217,7 +339,7 @@ export default function SetupMfa() {
                     Verifying…
                   </>
                 ) : (
-                  "Verify and enable two-factor"
+                  "Verify and continue"
                 )}
               </Button>
             </div>

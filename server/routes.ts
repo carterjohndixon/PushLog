@@ -73,6 +73,7 @@ import { authenticateAgentToken } from "./middleware/agentAuth";
 import { agentRateLimit } from "./middleware/agentRateLimit";
 import { bufferAgentEvent } from "./helper/agentBuffer";
 import { hashToken, generateAgentToken } from "./helper/tokens";
+import { generateRecoveryCodes, looksLikeRecoveryCode } from "./helper/recoveryCodes";
 import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
 import { listCommitsByPath } from "./github";
 
@@ -1861,13 +1862,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const valid = speakeasy.totp.verify({ secret, encoding: "base32", token: code, window: 2 });
       if (!valid) return res.status(401).json({ error: "Invalid code. Please try again." });
       const userId = req.session!.userId!;
-      const encrypted = encrypt(secret);
-      await databaseStorage.updateUser(userId, { totpSecret: encrypted, mfaEnabled: true } as any);
-      delete (req.session as any).mfaPending;
-      delete (req.session as any).mfaSetupRequired;
-      delete (req.session as any).mfaSetupSecret;
+
+      // Generate recovery codes, hash them, store in DB
+      const rawCodes = generateRecoveryCodes();
+      const hashes = await Promise.all(rawCodes.map((c) => bcrypt.hash(c, 10)));
+      await databaseStorage.deleteMfaRecoveryCodesByUser(userId);
+      await databaseStorage.createMfaRecoveryCodes(userId, hashes);
+
+      // Store verified secret in session; MFA is NOT enabled yet until /api/mfa/setup/confirm
+      (req.session as any).mfaSetupVerified = true;
       await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
-      res.status(200).json({ success: true });
+
+      res.status(200).json({ success: true, recoveryCodes: rawCodes });
     } catch (err) {
       console.error("MFA setup verify error:", err);
       Sentry.captureException(err);
@@ -1875,23 +1881,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // MFA verify (login) — requires mfaPending session
-  app.post("/api/mfa/verify", requireMfaPendingSession, body("code").trim().isLength({ min: 6, max: 6 }), async (req: Request, res: Response) => {
+  // MFA setup confirm — user confirms they saved recovery codes, finalize MFA enable
+  app.post("/api/mfa/setup/confirm", requireMfaPendingSession, async (req: Request, res: Response) => {
+    try {
+      const session = req.session as any;
+      if (!session.mfaSetupVerified || !session.mfaSetupSecret) {
+        return res.status(400).json({ error: "Complete the TOTP verification step first." });
+      }
+      const userId = req.session!.userId!;
+      const encrypted = encrypt(session.mfaSetupSecret);
+      await databaseStorage.updateUser(userId, { totpSecret: encrypted, mfaEnabled: true } as any);
+      delete session.mfaPending;
+      delete session.mfaSetupRequired;
+      delete session.mfaSetupSecret;
+      delete session.mfaSetupVerified;
+      await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
+      res.status(200).json({ success: true });
+    } catch (err) {
+      console.error("MFA setup confirm error:", err);
+      Sentry.captureException(err);
+      res.status(500).json({ error: "Failed to finalize MFA" });
+    }
+  });
+
+  // MFA verify (login) — accepts 6-digit TOTP or 10-char recovery code
+  app.post("/api/mfa/verify", requireMfaPendingSession, body("code").trim().isLength({ min: 6, max: 10 }), async (req: Request, res: Response) => {
     try {
       const errors = validationResult(req);
       if (!errors.isEmpty()) return res.status(400).json({ error: "Invalid code" });
-      const code = req.body.code as string;
+      const code = (req.body.code as string).toLowerCase().trim();
       const userId = req.session!.userId!;
       const user = await databaseStorage.getUserById(userId);
       if (!user) return res.status(404).json({ error: "User not found.", code: "user_not_found" });
-      const rawSecret = (user as any)?.totpSecret ? decrypt((user as any).totpSecret) : null;
-      if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support.", code: "mfa_not_configured" });
-      const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 2 });
-      if (!valid) return res.status(401).json({ error: "Invalid code. Please try again.", code: "invalid_code" });
+
+      let verified = false;
+
+      if (looksLikeRecoveryCode(code)) {
+        // Recovery code path
+        const hashes = await databaseStorage.getUnusedRecoveryCodeHashes(userId);
+        for (const hash of hashes) {
+          if (await bcrypt.compare(code, hash)) {
+            await databaseStorage.markRecoveryCodeUsed(hash);
+            verified = true;
+            break;
+          }
+        }
+        if (!verified) {
+          return res.status(401).json({ error: "Invalid or already used recovery code.", code: "invalid_recovery_code" });
+        }
+      } else {
+        // TOTP path
+        const rawSecret = (user as any)?.totpSecret ? decrypt((user as any).totpSecret) : null;
+        if (!rawSecret) return res.status(401).json({ error: "MFA not configured. Please contact support.", code: "mfa_not_configured" });
+        const valid = speakeasy.totp.verify({ secret: rawSecret, encoding: "base32", token: code, window: 2 });
+        if (!valid) return res.status(401).json({ error: "Invalid code. Please try again.", code: "invalid_code" });
+        verified = true;
+      }
+
+      if (!verified) return res.status(401).json({ error: "Verification failed.", code: "invalid_code" });
+
       delete (req.session as any).mfaPending;
       delete (req.session as any).mfaSetupRequired;
       await new Promise<void>((resolve, reject) => req.session!.save((err) => (err ? reject(err) : resolve())));
-      // Return profile so client can set cache and navigate immediately (no extra GET /api/profile round trip)
       const profileUser = {
         id: user.id,
         username: user.username || "",
