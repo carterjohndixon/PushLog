@@ -3,12 +3,8 @@
 # Or standalone: docker compose -f docker-compose.promote.yml up -d
 #
 # Requires PROMOTE_PROD_WEBHOOK_SECRET in .env.production (or env).
-# Staging's .env.staging needs:
-#   PROMOTE_PROD_WEBHOOK_URL=http://172.17.0.1:3999
-#   PROMOTE_PROD_WEBHOOK_SECRET=<same secret>
-#
-# From inside staging container, 172.17.0.1 is the Docker bridge gateway to the host.
-# Ensure port 3999 is not exposed to the internet (firewall/nginx).
+# The staging-app container reaches this service by container name (pushlog-promote)
+# on the shared "pushlog" Docker network.
 
 services:
   pushlog-promote:
@@ -22,14 +18,17 @@ services:
     environment:
       PROMOTE_HTTP_PORT: "3999"
       PROMOTE_WORKSPACE: /workspace
-      # PROMOTE_PROD_WEBHOOK_SECRET comes from env_file: .env.production
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       GITHUB_PERSONAL_ACCESS_TOKEN: ${GITHUB_PERSONAL_ACCESS_TOKEN:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/workspace
     ports:
-      # Bind to all interfaces so staging container can reach via 172.17.0.1:3999
-      - "3999:3999"
-    # Optional: use host network if 172.17.0.1 doesn't work (e.g. some Docker setups)
-    # network_mode: host
+      - "127.0.0.1:3999:3999"
+    networks:
+      - pushlog
+
+networks:
+  pushlog:
+    name: pushlog
+    external: true

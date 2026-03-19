@@ -1,8 +1,8 @@
 # Promote service — runs production promotion via Docker (replaces PM2-based deploy-production.sh)
-# Uses docker:24-cli for reliable docker compose; adds node for the HTTP server.
-FROM docker:24-cli
+# Uses Node Alpine as base, then adds Docker CLI + git + bash for promotion scripts.
+FROM node:20-alpine
 
-RUN apk add --no-cache nodejs git bash
+RUN apk add --no-cache docker-cli docker-cli-compose git bash
 
 WORKDIR /app
 
