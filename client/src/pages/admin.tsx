@@ -280,7 +280,8 @@ export default function AdminPage() {
 
   // ── Commit classification helpers ──
   const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
-  const stagingSha = data?.stagingDeployedSha || null;
+  const stagingShaRaw = data?.stagingDeployedSha || null;
+  const stagingSha = stagingShaRaw || data?.headSha || null;
 
   /** Build a set of pending SHAs for quick lookup */
   const pendingShaSet = new Set((data?.pendingCommits || []).map((c) => c.sha));

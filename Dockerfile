@@ -31,6 +31,9 @@ FROM node:20-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
+ARG CACHEBUST
+RUN echo "${CACHEBUST:-unknown}" > /app/.staging_deployed_sha && date -u +"%Y-%m-%dT%H:%M:%SZ" > /app/.staging_deployed_at
+ENV SOURCE_COMMIT=${CACHEBUST:-unknown}
 
 COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
