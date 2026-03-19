@@ -19,6 +19,30 @@ services:
     networks:
       - pushlog
 
+  staging-streaming-stats:
+    build:
+      context: .
+      dockerfile: Dockerfile.streaming-stats
+    container_name: pushlog-staging-streaming-stats
+    restart: unless-stopped
+    depends_on:
+      staging-db:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    environment:
+      PORT: "5004"
+      STREAMING_STATS_LISTEN_HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://${STAGING_DB_USER:-pushlog}:${STAGING_DB_PASSWORD}@staging-db:5432/${STAGING_DB_NAME:-pushlog_staging}
+    networks:
+      - pushlog
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5004/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
   staging-app:
     build:
       context: .
@@ -33,6 +57,8 @@ services:
     depends_on:
       staging-db:
         condition: service_healthy
+      staging-streaming-stats:
+        condition: service_healthy
     env_file:
       - .env.staging
     environment:
@@ -43,6 +69,8 @@ services:
       APP_URL: https://staging.pushlog.ai
       COOKIE_DOMAIN: staging.pushlog.ai
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine
+      RISK_ENGINE_BIN: /app/bin/risk-engine
+      STATS_ENGINE_URL: http://staging-streaming-stats:5004
       SLACK_NOTIFICATIONS_ENABLED: "false"
       BILLING_ENABLED: "false"
       PROMOTE_PROD_WEBHOOK_URL: "http://pushlog-promote:3999"

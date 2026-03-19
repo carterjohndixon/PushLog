@@ -1,4 +1,28 @@
 services:
+  # Rust HTTP service: pre-aggregates push stats for fast dashboards (replaces PM2 streaming-stats-prod).
+  prod-streaming-stats:
+    build:
+      context: .
+      dockerfile: Dockerfile.streaming-stats
+    container_name: pushlog-prod-streaming-stats
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      PORT: "5004"
+      STREAMING_STATS_LISTEN_HOST: "0.0.0.0"
+    networks:
+      - pushlog_prod
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:5004/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    # If DATABASE_SSL_CA_PATH in .env.production points to a host file, mount it at the same path:
+    # volumes:
+    #   - ./config/supabase-db.crt:/app/config/supabase-db.crt:ro
+
   pushlog-prod-web:
     build:
       context: .
@@ -9,6 +33,9 @@ services:
         SENTRY_PROJECT: ${SENTRY_PROJECT:-}
     container_name: pushlog-prod-web
     restart: unless-stopped
+    depends_on:
+      prod-streaming-stats:
+        condition: service_healthy
     env_file:
       - .env.production
     environment:
@@ -16,14 +43,21 @@ services:
       APP_ENV: production
       PORT: "3000"
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine
+      RISK_ENGINE_BIN: /app/bin/risk-engine
+      STATS_ENGINE_URL: http://prod-streaming-stats:5004
     ports:
       - "127.0.0.1:3000:3000"
+    networks:
+      - pushlog_prod
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
+    # Match prod-streaming-stats if you use a custom DB CA:
+    # volumes:
+    #   - ./config/supabase-db.crt:/app/config/supabase-db.crt:ro
 
   pushlog-agent:
     build:
@@ -40,12 +74,19 @@ services:
       - pushlog_agent_spool:/var/lib/pushlog-agent/spool
       # Optional: uncomment if you use `type: docker` sources in agent config.
       # - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - pushlog_prod
     healthcheck:
       test: ["CMD-SHELL", "pidof pushlog-agent >/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 20s
+
+networks:
+  pushlog_prod:
+    name: pushlog_prod
+    driver: bridge
 
 volumes:
   pushlog_agent_spool:

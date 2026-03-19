@@ -1,7 +1,8 @@
 //! Binary entrypoint for the streaming stats engine.
 
 use axum::{routing::get, routing::post, Router};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
+use std::str::FromStr;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
@@ -62,7 +63,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .layer(CorsLayer::permissive())
     .with_state(state);
 
-  let addr = SocketAddr::from(([127, 0, 0, 1], port));
+  // Default 127.0.0.1 for bare-metal/PM2; set STREAMING_STATS_LISTEN_HOST=0.0.0.0 in Docker.
+  let listen_host = std::env::var("STREAMING_STATS_LISTEN_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+  let ip = IpAddr::from_str(listen_host.trim()).unwrap_or_else(|_| {
+    eprintln!(
+      "streaming-stats: invalid STREAMING_STATS_LISTEN_HOST={:?}, using 127.0.0.1",
+      listen_host
+    );
+    IpAddr::from_str("127.0.0.1").expect("loopback")
+  });
+  let addr = SocketAddr::from((ip, port));
   println!("streaming-stats listening on http://{}", addr);
 
   let listener = tokio::net::TcpListener::bind(addr).await?;

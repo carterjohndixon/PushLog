@@ -26,6 +26,7 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # - carter.pushlog.ai static site
 RUN npm run build:production
 RUN cargo build --release -p incident-engine
+RUN cargo build --release -p risk-engine
 RUN npm prune --omit=dev
 
 FROM node:20-bookworm-slim AS runtime
@@ -40,6 +41,7 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/carter.pushlog.ai/dist ./carter.pushlog.ai/dist
 COPY --from=build /app/target/release/incident-engine /app/bin/incident-engine
+COPY --from=build /app/target/release/risk-engine /app/bin/risk-engine
 
 EXPOSE 3000
 CMD ["node", "dist/index.js"]

@@ -24,6 +24,7 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 RUN cargo build --release -p incident-engine
+RUN cargo build --release -p risk-engine
 RUN rm -rf /root/.rustup/toolchains/*/share /app/target/release/build /app/target/release/deps/*.d
 
 # Minimal runtime
@@ -39,6 +40,7 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/target/release/incident-engine /app/bin/incident-engine
+COPY --from=build /app/target/release/risk-engine /app/bin/risk-engine
 COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
