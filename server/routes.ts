@@ -2069,8 +2069,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const clientId = process.env.GITHUB_OAUTH_CLIENT_ID || process.env.GITHUB_CLIENT_ID || "Ov23li5UgB18JcaZHnxk";
       const redirectUri = process.env.APP_URL ? `${process.env.APP_URL.replace(/\/$/, "")}/auth/github/callback` : "https://pushlog.ai/auth/github/callback";
       const scope = "repo user:email read:org admin:org_hook";
-      
-      const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&state=${state}`;
+      const prompt = refreshOrgs ? "select_account" : "";
+      const authorizeParams = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        scope,
+        state,
+      });
+      if (prompt) authorizeParams.set("prompt", prompt);
+      const url = `https://github.com/login/oauth/authorize?${authorizeParams.toString()}`;
       
       // Instead of redirecting, send the URL and state back to the client
       res.status(200).json({ url, state });

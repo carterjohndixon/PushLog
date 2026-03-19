@@ -1132,16 +1132,6 @@ export default function OrganizationPage() {
                           >
                             {createInviteLinkMutation.isPending ? "Creating…" : "Create invite link"}
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-dashed ml-auto"
-                            onClick={handleConnectNewOrgs}
-                            disabled={connectNewOrgsLoading}
-                          >
-                            {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
-                            {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
-                          </Button>
                         </div>
                         <div className="space-y-2 pt-5">
                           <Label>Members</Label>
