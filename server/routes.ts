@@ -4459,7 +4459,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Enforce pushlogMode access based on org plan
-      if (updates.pushlogMode && isValidPushlogMode(updates.pushlogMode) && orgId) {
+      if (updates.pushlogMode && isValidPushLogMode(updates.pushlogMode) && orgId) {
         const org = await databaseStorage.getOrganization(orgId);
         const plan = ((org as any)?.plan || "free") as PlanName;
         if (!isModeAllowed(plan, updates.pushlogMode)) {
@@ -6472,7 +6472,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (body.preferredAiModel) {
         updates.preferredAiModel = body.preferredAiModel;
       }
-      if (body.preferredPushlogMode && isValidPushlogMode(body.preferredPushlogMode)) {
+      if (body.preferredPushlogMode && isValidPushLogMode(body.preferredPushlogMode)) {
         const orgId = (req.user as any).organizationId;
         if (orgId) {
           const org = await databaseStorage.getOrganization(orgId);
