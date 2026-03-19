@@ -265,8 +265,6 @@ export default function Models() {
     },
     onSuccess: (_, mode) => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      const label = MODE_CARDS.find((c) => c.mode === mode)?.label ?? mode;
-      toast({ title: "Summary mode updated", description: `All new integrations will use "${label}" summaries.` });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to update summary mode", description: e.message, variant: "destructive" });
