@@ -250,6 +250,17 @@
   }
 }
 
+.no-focus-ring,
+.no-focus-ring:focus,
+.no-focus-ring:focus-visible,
+.no-focus-ring:focus-within {
+  outline: none !important;
+  box-shadow: none !important;
+  ring: 0 !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

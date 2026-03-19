@@ -147,9 +147,9 @@ export default function Pricing() {
                   ) : (
                     <Link
                       href="/signup"
-                      className="block outline-none focus:outline-none focus-visible:ring-0 rounded-md"
+                      className="block rounded-md no-focus-ring"
                     >
-                      <Button variant="outline" className="w-full outline-none focus:outline-none focus-visible:ring-0">
+                      <Button variant="outline" className="w-full no-focus-ring" tabIndex={-1}>
                         Get Started
                       </Button>
                     </Link>

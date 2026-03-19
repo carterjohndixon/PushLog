@@ -77,6 +77,7 @@ export default function AdminPage() {
   const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
   const prevRemoteSha = useRef<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const logLineCountAtClear = useRef<number>(0);
 
   const { data: rawData, isLoading, error } = useQuery<AdminStatus>({
     queryKey: ["/api/admin/staging/status"],
@@ -177,6 +178,7 @@ export default function AdminPage() {
       setLocalPromoteAt(Date.now());
       setForceInProgress(false);
       setLogsOpen(true);
+      logLineCountAtClear.current = allLogLines.length;
       toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
@@ -224,7 +226,8 @@ export default function AdminPage() {
   const localInProgress = Boolean(localPromoteAt && Date.now() - localPromoteAt < LOCAL_PROMOTE_TTL);
 
   const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
-  const promoteLogTail = (data?.promoteRemoteStatus?.recentLogLines || []).slice(-80);
+  const allLogLines = data?.promoteRemoteStatus?.recentLogLines || [];
+  const promoteLogTail = allLogLines.slice(logLineCountAtClear.current).slice(-80);
   const lastLogLine = promoteLogTail[promoteLogTail.length - 1] || "";
   const promotionFinishedFromLogs =
     lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
