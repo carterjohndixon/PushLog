@@ -157,27 +157,55 @@ export default function OrganizationPage() {
     return window.localStorage.getItem(GITHUB_ORG_STORAGE_KEY) ?? "";
   });
   const [githubInviteRole, setGithubInviteRole] = useState<string>("developer");
-  const [connectNewOrgsLoading, setConnectNewOrgsLoading] = useState(false);
+  const [reconnectGitHubLoading, setReconnectGitHubLoading] = useState(false);
   const [pendingOrgSwitch, setPendingOrgSwitch] = useState<string | null>(null);
 
-  const handleConnectNewOrgs = async () => {
-    setConnectNewOrgsLoading(true);
+  /** Disconnect GitHub (revokes OAuth grant on GitHub when configured), then open authorize — full reset for org access. */
+  const handleReconnectGitHubFull = async () => {
+    setReconnectGitHubLoading(true);
     try {
-      const response = await fetch("/api/github/connect?refreshOrgs=true", { credentials: "include", headers: { Accept: "application/json" } });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        toast({ title: "Connection failed", description: data.error || "Could not connect.", variant: "destructive" });
+      const disconnectRes = await fetch("/api/github/disconnect", {
+        method: "POST",
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const disconnectData = await disconnectRes.json().catch(() => ({}));
+      if (!disconnectRes.ok) {
+        toast({
+          title: "Could not disconnect GitHub",
+          description: (disconnectData as { error?: string }).error || "Try again, or disconnect from Settings.",
+          variant: "destructive",
+        });
         return;
       }
-      if (data.url) {
+
+      const connectRes = await fetch("/api/github/connect", {
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      });
+      const connectData = await connectRes.json().catch(() => ({}));
+      if (!connectRes.ok) {
+        toast({
+          title: "Reconnect failed",
+          description:
+            (connectData as { error?: string }).error ||
+            "GitHub was disconnected. Connect GitHub from Settings → Integrations.",
+          variant: "destructive",
+        });
+        await queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+        return;
+      }
+      if ((connectData as { url?: string }).url) {
+        const data = connectData as { url: string; state?: string };
         if (data.state) localStorage.setItem("github_oauth_state", data.state);
         localStorage.setItem("returnPath", "/organization?github_refresh=1");
         window.location.href = data.url;
       }
     } catch {
-      toast({ title: "Connection failed", description: "Could not start GitHub connection.", variant: "destructive" });
+      toast({ title: "Reconnect failed", description: "Something went wrong. Try Settings → disconnect GitHub, then connect again.", variant: "destructive" });
+      await queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
     } finally {
-      setConnectNewOrgsLoading(false);
+      setReconnectGitHubLoading(false);
     }
   };
 
@@ -1021,21 +1049,33 @@ export default function OrganizationPage() {
                       <Github className="w-5 h-5 text-log-green" />
                       Invite from GitHub organization
                     </DialogTitle>
-                    <DialogDescription>
-                      Choose a GitHub org you belong to, see who is not yet in your PushLog organization, then create an invite link to share with them.
+                    <DialogDescription className="space-y-2">
+                      <span className="block">
+                        Choose a GitHub org you belong to, see who is not yet in your PushLog organization, then create an invite link to share with them.
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        Missing an org or need to change access? Use <strong className="text-foreground font-medium">Reconnect GitHub</strong> — same as disconnecting in Settings, then connecting again: PushLog removes the GitHub authorization (when the server is configured with OAuth secrets), then opens GitHub so you can approve organization access. Or do it manually in{" "}
+                        <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
+                          Settings → GitHub
+                        </Link>
+                        .
+                      </span>
                     </DialogDescription>
-                    {!githubOrgsLoading && !githubOrgsErrorState && githubOrgs.length > 0 && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center mt-3">
                       <Button
                         variant="outline"
                         size="sm"
-                        className="w-full sm:w-auto mt-3 border-dashed"
-                        onClick={handleConnectNewOrgs}
-                        disabled={connectNewOrgsLoading}
+                        className="w-full sm:w-auto border-dashed"
+                        onClick={handleReconnectGitHubFull}
+                        disabled={reconnectGitHubLoading}
                       >
-                        {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
-                        {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
+                        {reconnectGitHubLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
+                        {reconnectGitHubLoading ? "Reconnecting…" : "Reconnect GitHub"}
                       </Button>
-                    )}
+                      <p className="text-xs text-muted-foreground sm:max-w-[16rem]">
+                        Available as soon as you open this dialog — no need to wait for the list below.
+                      </p>
+                    </div>
                   </DialogHeader>
                   <div className="space-y-4 pt-2">
                     <div className="space-y-2">
@@ -1049,30 +1089,24 @@ export default function OrganizationPage() {
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">Could not load organizations</p>
                           <p className="mt-1">{githubOrgsError instanceof Error ? githubOrgsError.message : "An error occurred."}</p>
-                          <p className="mt-2 text-xs">Reconnect GitHub in Settings to grant organization access, or connect new orgs.</p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
-                              {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
-                              {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
-                            </Button>
-                            <Link href="/settings">
-                              <Button variant="outline" size="sm">Open Settings</Button>
+                          <p className="mt-2 text-xs">
+                            Use <strong className="text-foreground">Reconnect GitHub</strong> at the top of this dialog, or disconnect manually from{" "}
+                            <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
+                              Settings → GitHub
                             </Link>
-                          </div>
+                            .
+                          </p>
                         </div>
                       ) : githubOrgs.length === 0 ? (
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">No organization found</p>
-                          <p className="mt-1 text-xs">Connect GitHub orgs you have access to, or reconnect in Settings to refresh permissions.</p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button variant="outline" size="sm" onClick={handleConnectNewOrgs} disabled={connectNewOrgsLoading}>
-                              {connectNewOrgsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
-                              {connectNewOrgsLoading ? "Connecting…" : "Connect new orgs"}
-                            </Button>
-                            <Link href="/settings">
-                              <Button variant="outline" size="sm">Open Settings</Button>
-                            </Link>
-                          </div>
+                          <p className="mt-1 text-xs">
+                            Use <strong className="text-foreground">Reconnect GitHub</strong> at the top of this dialog to approve organization access on GitHub, or go to{" "}
+                            <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
+                              Settings → GitHub
+                            </Link>{" "}
+                            to disconnect and connect manually.
+                          </p>
                         </div>
                       ) : (
                         <Select
