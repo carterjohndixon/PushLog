@@ -66,6 +66,19 @@ type AdminStatus = {
 
 const LOCAL_PROMOTE_TTL = 120_000;
 
+/** Convert log line timestamps like [2026-03-19 12:33:40 AM PDT] to the user's local timezone */
+function localizeLogLine(line: string): string {
+  return line.replace(/^\[(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}:\d{2}\s+[AP]M\s+\w+)\]/, (_match, ts) => {
+    try {
+      const d = new Date(ts);
+      if (isNaN(d.getTime())) return _match;
+      return `[${d.toLocaleString(undefined, { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZoneName: "short" })}]`;
+    } catch {
+      return _match;
+    }
+  });
+}
+
 export default function AdminPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -525,7 +538,7 @@ export default function AdminPage() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <pre className="text-xs whitespace-pre-wrap break-words max-h-[400px] overflow-y-auto rounded bg-background p-3 border border-border font-mono mt-2">
-                            {promoteLogTail.join("\n")}
+                            {promoteLogTail.map(localizeLogLine).join("\n")}
                             <div ref={logsEndRef} />
                           </pre>
                         </CollapsibleContent>
