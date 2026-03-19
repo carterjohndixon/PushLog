@@ -1906,6 +1906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         monthlyBudget: (user as any).monthlyBudget ?? null,
         overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" as const : "skip_ai" as const,
         preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
+        preferredPushlogMode: (user as any).preferredPushlogMode ?? "clean_summary",
         devMode: !!((user as any).devMode),
         incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
         receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
@@ -4146,15 +4147,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Use user's preferred AI model as default if not specified
+      // Use user's preferred AI model and pushlog mode as defaults if not specified
       const user = await databaseStorage.getUserById(userId);
       const defaultAiModel = user?.preferredAiModel || 'gpt-5.2';
+      const defaultPushlogMode = (user as any)?.preferredPushlogMode || 'clean_summary';
       
       const integration = await storage.createIntegration({
         ...validatedData,
         userId: userId,
         organizationId: (req.user as any).organizationId ?? undefined,
         aiModel: validatedData.aiModel || defaultAiModel,
+        ...( !(validatedData as any).pushlogMode && { pushlogMode: defaultPushlogMode }),
       });
       
       // Send welcome message to Slack if integration is active
@@ -6406,6 +6409,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           monthlyBudget: user.monthlyBudget ?? null,
           overBudgetBehavior: (user as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai",
           preferredAiModel: (user as any).preferredAiModel ?? "gpt-5.2",
+          preferredPushlogMode: (user as any).preferredPushlogMode ?? "clean_summary",
           devMode: !!(user as any).devMode,
           incidentEmailEnabled: (user as any).incidentEmailEnabled !== false,
           receiveIncidentNotifications: (user as any).receiveIncidentNotifications !== false,
@@ -6460,13 +6464,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/user", authenticateToken, async (req, res) => {
     try {
       const userId = req.user!.userId;
-      const body = req.body as { preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean };
+      const body = req.body as { preferredAiModel?: string; preferredPushlogMode?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean };
       const updates: Record<string, unknown> = {};
       if (body.overBudgetBehavior && body.overBudgetBehavior === "free_model" || body.overBudgetBehavior === "skip_ai") {
         updates.overBudgetBehavior = body.overBudgetBehavior;
       }
       if (body.preferredAiModel) {
         updates.preferredAiModel = body.preferredAiModel;
+      }
+      if (body.preferredPushlogMode && isValidPushlogMode(body.preferredPushlogMode)) {
+        const orgId = (req.user as any).organizationId;
+        if (orgId) {
+          const org = await databaseStorage.getOrganization(orgId);
+          const plan = (((org as any)?.plan || "free") as PlanName);
+          if (!isModeAllowed(plan, body.preferredPushlogMode as any)) {
+            return res.status(403).json({
+              error: `The "${body.preferredPushlogMode}" mode requires a higher plan. Upgrade to access this mode.`,
+              code: "MODE_NOT_ALLOWED",
+            });
+          }
+        }
+        updates.preferredPushlogMode = body.preferredPushlogMode;
       }
       if (typeof body.devMode === "boolean") {
         if (APP_ENV !== "staging") {
@@ -6489,8 +6507,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const user = await databaseStorage.updateUser(userId, updates as any);
       if (!user) return res.status(404).json({ error: "User not found" });
-      const resBody: { success: boolean; preferredAiModel?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean } = { success: true };
+      const resBody: { success: boolean; preferredAiModel?: string; preferredPushlogMode?: string; overBudgetBehavior?: string; devMode?: boolean; incidentEmailEnabled?: boolean; receiveIncidentNotifications?: boolean } = { success: true };
       if (updates.preferredAiModel !== undefined) resBody.preferredAiModel = (user as any).preferredAiModel;
+      if (updates.preferredPushlogMode !== undefined) resBody.preferredPushlogMode = (user as any).preferredPushlogMode;
       if (updates.overBudgetBehavior !== undefined) resBody.overBudgetBehavior = (user as any).overBudgetBehavior;
       if (updates.devMode !== undefined) resBody.devMode = !!(user as any).devMode;
       if (updates.incidentEmailEnabled !== undefined) resBody.incidentEmailEnabled = (user as any).incidentEmailEnabled !== false;

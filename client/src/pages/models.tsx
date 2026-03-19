@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Sparkles, Loader2, Lock, ChevronDown, ChevronRight, Settings } from "lucide-react";
+import { Sparkles, Loader2, Lock, ChevronDown, ChevronRight, Settings, Eye, Check } from "lucide-react";
 import { Link } from "wouter";
 import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
@@ -55,14 +55,70 @@ interface ModeCard {
   label: string;
   description: string;
   requiredPlan: "free" | "pro" | "team";
+  example: { summary: string; impact: string; category: string; details: string };
 }
 
 const MODE_CARDS: ModeCard[] = [
-  { mode: "clean_summary", label: "Clean Summary", description: "Balanced developer-friendly summaries optimized for readability and signal.", requiredPlan: "free" },
-  { mode: "slack_friendly", label: "Slack-Friendly", description: "Short, scannable summaries designed for quick reading in Slack.", requiredPlan: "pro" },
-  { mode: "detailed_engineering", label: "Detailed Engineering", description: "Technical deep-dives with implementation details for engineers.", requiredPlan: "pro" },
-  { mode: "executive_summary", label: "Executive Summary", description: "Non-technical summaries focused on business value and user outcomes.", requiredPlan: "pro" },
-  { mode: "incident_aware", label: "Incident-Aware", description: "Risk-focused analysis highlighting potential production issues and breaking changes.", requiredPlan: "team" },
+  {
+    mode: "clean_summary",
+    label: "Clean Summary",
+    description: "Balanced developer-friendly summaries optimized for readability and signal.",
+    requiredPlan: "free",
+    example: {
+      summary: "Add user avatar upload with image cropping and S3 storage",
+      impact: "medium",
+      category: "Feature",
+      details: "Introduces a new avatar upload flow in the profile settings page. Users can crop images before uploading. Files are stored in S3 with a signed-URL retrieval pattern. Adds a new /api/avatar endpoint and updates the user model with an avatarUrl field.",
+    },
+  },
+  {
+    mode: "slack_friendly",
+    label: "Slack-Friendly",
+    description: "Short, scannable summaries designed for quick reading in Slack.",
+    requiredPlan: "pro",
+    example: {
+      summary: "Avatar upload + cropping in profile settings",
+      impact: "medium",
+      category: "Feature",
+      details: "New avatar upload with crop UI. Stored in S3, served via signed URLs.",
+    },
+  },
+  {
+    mode: "detailed_engineering",
+    label: "Detailed Engineering",
+    description: "Technical deep-dives with implementation details for engineers.",
+    requiredPlan: "pro",
+    example: {
+      summary: "Implement multipart avatar upload pipeline with sharp-based cropping and S3 lifecycle policies",
+      impact: "medium",
+      category: "Feature",
+      details: "Adds POST /api/avatar (multipart/form-data, max 5 MB). Server-side crop uses sharp to resize to 256\u00d7256 WebP. Uploads to S3 bucket `pushlog-avatars` with a 90-day lifecycle rule on /tmp prefixes. Signed GET URLs expire after 1 hour. The users table gains a nullable avatar_url column (migration 042). React component uses react-image-crop with a 1:1 aspect lock. Error boundary wraps the crop modal so failures don\u2019t unmount the settings page.",
+    },
+  },
+  {
+    mode: "executive_summary",
+    label: "Executive Summary",
+    description: "Non-technical summaries focused on business value and user outcomes.",
+    requiredPlan: "pro",
+    example: {
+      summary: "Users can now personalize their profile with a custom photo",
+      impact: "medium",
+      category: "User Experience",
+      details: "Team members can upload and crop a profile picture directly from their settings page, making it easier to identify teammates across the platform. The feature stores images securely in the cloud.",
+    },
+  },
+  {
+    mode: "incident_aware",
+    label: "Incident-Aware",
+    description: "Risk-focused analysis highlighting potential production issues and breaking changes.",
+    requiredPlan: "team",
+    example: {
+      summary: "Avatar upload endpoint introduced \u2014 review file-size limits and S3 IAM permissions",
+      impact: "high",
+      category: "Feature / Risk",
+      details: "New multipart upload endpoint accepts user files up to 5 MB. Potential risks: (1) No rate-limiting on the upload route \u2014 could be abused for storage exhaustion. (2) S3 bucket policy grants s3:PutObject to the app role but does not restrict Content-Type \u2014 non-image files could be stored. (3) The sharp image processing step runs synchronously on the request thread; large payloads may spike latency. (4) Migration adds a nullable column, which is safe, but ensure the deploy order is migration-first to avoid 500s from the new code reading a missing column.",
+    },
+  },
 ];
 
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, team: 2 };
@@ -84,6 +140,7 @@ interface ProfileUser extends ProfileUserForModels {
   hasOpenRouterKey?: boolean;
   hasOpenAiKey?: boolean;
   plan?: "free" | "pro" | "team";
+  preferredPushlogMode?: string;
 }
 
 export default function Models() {
@@ -93,6 +150,7 @@ export default function Models() {
   const [replaceAllModelId, setReplaceAllModelId] = useState<string>("");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedMode, setSelectedMode] = useState<PushlogMode>("clean_summary");
+  const [previewMode, setPreviewMode] = useState<ModeCard | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -105,6 +163,14 @@ export default function Models() {
     queryKey: PROFILE_QUERY_KEY,
     queryFn: fetchProfile,
   });
+
+  // Sync selectedMode from profile once loaded
+  useEffect(() => {
+    const saved = (profileResponse?.user as ProfileUser | undefined)?.preferredPushlogMode;
+    if (saved && (["clean_summary", "slack_friendly", "detailed_engineering", "executive_summary", "incident_aware"] as string[]).includes(saved)) {
+      setSelectedMode(saved as PushlogMode);
+    }
+  }, [profileResponse]);
   const userHasKey = !!profileResponse?.user?.hasOpenRouterKey;
   const userHasOpenAiKey = !!profileResponse?.user?.hasOpenAiKey;
   const profileUser = profileResponse?.user as ProfileUser | undefined;
@@ -192,6 +258,32 @@ export default function Models() {
     },
   });
 
+  const setModeMutation = useMutation({
+    mutationFn: async (mode: PushlogMode) => {
+      const res = await apiRequest("PATCH", "/api/user", { preferredPushlogMode: mode });
+      return res.json();
+    },
+    onSuccess: (_, mode) => {
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
+      const label = MODE_CARDS.find((c) => c.mode === mode)?.label ?? mode;
+      toast({ title: "Summary mode updated", description: `All new integrations will use "${label}" summaries.` });
+    },
+    onError: (e: Error) => {
+      toast({ title: "Failed to update summary mode", description: e.message, variant: "destructive" });
+    },
+  });
+
+  const handleModeSelect = (card: ModeCard) => {
+    const accessible = isModeAccessible(userPlan, card.requiredPlan);
+    if (!accessible) return;
+    if (selectedMode === card.mode) {
+      setPreviewMode(card);
+      return;
+    }
+    setSelectedMode(card.mode);
+    setModeMutation.mutate(card.mode);
+  };
+
   const userPlan = profileUser?.plan ?? "free";
 
   return (
@@ -211,12 +303,13 @@ export default function Models() {
             {MODE_CARDS.map((card) => {
               const accessible = isModeAccessible(userPlan, card.requiredPlan);
               const isSelected = selectedMode === card.mode;
+              const isSaving = setModeMutation.isPending && setModeMutation.variables === card.mode;
               return (
                 <button
                   key={card.mode}
                   type="button"
-                  disabled={!accessible}
-                  onClick={() => accessible && setSelectedMode(card.mode)}
+                  disabled={!accessible || isSaving}
+                  onClick={() => handleModeSelect(card)}
                   className={`relative text-left rounded-lg border p-4 transition-colors ${
                     isSelected
                       ? "border-log-green bg-log-green/5"
@@ -241,15 +334,31 @@ export default function Models() {
                       <Lock className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
                     )}
                   </div>
+                  {accessible && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPreviewMode(card); }}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View example
+                      </button>
+                      {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin text-log-green" />}
+                      {isSelected && !isSaving && (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-log-green">
+                          <Check className="w-3.5 h-3.5" />
+                          Active
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {!accessible && (
                     <div className="mt-3">
                       <Link href="/pricing" className="text-xs text-log-green hover:underline">
                         Upgrade to {card.requiredPlan}
                       </Link>
                     </div>
-                  )}
-                  {isSelected && accessible && (
-                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-log-green" />
                   )}
                 </button>
               );
@@ -350,6 +459,78 @@ export default function Models() {
             </div>
           </CollapsibleContent>
         </Collapsible>
+
+        {/* Mode Example Preview Modal */}
+        <Dialog open={!!previewMode} onOpenChange={(open) => { if (!open) setPreviewMode(null); }}>
+          <DialogContent className="max-w-lg">
+            {previewMode && (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="text-foreground flex items-center gap-2">
+                    <Eye className="w-5 h-5 text-log-green" />
+                    {previewMode.label} — Example
+                  </DialogTitle>
+                  <DialogDescription>{previewMode.description}</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 pt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Below is a sample summary for the same commit shown in each mode, so you can compare the style and detail level.
+                  </p>
+                  <div className="rounded-md border border-border bg-muted/30 p-4 space-y-3">
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Summary</p>
+                      <p className="text-sm text-foreground">{previewMode.example.summary}</p>
+                    </div>
+                    <div className="flex gap-4">
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Impact</p>
+                        <Badge variant="outline" className={`text-xs capitalize ${
+                          previewMode.example.impact === "high" ? "border-red-500/50 text-red-400" :
+                          previewMode.example.impact === "medium" ? "border-yellow-500/50 text-yellow-400" :
+                          "border-green-500/50 text-green-400"
+                        }`}>
+                          {previewMode.example.impact}
+                        </Badge>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Category</p>
+                        <Badge variant="outline" className="text-xs">{previewMode.example.category}</Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground mb-1">Details</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{previewMode.example.details}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    {selectedMode !== previewMode.mode && isModeAccessible(userPlan, previewMode.requiredPlan) && (
+                      <Button
+                        className="bg-log-green hover:bg-log-green/90"
+                        disabled={setModeMutation.isPending}
+                        onClick={() => {
+                          setSelectedMode(previewMode.mode);
+                          setModeMutation.mutate(previewMode.mode);
+                          setPreviewMode(null);
+                        }}
+                      >
+                        {setModeMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : `Use ${previewMode.label}`}
+                      </Button>
+                    )}
+                    {selectedMode === previewMode.mode && (
+                      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-log-green px-3 py-2">
+                        <Check className="w-4 h-4" />
+                        Currently active
+                      </span>
+                    )}
+                    <Button variant="outline" onClick={() => setPreviewMode(null)}>
+                      Close
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
         <Dialog
           open={replaceAllConfirmOpen}

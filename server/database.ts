@@ -137,6 +137,7 @@ function convertToUser(dbUser: typeof users.$inferSelect): User {
     totpSecret: (dbUser as any).totpSecret ?? (dbUser as any).totp_secret ?? null,
     monthlyBudget: (dbUser as any).monthlyBudget ?? null,
     overBudgetBehavior: ((dbUser as any).overBudgetBehavior === "free_model" ? "free_model" : "skip_ai") as "free_model" | "skip_ai",
+    preferredPushlogMode: (dbUser as any).preferredPushlogMode ?? "clean_summary",
     devMode: !!(dbUser as any).devMode,
     incidentEmailEnabled: (dbUser as any).incidentEmailEnabled !== false,
     receiveIncidentNotifications: (dbUser as any).receiveIncidentNotifications !== false,

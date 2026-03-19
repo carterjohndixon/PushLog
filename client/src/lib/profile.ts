@@ -19,6 +19,8 @@ export interface ProfileUser {
   hasOpenAiKey?: boolean;
   /** Default OpenRouter AI model for new integrations (e.g. anthropic/claude-3.5-sonnet) */
   preferredAiModel?: string;
+  /** Default PushLog summary mode (e.g. clean_summary, slack_friendly) */
+  preferredPushlogMode?: string;
   /** Monthly AI spend budget in units of $0.0001 (display as userBudget / 10000); null = no budget */
   monthlyBudget?: number | null;
   /** When over budget: "free_model" = use free model; "skip_ai" = plain push, no AI */

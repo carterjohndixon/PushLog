@@ -36,6 +36,7 @@ export const users = pgTable("users", {
   totpSecret: text("totp_secret"), // Encrypted TOTP secret for authenticator app
   monthlyBudget: integer("monthly_budget"), // Monthly AI spend budget in units of $0.0001; nullable = no budget
   overBudgetBehavior: text("over_budget_behavior").default("skip_ai"), // "skip_ai" = send plain push when over budget; "free_model" = use free model
+  preferredPushlogMode: text("preferred_pushlog_mode").default("clean_summary"), // clean_summary | slack_friendly | detailed_engineering | executive_summary | incident_aware
   devMode: boolean("dev_mode").default(false), // Enable test features (e.g. Simulate incident on Integrations)
   incidentEmailEnabled: boolean("incident_email_enabled").default(true), // Email incident alerts (Sentry, spike, etc.)
   receiveIncidentNotifications: boolean("receive_incident_notifications").default(true), // In incident pool (users with repos + this true get incidents); when false, never receive
@@ -504,6 +505,7 @@ export type User = {
   totpSecret: string | null;
   monthlyBudget: number | null;
   overBudgetBehavior: "free_model" | "skip_ai";
+  preferredPushlogMode?: string;
   devMode?: boolean;
   incidentEmailEnabled?: boolean;
   receiveIncidentNotifications?: boolean;
