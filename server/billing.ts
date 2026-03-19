@@ -3,7 +3,7 @@
  * Source of truth for plan limits. All enforcement goes through these functions.
  */
 
-import type { PushlogMode } from "./pushlogModes";
+import type { PushLogMode } from "./pushlogModes";
 
 // ---------------------------------------------------------------------------
 // Plan definitions
@@ -14,7 +14,7 @@ export type PlanName = "free" | "pro" | "team";
 export interface PlanLimits {
   repoLimit: number;
   summaryCap: number;
-  allowedModes: PushlogMode[];
+  allowedModes: PushLogMode[];
   sentryEnabled: boolean;
   incidentsEnabled: boolean;
   priceMonthly: number; // dollars
@@ -76,7 +76,7 @@ export function isValidPlan(plan: string): plan is PlanName {
   return plan === "free" || plan === "pro" || plan === "team";
 }
 
-export function isModeAllowed(plan: PlanName, mode: PushlogMode): boolean {
+export function isModeAllowed(plan: PlanName, mode: PushLogMode): boolean {
   return getPlanLimits(plan).allowedModes.includes(mode);
 }
 

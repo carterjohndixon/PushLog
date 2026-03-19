@@ -6569,7 +6569,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ error: "Developer mode is only available on staging" });
         }
         const userForCheck = await databaseStorage.getUserById(userId);
-        if (!isStagingAdminUser(userForCheck)) {
+        if (!isStagingAdminUser(userForCheck ?? null)) {
           return res.status(403).json({ error: "Admin access required" });
         }
         updates.devMode = body.devMode;

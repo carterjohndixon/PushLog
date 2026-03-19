@@ -306,7 +306,7 @@ export async function runAiSummary(
   if (!opts.overBudgetSkipAi) {
     try {
       const rawMode = (integration as any).pushlogMode ?? (integration as any).pushlog_mode ?? "clean_summary";
-      let pushlogMode: PushlogMode = isValidPushLogMode(rawMode) ? rawMode : "clean_summary";
+      let pushlogMode: PushLogMode = isValidPushLogMode(rawMode) ? rawMode : "clean_summary";
 
       // Enforce plan-based summary limits and mode access
       const orgId = (integration as any).organizationId;
@@ -340,7 +340,7 @@ export async function runAiSummary(
         }
       }
 
-      let aiOpts: { openRouterApiKey?: string; openaiApiKey?: string; pushlogMode?: PushlogMode; notificationContext?: { userId: string; repositoryName: string; integrationId: string; slackChannelName: string } } | undefined;
+      let aiOpts: { openRouterApiKey?: string; openaiApiKey?: string; pushlogMode?: PushLogMode; notificationContext?: { userId: string; repositoryName: string; integrationId: string; slackChannelName: string } } | undefined;
       if (opts.useOpenRouter && opts.openRouterKeyRaw) {
         aiOpts = { openRouterApiKey: opts.openRouterKeyRaw.trim(), pushlogMode, notificationContext: { userId: integration.userId, repositoryName: repoDisplayName, integrationId: integration.id, slackChannelName: integration.slackChannelName } };
       } else if (opts.useOpenAi && opts.openAiKeyRaw) {

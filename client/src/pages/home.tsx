@@ -748,7 +748,7 @@ export default function Home() {
                 </div>
                 <h3 className="text-xl font-bold text-foreground mb-3">Incident Reports</h3>
                 <p className="text-muted-foreground">
-                  Connect Sentry webhooks or run the pushlog-agent on your EC2 servers to stream runtime errors into PushLog—with correlated commits and authors so you know exactly what changed.
+                  Connect Sentry webhooks or run the pushlog-agent on any server you can SSH into—EC2, Vultr, DigitalOcean, bare metal, or any cloud VM—to stream runtime errors into PushLog with correlated commits and authors.
                 </p>
               </CardContent>
             </Card>

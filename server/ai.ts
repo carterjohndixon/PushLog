@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { calculateTokenCost, estimateTokenCostForDisplay, estimateTokenCostFromUsage } from './aiCost';
 import broadcastNotification from './helper/broadcastNotification';
 import { storage } from './storage';
-import { type PushlogMode, getModeConfig } from './pushlogModes';
+import { type PushLogMode, getModeConfig } from './pushlogModes';
 
 const __filenameAi = fileURLToPath(import.meta.url);
 const __dirnameAi = path.dirname(__filenameAi);
@@ -61,7 +61,7 @@ export interface GenerateCodeSummaryOptions {
   /** When set, use user's OpenAI API key (user pays OpenAI). No PushLog credit deduction. */
   openaiApiKey?: string;
   /** PushLog summary mode — controls system prompt, prompt modifier, and temperature. Defaults to clean_summary. */
-  pushlogMode?: PushlogMode;
+  pushlogMode?: PushLogMode;
   /** When set, OpenRouter errors will create an in-app notification for this user and broadcast it. */
   notificationContext?: {
     userId: string;
