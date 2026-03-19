@@ -281,6 +281,11 @@ export default function AdminPage() {
   // ── Commit classification helpers ──
   const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
   const stagingShaRaw = data?.stagingDeployedSha || null;
+  console.log("stagingShaRaw", stagingShaRaw);
+  console.log("data?.headSha", data?.headSha);
+  console.log("data?.prodDeployedSha", data?.prodDeployedSha);
+  console.log("data?.promoteRemoteStatus?.prodDeployedSha", data?.promoteRemoteStatus?.prodDeployedSha);
+  console.log("prodSha", prodSha);
   const stagingSha = stagingShaRaw || data?.headSha || null;
 
   /** Build a set of pending SHAs for quick lookup */
@@ -348,8 +353,8 @@ export default function AdminPage() {
                       <p className="font-semibold text-blue-600 dark:text-blue-400">Staging</p>
                     </div>
                     <p>
-                      <span className="text-muted-foreground">Commit:</span>{" "}
-                      <code className="text-xs">{stagingSha ? stagingSha.slice(0, 10) : "unknown"}</code>
+                      <span className="text-muted-foreground">Staging commit:</span>{" "}
+                      <code className="text-xs">{stagingSha ? stagingSha.slice(0, 10) : "unknown (first run"}</code>
                       {stagingSha && data.headSha && shaMatches(stagingSha, data.headSha) && (
                         <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-blue-600 border-blue-500/40">UP TO DATE</Badge>
                       )}
@@ -359,7 +364,7 @@ export default function AdminPage() {
                     )}
                     {stagingSha && data.recentCommits.length > 0 && (() => {
                       const c = data.recentCommits.find((x) => isStaging(x));
-                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>{c.subject}</p> : null;
+                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>Commit title: {c.subject}</p> : null;
                     })()}
                   </div>
                   {/* Production */}
@@ -369,7 +374,7 @@ export default function AdminPage() {
                       <p className="font-semibold text-green-600 dark:text-green-400">Production</p>
                     </div>
                     <p>
-                      <span className="text-muted-foreground">Commit:</span>{" "}
+                      <span className="text-muted-foreground">Production commit:</span>{" "}
                       <code className="text-xs">{prodSha ? prodSha.slice(0, 10) : "unknown (first run)"}</code>
                       {prodSha && stagingSha && shaMatches(prodSha, stagingSha) && (
                         <Badge variant="outline" className="ml-2 text-[10px] px-1 py-0 text-green-600 border-green-500/40">IN SYNC</Badge>
@@ -381,7 +386,7 @@ export default function AdminPage() {
                     </p>
                     {prodSha && data.recentCommits.length > 0 && (() => {
                       const c = data.recentCommits.find((x) => shaMatches(x.sha, prodSha));
-                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>{c.subject}</p> : null;
+                      return c ? <p className="text-muted-foreground truncate" title={c.subject}>Commit title: {c.subject}</p> : null;
                     })()}
                   </div>
                 </div>
