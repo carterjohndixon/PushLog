@@ -1049,19 +1049,10 @@ export default function OrganizationPage() {
                       <Github className="w-5 h-5 text-log-green" />
                       Invite from GitHub organization
                     </DialogTitle>
-                    <DialogDescription className="space-y-2">
-                      <span className="block">
-                        Choose a GitHub org you belong to, see who is not yet in your PushLog organization, then create an invite link to share with them.
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        Missing an org or need to change access? Use <strong className="text-foreground font-medium">Reconnect GitHub</strong> — same as disconnecting in Settings, then connecting again: PushLog removes the GitHub authorization (when the server is configured with OAuth secrets), then opens GitHub so you can approve organization access. Or do it manually in{" "}
-                        <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
-                          Settings → GitHub
-                        </Link>
-                        .
-                      </span>
+                    <DialogDescription>
+                      Select a GitHub org, then invite members who aren’t in this PushLog org yet.
                     </DialogDescription>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center mt-3">
+                    <div className="mt-3">
                       <Button
                         variant="outline"
                         size="sm"
@@ -1072,8 +1063,12 @@ export default function OrganizationPage() {
                         {reconnectGitHubLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Github className="w-4 h-4 mr-2" />}
                         {reconnectGitHubLoading ? "Reconnecting…" : "Reconnect GitHub"}
                       </Button>
-                      <p className="text-xs text-muted-foreground sm:max-w-[16rem]">
-                        Available as soon as you open this dialog — no need to wait for the list below.
+                      <p className="text-xs text-muted-foreground mt-1.5">
+                        Use if an org is missing or GitHub access changed.{" "}
+                        <Link href="/settings" className="underline underline-offset-2 hover:text-primary">
+                          Settings → GitHub
+                        </Link>{" "}
+                        works too.
                       </p>
                     </div>
                   </DialogHeader>
@@ -1089,9 +1084,9 @@ export default function OrganizationPage() {
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">Could not load organizations</p>
                           <p className="mt-1">{githubOrgsError instanceof Error ? githubOrgsError.message : "An error occurred."}</p>
-                          <p className="mt-2 text-xs">
-                            Use <strong className="text-foreground">Reconnect GitHub</strong> at the top of this dialog, or disconnect manually from{" "}
-                            <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Try <strong className="text-foreground">Reconnect GitHub</strong> above or{" "}
+                            <Link href="/settings" className="underline underline-offset-2 hover:text-primary">
                               Settings → GitHub
                             </Link>
                             .
@@ -1100,12 +1095,12 @@ export default function OrganizationPage() {
                       ) : githubOrgs.length === 0 ? (
                         <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-3 text-sm text-muted-foreground">
                           <p className="font-medium text-foreground">No organization found</p>
-                          <p className="mt-1 text-xs">
-                            Use <strong className="text-foreground">Reconnect GitHub</strong> at the top of this dialog to approve organization access on GitHub, or go to{" "}
-                            <Link href="/settings" className="text-foreground underline underline-offset-2 hover:text-primary">
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            Try <strong className="text-foreground">Reconnect GitHub</strong> above or{" "}
+                            <Link href="/settings" className="underline underline-offset-2 hover:text-primary">
                               Settings → GitHub
-                            </Link>{" "}
-                            to disconnect and connect manually.
+                            </Link>
+                            .
                           </p>
                         </div>
                       ) : (
