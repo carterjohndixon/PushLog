@@ -1926,6 +1926,24 @@ export default function Settings() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                onClick={() => {
+                                  const text = "PushLog MFA Recovery Codes\n" + "=".repeat(30) + "\n\n" +
+                                    recoveryCodesResult.map((c, i) => `${String(i + 1).padStart(2, " ")}. ${c}`).join("\n") +
+                                    "\n\nEach code can only be used once.\nStore these somewhere safe.\n";
+                                  const blob = new Blob([text], { type: "text/plain" });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement("a");
+                                  a.href = url;
+                                  a.download = "pushlog_recovery_codes.txt";
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                }}
+                              >
+                                Download .txt
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => { setRecoveryCodesOpen(false); setRecoveryCodesResult(null); }}
                               >
                                 Done

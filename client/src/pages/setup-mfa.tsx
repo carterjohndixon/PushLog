@@ -115,7 +115,7 @@ export default function SetupMfa() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "pushlog-recovery-codes.txt";
+    a.download = "pushlog_recovery_codes.txt";
     a.click();
     URL.revokeObjectURL(url);
   };
