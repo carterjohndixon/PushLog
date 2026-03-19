@@ -306,7 +306,7 @@ export async function runAiSummary(
   if (!opts.overBudgetSkipAi) {
     try {
       const rawMode = (integration as any).pushlogMode ?? (integration as any).pushlog_mode ?? "clean_summary";
-      let pushlogMode: PushlogMode = isValidPushlogMode(rawMode) ? rawMode : "clean_summary";
+      let pushlogMode: PushlogMode = isValidPushLogMode(rawMode) ? rawMode : "clean_summary";
 
       // Enforce plan-based summary limits and mode access
       const orgId = (integration as any).organizationId;
