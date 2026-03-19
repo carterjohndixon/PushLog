@@ -597,18 +597,18 @@ export async function getGitHubUserPublicEmail(accessToken: string, login: strin
  * Requires GitHub OAuth scope: read:org.
  */
 export async function getGitHubUserOrgs(accessToken: string): Promise<GitHubOrg[]> {
-  const allOrgs: GitHubOrg[] = [];
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  } as const;
+
+  const byId = new Map<number, GitHubOrg>();
+
+  // Primary list endpoint.
   let page = 1;
   while (true) {
-    const response = await fetch(
-      `https://api.github.com/user/orgs?per_page=100&page=${page}`,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: "application/vnd.github.v3+json",
-        },
-      }
-    );
+    const response = await fetch(`https://api.github.com/user/orgs?per_page=100&page=${page}`, { headers });
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
       const msg = (err as any).message || response.statusText;
@@ -618,13 +618,48 @@ export async function getGitHubUserOrgs(accessToken: string): Promise<GitHubOrg[
       throw new Error(`GitHub API error: ${msg}`);
     }
     const data = await response.json();
-    if (!Array.isArray(data)) return allOrgs;
-    if (data.length === 0) break;
-    allOrgs.push(...data);
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const org of data as any[]) {
+      if (typeof org?.id === "number" && typeof org?.login === "string") {
+        byId.set(org.id, {
+          id: org.id,
+          login: org.login,
+          avatar_url: org.avatar_url ?? null,
+          description: org.description ?? null,
+        });
+      }
+    }
     if (data.length < 100) break;
     page++;
   }
-  return allOrgs;
+
+  // Membership endpoint can surface org memberships that /user/orgs can miss.
+  // Do not restrict to `state=active` so we can also surface `pending` memberships.
+  page = 1;
+  while (true) {
+    const response = await fetch(`https://api.github.com/user/memberships/orgs?per_page=100&page=${page}`, { headers });
+    if (!response.ok) {
+      // Best-effort fallback only; don't fail if this endpoint is unavailable.
+      break;
+    }
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const membership of data as any[]) {
+      const org = membership?.organization;
+      if (typeof org?.id === "number" && typeof org?.login === "string") {
+        byId.set(org.id, {
+          id: org.id,
+          login: org.login,
+          avatar_url: org.avatar_url ?? null,
+          description: org.description ?? null,
+        });
+      }
+    }
+    if (data.length < 100) break;
+    page++;
+  }
+
+  return Array.from(byId.values()).sort((a, b) => a.login.localeCompare(b.login));
 }
 
 /**
