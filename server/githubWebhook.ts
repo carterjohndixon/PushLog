@@ -10,7 +10,7 @@ import { databaseStorage } from "./database";
 import { getCommit } from "./github";
 import { decrypt } from "./encryption";
 import { generateCodeSummary, generateSlackMessage } from "./ai";
-import { type PushLogMode, isValidPushlogMode } from "./pushlogModes";
+import { type PushLogMode, isValidPushLogMode } from "./pushlogModes";
 import { isUnderSummaryCap, isModeAllowed, type PlanName } from "./billing";
 import { sendPushNotification, sendSlackMessage } from "./slack";
 import broadcastNotification from "./helper/broadcastNotification";
