@@ -885,17 +885,27 @@ export default function Settings() {
   const githubDisconnectMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch("/api/github/disconnect", { method: "POST", credentials: "include", headers: { Accept: "application/json" } });
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const d = await response.json().catch(() => ({}));
-        throw new Error(d.error || "Failed to disconnect");
+        throw new Error((data as { error?: string }).error || "Failed to disconnect");
       }
+      return data as { success?: boolean; message?: string; githubAuthorizationRevoked?: boolean };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       setGithubDisconnectModalOpen(false);
-      toast({ title: "GitHub disconnected", description: "You can reconnect anytime from this page." });
+      const revoked = data?.githubAuthorizationRevoked === true;
+      toast({
+        title: "GitHub disconnected",
+        description:
+          data?.message ||
+          (revoked
+            ? "Authorization removed on GitHub too. Reconnect to pick org access again."
+            : "You can reconnect anytime from this page. If GitHub still lists PushLog, revoke it under GitHub → Settings → Applications."),
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });

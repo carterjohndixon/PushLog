@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { formatLocalDate, formatLocalDateTime } from "@/lib/date";
-import { Users, UserPlus, User, Shield, Settings, ArrowLeft, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil, Github, Loader2 } from "lucide-react";
+import { Users, UserPlus, User, Shield, Settings, Copy, Mail, Link2, UserMinus, ChevronRight, Pencil, Github, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import {
   AlertDialog,
@@ -610,12 +610,6 @@ export default function OrganizationPage() {
           <Card>
             <CardContent className="pt-6">
               <p className="text-destructive">Failed to load organization.</p>
-              <Link href="/settings">
-                <Button variant="outline" className="mt-4">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Settings
-                </Button>
-              </Link>
             </CardContent>
           </Card>
         </main>

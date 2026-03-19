@@ -31,6 +31,7 @@ import {
   getGitHubOrgDiagnostics,
   getGitHubOrgMembers,
   getGitHubUserPublicEmail,
+  revokeGitHubOAuthGrant,
 } from "./github";
 import { exchangeGoogleCodeForToken, getGoogleUser } from "./google";
 import { 
@@ -2098,13 +2099,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Authentication required" });
       }
 
-      // Clear GitHub connection
+      const user = await databaseStorage.getUserById(userId);
+      const stored = (user as any)?.githubToken as string | null | undefined;
+      let rawToken: string | null = null;
+      if (stored && typeof stored === "string") {
+        try {
+          rawToken = (stored.startsWith("ghp_") || stored.startsWith("gho_") ? stored : decrypt(stored)) as string;
+        } catch (decryptErr) {
+          console.warn("Disconnect GitHub: could not decrypt stored token; clearing locally only", decryptErr);
+        }
+      }
+
+      let githubAuthorizationRevoked = false;
+      if (rawToken) {
+        const revokeResult = await revokeGitHubOAuthGrant(rawToken);
+        githubAuthorizationRevoked = revokeResult.revoked;
+        if (!revokeResult.revoked) {
+          console.warn("Disconnect GitHub: GitHub grant revoke did not return 204", revokeResult);
+        }
+      }
+
+      // Clear GitHub connection in PushLog (always, even if GitHub revoke failed)
       await databaseStorage.updateUser(userId, {
         githubId: null,
         githubToken: null
       });
 
-      res.status(200).json({ success: true, message: "GitHub account disconnected successfully" });
+      res.status(200).json({
+        success: true,
+        message: githubAuthorizationRevoked
+          ? "GitHub disconnected and authorization revoked on GitHub. Reconnect to choose org access again."
+          : "GitHub disconnected in PushLog. If GitHub still shows PushLog as authorized, revoke it under GitHub Settings → Applications or ensure OAuth client secrets are configured on the server.",
+        githubAuthorizationRevoked,
+      });
     } catch (error) {
       console.error('Failed to disconnect GitHub:', error);
       Sentry.captureException(error);

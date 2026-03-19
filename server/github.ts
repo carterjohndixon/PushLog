@@ -232,6 +232,86 @@ export async function validateGitHubToken(accessToken: string): Promise<boolean>
 }
 
 /**
+ * OAuth app client_id + client_secret pairs configured on this server (prod, staging, generic).
+ * Used to revoke grants — the pair must match the app that issued the user's token.
+ */
+function getConfiguredGitHubOAuthAppCredentialPairs(): Array<{ clientId: string; clientSecret: string }> {
+  const pairs: Array<{ clientId: string; clientSecret: string }> = [];
+  const seen = new Set<string>();
+  const push = (id: string | undefined, secret: string | undefined) => {
+    const cid = id?.trim();
+    const sec = secret?.trim();
+    if (!cid || !sec) return;
+    const key = `${cid}:${sec}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    pairs.push({ clientId: cid, clientSecret: sec });
+  };
+
+  push(
+    process.env.GITHUB_OAUTH_CLIENT_ID_PROD,
+    process.env.GITHUB_OAUTH_CLIENT_SECRET_PROD || process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET
+  );
+  push(
+    process.env.GITHUB_OAUTH_CLIENT_ID_STAGING || process.env.GITHUB_OAUTH_CLIENT_ID,
+    process.env.GITHUB_OAUTH_CLIENT_SECRET_STAGING || process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET
+  );
+  push(process.env.GITHUB_OAUTH_CLIENT_ID, process.env.GITHUB_OAUTH_CLIENT_SECRET || process.env.GITHUB_CLIENT_SECRET);
+  push(process.env.GITHUB_CLIENT_ID, process.env.GITHUB_CLIENT_SECRET || process.env.GITHUB_OAUTH_CLIENT_SECRET);
+
+  return pairs;
+}
+
+export type RevokeGitHubGrantResult = {
+  revoked: boolean;
+  attemptedPairs: number;
+  /** HTTP status from the last attempt (e.g. 204 success, 404 wrong app) */
+  lastHttpStatus?: number;
+};
+
+/**
+ * Revoke the OAuth authorization on GitHub so the app disappears from
+ * Settings → Applications → Authorized OAuth Apps and the next connect shows full consent.
+ * DELETE https://api.github.com/applications/{client_id}/grant — Basic auth = client_id:client_secret.
+ * @see https://docs.github.com/en/rest/apps/oauth-applications#delete-an-app-authorization
+ */
+export async function revokeGitHubOAuthGrant(accessToken: string): Promise<RevokeGitHubGrantResult> {
+  const pairs = getConfiguredGitHubOAuthAppCredentialPairs();
+  if (pairs.length === 0) {
+    console.warn("revokeGitHubOAuthGrant: no GITHUB_*_CLIENT_ID/SECRET pairs configured; skipping GitHub-side revoke");
+    return { revoked: false, attemptedPairs: 0 };
+  }
+
+  let lastHttpStatus: number | undefined;
+  for (let i = 0; i < pairs.length; i++) {
+    const { clientId, clientSecret } = pairs[i]!;
+    const url = `https://api.github.com/applications/${encodeURIComponent(clientId)}/grant`;
+    const basic = Buffer.from(`${clientId}:${clientSecret}`, "utf8").toString("base64");
+    try {
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Basic ${basic}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+          "User-Agent": "PushLog",
+        },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+      lastHttpStatus = response.status;
+      if (response.status === 204) {
+        return { revoked: true, attemptedPairs: i + 1, lastHttpStatus: 204 };
+      }
+    } catch (err) {
+      console.error("revokeGitHubOAuthGrant fetch error:", err);
+    }
+  }
+
+  return { revoked: false, attemptedPairs: pairs.length, lastHttpStatus };
+}
+
+/**
  * Get user's repositories from GitHub (including organization repos)
  */
 export async function getUserRepositories(accessToken: string): Promise<GitHubRepository[]> {
