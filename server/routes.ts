@@ -28,6 +28,7 @@ import {
   validateGitHubToken,
   getGitHubTokenScopes,
   getGitHubUserOrgs,
+  getGitHubOrgDiagnostics,
   getGitHubOrgMembers,
   getGitHubUserPublicEmail,
 } from "./github";
@@ -3334,6 +3335,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const msg = e?.message || "Failed to load GitHub organizations";
         const status = msg.includes("read:org") ? 400 : 500;
         res.status(status).json({ error: msg });
+      }
+    }
+  );
+
+  /** Debug GitHub org visibility for the current OAuth token (owner/admin only). */
+  app.get(
+    "/api/debug/github-orgs",
+    authenticateToken,
+    requireOrgMember,
+    requireOrgRole(["owner", "admin"]),
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.user!.userId;
+        const user = await databaseStorage.getUserById(userId);
+        const token = (user as any)?.githubToken;
+        if (!token || typeof token !== "string") {
+          return res.status(400).json({ error: "GitHub account not connected." });
+        }
+        const rawToken = (token.startsWith("ghp_") || token.startsWith("gho_") ? token : decrypt(token)) as string;
+        const diagnostics = await getGitHubOrgDiagnostics(rawToken);
+        const merged = await getGitHubUserOrgs(rawToken);
+        res.status(200).json({
+          scopes: diagnostics.scopes,
+          counts: {
+            userOrgs: diagnostics.userOrgs.length,
+            memberships: diagnostics.memberships.length,
+            merged: merged.length,
+          },
+          userOrgs: diagnostics.userOrgs.map((o) => ({ id: o.id, login: o.login })),
+          memberships: diagnostics.memberships.map((m) => ({
+            state: m.state,
+            role: m.role,
+            organization: { id: m.organization.id, login: m.organization.login },
+          })),
+          merged: merged.map((o) => ({ id: o.id, login: o.login })),
+        });
+      } catch (e: any) {
+        console.error("Debug GitHub orgs error:", e);
+        Sentry.captureException(e);
+        res.status(500).json({ error: e?.message || "Failed to debug GitHub org visibility" });
       }
     }
   );

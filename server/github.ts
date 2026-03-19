@@ -571,6 +571,12 @@ export interface GitHubOrgMember {
   avatar_url: string | null;
 }
 
+export interface GitHubOrgMembership {
+  state: string;
+  role: string | null;
+  organization: GitHubOrg;
+}
+
 /**
  * Get a GitHub user's public profile email (GET /users/:username).
  * Returns email only if the user has made it public on their GitHub profile; otherwise null.
@@ -660,6 +666,74 @@ export async function getGitHubUserOrgs(accessToken: string): Promise<GitHubOrg[
   }
 
   return Array.from(byId.values()).sort((a, b) => a.login.localeCompare(b.login));
+}
+
+/** Raw diagnostics for debugging org visibility in OAuth flows. */
+export async function getGitHubOrgDiagnostics(accessToken: string): Promise<{
+  scopes: string[];
+  userOrgs: GitHubOrg[];
+  memberships: GitHubOrgMembership[];
+}> {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    Accept: "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+  } as const;
+
+  const scopes = await getGitHubTokenScopes(accessToken);
+
+  const userOrgs: GitHubOrg[] = [];
+  let page = 1;
+  while (true) {
+    const response = await fetch(`https://api.github.com/user/orgs?per_page=100&page=${page}`, { headers });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      const msg = (err as any).message || response.statusText;
+      throw new Error(`GitHub /user/orgs failed: ${msg}`);
+    }
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const org of data as any[]) {
+      if (typeof org?.id === "number" && typeof org?.login === "string") {
+        userOrgs.push({
+          id: org.id,
+          login: org.login,
+          avatar_url: org.avatar_url ?? null,
+          description: org.description ?? null,
+        });
+      }
+    }
+    if (data.length < 100) break;
+    page++;
+  }
+
+  const memberships: GitHubOrgMembership[] = [];
+  page = 1;
+  while (true) {
+    const response = await fetch(`https://api.github.com/user/memberships/orgs?per_page=100&page=${page}`, { headers });
+    if (!response.ok) break;
+    const data = await response.json();
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const membership of data as any[]) {
+      const org = membership?.organization;
+      if (typeof org?.id === "number" && typeof org?.login === "string") {
+        memberships.push({
+          state: typeof membership?.state === "string" ? membership.state : "unknown",
+          role: typeof membership?.role === "string" ? membership.role : null,
+          organization: {
+            id: org.id,
+            login: org.login,
+            avatar_url: org.avatar_url ?? null,
+            description: org.description ?? null,
+          },
+        });
+      }
+    }
+    if (data.length < 100) break;
+    page++;
+  }
+
+  return { scopes, userOrgs, memberships };
 }
 
 /**
