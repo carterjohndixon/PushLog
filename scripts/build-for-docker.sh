@@ -44,6 +44,7 @@ RUN npm ci --omit=dev
 COPY dist ./dist
 COPY bin/incident-engine /app/bin/incident-engine
 RUN echo "${CACHEBUST:-unknown}" > /app/.staging_deployed_sha && date -u +"%Y-%m-%dT%H:%M:%SZ" > /app/.staging_deployed_at
+ENV SOURCE_COMMIT=${CACHEBUST:-unknown}
 EXPOSE 3001
 CMD ["node", "dist/index.js"]
 DOCKERFILE

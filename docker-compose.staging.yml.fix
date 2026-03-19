@@ -44,7 +44,7 @@ services:
       COOKIE_DOMAIN: staging.pushlog.ai
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine
       SLACK_NOTIFICATIONS_ENABLED: "false"
-      BILLING_ENABLED: "false"
+      BILLING_ENABLED: "true"
       PROMOTE_PROD_WEBHOOK_URL: "http://pushlog-promote:3999"
     ports:
       - "127.0.0.1:3002:3001"

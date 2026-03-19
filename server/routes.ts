@@ -1278,9 +1278,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const promoteScript = path.join(appDir, "deploy-production.sh");
       const promoteViaWebhook = APP_ENV === "staging" && isProductionDeployConfigured();
 
+      const envSha = process.env.SOURCE_COMMIT && process.env.SOURCE_COMMIT !== "unknown" ? process.env.SOURCE_COMMIT : null;
       const stagingDeployedSha =
         (fs.existsSync(stagingShaFile) ? fs.readFileSync(stagingShaFile, "utf8").trim() : null) ||
         (fs.existsSync(containerStagingShaFile) ? fs.readFileSync(containerStagingShaFile, "utf8").trim() : null) ||
+        envSha ||
         null;
       const stagingDeployedAt =
         (fs.existsSync(stagingAtFile) ? fs.readFileSync(stagingAtFile, "utf8").trim() : null) ||
