@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Start PushLog production stack: prune stopped containers, ensure prod network, then compose up.
+# By default also starts the promote service (docker-compose.promote.yml) so staging admin can promote.
 # Run from anywhere: ./scripts/docker-production-up.sh [-- extra compose args]
 #
 # Requires external network pushlog_prod (see docker-compose.production.yml).
+# Promote requires external network pushlog (shared with staging for http://pushlog-promote:3999).
 # Optional: COMPOSE_PROJECT_NAME=pushlog (default)
 # Optional: PROD_ENV_FILE=path (default: repo root .env.production)
+# Optional: DOCKER_PRODUCTION_SKIP_PROMOTE=1 to only start docker-compose.production.yml
 
 set -euo pipefail
 
@@ -13,7 +16,9 @@ cd "$ROOT"
 
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pushlog}"
 PROD_COMPOSE="${PROD_COMPOSE:-docker-compose.production.yml}"
+PROMOTE_COMPOSE="${PROMOTE_COMPOSE:-docker-compose.promote.yml}"
 PROD_NETWORK_NAME="${PROD_NETWORK_NAME:-pushlog_prod}"
+STAGING_BRIDGE_NETWORK="${STAGING_BRIDGE_NETWORK:-pushlog}"
 
 if [[ -z "${PROD_ENV_FILE:-}" ]]; then
   PROD_ENV_FILE="${ROOT}/.env.production"
@@ -36,9 +41,32 @@ else
   echo "==> [production] Network ${PROD_NETWORK_NAME} already exists."
 fi
 
+INCLUDE_PROMOTE=1
+case "${DOCKER_PRODUCTION_SKIP_PROMOTE:-}" in
+  1|true|yes|on) INCLUDE_PROMOTE=0 ;;
+esac
+
+COMPOSE_FILE_ARGS=(-f "${PROD_COMPOSE}")
+if [[ "${INCLUDE_PROMOTE}" -eq 1 ]]; then
+  if [[ ! -f "${ROOT}/${PROMOTE_COMPOSE}" ]]; then
+    echo "error: promote compose not found: ${ROOT}/${PROMOTE_COMPOSE}" >&2
+    exit 1
+  fi
+  if ! docker network inspect "${STAGING_BRIDGE_NETWORK}" >/dev/null 2>&1; then
+    echo "==> [production] Creating Docker network ${STAGING_BRIDGE_NETWORK} (staging ↔ promote)..."
+    docker network create "${STAGING_BRIDGE_NETWORK}"
+  else
+    echo "==> [production] Network ${STAGING_BRIDGE_NETWORK} already exists."
+  fi
+  COMPOSE_FILE_ARGS+=(-f "${PROMOTE_COMPOSE}")
+  echo "==> [production] Including promote stack (${PROMOTE_COMPOSE}). Set DOCKER_PRODUCTION_SKIP_PROMOTE=1 to omit."
+else
+  echo "==> [production] Skipping promote (DOCKER_PRODUCTION_SKIP_PROMOTE set)."
+fi
+
 echo "==> [production] Using env file: ${PROD_ENV_FILE}"
-echo "==> [production] docker compose --env-file ... -p ${COMPOSE_PROJECT_NAME} -f ${PROD_COMPOSE} up -d --build $@"
-docker compose --env-file "${PROD_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${PROD_COMPOSE}" up -d --build "$@"
+echo "==> [production] docker compose --env-file ... -p ${COMPOSE_PROJECT_NAME} ${COMPOSE_FILE_ARGS[*]} up -d --build $@"
+docker compose --env-file "${PROD_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" "${COMPOSE_FILE_ARGS[@]}" up -d --build "$@"
 
 echo "==> [production] Done."
-docker compose --env-file "${PROD_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${PROD_COMPOSE}" ps
+docker compose --env-file "${PROD_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" "${COMPOSE_FILE_ARGS[@]}" ps
