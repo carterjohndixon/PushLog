@@ -62,7 +62,7 @@ func printUsage() {
 	fmt.Println(`pushlog-agent — PushLog server log collector
 
 Usage:
-  pushlog-agent connect --token <plg_xxx> [--endpoint <url>] [--config <path>]
+  pushlog-agent connect --token <plg_xxx>
   pushlog-agent run [--config <path>]
   pushlog-agent test [--config <path>]
   pushlog-agent paths [--config <path>]

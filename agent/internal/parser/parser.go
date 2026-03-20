@@ -74,7 +74,17 @@ var (
 
 		// PM2/process manager operational
 		regexp.MustCompile(`(?i)pm2.*restart|pm2.*stop|pm2.*reload`),
+
+		// Docker CLI on the agent host (merged into docker logs stderr) — not app errors
+		regexp.MustCompile(`(?i)error\s+response\s+from\s+daemon`),
+		regexp.MustCompile(`(?i)no\s+such\s+container`),
+		regexp.MustCompile(`(?i)cannot\s+connect\s+to\s+the\s+docker\s+daemon`),
 	}
+
+	// Lines where the word "error" is followed by a space (not ":") are usually CLI/stderr
+	// prose ("Error response from daemon"), not JS "Error: message". Avoid exception_type
+	// "Error" so UIs do not show "Error: Error response ...".
+	leadingErrorSpaceRe = regexp.MustCompile(`(?i)^error\s+`)
 
 	exceptionPattern = regexp.MustCompile(`(?i)^(\w+(?:\.\w+)*(?:Error|Exception|Panic|Fault))`)
 
@@ -126,10 +136,7 @@ func ParseLine(line, service, environment string) *InboundEvent {
 		return nil
 	}
 
-	exType := extractExceptionType(line)
-	if exType == "" {
-		exType = strings.Title(severity)
-	}
+	exType := inferExceptionType(line, severity)
 
 	msg := line
 	if len(msg) > 8192 {
@@ -175,10 +182,7 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 		return nil
 	}
 
-	exType := extractExceptionType(msg)
-	if exType == "" {
-		exType = strings.Title(severity)
-	}
+	exType := inferExceptionType(msg, severity)
 
 	if len(msg) > 8192 {
 		msg = msg[:8192]
@@ -228,6 +232,16 @@ func extractExceptionType(line string) string {
 		return m[1]
 	}
 	return ""
+}
+
+func inferExceptionType(line, severity string) string {
+	if ex := extractExceptionType(line); ex != "" {
+		return ex
+	}
+	if severity == "error" && leadingErrorSpaceRe.MatchString(line) {
+		return "ProcessOutput"
+	}
+	return strings.Title(severity)
 }
 
 func parseInt(s string) int {

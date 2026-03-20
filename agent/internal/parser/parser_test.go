@@ -5,6 +5,19 @@ import (
 	"testing"
 )
 
+func TestParseLine_DockerDaemonFiltered(t *testing.T) {
+	dockerCli := []string{
+		`Error response from daemon: No such container: pushlog-prod-web`,
+		`ERROR RESPONSE FROM DAEMON: no such container: foo`,
+		`Cannot connect to the Docker daemon at unix:///var/run/docker.sock`,
+	}
+	for _, line := range dockerCli {
+		if ParseLine(line, "app", "prod") != nil {
+			t.Errorf("expected nil (docker CLI noise) for %q", line)
+		}
+	}
+}
+
 func TestParseLine_NoiseFiltered(t *testing.T) {
 	noise := []string{
 		// Auth/expected status codes
@@ -43,6 +56,18 @@ func TestParseLine_NoiseFiltered(t *testing.T) {
 		if ev != nil {
 			t.Errorf("expected nil (filtered) for %q, got severity=%s", line, ev.Severity)
 		}
+	}
+}
+
+func TestParseLine_ProcessOutputExceptionType(t *testing.T) {
+	// "Error " + word (not "Error:") avoids duplicate "Error: Error ..." in incident titles.
+	line := `Error something broke in worker`
+	ev := ParseLine(line, "api", "prod")
+	if ev == nil {
+		t.Fatal("expected event")
+	}
+	if ev.ExceptionType != "ProcessOutput" {
+		t.Errorf("want ExceptionType ProcessOutput, got %q", ev.ExceptionType)
 	}
 }
 
