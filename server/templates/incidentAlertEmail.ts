@@ -280,7 +280,8 @@ export function getIncidentAlertEmailTemplate(
                           <div style="font-size: 11px; font-weight: 600; color: ${C.green}; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
                           ${metadata?.correlatedFile ? `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">
-                            Commits that changed <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>
+                            ${metadata?.correlatedLine != null ? "Commits that added a line at " : "Commits touching "}
+                            <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>${metadata?.correlatedLine != null ? " in this file" : ""}
                           </div>` : `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">Changes to the affected file</div>`}
                           ${relatedCommits.map((c) => `
@@ -290,7 +291,7 @@ export function getIncidentAlertEmailTemplate(
                                 <div>
                                   <a href="${escapeHtml(c.htmlUrl)}" style="color: ${C.green}; text-decoration: none; font-family: 'Courier New', monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
                                   <span style="color: ${C.title}; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
-                                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">touches error line</span>` : ""}
+                                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">added this line</span>` : ""}
                                   ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background-color: ${C.badgeAmberBg}; border: 1px solid ${C.badgeAmberBorder}; border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
                                 </div>
                                 <div style="font-size: 11px; color: ${C.dim}; margin-top: 4px;">@${escapeHtml(c.author.login)}${c.timestamp ? ` &middot; ${formatRelativeTime(c.timestamp)}` : ""}</div>

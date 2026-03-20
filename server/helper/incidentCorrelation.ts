@@ -1,6 +1,6 @@
 /**
  * Incident-to-code correlation: extract stack trace location, resolve repo,
- * fetch GitHub commits, score by line-level proximity. Deterministic, non-blocking.
+ * fetch GitHub commits that **added** the stack trace line (unified-diff '+' rows). Deterministic, non-blocking.
  */
 
 import { decrypt } from "../encryption";
@@ -182,46 +182,68 @@ export async function resolveRepoForIncident(
 // --- Line-level diff analysis ---
 
 const DIFF_FETCH_TIMEOUT_MS = 4000;
-const LINE_PROXIMITY_WINDOW = 30;
+/** Max commits to diff-check (GitHub listCommitsByPath returns up to 20). */
+const MAX_DIFF_CHECKS = 20;
 
 interface CommitDiffInfo {
   sha: string;
+  /** True iff the stack trace line is a '+' line in the unified diff (real addition in that commit). */
   touchesErrorLine: boolean;
+  /** Min |target - L| over added new-file lines L; Infinity if none. */
   closestLineDistance: number;
-  changedLineRanges: Array<{ start: number; end: number }>;
+  addedNewFileLines: number[];
 }
 
+const unifiedHunkHeaderRe = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@/;
+
 /**
- * Parse a unified diff patch to extract changed line ranges in the new file.
- * Looks for @@ -old,count +new,count @@ hunks and collects the added/modified line numbers.
+ * Walk a unified diff and collect line numbers in the **new** file that come from '+' rows
+ * (additions). Context (' ') and deletions ('-') do not add line numbers to this set.
  */
-function parseChangedLines(patch: string): Array<{ start: number; end: number }> {
-  const ranges: Array<{ start: number; end: number }> = [];
-  const hunkRe = /^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@/gm;
-  let match;
-  while ((match = hunkRe.exec(patch)) !== null) {
-    const start = parseInt(match[1], 10);
-    const count = match[2] != null ? parseInt(match[2], 10) : 1;
-    ranges.push({ start, end: start + Math.max(count - 1, 0) });
+export function parseAddedNewFileLineNumbers(patch: string): number[] {
+  const added: number[] = [];
+  let newLine = 0;
+  let inHunk = false;
+  for (const row of patch.split("\n")) {
+    const hm = row.match(unifiedHunkHeaderRe);
+    if (hm) {
+      newLine = parseInt(hm[1], 10);
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk) continue;
+    if (row === "\\ No newline at end of file") continue;
+    if (row.startsWith("diff --git ") || row.startsWith("index ")) {
+      inHunk = false;
+      continue;
+    }
+    const c0 = row[0];
+    if (c0 === "+" && !row.startsWith("+++")) {
+      added.push(newLine);
+      newLine++;
+    } else if (c0 === "-") {
+      // Old-file only; new file line counter unchanged.
+    } else if (c0 === " ") {
+      newLine++;
+    } else if (row === "") {
+      newLine++;
+    }
   }
-  return ranges;
+  return added;
 }
 
-/**
- * Compute the closest distance between a target line and any changed line range.
- * Returns 0 if the target line is inside a changed range.
- */
-function lineDistance(targetLine: number, ranges: Array<{ start: number; end: number }>): number {
+function closestDistanceToAddedLines(targetLine: number, addedLines: number[]): number {
+  if (addedLines.length === 0) return Infinity;
   let closest = Infinity;
-  for (const r of ranges) {
-    if (targetLine >= r.start && targetLine <= r.end) return 0;
-    closest = Math.min(closest, Math.abs(targetLine - r.start), Math.abs(targetLine - r.end));
+  for (const L of addedLines) {
+    const d = Math.abs(targetLine - L);
+    if (d < closest) closest = d;
   }
   return closest;
 }
 
 /**
- * Fetch a single commit's diff for a specific file and determine line proximity.
+ * Fetch a single commit's diff for a specific file; see if a '+' row lands on `targetLine` in the new file.
  * Uses GitHub's commit API with diff media type.
  */
 async function fetchCommitDiffForFile(
@@ -232,8 +254,13 @@ async function fetchCommitDiffForFile(
   targetLine: number | undefined,
   token: string,
 ): Promise<CommitDiffInfo> {
-  const fallback: CommitDiffInfo = { sha, touchesErrorLine: false, closestLineDistance: Infinity, changedLineRanges: [] };
-  if (targetLine == null) return { ...fallback, closestLineDistance: 0 };
+  const fallback: CommitDiffInfo = {
+    sha,
+    touchesErrorLine: false,
+    closestLineDistance: Infinity,
+    addedNewFileLines: [],
+  };
+  if (targetLine == null || targetLine <= 0) return fallback;
 
   try {
     const controller = new AbortController();
@@ -254,15 +281,15 @@ async function fetchCommitDiffForFile(
     const file = data.files?.find((f) => f.filename?.toLowerCase() === normalizedTarget || f.filename?.toLowerCase().endsWith("/" + normalizedTarget));
     if (!file?.patch) return fallback;
 
-    const ranges = parseChangedLines(file.patch);
-    if (ranges.length === 0) return fallback;
+    const addedLines = parseAddedNewFileLineNumbers(file.patch);
+    if (addedLines.length === 0) return fallback;
 
-    const dist = lineDistance(targetLine, ranges);
+    const dist = closestDistanceToAddedLines(targetLine, addedLines);
     return {
       sha,
-      touchesErrorLine: dist === 0,
+      touchesErrorLine: addedLines.includes(targetLine),
       closestLineDistance: dist,
-      changedLineRanges: ranges,
+      addedNewFileLines: addedLines,
     };
   } catch {
     return fallback;
@@ -273,7 +300,6 @@ async function fetchCommitDiffForFile(
 
 const RECENCY_WINDOW_HOURS = 168; // 1 week
 const MAX_RELATED_COMMITS = 5;
-const MAX_DIFF_CHECKS = 8;
 
 export interface ScoredCommit {
   sha: string;
@@ -288,17 +314,8 @@ export interface ScoredCommit {
 }
 
 /**
- * Score commits using line-level proximity + recency + stack position.
- *
- * Scoring breakdown:
- *   - Direct line hit (diff touches error line):  +3.0
- *   - Nearby lines (within 30 lines):             +2.0 * (1 - distance/30)
- *   - Recency (within 7 days):                    +1.0 * (1 - hours/168)
- *   - File match baseline:                        +0.5
- *
- * This means a commit that directly modified the error line last week
- * scores ~3.5, while a recent commit that touched a distant part of the
- * same file scores ~1.5.
+ * Rank commits that **added** the stack line (per unified-diff '+' rows). Caller should pass
+ * only commits whose diff already matched the line; scoring is recency + tie-break.
  */
 export function scoreAndRankCommits(
   commits: GitHubCommitForCorrelation[],
@@ -315,21 +332,10 @@ export function scoreAndRankCommits(
     const recencyScore = Math.max(0, 1 - hoursSince / RECENCY_WINDOW_HOURS);
 
     const diff = diffInfos.get(c.sha);
-    let lineScore = 0;
-    let touchesErrorLine = false;
-    let lineDist: number | undefined;
+    const touchesErrorLine = diff?.touchesErrorLine === true;
+    const lineDist = diff?.closestLineDistance;
 
-    if (diff) {
-      lineDist = diff.closestLineDistance;
-      if (diff.touchesErrorLine) {
-        lineScore = 3.0;
-        touchesErrorLine = true;
-      } else if (diff.closestLineDistance <= LINE_PROXIMITY_WINDOW) {
-        lineScore = 2.0 * (1 - diff.closestLineDistance / LINE_PROXIMITY_WINDOW);
-      }
-    }
-
-    const score = 0.5 + lineScore + 1.0 * recencyScore;
+    const score = (touchesErrorLine ? 2.0 : 0) + 1.0 * recencyScore;
 
     return {
       sha: c.sha,
@@ -340,7 +346,7 @@ export function scoreAndRankCommits(
       timestamp: c.timestamp,
       score: Math.round(score * 1000) / 1000,
       touchesErrorLine,
-      lineDistance: lineDist,
+      lineDistance: lineDist !== Infinity ? lineDist : undefined,
     };
   });
 
@@ -370,8 +376,9 @@ function emptyCorrelation(): EnrichedCorrelation {
  * 1. Extract best code location from resolved stack trace
  * 2. Resolve the GitHub repo via incidentServiceName
  * 3. Fetch recent commits that touched the affected file
- * 4. For the top N commits, fetch their diffs to check which lines they changed
- * 5. Score by line proximity + recency → surface the most likely culprit
+ * 4. Fetch each candidate's diff; keep only commits where a '+' line in the patch is exactly
+ *    the stack trace line in the new file (same line number as reported in the trace).
+ * 5. Rank survivors by recency.
  *
  * Never throws; returns empty on any failure.
  */
@@ -399,6 +406,7 @@ export async function enrichIncidentWithGitHubCorrelation(
 
   const location = extractBestCodeLocation(summary.stacktrace || []);
   if (!location || !isMappablePath(location.file)) return emptyCorrelation();
+  if (location.line == null || location.line <= 0) return emptyCorrelation();
 
   const repo = await resolveRepoForIncident(summary.service, orgId, storage);
   if (!repo || !repo.token) return emptyCorrelation();
@@ -410,8 +418,6 @@ export async function enrichIncidentWithGitHubCorrelation(
   const commits = await listCommitsByPath(repo.owner, repo.repo, location.file, since, repo.token);
   if (!commits || commits.length === 0) return emptyCorrelation();
 
-  // Fetch diffs for the top candidates to determine line-level proximity.
-  // Limit to MAX_DIFF_CHECKS to stay within rate limits.
   const toCheck = commits.slice(0, MAX_DIFF_CHECKS);
   const diffResults = await Promise.all(
     toCheck.map((c) =>
@@ -421,7 +427,10 @@ export async function enrichIncidentWithGitHubCorrelation(
   const diffMap = new Map<string, CommitDiffInfo>();
   for (const d of diffResults) diffMap.set(d.sha, d);
 
-  const scored = scoreAndRankCommits(commits, location, summary.start_time, diffMap, MAX_RELATED_COMMITS);
+  const lineHitCommits = commits.filter((c) => diffMap.get(c.sha)?.touchesErrorLine === true);
+  if (lineHitCommits.length === 0) return emptyCorrelation();
+
+  const scored = scoreAndRankCommits(lineHitCommits, location, summary.start_time, diffMap, MAX_RELATED_COMMITS);
 
   const seen = new Set<string>();
   const authors = scored

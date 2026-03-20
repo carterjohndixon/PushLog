@@ -478,10 +478,13 @@ export function NotificationDetailsModal() {
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Correlated commits</h5>
                       {metadata.correlatedFile && (
                         <p className="text-xs text-muted-foreground">
-                          Commits that changed{" "}
+                          {metadata.correlatedLine != null
+                            ? "Commits that added a line at "
+                            : "Commits touching "}
                           <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                             {metadata.correlatedFile}{metadata.correlatedLine ? `:${metadata.correlatedLine}` : ""}
                           </code>
+                          {metadata.correlatedLine != null ? " in this file" : ""}
                         </p>
                       )}
                       <div className="space-y-2">
@@ -499,7 +502,7 @@ export function NotificationDetailsModal() {
                               <span className="text-foreground text-sm">{c.message ?? ""}</span>
                               {c.touchesErrorLine && (
                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-                                  touches error line
+                                  added this line
                                 </span>
                               )}
                               {!c.touchesErrorLine && c.lineDistance != null && c.lineDistance <= 30 && (
