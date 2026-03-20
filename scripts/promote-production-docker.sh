@@ -90,13 +90,17 @@ for cname in "${PROD_FIXED_CONTAINERS[@]}"; do
   fi
 done
 
-# ── Drop compose project stack (keeps external network + named volumes) ──
-log "docker compose -p $COMPOSE_PROJECT_NAME down --remove-orphans ..."
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down --remove-orphans >> "$DOCKER_LOG" 2>&1 || true
+# ── Drop production stack only (keeps external network + named volumes) ──
+# IMPORTANT: Do NOT use --remove-orphans here. Staging often uses the same
+# COMPOSE_PROJECT_NAME (e.g. pushlog) with docker-compose.staging.yml; orphans would
+# include every staging + pushlog-promote container and this script would nuke the host.
+log "docker compose -p $COMPOSE_PROJECT_NAME down (production file only, no --remove-orphans) ..."
+docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down >> "$DOCKER_LOG" 2>&1 || true
 
 # ── Rebuild and restart production containers ──
 log "Rebuilding and restarting (compose project=$COMPOSE_PROJECT_NAME)..."
-if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build --force-recreate --remove-orphans >> "$DOCKER_LOG" 2>&1; then
+# Same: no --remove-orphans on up — would delete staging/promote as "orphans" of this file set.
+if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build --force-recreate >> "$DOCKER_LOG" 2>&1; then
   log "ERROR: docker compose up failed. See deploy-production-docker.log for details."
   tail -20 "$DOCKER_LOG" | while IFS= read -r line; do log "  $line"; done
   exit 1
