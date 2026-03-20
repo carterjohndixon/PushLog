@@ -66,6 +66,7 @@ export interface IStorage {
   getOrganizationIncidentSettings(organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null>;
   upsertOrganizationIncidentSettings(organizationId: string, settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }>;
   getOrganizationIdByIncidentServiceName(service: string): Promise<string | null>;
+  inferOrganizationIdFromNotifyUsers(userIds: string[]): Promise<string | null>;
   getAllOrganizationIds(): Promise<string[]>;
 
   // Sentry webhook apps
@@ -316,6 +317,10 @@ export class MemStorage implements IStorage {
   }
 
   async getOrganizationIdByIncidentServiceName(_service: string): Promise<string | null> {
+    return null;
+  }
+
+  async inferOrganizationIdFromNotifyUsers(_userIds: string[]): Promise<string | null> {
     return null;
   }
 

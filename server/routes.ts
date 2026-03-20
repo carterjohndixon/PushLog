@@ -629,6 +629,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (targetUsers.size === 0) return;
 
+    // GitHub correlation needs an org even when no repo has incidentServiceName set (solo org + one repo).
+    let correlationOrgId = orgId;
+    if (!correlationOrgId) {
+      correlationOrgId = await databaseStorage.inferOrganizationIdFromNotifyUsers(Array.from(targetUsers));
+    }
+
     const topSymptom = (summary as any).top_symptoms?.[0];
     const actualErrorMessage = topSymptom?.message != null ? String(topSymptom.message).trim() : undefined;
     const actualExceptionType = topSymptom?.exception_type != null ? String(topSymptom.exception_type).trim() : undefined;
@@ -668,7 +674,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       correlation = await enrichIncidentWithGitHubCorrelation(
         { service: summary.service, start_time: summary.start_time, stacktrace: resolvedStacktraceForMeta },
-        orgId,
+        correlationOrgId,
         databaseStorage as any,
         listCommitsByPath,
       );

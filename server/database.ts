@@ -1025,13 +1025,54 @@ export class DatabaseStorage implements IStorage {
 
   /** Resolve org from Sentry/integration service name (repos can set incidentServiceName to match). */
   async getOrganizationIdByIncidentServiceName(service: string): Promise<string | null> {
+    const s = String(service || "").trim();
+    if (!s) return null;
     const [row] = await db
       .select({ organizationId: repositories.organizationId })
       .from(repositories)
-      .where(and(eq(repositories.incidentServiceName, service), isNotNull(repositories.organizationId)))
+      .where(and(eq(repositories.incidentServiceName, s), isNotNull(repositories.organizationId)))
       .limit(1);
-    const oid = (row as { organizationId: string | null } | undefined)?.organizationId;
-    return oid ?? null;
+    let oid = (row as { organizationId: string | null } | undefined)?.organizationId;
+    if (oid) return oid;
+    const key = s.toLowerCase();
+    const [rowCi] = await db
+      .select({ organizationId: repositories.organizationId })
+      .from(repositories)
+      .where(
+        and(
+          isNotNull(repositories.organizationId),
+          isNotNull(repositories.incidentServiceName),
+          sql`lower(btrim(${repositories.incidentServiceName})) = ${key}`,
+        ),
+      )
+      .limit(1);
+    return (rowCi as { organizationId: string | null } | undefined)?.organizationId ?? null;
+  }
+
+  /**
+   * When incident service name does not match any repo, infer org from users who will receive the alert.
+   * Only returns an id when all recipients belong to exactly one organization (solo org or same team).
+   */
+  async inferOrganizationIdFromNotifyUsers(userIds: string[]): Promise<string | null> {
+    const ids = Array.from(new Set(userIds.filter(Boolean)));
+    if (ids.length === 0) return null;
+    const orgSet = new Set<string>();
+    const userRows = await db
+      .select({ organizationId: users.organizationId })
+      .from(users)
+      .where(inArray(users.id, ids));
+    for (const r of userRows) {
+      if (r.organizationId) orgSet.add(r.organizationId);
+    }
+    const memRows = await db
+      .select({ organizationId: organizationMemberships.organizationId })
+      .from(organizationMemberships)
+      .where(inArray(organizationMemberships.userId, ids));
+    for (const r of memRows) {
+      orgSet.add(r.organizationId);
+    }
+    if (orgSet.size === 1) return Array.from(orgSet)[0] ?? null;
+    return null;
   }
 
   // ── Sentry webhook apps ──
