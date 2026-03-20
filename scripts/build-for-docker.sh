@@ -6,8 +6,16 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "Building incident-engine..."
-cargo build --release -p incident-engine
+if [ -f "scripts/lib-rust-incremental.sh" ]; then
+  # shellcheck source=scripts/lib-rust-incremental.sh
+  source "scripts/lib-rust-incremental.sh"
+fi
+if command -v pushlog_maybe_cargo_release >/dev/null 2>&1; then
+  pushlog_maybe_cargo_release incident-engine incident-engine server/incident-engine echo
+else
+  echo "Building incident-engine..."
+  cargo build --release -p incident-engine
+fi
 
 echo "Building Node app for staging (isolated — does not overwrite dist/)..."
 STAGING_BUILD=".docker-build/staging-build"

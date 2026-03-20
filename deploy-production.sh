@@ -28,6 +28,10 @@ if [ ! -d "$APP_DIR" ]; then
 fi
 
 cd "$APP_DIR" || { log "ERROR: Cannot cd to $APP_DIR"; exit 1; }
+if [ -f "scripts/lib-rust-incremental.sh" ]; then
+  # shellcheck source=scripts/lib-rust-incremental.sh
+  source "scripts/lib-rust-incremental.sh"
+fi
 ACTUAL_PWD="$(pwd)"
 log "Starting production promotion..."
 log "Working directory: $ACTUAL_PWD (APP_DIR=$APP_DIR)"
@@ -110,12 +114,18 @@ if [ "$NEED_INSTALL" = true ]; then
   cp package-lock.json .deps_installed_for 2>/dev/null || true
 fi
 
-# ── Stage: Build Rust ──
-log "Building incident-engine (Rust)..."
-cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-engine build skipped (cargo/rust not available)"
-cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare build skipped (cargo/rust not available)"
-log "Building streaming-stats (Rust, requires tls-rustls for Supabase/cloud DB)..."
-cargo build --release -p streaming-stats 2>/dev/null || log "Warning: streaming-stats build skipped (cargo/rust not available)"
+# ── Stage: Build Rust (skip release rebuild when binary is newer than crate sources) ──
+if command -v pushlog_maybe_cargo_release_optional >/dev/null 2>&1; then
+  pushlog_maybe_cargo_release_optional incident-engine incident-engine server/incident-engine log
+  pushlog_maybe_cargo_release_optional pkg-compare pkg-compare tools/pkg-compare log
+  pushlog_maybe_cargo_release_optional streaming-stats streaming-stats server/streaming-stats log
+else
+  log "Building incident-engine (Rust)..."
+  cargo build --release -p incident-engine 2>/dev/null || log "Warning: incident-engine build skipped (cargo/rust not available)"
+  cargo build --release -p pkg-compare 2>/dev/null || log "Warning: pkg-compare build skipped (cargo/rust not available)"
+  log "Building streaming-stats (Rust, requires tls-rustls for Supabase/cloud DB)..."
+  cargo build --release -p streaming-stats 2>/dev/null || log "Warning: streaming-stats build skipped (cargo/rust not available)"
+fi
 
 log "Building production bundle..."
 npm run build:production

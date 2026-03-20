@@ -43,6 +43,11 @@ fi
 
 cd "$APP_DIR"
 
+if [ -f "scripts/lib-rust-incremental.sh" ]; then
+  # shellcheck source=scripts/lib-rust-incremental.sh
+  source "scripts/lib-rust-incremental.sh"
+fi
+
 log_info "Starting deployment..."
 log_info "Current directory: $(pwd)"
 log_info "Branch: $BRANCH"
@@ -99,19 +104,28 @@ npm run build || {
     exit 1
 }
 
-# Build streaming-stats (Rust)
-log_info "Building streaming-stats..."
-cargo build --release -p streaming-stats || {
+# Build Rust crates (skip when release binaries are already newer than sources)
+if command -v pushlog_maybe_cargo_release >/dev/null 2>&1; then
+  pushlog_maybe_cargo_release streaming-stats streaming-stats server/streaming-stats log_info || {
     log_error "Failed to build streaming-stats"
     exit 1
-}
-
-# Build incident-engine (Rust)
-log_info "Building incident-engine..."
-cargo build --release -p incident-engine || {
+  }
+  pushlog_maybe_cargo_release incident-engine incident-engine server/incident-engine log_info || {
     log_error "Failed to build incident-engine"
     exit 1
-}
+  }
+else
+  log_info "Building streaming-stats..."
+  cargo build --release -p streaming-stats || {
+    log_error "Failed to build streaming-stats"
+    exit 1
+  }
+  log_info "Building incident-engine..."
+  cargo build --release -p incident-engine || {
+    log_error "Failed to build incident-engine"
+    exit 1
+  }
+fi
 
 # Restart Docker staging services (staging uses containers, not PM2)
 COMPOSE_FILE="${APP_DIR}/docker-compose.staging.yml"

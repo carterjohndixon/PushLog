@@ -1,15 +1,22 @@
+# syntax=docker/dockerfile:1
 # Rust streaming-stats — HTTP ingest for dashboard aggregates (replaces PM2 on the host).
-# Build: docker build -f Dockerfile.streaming-stats -t pushlog-streaming-stats .
+# BuildKit cache mounts keep cargo registry + target/ between builds so unchanged Rust code rebuilds quickly.
+# Build: DOCKER_BUILDKIT=1 docker build -f Dockerfile.streaming-stats -t pushlog-streaming-stats .
 FROM rust:1-bookworm AS build
 WORKDIR /app
 COPY . .
-RUN cargo build --release -p streaming-stats
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build --release -p streaming-stats \
+ && mkdir -p /out \
+ && cp target/release/streaming-stats /out/streaming-stats
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update -qq \
   && apt-get install -y -qq --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
-COPY --from=build /app/target/release/streaming-stats /usr/local/bin/streaming-stats
+COPY --from=build /out/streaming-stats /usr/local/bin/streaming-stats
 ENV PORT=5004
 EXPOSE 5004
 CMD ["streaming-stats"]

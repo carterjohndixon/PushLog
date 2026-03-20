@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 FROM node:20-bookworm-slim AS build
 
 RUN apt-get update -qq && apt-get install -y -qq curl build-essential && rm -rf /var/lib/apt/lists/*
@@ -25,8 +26,15 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 # - main web app (client + server bundle)
 # - carter.pushlog.ai static site
 RUN npm run build:production
-RUN cargo build --release -p incident-engine
-RUN cargo build --release -p risk-engine
+# Cache mounts: incremental Rust rebuilds when only unrelated repo files changed.
+RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    --mount=type=cache,target=/app/target,sharing=locked \
+    cargo build --release -p incident-engine \
+ && cargo build --release -p risk-engine \
+ && mkdir -p /rust-out \
+ && cp target/release/incident-engine /rust-out/ \
+ && cp target/release/risk-engine /rust-out/
 RUN npm prune --omit=dev
 
 FROM node:20-bookworm-slim AS runtime
@@ -40,8 +48,8 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/carter.pushlog.ai/dist ./carter.pushlog.ai/dist
-COPY --from=build /app/target/release/incident-engine /app/bin/incident-engine
-COPY --from=build /app/target/release/risk-engine /app/bin/risk-engine
+COPY --from=build /rust-out/incident-engine /app/bin/incident-engine
+COPY --from=build /rust-out/risk-engine /app/bin/risk-engine
 
 EXPOSE 3000
 CMD ["node", "dist/index.js"]
