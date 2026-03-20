@@ -706,7 +706,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
     // The incident engine email is the single combined email (Sentry event + spike/new_issue/regression classification).
-    const skipInAppDuplicate = wasRecentSentryNotification(summary.service, summary.environment);
+    // Agent-sourced incidents must not be suppressed: they share service/env with Sentry (e.g. app/production) but are a separate path.
+    const incidentSource = String((summary as any).source || "").toLowerCase();
+    const skipInAppDuplicate =
+      incidentSource !== "agent" && wasRecentSentryNotification(summary.service, summary.environment);
 
     await Promise.all(
       Array.from(targetUsers).map(async (userId) => {

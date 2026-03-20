@@ -1807,7 +1807,9 @@ export default function Settings() {
                             if (res.ok) {
                               toast({
                                 title: "Agent + correlation test triggered",
-                                description: data.message || "Error logged to stderr. Agent should create incident with related commits (repo needs incidentServiceName set).",
+                                description:
+                                  data.message ||
+                                  "Stack written to the Node process stderr. You only get a notification if pushlog-agent runs on the same host and tails docker logs for the container running this API. Enable Receive incident notifications and keep a repo connected.",
                               });
                             } else {
                               toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });

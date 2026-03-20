@@ -58,6 +58,8 @@ export interface IncidentEventInput {
 export interface IncidentSummaryOutput {
   incident_id: string;
   title: string;
+  /** From incident-engine: "agent" | "sentry" | etc. */
+  source?: string;
   service: string;
   environment: string;
   severity: "warning" | "error" | "critical";
