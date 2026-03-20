@@ -191,7 +191,10 @@ export default function AdminPage() {
       setLocalPromoteAt(Date.now());
       setForceInProgress(false);
       setLogsOpen(true);
-      logLineCountAtClear.current = allLogLines.length;
+      // Baseline from query cache (not render closure) so each new promote hides prior run lines until new ones append.
+      const cached = queryClient.getQueryData<AdminStatus>(["/api/admin/staging/status"]);
+      const len = cached?.promoteRemoteStatus?.recentLogLines?.length ?? 0;
+      logLineCountAtClear.current = len;
       toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
@@ -240,7 +243,10 @@ export default function AdminPage() {
 
   const remoteStatusAvailable = data?.promoteRemoteStatus && !data.promoteRemoteStatus.error;
   const allLogLines = data?.promoteRemoteStatus?.recentLogLines || [];
-  const promoteLogTail = allLogLines.slice(logLineCountAtClear.current).slice(-80);
+  // If the promote service truncates its buffer, an old clear index can be past EOF — treat as a fresh buffer.
+  const clearIdx = logLineCountAtClear.current;
+  const logSliceStart = clearIdx > allLogLines.length ? 0 : clearIdx;
+  const promoteLogTail = allLogLines.slice(logSliceStart).slice(-80);
   const lastLogLine = promoteLogTail[promoteLogTail.length - 1] || "";
   const promotionFinishedFromLogs =
     lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
