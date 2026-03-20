@@ -1,9 +1,34 @@
+# PushLog agent — production host (Docker stack)
+#
+# 1) In PushLog UI: Settings → Agents → create agent, copy token (plg_...).
+# 2) Replace token below. Rebuild/restart pushlog-agent after edits:
+#    docker compose ... up -d --build pushlog-agent
+#
+# Each `type: docker` entry runs: docker logs -f --tail 0 <container>
+# (only lines matching error/fatal/warn patterns are sent — see docs/PUSHLOG_AGENT_GO.md)
+
 endpoint: https://pushlog.ai
 token: plg_replace_with_real_agent_token
 environment: production
-service: pushlog-prod
+service: pushlog-docker-host
+
 sources:
-  # Example: watch Docker logs for the production web container
+  # --- Production stack (same host) ---
   - type: docker
     container: pushlog-prod-web
+  - type: docker
+    container: pushlog-prod-streaming-stats
+
+  # --- Staging stack (if it runs on this server) ---
+  - type: docker
+    container: pushlog-staging-app
+  - type: docker
+    container: pushlog-staging-streaming-stats
+
+  # --- Optional: promote service / DB (noisy; comment out if unwanted) ---
+  # - type: docker
+  #   container: pushlog-promote
+  # - type: docker
+  #   container: pushlog-staging-db
+
 spool_dir: /var/lib/pushlog-agent/spool

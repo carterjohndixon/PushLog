@@ -68,12 +68,15 @@ services:
     depends_on:
       pushlog-prod-web:
         condition: service_healthy
+    # Root is required for default docker.sock permissions (root:docker on the host).
+    # Config and spool are still explicit mounts; only the agent binary runs with elevated in-container uid.
+    user: "0:0"
     command: ["run", "--config", "/etc/pushlog-agent/config.yaml"]
     volumes:
       - ./config/pushlog-agent.production.yaml:/etc/pushlog-agent/config.yaml:ro
       - pushlog_agent_spool:/var/lib/pushlog-agent/spool
-      # Optional: uncomment if you use `type: docker` sources in agent config.
-      # - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Required for `type: docker` sources in agent config (docker logs -f <container>).
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - pushlog_prod
     healthcheck:

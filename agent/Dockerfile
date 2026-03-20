@@ -10,7 +10,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o
 
 FROM alpine:3.21 AS runtime
 
-RUN addgroup -S pushlog && adduser -S -G pushlog pushlog \
+# docker-cli: required for `type: docker` sources (`docker logs -f`). Socket mounted at runtime from compose.
+RUN apk add --no-cache docker-cli \
+  && addgroup -S pushlog && adduser -S -G pushlog pushlog \
   && mkdir -p /etc/pushlog-agent /var/lib/pushlog-agent/spool \
   && chown -R pushlog:pushlog /etc/pushlog-agent /var/lib/pushlog-agent
 
