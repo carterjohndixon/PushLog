@@ -46,6 +46,8 @@ if (process.env.NODE_ENV !== 'test') {
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
+/** GCM authentication tag length in bytes (128-bit tag). Explicit for static analysis; matches Node default. */
+const AUTH_TAG_LENGTH = 16;
 
 /**
  * Encrypts sensitive data using AES-256-GCM.
@@ -60,7 +62,9 @@ export function encrypt(text: string): string {
     const iv = crypto.randomBytes(IV_LENGTH);
     const key = Buffer.from(ENCRYPTION_KEY, 'hex');
     
-    const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
+    const cipher = crypto.createCipheriv(ALGORITHM, key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     
     let encrypted = cipher.update(text, 'utf8', 'base64');
     encrypted += cipher.final('base64');
@@ -96,7 +100,9 @@ export function decrypt(encryptedText: string): string {
     const authTag = Buffer.from(authTagBase64, 'base64');
     const key = Buffer.from(ENCRYPTION_KEY, 'hex');
     
-    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     decipher.setAuthTag(authTag);
     
     let decrypted = decipher.update(encrypted, 'base64', 'utf8');

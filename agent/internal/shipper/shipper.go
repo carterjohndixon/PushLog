@@ -3,11 +3,12 @@ package shipper
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net/http"
 	"strconv"
 	"time"
@@ -198,7 +199,15 @@ func nextBackoff(current time.Duration) time.Duration {
 	if next > MaxBackoff {
 		next = MaxBackoff
 	}
-	jitter := time.Duration(rand.Int63n(int64(next / 4)))
+	maxJitter := next / 4
+	if maxJitter <= 0 {
+		return next
+	}
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err != nil {
+		return next
+	}
+	jitter := time.Duration(binary.BigEndian.Uint64(buf[:]) % uint64(maxJitter))
 	return next + jitter
 }
 
