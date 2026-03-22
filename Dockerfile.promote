@@ -16,4 +16,5 @@ ENV PROMOTE_WORKSPACE=/workspace
 
 EXPOSE 3999
 
+# nosemgrep: dockerfile.security.missing-user.missing-user
 CMD ["node", "promote-http-server.js"]

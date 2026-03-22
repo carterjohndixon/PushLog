@@ -51,5 +51,8 @@ COPY --from=build /app/carter.pushlog.ai/dist ./carter.pushlog.ai/dist
 COPY --from=build /rust-out/incident-engine /app/bin/incident-engine
 COPY --from=build /rust-out/risk-engine /app/bin/risk-engine
 
+RUN chown -R node:node /app
+
 EXPOSE 3000
+USER node
 CMD ["node", "dist/index.js"]

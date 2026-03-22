@@ -1,6 +1,6 @@
 //! Application state shared across handlers.
 
-use sqlx::PgPool;
+use sqlx_postgres::PgPool;
 
 pub struct AppState {
   pub pool: PgPool,

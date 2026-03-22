@@ -12,7 +12,10 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.7", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono"] }
+# Use sqlx-core + sqlx-postgres only (not the `sqlx` meta-crate) so the lockfile does not
+# include sqlx-mysql / rsa (RUSTSEC-2023-0071). Underscore features match sqlx's runtime-tokio + tls-rustls-ring.
+sqlx-core = { version = "0.8.6", default-features = false, features = ["_rt-tokio", "_tls-rustls-ring-webpki", "json", "chrono", "uuid"] }
+sqlx-postgres = { version = "0.8.6", default-features = false, features = ["chrono", "uuid"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tower-http = { version = "0.5", features = ["cors"] }

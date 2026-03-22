@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
+use sqlx_postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
 use streaming_stats::AppState;
 
 const SUPABASE_SSL_HINT: &str = "\n\nFor Supabase: download the DB certificate from Project Settings → Database, save it on the server (e.g. /var/www/pushlog/config/supabase-db.crt), and set DATABASE_SSL_CA_PATH to that path in .env.production.";

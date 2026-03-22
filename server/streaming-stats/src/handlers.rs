@@ -6,6 +6,8 @@ use std::sync::Arc;
 use crate::date;
 use crate::state::AppState;
 use crate::types::IngestPayload;
+use sqlx_core::query::query;
+use sqlx_postgres::Postgres;
 
 pub async fn health() -> &'static str {
   "ok"
@@ -26,7 +28,7 @@ pub async fn ingest(
   let impact_score = payload.impact_score.clamp(0, 100);
   let repo_key = payload.repository_id.to_string();
 
-  let result = sqlx::query(
+  let result = query::<Postgres>(
     r#"
     INSERT INTO user_daily_stats (user_id, stat_date, pushes_count, total_risk, per_repo_counts)
     VALUES ($1, $2::date, 1, $3, jsonb_build_object($4, 1))

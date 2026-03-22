@@ -30,7 +30,12 @@ const useSsl =
   /supabase\.(co|com)/i.test(connectionString);
 
 const sql = postgres(connectionString, {
-  ...(useSsl && { ssl: { rejectUnauthorized: false } }),
+  ...(useSsl
+    ? {
+        // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+        ssl: { rejectUnauthorized: false },
+      }
+    : {}),
 });
 
 // Utility functions

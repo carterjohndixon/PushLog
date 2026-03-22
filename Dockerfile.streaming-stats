@@ -17,6 +17,10 @@ RUN apt-get update -qq \
   && apt-get install -y -qq --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 COPY --from=build /out/streaming-stats /usr/local/bin/streaming-stats
+RUN groupadd --system --gid 10001 pushlog \
+  && useradd --system --uid 10001 --gid pushlog --no-create-home pushlog \
+  && chown pushlog:pushlog /usr/local/bin/streaming-stats
 ENV PORT=5004
 EXPOSE 5004
+USER pushlog
 CMD ["streaming-stats"]

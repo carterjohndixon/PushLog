@@ -52,5 +52,8 @@ COPY --from=build /app/drizzle.config.ts ./
 COPY --from=build /app/shared ./shared
 COPY --from=build /app/server ./server
 
+RUN chown -R node:node /app
+
 EXPOSE 3001
+USER node
 CMD ["node", "dist/index.js"]
