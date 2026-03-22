@@ -48,6 +48,7 @@ export interface IncidentAlertMetadata {
   relevantAuthors?: Array<{ login: string; name?: string | null }>;
   correlatedFile?: string;
   correlatedLine?: number;
+  correlationMatch?: "exact_line" | "near_line" | "file";
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -119,6 +120,27 @@ export function getIncidentAlertEmailTemplate(
   const hasRelatedCommits = Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0;
   const relatedCommits = metadata?.relatedCommits ?? [];
   const relevantAuthors = metadata?.relevantAuthors ?? [];
+  const corrMatch = metadata?.correlationMatch;
+  const corrFile = metadata?.correlatedFile;
+  const corrLine = metadata?.correlatedLine;
+  const correlationIntroHtml = (() => {
+    if (!corrFile) return "";
+    const fileEsc = escapeHtml(String(corrFile));
+    const lineSuffix =
+      corrLine != null ? `:${escapeHtml(String(corrLine))}` : "";
+    if (corrMatch === "near_line" && corrLine != null) {
+      return `Commits that added lines near <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}${lineSuffix}</code> in this file`;
+    }
+    if (corrMatch === "file") {
+      return corrLine != null
+        ? `Recent commits touching <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}</code> (stack reported line ${escapeHtml(String(corrLine))})`
+        : `Recent commits touching <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}</code>`;
+    }
+    if (corrLine != null) {
+      return `Commits that added a line at <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}${lineSuffix}</code> in this file`;
+    }
+    return `Commits touching <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}</code>`;
+  })();
   const hasErrorMessage = metadata?.errorMessage != null && String(metadata.errorMessage).trim().length > 0;
   const rawExceptionType = metadata?.exceptionType != null ? String(metadata.exceptionType).trim() : "";
   const rawErrorMessage = hasErrorMessage ? String(metadata!.errorMessage!).trim() : "";
@@ -278,10 +300,9 @@ export function getIncidentAlertEmailTemplate(
                       <tr>
                         <td style="padding: 14px;">
                           <div style="font-size: 11px; font-weight: 600; color: ${C.green}; letter-spacing: 0.5px; margin-bottom: 4px;">CORRELATED COMMITS</div>
-                          ${metadata?.correlatedFile ? `
+                          ${correlationIntroHtml ? `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">
-                            ${metadata?.correlatedLine != null ? "Commits that added a line at " : "Commits touching "}
-                            <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${escapeHtml(String(metadata.correlatedFile))}${metadata?.correlatedLine ? `:${metadata.correlatedLine}` : ""}</code>${metadata?.correlatedLine != null ? " in this file" : ""}
+                            ${correlationIntroHtml}
                           </div>` : `
                           <div style="font-size: 12px; color: ${C.muted}; margin-bottom: 12px;">Changes to the affected file</div>`}
                           ${relatedCommits.map((c) => `

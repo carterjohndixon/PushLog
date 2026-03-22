@@ -670,7 +670,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const resolvedStacktraceForMeta = await Promise.all(appStacktraceForMeta.map(resolveFrame));
 
     // Incident-to-code correlation: use source-mapped frames so we look up real repo paths, not dist/bundle.
-    let correlation: { relatedCommits?: any[]; relevantAuthors?: any[]; correlationSource?: string | null; correlatedFile?: string; correlatedLine?: number } = {};
+    let correlation: {
+      relatedCommits?: any[];
+      relevantAuthors?: any[];
+      correlationSource?: string | null;
+      correlatedFile?: string;
+      correlatedLine?: number;
+      correlationMatch?: string;
+    } = {};
     try {
       correlation = await enrichIncidentWithGitHubCorrelation(
         { service: summary.service, start_time: summary.start_time, stacktrace: resolvedStacktraceForMeta },
@@ -701,7 +708,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ...(correlation.relevantAuthors?.length ? { relevantAuthors: correlation.relevantAuthors } : {}),
       ...(correlation.correlationSource ? { correlationSource: correlation.correlationSource } : {}),
       ...(correlation.correlatedFile ? { correlatedFile: correlation.correlatedFile } : {}),
-      ...(correlation.correlatedLine ? { correlatedLine: correlation.correlatedLine } : {}),
+      ...(correlation.correlatedLine != null ? { correlatedLine: correlation.correlatedLine } : {}),
+      ...(correlation.correlationMatch ? { correlationMatch: correlation.correlationMatch } : {}),
     });
 
     // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
@@ -761,6 +769,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
               exceptionType: actualExceptionType ?? undefined,
               relatedCommits: correlation.relatedCommits,
               relevantAuthors: correlation.relevantAuthors,
+              correlatedFile: correlation.correlatedFile,
+              correlatedLine: correlation.correlatedLine,
+              correlationMatch: correlation.correlationMatch as "exact_line" | "near_line" | "file" | undefined,
             });
           }
         } catch (err) {

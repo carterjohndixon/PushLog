@@ -478,13 +478,53 @@ export function NotificationDetailsModal() {
                       <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Correlated commits</h5>
                       {metadata.correlatedFile && (
                         <p className="text-xs text-muted-foreground">
-                          {metadata.correlatedLine != null
-                            ? "Commits that added a line at "
-                            : "Commits touching "}
-                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
-                            {metadata.correlatedFile}{metadata.correlatedLine ? `:${metadata.correlatedLine}` : ""}
-                          </code>
-                          {metadata.correlatedLine != null ? " in this file" : ""}
+                          {(() => {
+                            const m = metadata.correlationMatch as string | undefined;
+                            const f = metadata.correlatedFile;
+                            const ln = metadata.correlatedLine;
+                            if (m === "near_line" && ln != null) {
+                              return (
+                                <>
+                                  Commits that added lines near{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                    {f}:{ln}
+                                  </code>{" "}
+                                  in this file
+                                </>
+                              );
+                            }
+                            if (m === "file") {
+                              return ln != null ? (
+                                <>
+                                  Recent commits touching{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{f}</code>{" "}
+                                  (stack reported line {ln})
+                                </>
+                              ) : (
+                                <>
+                                  Recent commits touching{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{f}</code>
+                                </>
+                              );
+                            }
+                            if (ln != null) {
+                              return (
+                                <>
+                                  Commits that added a line at{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                    {f}:{ln}
+                                  </code>{" "}
+                                  in this file
+                                </>
+                              );
+                            }
+                            return (
+                              <>
+                                Commits touching{" "}
+                                <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{f}</code>
+                              </>
+                            );
+                          })()}
                         </p>
                       )}
                       <div className="space-y-2">

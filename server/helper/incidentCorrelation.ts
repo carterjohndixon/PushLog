@@ -74,6 +74,17 @@ export interface CodeLocation {
  * Extract ALL mappable code locations from the stack trace (ordered by frame position).
  * The first is the "best" (closest to the error), but we use all of them for scoring.
  */
+/** Coerce stack frame line from JSON (number or numeric string). */
+export function parseFrameLine(line: unknown): number | undefined {
+  if (line == null) return undefined;
+  if (typeof line === "number" && Number.isFinite(line) && line > 0) return Math.trunc(line);
+  if (typeof line === "string") {
+    const n = parseInt(line.trim(), 10);
+    if (!Number.isNaN(n) && n > 0) return n;
+  }
+  return undefined;
+}
+
 export function extractCodeLocations(
   stacktrace: Array<{ file?: string; line?: number }>
 ): CodeLocation[] {
@@ -86,10 +97,10 @@ export function extractCodeLocations(
     if (!isAppStackFrame(raw)) continue;
     const normalized = normalizeStackPath(raw);
     if (!normalized || !isMappablePath(normalized)) continue;
-    const key = normalized + ":" + (f.line ?? 0);
+    const line = parseFrameLine((f as { line?: unknown }).line);
+    const key = normalized + ":" + (line ?? 0);
     if (seen.has(key)) continue;
     seen.add(key);
-    const line = typeof f.line === "number" && f.line > 0 ? f.line : undefined;
     locations.push({ file: normalized, line });
   }
   return locations;
@@ -300,6 +311,8 @@ async function fetchCommitDiffForFile(
 
 const RECENCY_WINDOW_HOURS = 168; // 1 week
 const MAX_RELATED_COMMITS = 5;
+/** If no commit has a '+' exactly on the stack line, include commits whose nearest added line is within this distance. */
+const NEAR_LINE_MAX_DISTANCE = 30;
 
 export interface ScoredCommit {
   sha: string;
@@ -334,8 +347,14 @@ export function scoreAndRankCommits(
     const diff = diffInfos.get(c.sha);
     const touchesErrorLine = diff?.touchesErrorLine === true;
     const lineDist = diff?.closestLineDistance;
+    const dist =
+      lineDist !== undefined && lineDist !== Infinity && Number.isFinite(lineDist) ? lineDist : undefined;
+    let proximityBonus = 0;
+    if (!touchesErrorLine && dist != null && dist <= NEAR_LINE_MAX_DISTANCE) {
+      proximityBonus = 1.5 * (1 - dist / NEAR_LINE_MAX_DISTANCE);
+    }
 
-    const score = (touchesErrorLine ? 2.0 : 0) + 1.0 * recencyScore;
+    const score = (touchesErrorLine ? 2.5 : 0) + proximityBonus + 1.0 * recencyScore;
 
     return {
       sha: c.sha,
@@ -358,12 +377,16 @@ export function scoreAndRankCommits(
   return scored.slice(0, limit);
 }
 
+export type CorrelationMatchMode = "exact_line" | "near_line" | "file";
+
 export interface EnrichedCorrelation {
   relatedCommits: ScoredCommit[];
   relevantAuthors: Array<{ login: string; name?: string | null }>;
   correlationSource: "github" | null;
   correlatedFile?: string;
   correlatedLine?: number;
+  /** How relatedCommits were chosen (exact '+' line, nearby additions, or file-level recency). */
+  correlationMatch?: CorrelationMatchMode;
 }
 
 function emptyCorrelation(): EnrichedCorrelation {
@@ -428,9 +451,26 @@ export async function enrichIncidentWithGitHubCorrelation(
   for (const d of diffResults) diffMap.set(d.sha, d);
 
   const lineHitCommits = commits.filter((c) => diffMap.get(c.sha)?.touchesErrorLine === true);
-  if (lineHitCommits.length === 0) return emptyCorrelation();
+  let candidateCommits = lineHitCommits;
+  let matchMode: CorrelationMatchMode = "exact_line";
 
-  const scored = scoreAndRankCommits(lineHitCommits, location, summary.start_time, diffMap, MAX_RELATED_COMMITS);
+  if (lineHitCommits.length === 0) {
+    const nearCommits = commits.filter((c) => {
+      const d = diffMap.get(c.sha)?.closestLineDistance;
+      return typeof d === "number" && Number.isFinite(d) && d <= NEAR_LINE_MAX_DISTANCE;
+    });
+    if (nearCommits.length > 0) {
+      candidateCommits = nearCommits;
+      matchMode = "near_line";
+    } else {
+      candidateCommits = toCheck;
+      matchMode = "file";
+    }
+  }
+
+  if (candidateCommits.length === 0) return emptyCorrelation();
+
+  const scored = scoreAndRankCommits(candidateCommits, location, summary.start_time, diffMap, MAX_RELATED_COMMITS);
 
   const seen = new Set<string>();
   const authors = scored
@@ -451,5 +491,6 @@ export async function enrichIncidentWithGitHubCorrelation(
     correlationSource: "github",
     correlatedFile: location.file,
     correlatedLine: location.line,
+    correlationMatch: matchMode,
   };
 }
