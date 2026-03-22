@@ -185,13 +185,6 @@ export function IntegrationSetupModal({
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       onOpenChange(false);
-      const channelName = variables.slackChannelName;
-      toast({
-        title: "Integration Created",
-        description: channelName
-          ? `Connected! Make sure to run /invite @PushLog in #${channelName} so the bot can post messages.`
-          : "Your repository is now connected to Slack and monitoring has been enabled!",
-      });
     },
     onError(error: Error) {
       toast({

@@ -229,11 +229,6 @@ export function RepositorySelectModal({
 
                         if (!response.ok) {
                           if (response.status === 400 && data.error === "GitHub account already connected") {
-                            toast({
-                              title: "GitHub Already Connected",
-                              description: "Try refreshing the page to fetch your repositories.",
-                              variant: "default",
-                            });
                             window.location.reload();
                             return;
                           }
@@ -292,11 +287,6 @@ export function RepositorySelectModal({
 
                           if (!response.ok) {
                             if (response.status === 400 && data.error === "GitHub account already connected") {
-                              toast({
-                                title: "GitHub Already Connected",
-                                description: "Try refreshing the page to fetch your repositories.",
-                                variant: "default",
-                              });
                               window.location.reload();
                               return;
                             }

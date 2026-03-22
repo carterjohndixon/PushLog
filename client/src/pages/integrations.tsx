@@ -229,10 +229,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      toast({
-        title: "Integration Updated",
-        description: "Integration status has been updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -284,10 +280,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsIntegrationSettingsOpen(false);
       setSelectedIntegration(null);
-      toast({
-        title: "Integration Updated",
-        description: "Integration settings have been successfully updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -311,10 +303,6 @@ export default function Integrations({ userProfile: userProfileProp }: Integrati
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsDeleteConfirmationOpen(false);
       setIntegrationToDelete(null);
-      toast({
-        title: "Integration Deleted",
-        description: "Integration has been successfully removed.",
-      });
     },
     onError: (error: any) => {
       toast({

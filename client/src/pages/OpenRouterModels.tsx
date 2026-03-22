@@ -331,7 +331,6 @@ export function OpenRouterModels({
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/monthly-spend"] });
       setBudgetInput("");
-      toast({ title: "Budget updated" });
     },
     onError: (e: Error) => {
       toast({ title: "Budget update failed", description: e.message, variant: "destructive" });
@@ -343,15 +342,8 @@ export function OpenRouterModels({
       const res = await apiRequest("PATCH", "/api/user", { overBudgetBehavior: behavior });
       return res.json();
     },
-    onSuccess: (_, behavior) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: "Setting saved",
-        description:
-          behavior === "skip_ai"
-            ? "When over budget, AI summaries will be paused (plain push only)."
-            : "When over budget, summaries will use the free model.",
-      });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to save", description: e.message, variant: "destructive" });
@@ -370,9 +362,6 @@ export function OpenRouterModels({
       if (!data.valid) throw new Error(data.error || "Verification failed");
       return data;
     },
-    onSuccess: () => {
-      toast({ title: "Key verified", description: "You can save it below." });
-    },
     onError: (e: Error) => {
       toast({ title: "Verification failed", description: e.message, variant: "destructive" });
     },
@@ -388,7 +377,6 @@ export function OpenRouterModels({
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/credits"] });
       setApiKeyInput("");
-      toast({ title: "API key saved", description: "Your OpenRouter key is stored securely." });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to save key", description: e.message, variant: "destructive" });
@@ -404,7 +392,6 @@ export function OpenRouterModels({
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/credits"] });
-      toast({ title: "API key removed", description: "You can add a new key anytime." });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to remove key", description: e.message, variant: "destructive" });
@@ -441,7 +428,6 @@ export function OpenRouterModels({
     },
     onSuccess: (data) => {
       queryClient.setQueryData(["/api/openrouter/usage"], data);
-      toast({ title: "Usage refreshed", description: "OpenRouter usage data updated." });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to fetch usage", description: e.message, variant: "destructive" });
@@ -486,7 +472,6 @@ export function OpenRouterModels({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
-      toast({ title: "Usage updated", description: "OpenRouter usage record updated." });
     },
     onError: (e: Error) => {
       toast({ title: "Update failed", description: e.message, variant: "destructive" });
@@ -503,7 +488,6 @@ export function OpenRouterModels({
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       setViewingGenerationId(null);
       setUsagePerGenResult(null);
-      toast({ title: "Usage deleted", description: "Record removed from your usage history." });
     },
     onError: (e: Error) => {
       toast({ title: "Delete failed", description: e.message, variant: "destructive" });
@@ -707,11 +691,6 @@ export function OpenRouterModels({
                   if (!quickApplyModelId || !applyToIntegrationId) return;
                   const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                   if (int?.aiModel === quickApplyModelId) {
-                    toast({
-                      title: "Already using this model",
-                      description: `This integration already uses ${getAiModelDisplayName(quickApplyModelId)}.`,
-                      variant: "default",
-                    });
                     return;
                   }
                   applyToIntegrationMutation.mutate(
@@ -1815,11 +1794,6 @@ export function OpenRouterModels({
                           if (!applyToIntegrationId || !selectedModel) return;
                           const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                           if (int?.aiModel === selectedModel.id) {
-                            toast({
-                              title: "Already using this model",
-                              description: `This integration is already using ${getAiModelDisplayName(selectedModel.id)}.`,
-                              variant: "default",
-                            });
                             return;
                           }
                           applyToIntegrationMutation.mutate(

@@ -70,14 +70,13 @@ export default function AdminPricingPage() {
       }
       return res.json();
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/pricing"] });
       setEditing(null);
       setAddOpen(false);
       setAddModelId("");
       setAddInput("");
       setAddOutput("");
-      toast({ title: "Saved", description: variables?._isNew ? "Pricing added." : "Pricing updated." });
     },
     onError: (e: Error) => {
       toast({ title: "Save failed", description: e.message, variant: "destructive" });

@@ -89,10 +89,6 @@ export default function Dashboard() {
       // Clean up the URL without reloading
       window.history.replaceState(null, '', window.location.pathname);
     } else if (hash.startsWith('#slack=connected')) {
-      toast({
-        title: "Slack Connected",
-        description: "Your Slack workspace has been successfully connected!",
-      });
       // Clean up the URL without reloading
       window.history.replaceState(null, '', window.location.pathname);
     }
@@ -235,17 +231,11 @@ export default function Dashboard() {
         queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
         queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
 
-        // Show specific notification for the repository that was just connected
         if (data.warning) {
           toast({
-            title: "Repository Connected with Warning",
+            title: "Repository connected with warning",
             description: data.warning,
-            variant: "default",
-          });
-        } else {
-          toast({
-            title: "Repository Connected",
-            description: `${repository.name} has been successfully connected to PushLog.`,
+            variant: "destructive",
           });
         }
       },
@@ -471,10 +461,6 @@ export default function Dashboard() {
       // Defer invalidation so UI paints first; our setQueryData is already correct
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      toast({
-        title: "Integration Updated",
-        description: "Integration status has been updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -523,10 +509,6 @@ export default function Dashboard() {
       // Skip invalidating repositories-and-integrations — we've already updated it
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      toast({
-        title: "Integration Deleted",
-        description: "The integration has been successfully deleted.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -577,10 +559,6 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       setIsIntegrationSettingsOpen(false);
       setSelectedIntegration(null);
-      toast({
-        title: "Settings Updated",
-        description: "Integration settings have been successfully updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -625,10 +603,6 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       setIsRepositorySettingsOpen(false);
       setSelectedRepository(null);
-      toast({
-        title: "Settings Updated",
-        description: "Repository settings have been successfully updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -681,10 +655,6 @@ export default function Dashboard() {
         queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
         setIsDeleteRepoConfirmationOpen(false);
         setRepositoryToDelete(null);
-        toast({
-          title: "Repository Deleted",
-          description: "Repository has been successfully removed.",
-        });
       },
       onError: (error: any, repoId, context) => {
         // Rollback the optimistic update

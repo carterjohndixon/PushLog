@@ -29,10 +29,6 @@ export default function VerifyEmail() {
       return data;
     },
     onSuccess: () => {
-      toast({
-        title: "Email verified",
-        description: "Your email has been verified. Redirecting to dashboard…",
-      });
       queryClient.clear();
       queryClient.invalidateQueries();
       setTimeout(() => setLocation("/dashboard"), 1200);

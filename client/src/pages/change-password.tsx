@@ -28,10 +28,6 @@ export default function ChangePasswordPage() {
       });
     },
     onSuccess: () => {
-      toast({
-        title: "Password changed",
-        description: "Your password has been updated.",
-      });
       setLocation("/dashboard");
     },
     onError: (err: Error) => {

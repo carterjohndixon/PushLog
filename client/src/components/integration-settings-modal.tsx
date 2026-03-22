@@ -154,9 +154,6 @@ export function IntegrationSettingsModal({
       const res = await apiRequest("POST", `/api/integrations/${integrationId}/test-slack`);
       return res.json();
     },
-    onSuccess: () => {
-      toast({ title: "Test sent", description: "Check your Slack channel for the test message." });
-    },
     onError: (err: any) => {
       toast({
         title: "Test failed",

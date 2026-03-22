@@ -337,7 +337,6 @@ export function OpenAIModels({
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/openai/monthly-spend"] });
       setBudgetInput("");
-      toast({ title: "Budget updated" });
     },
     onError: (e: Error) => {
       toast({ title: "Budget update failed", description: e.message, variant: "destructive" });
@@ -349,15 +348,8 @@ export function OpenAIModels({
       const res = await apiRequest("PATCH", "/api/user", { overBudgetBehavior: behavior });
       return res.json();
     },
-    onSuccess: (_, behavior) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: "Setting saved",
-        description:
-          behavior === "skip_ai"
-            ? "When over budget, AI summaries will be paused (plain push only)."
-            : "When over budget, summaries will use the free model.",
-      });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to save", description: e.message, variant: "destructive" });
@@ -378,7 +370,6 @@ export function OpenAIModels({
       queryClient.invalidateQueries({ queryKey: ["/api/openai/usage/daily"] });
       queryClient.invalidateQueries({ queryKey: ["/api/openai/monthly-spend"] });
       setViewingCall(null);
-      toast({ title: "Deleted", description: "Call removed from history." });
     },
     onError: (e: Error) => {
       toast({ title: "Delete failed", description: e.message, variant: "destructive" });
@@ -412,9 +403,6 @@ export function OpenAIModels({
       if (!data.valid) throw new Error(data.error || "Verification failed");
       return data;
     },
-    onSuccess: () => {
-      toast({ title: "Key verified", description: "You can save it below." });
-    },
     onError: (e: Error) => {
       toast({ title: "Verification failed", description: e.message, variant: "destructive" });
     },
@@ -428,7 +416,6 @@ export function OpenAIModels({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       setOpenaiApiKeyInput("");
-      toast({ title: "API key saved", description: "Your OpenAI key is stored securely." });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to save key", description: e.message, variant: "destructive" });
@@ -442,7 +429,6 @@ export function OpenAIModels({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({ title: "API key removed", description: "You can add a new key anytime." });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to remove key", description: e.message, variant: "destructive" });
@@ -640,11 +626,6 @@ export function OpenAIModels({
                   if (!quickApplyModelId || !applyToIntegrationId) return;
                   const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                   if (int?.aiModel === quickApplyModelId) {
-                    toast({
-                      title: "Already using this model",
-                      description: `This integration already uses ${getAiModelDisplayName(quickApplyModelId)}.`,
-                      variant: "default",
-                    });
                     return;
                   }
                   applyToIntegrationMutation.mutate(
@@ -1277,7 +1258,6 @@ export function OpenAIModels({
                   size="sm"
                   onClick={() => {
                     refetchOpenaiUsage();
-                    toast({ title: "Refreshed", description: "Usage data updated." });
                   }}
                 >
                   Refresh
@@ -1514,11 +1494,6 @@ export function OpenAIModels({
                               if (!applyToIntegrationId) return;
                               const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                               if (int?.aiModel === selectedOpenAiModel.id) {
-                                toast({
-                                  title: "Already using this model",
-                                  description: `This integration is already using ${getAiModelDisplayName(selectedOpenAiModel.id)}.`,
-                                  variant: "default",
-                                });
                                 return;
                               }
                               applyToIntegrationMutation.mutate(

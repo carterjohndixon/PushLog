@@ -150,7 +150,7 @@ export default function AdminPage() {
       if (remote.inProgress === false) {
         const newSha = remote.prodDeployedSha || data.prodDeployedSha;
         if (newSha && newSha !== prevRemoteSha.current) {
-          toast({ title: "Promotion complete", description: `Deployed SHA: ${newSha.slice(0, 10)}` });
+          prevRemoteSha.current = newSha;
         }
         setLocalPromoteAt(null);
         // Force immediate refetch to ensure we have the latest deployed SHA (avoids race with file write)
@@ -195,7 +195,6 @@ export default function AdminPage() {
       const cached = queryClient.getQueryData<AdminStatus>(["/api/admin/staging/status"]);
       const len = cached?.promoteRemoteStatus?.recentLogLines?.length ?? 0;
       logLineCountAtClear.current = len;
-      toast({ title: "Promotion started", description: "Production promotion is running now." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
     onError: (e: Error) => {
@@ -229,7 +228,6 @@ export default function AdminPage() {
     onSuccess: () => {
       setLocalPromoteAt(null);
       setForceInProgress(false);
-      toast({ title: "Promotion cancelled", description: "The deployment has been stopped." });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/staging/status"] });
     },
     onError: (e: Error) => {

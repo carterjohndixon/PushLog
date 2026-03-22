@@ -361,10 +361,6 @@ export default function OrganizationPage() {
     },
     onSuccess: (data) => {
       setInviteLink(data.joinUrl);
-      toast({
-        title: "Invite link created",
-        description: "Share this link with anyone you want to add. They sign in (or sign up) and accept. Link expires in 7 days.",
-      });
     },
     onError: (err: Error) => {
       toast({ title: "Failed to create link", description: err.message, variant: "destructive" });
@@ -389,10 +385,6 @@ export default function OrganizationPage() {
     },
     onSuccess: (_data, variables) => {
       setEmailInviteEmail("");
-      toast({
-        title: "Invite sent",
-        description: `An email with a sign-in link was sent to ${variables.email}. They can join the organization after logging in.`,
-      });
       setInviteModalOpen(false);
     },
     onError: (err: Error) => {
@@ -425,13 +417,8 @@ export default function OrganizationPage() {
       if (!res.ok) throw new Error(data.error || "Failed to revoke link");
       return data;
     },
-    onSuccess: (data: { alreadyInvalid?: boolean }) => {
+    onSuccess: () => {
       setInviteLink(null);
-      if (data?.alreadyInvalid) {
-        toast({ title: "Link already invalid", description: "This link was already used or expired. It can no longer be used." });
-      } else {
-        toast({ title: "Invite link revoked", description: "The link no longer works. Create a new link if needed." });
-      }
     },
     onError: (err: Error) => {
       toast({ title: "Revoke failed", description: err.message, variant: "destructive" });
@@ -462,12 +449,8 @@ export default function OrganizationPage() {
     onMutate: (variables) => {
       setSendingInviteToLogin(variables.githubLogin);
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       setSendingInviteToLogin(null);
-      toast({
-        title: "Invite sent",
-        description: `An invite email was sent to the address on ${variables.githubLogin}'s GitHub profile. They can join as ${ROLE_LABELS[variables.role]}.`,
-      });
     },
     onError: (err: Error & { code?: string }) => {
       setSendingInviteToLogin(null);
@@ -480,10 +463,9 @@ export default function OrganizationPage() {
   });
 
   /** Copy invite link for a GitHub org member (create link with current role if none exists). Used when email isn't public. */
-  const copyInviteLinkForGitHubMember = (memberLogin: string) => {
+  const copyInviteLinkForGitHubMember = () => {
     if (inviteLink) {
       navigator.clipboard.writeText(inviteLink);
-      toast({ title: "Copied", description: `Send this link to ${memberLogin} to join as ${ROLE_LABELS[githubInviteRole]}.` });
       return;
     }
     createInviteLinkMutation.mutate(
@@ -492,7 +474,6 @@ export default function OrganizationPage() {
         onSuccess: (data) => {
           setInviteLink(data.joinUrl);
           navigator.clipboard.writeText(data.joinUrl);
-          toast({ title: "Copied", description: `Send this link to ${memberLogin} to join as ${ROLE_LABELS[githubInviteRole]}.` });
         },
       }
     );
@@ -513,7 +494,6 @@ export default function OrganizationPage() {
       setMemberToRemove(null);
       setSelectedMember(null);
       queryClient.invalidateQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
-      toast({ title: "Member removed", description: "They no longer have access to this organization." });
     },
     onError: (err: Error) => {
       toast({ title: "Remove failed", description: err.message, variant: "destructive" });
@@ -534,7 +514,6 @@ export default function OrganizationPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORG_MEMBERS_QUERY_KEY });
-      toast({ title: "Role updated", description: "The member's role has been changed." });
     },
     onError: (err: Error) => {
       toast({ title: "Update failed", description: err.message, variant: "destructive" });
@@ -562,7 +541,6 @@ export default function OrganizationPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ORG_INCIDENT_SETTINGS_QUERY_KEY });
-      toast({ title: "Incident settings saved", description: "Who receives alerts has been updated." });
     },
     onError: (err: Error) => {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
@@ -1023,7 +1001,6 @@ export default function OrganizationPage() {
                               title="Copy link"
                               onClick={() => {
                                 navigator.clipboard.writeText(inviteLink);
-                                toast({ title: "Copied", description: "Invite link copied to clipboard." });
                               }}
                             >
                               <Copy className="w-4 h-4" />
@@ -1236,7 +1213,7 @@ export default function OrganizationPage() {
                                             type="button"
                                             className="text-xs text-muted-foreground hover:text-foreground hover:underline"
                                             disabled={createInviteLinkMutation.isPending}
-                                            onClick={() => copyInviteLinkForGitHubMember(m.login)}
+                                            onClick={() => copyInviteLinkForGitHubMember()}
                                           >
                                             Copy link instead
                                           </button>
@@ -1261,7 +1238,6 @@ export default function OrganizationPage() {
                                 title="Copy link"
                                 onClick={() => {
                                   navigator.clipboard.writeText(inviteLink);
-                                  toast({ title: "Copied", description: "Invite link copied to clipboard." });
                                 }}
                               >
                                 <Copy className="w-4 h-4" />

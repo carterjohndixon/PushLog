@@ -34,7 +34,6 @@ export default function VerifyMfa() {
       if (data?.success && data?.user) {
         queryClient.setQueryData(PROFILE_QUERY_KEY, { success: true, user: data.user });
       }
-      toast({ title: "Login successful", description: "Welcome back." });
       setLocation("/dashboard");
       const opts = { credentials: "include" as RequestCredentials, headers: { Accept: "application/json" }, cache: "no-store" as RequestCache };
       queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile }).catch(() => {});

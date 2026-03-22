@@ -77,12 +77,7 @@ export default function ResetPassword() {
         throw new Error(cleanMessage);
       }
     },
-    onSuccess: (data) => {
-      toast({
-        title: "Password Reset Successful",
-        description: "Your password has been reset. You can now log in with your new password.",
-      });
-      // Redirect to login after short delay
+    onSuccess: () => {
       setTimeout(() => setLocation("/login"), 2000);
     },
     onError: (error: Error) => {

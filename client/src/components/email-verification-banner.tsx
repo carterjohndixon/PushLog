@@ -18,15 +18,6 @@ export function EmailVerificationBanner() {
     onSuccess: (data: { alreadyVerified?: boolean }) => {
       if (data.alreadyVerified) {
         queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-        toast({
-          title: "Already verified",
-          description: "Your email is already verified. Refreshing…",
-        });
-      } else {
-        toast({
-          title: "Verification Email Sent",
-          description: "Please check your email inbox and spam folder.",
-        });
       }
     },
     onError: (error: any) => {

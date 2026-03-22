@@ -95,7 +95,6 @@ function AccountTypeSection({
         toast({ title: "Update failed", description: data.error || "Could not update account type.", variant: "destructive" });
         return;
       }
-      toast({ title: "Account type updated", description: type === "team" ? "Your account is now set as Organization." : "Your account is now set as Solo." });
       onSuccess();
     } finally {
       setSaving(null);
@@ -199,7 +198,6 @@ function AgentsSection() {
     onSuccess: () => {
       setRevokeId(null);
       queryClient.invalidateQueries({ queryKey: ["agents"] });
-      toast({ title: "Agent revoked" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -209,7 +207,6 @@ function AgentsSection() {
   const copyToken = () => {
     if (newToken) {
       navigator.clipboard.writeText(newToken);
-      toast({ title: "Token copied to clipboard" });
     }
   };
 
@@ -413,7 +410,6 @@ function SentryWebhooksSection() {
     onSuccess: () => {
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: ["/api/org/sentry-apps"] });
-      toast({ title: "Sentry webhook app deleted" });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -422,12 +418,10 @@ function SentryWebhooksSection() {
 
   const copyUrl = (url: string) => {
     navigator.clipboard.writeText(url);
-    toast({ title: "Webhook URL copied" });
   };
 
   const copySecret = (secret: string) => {
     navigator.clipboard.writeText(secret);
-    toast({ title: "Secret copied" });
   };
 
   return (
@@ -799,7 +793,6 @@ export default function Settings() {
       queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      toast({ title: "Slack workspace disconnected", description: "Integrations using that workspace have been paused. You can reconnect from the Dashboard." });
     },
     onError: (error: Error) => {
       toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });
@@ -864,7 +857,7 @@ export default function Settings() {
           toast({
             title: "Already connected",
             description: "GitHub is already connected. If you're having issues, disconnect and reconnect.",
-            variant: "default",
+            variant: "destructive",
           });
         } else {
           toast({ title: "Connection failed", description: data.error || "Failed to connect GitHub.", variant: "destructive" });
@@ -892,21 +885,12 @@ export default function Settings() {
       }
       return data as { success?: boolean; message?: string; githubAuthorizationRevoked?: boolean };
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/account/data-summary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       setGithubDisconnectModalOpen(false);
-      const revoked = data?.githubAuthorizationRevoked === true;
-      toast({
-        title: "GitHub disconnected",
-        description:
-          data?.message ||
-          (revoked
-            ? "Authorization removed on GitHub too. Reconnect to pick org access again."
-            : "You can reconnect anytime from this page. If GitHub still lists PushLog, revoke it under GitHub → Settings → Applications."),
-      });
     },
     onError: (error: Error) => {
       toast({ title: "Disconnect failed", description: error.message, variant: "destructive" });
@@ -934,11 +918,6 @@ export default function Settings() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Data Exported",
-        description: "Your data has been downloaded successfully.",
-      });
     } catch (error) {
       toast({
         title: "Export Failed",
@@ -970,10 +949,6 @@ export default function Settings() {
       return response.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Account Deleted",
-        description: "Your account and all data have been permanently deleted.",
-      });
       queryClient.removeQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.clear();
       window.location.href = '/';
@@ -999,10 +974,6 @@ export default function Settings() {
       return res;
     },
     onSuccess: () => {
-      toast({
-        title: "Password changed",
-        description: "Your password has been updated. Other sessions have been signed out.",
-      });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -1033,7 +1004,6 @@ export default function Settings() {
           new CustomEvent("incident-notification", { detail: data.notification })
         );
       }
-      toast({ title: "Incident sent", description: "Check your notifications (bell icon)." });
     },
     onError: (error: Error) => {
       toast({ title: "Simulate failed", description: error.message, variant: "destructive" });
@@ -1063,10 +1033,6 @@ export default function Settings() {
         icon: "/images/PushLog-06p_njbF.png",
         tag: "pushlog-test",
       });
-      toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
-    },
-    onSuccess: () => {
-      toast({ title: "Test notification sent", description: "Check your OS notification area (or system tray)." });
     },
     onError: (error: Error) => {
       toast({ title: "Could not send test notification", variant: "destructive", description: error.message });
@@ -1715,9 +1681,14 @@ export default function Settings() {
                       disabled={Notification.permission === "denied"}
                       onClick={async () => {
                         const p = await Notification.requestPermission();
+                        if (p === "granted") return;
                         toast({
-                          title: p === "granted" ? "Browser notifications enabled" : p === "denied" ? "Notifications blocked" : "Permission dismissed",
-                          variant: p === "granted" ? "default" : "destructive",
+                          title: p === "denied" ? "Notifications blocked" : "Permission dismissed",
+                          description:
+                            p === "denied"
+                              ? "Unblock notifications in your browser settings to receive incident alerts."
+                              : "You can enable browser notifications anytime from this page.",
+                          variant: "destructive",
                         });
                       }}
                     >
@@ -1782,12 +1753,7 @@ export default function Settings() {
                           try {
                             const res = await fetch("/api/test/trigger-error", { credentials: "include" });
                             const data = await res.json().catch(() => ({}));
-                            if (res.ok) {
-                              toast({
-                                title: "Test error reported",
-                                description: data.message || "Sentry should have received it. Check your Sentry project and, if webhook is set up, your incident alerts.",
-                              });
-                            } else {
+                            if (!res.ok) {
                               toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
                             }
                           } catch {
@@ -1805,14 +1771,7 @@ export default function Settings() {
                           try {
                             const res = await fetch("/api/test/agent-correlation", { method: "POST", credentials: "include" });
                             const data = await res.json().catch(() => ({}));
-                            if (res.ok) {
-                              toast({
-                                title: "Agent + correlation test triggered",
-                                description:
-                                  data.message ||
-                                  "Stack written to the Node process stderr. You only get a notification if pushlog-agent runs on the same host and tails docker logs for the container running this API. Enable Receive incident notifications and keep a repo connected.",
-                              });
-                            } else {
+                            if (!res.ok) {
                               toast({ title: "Request failed", description: data.error || "Not found or disabled.", variant: "destructive" });
                             }
                           } catch {
@@ -1830,10 +1789,6 @@ export default function Settings() {
                         size="sm"
                         className="border-red-500/50 text-red-700 dark:text-red-400"
                         onClick={() => {
-                          toast({
-                            title: "Throwing real error...",
-                            description: "Route will 500 (real failure). Sentry captures it → webhook → notification (if alert fires).",
-                          });
                           window.open(`/api/test/throw?t=${Date.now()}`, "_blank", "noopener");
                         }}
                       >
@@ -1865,10 +1820,6 @@ export default function Settings() {
                                 filteredCount: data.filteredCount ?? 0,
                                 original: Array.isArray(data.original) ? data.original : [],
                                 filtered: Array.isArray(data.filtered) ? data.filtered : [],
-                              });
-                              toast({
-                                title: data.pass ? "Stack filter OK" : "Stack filter check",
-                                description: data.pass ? "Only app frames kept. See details below." : "Check the result below.",
                               });
                             } else {
                               toast({
@@ -1934,7 +1885,6 @@ export default function Settings() {
                                 size="sm"
                                 onClick={() => {
                                   navigator.clipboard.writeText(recoveryCodesResult.join("\n"));
-                                  toast({ title: "Copied", description: "Recovery codes copied to clipboard." });
                                 }}
                               >
                                 Copy all

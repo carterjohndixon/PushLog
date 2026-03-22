@@ -83,7 +83,6 @@ export default function SetupMfa() {
     },
     onSuccess: async () => {
       await queryClient.prefetchQuery({ queryKey: PROFILE_QUERY_KEY, queryFn: fetchProfile });
-      toast({ title: "MFA enabled", description: "Your account is now protected with two-factor authentication." });
       setLocation("/dashboard");
     },
     onError: (err: Error) => {

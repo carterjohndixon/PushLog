@@ -21,11 +21,6 @@ export default function ForgotPassword() {
       return response.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Reset Link Sent",
-        description: "If an account exists with this email, you will receive a password reset link.",
-      });
-      // Redirect to login after short delay
       setTimeout(() => setLocation("/login"), 2000);
     },
     onError: (error: any) => {

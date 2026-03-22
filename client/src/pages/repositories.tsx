@@ -431,10 +431,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      toast({
-        title: "Repository Updated",
-        description: "Repository status has been updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -463,10 +459,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
       queryClient.invalidateQueries({ queryKey: ['/api/integrations'] });
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      toast({
-        title: "Repository Deleted",
-        description: "Repository has been successfully removed.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -519,10 +511,6 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
       setIsRepositorySettingsOpen(false);
       setSelectedRepository(null);
-      toast({
-        title: "Settings Updated",
-        description: "Repository settings have been successfully updated.",
-      });
     },
     onError: (error: any) => {
       toast({
@@ -621,11 +609,13 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
       );
       queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
-      toast({
-        title: "Repository connected",
-        description: data.warning ?? `${repository.name} has been connected to PushLog.`,
-        variant: data.warning ? "default" : "default",
-      });
+      if (data.warning) {
+        toast({
+          title: "Repository connected with warning",
+          description: data.warning,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: Error) => {
       setConnectingRepoId(null);

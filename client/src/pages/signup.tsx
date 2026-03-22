@@ -91,12 +91,6 @@ export default function Signup() {
         return response.json();
       },
       onSuccess: (data: { needsMfaSetup?: boolean; redirectTo?: string }) => {
-        toast({
-          title: "Account Created",
-          description: data?.needsMfaSetup
-            ? "Scan the QR code in your authenticator app to finish setup."
-            : "Your account has been created successfully.",
-        });
         if (data?.needsMfaSetup && data?.redirectTo) {
           window.location.href = data.redirectTo;
         } else {

@@ -84,8 +84,9 @@ export default function Home() {
       const msg = error instanceof Error ? error.message : "";
       if (msg.includes("already connected")) {
         toast({
-          title: "Already Connected",
+          title: "Already connected",
           description: "Your GitHub account is already connected. Go to Repositories to add repos.",
+          variant: "destructive",
         });
       } else {
         toast({
@@ -113,8 +114,9 @@ export default function Home() {
         const workspaces = await workspacesRes.json();
         if (Array.isArray(workspaces) && workspaces.length > 0) {
           toast({
-            title: "Already Connected",
+            title: "Already connected",
             description: "Your Slack workspace is already connected. Go to Integrations to set up notifications.",
+            variant: "destructive",
           });
           return;
         }
@@ -155,10 +157,6 @@ export default function Home() {
           if (event.origin !== window.location.origin || event.data !== "slack-connected") return;
           window.removeEventListener("message", onMessage);
           if (popup) popup.close();
-          toast({
-            title: "Slack Connected",
-            description: "Your Slack workspace is now connected. Go to Integrations to set up notifications.",
-          });
           scrollToDashboard();
         };
         window.addEventListener("message", onMessage);

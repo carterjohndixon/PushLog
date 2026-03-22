@@ -91,10 +91,6 @@ export function SetupOrganizationModal({
         toast({ title: "Update failed", description: data.error || "Could not update organization.", variant: "destructive" });
         return;
       }
-      toast({
-        title: "Organization updated",
-        description: mode === "setup" ? "You can now invite teammates." : "Your changes have been saved.",
-      });
       onOpenChange(false);
       onSuccess?.();
     } finally {

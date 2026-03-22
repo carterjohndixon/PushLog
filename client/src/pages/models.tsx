@@ -212,10 +212,6 @@ export default function Models() {
       queryClient.invalidateQueries({ queryKey: ["/api/openrouter/usage"] });
       if (!modelId.includes("/")) queryClient.invalidateQueries({ queryKey: ["/api/openai/usage"] });
       setApplyToIntegrationId("");
-      toast({
-        title: "Model applied",
-        description: `Integration will use ${getAiModelDisplayName(modelId)} for commit summaries.`,
-      });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to apply model", description: e.message, variant: "destructive" });
@@ -227,12 +223,8 @@ export default function Models() {
       const res = await apiRequest("PATCH", "/api/user", { preferredAiModel: modelId });
       return res.json();
     },
-    onSuccess: (_, modelId) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
-      toast({
-        title: "Default model updated",
-        description: `New integrations will use ${getAiModelDisplayName(modelId)}.`,
-      });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to set default model", description: e.message, variant: "destructive" });
@@ -248,10 +240,6 @@ export default function Models() {
       queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ["/api/integrations"] });
       setReplaceAllConfirmOpen(false);
-      toast({
-        title: "Integrations updated",
-        description: `${data.updatedCount} integration(s) now use ${getAiModelDisplayName(data.preferredAiModel)}. This is also your default for new integrations.`,
-      });
     },
     onError: (e: Error) => {
       toast({ title: "Failed to update integrations", description: e.message, variant: "destructive" });
