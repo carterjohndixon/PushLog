@@ -525,6 +525,124 @@ export interface GitHubCommitForCorrelation {
 }
 
 const GITHUB_COMMITS_FETCH_TIMEOUT_MS = 4000;
+const GITHUB_CONTENTS_FETCH_TIMEOUT_MS = 4000;
+
+/** Encode each path segment for GET .../contents/{path} (GitHub requires per-segment encoding). */
+function encodeRepoContentPath(filePath: string): string {
+  const trimmed = String(filePath || "").replace(/^\/+/, "");
+  if (!trimmed) return "";
+  return trimmed
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+}
+
+/**
+ * Fetch the raw text of line `lineNumber` (1-based) from a file at `ref` (branch, tag, or commit SHA).
+ * Uses the repository contents API with raw media type so large files are supported without base64.
+ * Returns null if the path is missing, the ref is invalid, the line is out of range, or the request fails.
+ */
+export async function getExactSourceLine(
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+  lineNumber: number,
+  accessToken?: string | null
+): Promise<string | null> {
+  const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+  const o = String(owner || "").trim();
+  const r = String(repo || "").trim();
+  const p = String(path || "").trim();
+  const rf = String(ref || "").trim();
+  const line = Math.trunc(Number(lineNumber));
+  if (!o || !r || !p || !rf || !Number.isFinite(line) || line < 1) return null;
+
+  const encodedPath = encodeRepoContentPath(p);
+  if (!encodedPath) return null;
+
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3.raw",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const url = new URL(
+    `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/contents/${encodedPath}`
+  );
+  url.searchParams.set("ref", rf);
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_CONTENTS_FETCH_TIMEOUT_MS);
+    const response = await fetch(url.toString(), {
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 403) {
+        console.warn("[github] getExactSourceLine forbidden:", response.status, o, r, p);
+      }
+      return null;
+    }
+
+    const ct = (response.headers.get("content-type") || "").toLowerCase();
+    if (ct.includes("application/json")) return null;
+
+    const text = await response.text();
+    const lines = text.split(/\r?\n/);
+    if (line > lines.length) return null;
+    return lines[line - 1] ?? null;
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("[github] getExactSourceLine timeout:", o, r, p);
+    } else {
+      console.warn("[github] getExactSourceLine error:", err?.message || err, o, r);
+    }
+    return null;
+  }
+}
+
+/**
+ * Default branch name for a repository (e.g. `main`). Used when choosing a ref for contents/blame-aligned reads.
+ */
+export async function getRepositoryDefaultBranchName(
+  owner: string,
+  repo: string,
+  accessToken?: string | null
+): Promise<string | null> {
+  const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+  const o = String(owner || "").trim();
+  const r = String(repo || "").trim();
+  if (!o || !r) return null;
+
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github.v3+json",
+  };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_CONTENTS_FETCH_TIMEOUT_MS);
+    const response = await fetch(
+      `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}`,
+      { headers, signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+    if (!response.ok) return null;
+    const data = (await response.json()) as { default_branch?: string };
+    const br = data.default_branch;
+    return typeof br === "string" && br.trim() ? br.trim() : null;
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("[github] getRepositoryDefaultBranchName timeout:", o, r);
+    } else {
+      console.warn("[github] getRepositoryDefaultBranchName error:", err?.message || err, o, r);
+    }
+    return null;
+  }
+}
 
 /**
  * List commits that touch a specific file path.
@@ -598,6 +716,147 @@ export async function listCommitsByPath(
       console.warn("[github] listCommitsByPath error:", err?.message || err, owner, repo);
     }
     return [];
+  }
+}
+
+const GITHUB_GRAPHQL_TIMEOUT_MS = 4000;
+
+/** Commit that last modified a line on the default branch (Git blame). */
+export interface GitHubBlameCommit {
+  sha: string;
+  message: string;
+  authorLogin: string;
+  authorName: string | null;
+  timestamp: string;
+  htmlUrl: string;
+}
+
+/**
+ * Resolve which commit last touched `line` in `filePath` on the repository default branch.
+ * Uses the GraphQL blame API so line numbers match the current tree (unlike unified-diff line math across history).
+ */
+export async function fetchBlameCommitForLine(
+  owner: string,
+  repo: string,
+  filePath: string,
+  line: number,
+  accessToken?: string | null
+): Promise<GitHubBlameCommit | null> {
+  const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
+  if (!token || !filePath || line < 1) return null;
+
+  const query = `
+    query BlameLine($owner: String!, $name: String!, $path: String!) {
+      repository(owner: $owner, name: $name) {
+        defaultBranchRef {
+          target {
+            ... on Commit {
+              blame(path: $path) {
+                ranges {
+                  startingLine
+                  endingLine
+                  commit {
+                    oid
+                    abbreviatedOid
+                    message
+                    committedDate
+                    url
+                    author {
+                      name
+                      email
+                      user { login }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_GRAPHQL_TIMEOUT_MS);
+    const resp = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query,
+        variables: { owner, name: repo, path: filePath },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as {
+      errors?: unknown[];
+      data?: {
+        repository?: {
+          defaultBranchRef?: {
+            target?: {
+              blame?: {
+                ranges?: Array<{
+                  startingLine: number;
+                  endingLine: number;
+                  commit?: {
+                    oid?: string;
+                    abbreviatedOid?: string;
+                    message?: string;
+                    committedDate?: string;
+                    url?: string;
+                    author?: { name?: string | null; email?: string | null; user?: { login?: string } | null };
+                  };
+                }>;
+              };
+            };
+          };
+        };
+      };
+    };
+
+    if (json.errors?.length) {
+      console.warn("[github] fetchBlameCommitForLine GraphQL errors:", owner, repo, filePath);
+      return null;
+    }
+
+    const ranges = json.data?.repository?.defaultBranchRef?.target?.blame?.ranges;
+    if (!Array.isArray(ranges) || ranges.length === 0) return null;
+
+    const hit = ranges.find((r) => line >= r.startingLine && line <= r.endingLine);
+    if (!hit?.commit?.oid) return null;
+
+    const c = hit.commit;
+    const msg = String(c.message || "")
+      .split("\n")[0]
+      .trim()
+      .slice(0, 120);
+    const author = c.author;
+    const login =
+      author?.user?.login?.trim() ||
+      (author?.email && String(author.email).includes("@") ? String(author.email).split("@")[0] : "") ||
+      "unknown";
+
+    return {
+      sha: String(c.oid),
+      message: msg,
+      authorLogin: login,
+      authorName: author?.name ? String(author.name) : null,
+      timestamp: String(c.committedDate || ""),
+      htmlUrl: c.url || `https://github.com/${owner}/${repo}/commit/${c.oid}`,
+    };
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("[github] fetchBlameCommitForLine timeout:", owner, repo, filePath);
+    } else {
+      console.warn("[github] fetchBlameCommitForLine error:", err?.message || err, owner, repo);
+    }
+    return null;
   }
 }
 

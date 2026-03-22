@@ -29,6 +29,7 @@ export interface RelatedCommitForEmail {
   touchesErrorLine?: boolean;
   lineDistance?: number;
   score?: number;
+  fromBlame?: boolean;
 }
 
 export interface IncidentAlertMetadata {
@@ -48,7 +49,7 @@ export interface IncidentAlertMetadata {
   relevantAuthors?: Array<{ login: string; name?: string | null }>;
   correlatedFile?: string;
   correlatedLine?: number;
-  correlationMatch?: "exact_line" | "near_line" | "file";
+  correlationMatch?: "blame_line" | "exact_line" | "file" | "near_line";
 }
 
 function formatRelativeTime(isoString: string): string {
@@ -128,8 +129,11 @@ export function getIncidentAlertEmailTemplate(
     const fileEsc = escapeHtml(String(corrFile));
     const lineSuffix =
       corrLine != null ? `:${escapeHtml(String(corrLine))}` : "";
+    if (corrMatch === "blame_line" && corrLine != null) {
+      return `Line <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}${lineSuffix}</code> is attributed with git blame on the default branch; extra rows (if any) also added that line in a recent diff`;
+    }
     if (corrMatch === "near_line" && corrLine != null) {
-      return `Commits that added lines near <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}${lineSuffix}</code> in this file`;
+      return `Older near-line correlation for <code style="background-color: ${C.codeBg}; padding: 2px 6px; border-radius: 3px; font-family: 'Courier New', monospace; font-size: 11px; color: ${C.title};">${fileEsc}${lineSuffix}</code> (may be inaccurate)`;
     }
     if (corrMatch === "file") {
       return corrLine != null
@@ -312,8 +316,9 @@ export function getIncidentAlertEmailTemplate(
                                 <div>
                                   <a href="${escapeHtml(c.htmlUrl)}" style="color: ${C.green}; text-decoration: none; font-family: 'Courier New', monospace; font-size: 12px;">${escapeHtml(c.shortSha)}</a>
                                   <span style="color: ${C.title}; font-size: 13px; margin-left: 8px;">${escapeHtml(c.message)}</span>
-                                  ${c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">added this line</span>` : ""}
-                                  ${!c.touchesErrorLine && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background-color: ${C.badgeAmberBg}; border: 1px solid ${C.badgeAmberBorder}; border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
+                                  ${c.fromBlame ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">last change at this line</span>` : ""}
+                                  ${!c.fromBlame && c.touchesErrorLine ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: ${C.red}; background-color: ${C.badgeRedBg}; border: 1px solid ${C.badgeRedBorder}; border-radius: 10px;">added this line (diff)</span>` : ""}
+                                  ${!c.touchesErrorLine && !c.fromBlame && typeof c.lineDistance === "number" && c.lineDistance <= 30 ? `<span style="display: inline-block; margin-left: 6px; padding: 1px 6px; font-size: 10px; font-weight: 600; color: #f59e0b; background-color: ${C.badgeAmberBg}; border: 1px solid ${C.badgeAmberBorder}; border-radius: 10px;">${c.lineDistance} lines away</span>` : ""}
                                 </div>
                                 <div style="font-size: 11px; color: ${C.dim}; margin-top: 4px;">@${escapeHtml(c.author.login)}${c.timestamp ? ` &middot; ${formatRelativeTime(c.timestamp)}` : ""}</div>
                               </td>

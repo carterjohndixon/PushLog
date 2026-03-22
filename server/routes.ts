@@ -685,6 +685,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       correlatedFile?: string;
       correlatedLine?: number;
       correlationMatch?: string;
+      exactLineMatch?: { matched: boolean; sourceLine: string; matchedLine: string };
     } = {};
     try {
       correlation = await enrichIncidentWithGitHubCorrelation(
@@ -718,6 +719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ...(correlation.correlatedFile ? { correlatedFile: correlation.correlatedFile } : {}),
       ...(correlation.correlatedLine != null ? { correlatedLine: correlation.correlatedLine } : {}),
       ...(correlation.correlationMatch ? { correlationMatch: correlation.correlationMatch } : {}),
+      ...(correlation.exactLineMatch ? { exactLineMatch: correlation.exactLineMatch } : {}),
     });
 
     // When Sentry webhook already sent an in-app notification, skip creating a second one — but still send the email.
@@ -779,7 +781,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
               relevantAuthors: correlation.relevantAuthors,
               correlatedFile: correlation.correlatedFile,
               correlatedLine: correlation.correlatedLine,
-              correlationMatch: correlation.correlationMatch as "exact_line" | "near_line" | "file" | undefined,
+              correlationMatch: correlation.correlationMatch as
+                | "blame_line"
+                | "exact_line"
+                | "file"
+                | "near_line"
+                | undefined,
             });
           }
         } catch (err) {

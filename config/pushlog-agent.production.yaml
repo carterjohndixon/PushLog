@@ -6,6 +6,11 @@
 #
 # Each `type: docker` entry runs: docker logs -f --tail 0 <container>
 # (only lines matching error/fatal/warn patterns are sent — see docs/PUSHLOG_AGENT_GO.md)
+#
+# noise_preset:
+#   - generic (default) — for customer application logs; does not filter PushLog-internal lines.
+#   - pushlog_api — use when tailing PushLog's own API/worker containers (filters [incident-engine], GitHub token check noise, etc.).
+noise_preset: pushlog_api
 
 endpoint: https://pushlog.ai
 token: plg_replace_with_real_agent_token

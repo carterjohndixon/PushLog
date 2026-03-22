@@ -482,14 +482,25 @@ export function NotificationDetailsModal() {
                             const m = metadata.correlationMatch as string | undefined;
                             const f = metadata.correlatedFile;
                             const ln = metadata.correlatedLine;
-                            if (m === "near_line" && ln != null) {
+                            if (m === "blame_line" && ln != null) {
                               return (
                                 <>
-                                  Commits that added lines near{" "}
                                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                                     {f}:{ln}
                                   </code>{" "}
-                                  in this file
+                                  — git blame on the default branch; other rows may show recent diffs that added this
+                                  line
+                                </>
+                              );
+                            }
+                            if (m === "near_line" && ln != null) {
+                              return (
+                                <>
+                                  Older near-line match for{" "}
+                                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
+                                    {f}:{ln}
+                                  </code>{" "}
+                                  (often inaccurate)
                                 </>
                               );
                             }
@@ -528,8 +539,8 @@ export function NotificationDetailsModal() {
                         </p>
                       )}
                       <div className="space-y-2">
-                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; timestamp?: string; touchesErrorLine?: boolean; lineDistance?: number; score?: number }, i: number) => (
-                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}>
+                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; timestamp?: string; touchesErrorLine?: boolean; fromBlame?: boolean; lineDistance?: number; score?: number }, i: number) => (
+                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine || c.fromBlame ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}>
                             <div className="flex flex-wrap items-center gap-2">
                               <a
                                 href={c.htmlUrl}
@@ -540,12 +551,17 @@ export function NotificationDetailsModal() {
                                 {c.shortSha ?? c.sha?.slice(0, 7) ?? "—"}
                               </a>
                               <span className="text-foreground text-sm">{c.message ?? ""}</span>
-                              {c.touchesErrorLine && (
+                              {c.fromBlame && (
                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-                                  added this line
+                                  last change at this line
                                 </span>
                               )}
-                              {!c.touchesErrorLine && c.lineDistance != null && c.lineDistance <= 30 && (
+                              {!c.fromBlame && c.touchesErrorLine && (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
+                                  added this line (diff)
+                                </span>
+                              )}
+                              {!c.touchesErrorLine && !c.fromBlame && c.lineDistance != null && c.lineDistance <= 30 && (
                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
                                   {c.lineDistance} lines away
                                 </span>
