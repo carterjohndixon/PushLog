@@ -63,8 +63,8 @@ export interface IStorage {
   revokeOrganizationInviteLink(organizationId: string, token: string): Promise<boolean>;
   createOrganizationInviteEmail(organizationId: string, email: string, role: string, expiresAt: Date, createdByUserId: string, options?: { invitedForGitHubLogin?: string }): Promise<{ joinUrl: string }>;
   consumeOrganizationInvite(token: string, userId: string, options?: { leaveCurrentOrg?: boolean }): Promise<{ organizationId: string; role: string } | { error: string; code?: string }>;
-  getOrganizationIncidentSettings(organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null>;
-  upsertOrganizationIncidentSettings(organizationId: string, settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }>;
+  getOrganizationIncidentSettings(organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; notificationMinSeverity: string; updatedAt: string } | null>;
+  upsertOrganizationIncidentSettings(organizationId: string, settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean; notificationMinSeverity?: string }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; notificationMinSeverity: string; updatedAt: string }>;
   getOrganizationIdByIncidentServiceName(service: string): Promise<string | null>;
   inferOrganizationIdFromNotifyUsers(userIds: string[]): Promise<string | null>;
   getAllOrganizationIds(): Promise<string[]>;
@@ -300,11 +300,11 @@ export class MemStorage implements IStorage {
     return { error: "MemStorage: not implemented" };
   }
 
-  async getOrganizationIncidentSettings(_organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string } | null> {
+  async getOrganizationIncidentSettings(_organizationId: string): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; notificationMinSeverity: string; updatedAt: string } | null> {
     return null;
   }
 
-  async upsertOrganizationIncidentSettings(organizationId: string, _settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; updatedAt: string }> {
+  async upsertOrganizationIncidentSettings(organizationId: string, _settings: { targetingMode?: string; specificUserIds?: string[] | null; specificRoles?: string[] | null; priorityUserIds?: string[] | null; includeViewers?: boolean; notificationMinSeverity?: string }): Promise<{ organizationId: string; targetingMode: string; specificUserIds: string[] | null; specificRoles: string[] | null; priorityUserIds: string[] | null; includeViewers: boolean; notificationMinSeverity: string; updatedAt: string }> {
     return {
       organizationId,
       targetingMode: "users_with_repos",
@@ -312,6 +312,7 @@ export class MemStorage implements IStorage {
       specificRoles: null,
       priorityUserIds: null,
       includeViewers: false,
+      notificationMinSeverity: "all",
       updatedAt: new Date().toISOString(),
     };
   }

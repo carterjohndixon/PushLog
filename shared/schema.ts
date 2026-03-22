@@ -131,6 +131,8 @@ export const organizationIncidentSettings = pgTable("organization_incident_setti
   specificRoles: jsonb("specific_roles").$type<string[]>(),
   priorityUserIds: jsonb("priority_user_ids").$type<string[]>(),
   includeViewers: boolean("include_viewers").notNull().default(false),
+  /** Minimum severity for in-app + email incident alerts: all | error | critical (agent + Sentry + incident engine). */
+  notificationMinSeverity: text("notification_min_severity").notNull().default("all"),
   updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 });
 

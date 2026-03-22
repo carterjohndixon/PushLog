@@ -77,7 +77,10 @@ import { bufferAgentEvent } from "./helper/agentBuffer";
 import { hashToken, generateAgentToken } from "./helper/tokens";
 import { generateRecoveryCodes, looksLikeRecoveryCode } from "./helper/recoveryCodes";
 import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
-import { shouldSendIncidentNotification } from "./helper/incidentNotificationPolicy";
+import {
+  shouldSendIncidentNotification,
+  resolveIncidentNotificationFloor,
+} from "./helper/incidentNotificationPolicy";
 import { listCommitsByPath } from "./github";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
@@ -614,7 +617,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
 
-    if (!shouldSendIncidentNotification(summary.severity)) {
+    const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
+    const notificationFloor = await resolveIncidentNotificationFloor(orgId);
+    if (!shouldSendIncidentNotification(summary.severity, notificationFloor)) {
       return;
     }
 
@@ -622,8 +627,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const targetUsers = new Set<string>();
     const linkedUserId = summary.links?.pushlog_user_id?.trim();
     if (linkedUserId) targetUsers.add(linkedUserId);
-
-    const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
 
     if (targetUsers.size === 0) {
       const defaultTargets = orgId
@@ -3203,6 +3206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               specificRoles: row.specificRoles ?? null,
               priorityUserIds: row.priorityUserIds ?? null,
               includeViewers: row.includeViewers,
+              notificationMinSeverity: row.notificationMinSeverity ?? "all",
               updatedAt: row.updatedAt,
             }
           : {
@@ -3211,6 +3215,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               specificRoles: null as string[] | null,
               priorityUserIds: null as string[] | null,
               includeViewers: false,
+              notificationMinSeverity: "all" as const,
               updatedAt: new Date().toISOString(),
             };
         res.status(200).json(payload);
@@ -3236,6 +3241,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     body("priorityUserIds").optional({ nullable: true }).isArray(),
     body("priorityUserIds.*").optional().isUUID(),
     body("includeViewers").optional().isBoolean(),
+    body("notificationMinSeverity").optional().isIn(["all", "error", "critical"]),
     async (req: Request, res: Response) => {
       try {
         const errors = validationResult(req);
@@ -3249,6 +3255,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const specificRoles = req.body?.specificRoles !== undefined ? (req.body.specificRoles as string[] | null) : (current?.specificRoles ?? null);
         const priorityUserIds = req.body?.priorityUserIds !== undefined ? (req.body.priorityUserIds as string[] | null) : (current?.priorityUserIds ?? null);
         const includeViewers = req.body?.includeViewers !== undefined ? !!req.body.includeViewers : (current?.includeViewers ?? false);
+        const notificationMinSeverity =
+          req.body?.notificationMinSeverity !== undefined
+            ? String(req.body.notificationMinSeverity).toLowerCase()
+            : (current?.notificationMinSeverity ?? "all");
 
         if (mode === "specific_users") {
           const hasUsers = Array.isArray(specificUserIds) && specificUserIds.length > 0;
@@ -3264,6 +3274,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           specificRoles: specificRoles ?? null,
           priorityUserIds: priorityUserIds ?? null,
           includeViewers,
+          notificationMinSeverity,
         };
         const updated = await databaseStorage.upsertOrganizationIncidentSettings(orgId, merged);
         res.status(200).json({
@@ -3272,6 +3283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           specificRoles: updated.specificRoles ?? null,
           priorityUserIds: updated.priorityUserIds ?? null,
           includeViewers: updated.includeViewers,
+          notificationMinSeverity: updated.notificationMinSeverity ?? "all",
           updatedAt: updated.updatedAt,
         });
       } catch (e) {

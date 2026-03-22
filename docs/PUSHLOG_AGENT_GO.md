@@ -244,7 +244,7 @@ The installer:
 Then:
 ```bash
 sudo pushlog-agent connect --token plg_xxx
-sudo nano /etc/pushlog-agent/config.yaml     # add sources
+sudo vim /etc/pushlog-agent/config.yaml     # add sources
 sudo pushlog-agent test                       # verify
 sudo systemctl enable --now pushlog-agent     # start
 ```

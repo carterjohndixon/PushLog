@@ -15,7 +15,10 @@ import {
   ingestIncidentEvent,
   type IncidentEventInput,
 } from "./incidentEngine";
-import { shouldSendIncidentNotification } from "./helper/incidentNotificationPolicy";
+import {
+  shouldSendIncidentNotification,
+  resolveIncidentNotificationFloor,
+} from "./helper/incidentNotificationPolicy";
 import { isSentryAllowed, type PlanName } from "./billing";
 
 const APP_ENV = process.env.APP_ENV || "production";
@@ -444,15 +447,16 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
       return;
     }
 
-    if (!shouldSendIncidentNotification(event.severity)) {
+    const resolvedOrgIdForFloor = orgId ?? (await storage.getOrganizationIdByIncidentServiceName(service));
+    const sentryNotificationFloor = await resolveIncidentNotificationFloor(resolvedOrgIdForFloor ?? null);
+    if (!shouldSendIncidentNotification(event.severity, sentryNotificationFloor)) {
       res.status(202).json({ accepted: true });
       return;
     }
 
     const targetUserIds = await (async (): Promise<string[]> => {
       if (orgId) return getIncidentNotificationTargetsForOrg(orgId, false);
-      const resolvedOrgId = await storage.getOrganizationIdByIncidentServiceName(service);
-      if (resolvedOrgId) return getIncidentNotificationTargetsForOrg(resolvedOrgId, false);
+      if (resolvedOrgIdForFloor) return getIncidentNotificationTargetsForOrg(resolvedOrgIdForFloor, false);
       return getIncidentNotificationTargets(false);
     })();
     const targetUsers = new Set<string>(targetUserIds);

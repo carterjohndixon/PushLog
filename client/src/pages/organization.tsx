@@ -56,6 +56,7 @@ type IncidentSettingsPayload = {
   specificRoles: string[] | null;
   priorityUserIds: string[] | null;
   includeViewers: boolean;
+  notificationMinSeverity: "all" | "error" | "critical";
   updatedAt: string;
 };
 
@@ -151,6 +152,9 @@ export default function OrganizationPage() {
   const [incidentSpecificRoles, setIncidentSpecificRoles] = useState<string[]>([]);
   const [incidentIncludeViewers, setIncidentIncludeViewers] = useState(false);
   const [incidentPriorityUserIds, setIncidentPriorityUserIds] = useState<string[]>([]);
+  const [incidentNotificationMinSeverity, setIncidentNotificationMinSeverity] = useState<
+    IncidentSettingsPayload["notificationMinSeverity"]
+  >("all");
   const [githubInviteModalOpen, setGithubInviteModalOpen] = useState(false);
   const [selectedGitHubOrgLogin, setSelectedGitHubOrgLogin] = useState<string>(() => {
     if (typeof window === "undefined") return "";
@@ -323,6 +327,8 @@ export default function OrganizationPage() {
       if (incidentIncludeViewers !== incidentSettingsData.includeViewers) setIncidentIncludeViewers(incidentSettingsData.includeViewers);
       const newPriorityIds = incidentSettingsData.priorityUserIds ?? [];
       if (JSON.stringify(incidentPriorityUserIds) !== JSON.stringify(newPriorityIds)) setIncidentPriorityUserIds(newPriorityIds);
+      const sev = incidentSettingsData.notificationMinSeverity ?? "all";
+      if (incidentNotificationMinSeverity !== sev) setIncidentNotificationMinSeverity(sev);
     }
   }
 
@@ -542,6 +548,7 @@ export default function OrganizationPage() {
       specificRoles: string[] | null;
       priorityUserIds: string[] | null;
       includeViewers: boolean;
+      notificationMinSeverity: IncidentSettingsPayload["notificationMinSeverity"];
     }) => {
       const res = await fetch("/api/org/incident-settings", {
         method: "PATCH",
@@ -573,6 +580,7 @@ export default function OrganizationPage() {
       specificRoles: incidentMode === "specific_users" ? incidentSpecificRoles : [],
       priorityUserIds: incidentPriorityUserIds,
       includeViewers: incidentIncludeViewers,
+      notificationMinSeverity: incidentNotificationMinSeverity,
     });
   };
 
@@ -720,8 +728,8 @@ export default function OrganizationPage() {
             </CardHeader>
           </Card>
 
-          {/* Incident notifications (owner/admin only; hide when solo) */}
-          {canInvite && !isSolo && (
+          {/* Incident notifications (owner/admin) — includes pushlog-agent + Sentry + incident engine */}
+          {canInvite && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -729,10 +737,32 @@ export default function OrganizationPage() {
                   Incident notifications
                 </CardTitle>
                 <CardDescription>
-                  Choose who in the organization receives Sentry and incident alerts. Per-repo teams (Repositories → Team) control who can see each repo; &quot;Users with access to repos&quot; uses that. Per-user &quot;Receive incident notifications&quot; in Settings still applies.
+                  Choose who receives alerts and how severe an issue must be before we notify (in-app and email). Applies to Sentry, the pushlog-agent, and the incident engine. Per-repo teams (Repositories → Team) control repo access; &quot;Users with access to repos&quot; uses that. Per-user &quot;Receive incident notifications&quot; in Settings still applies.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                <div className="space-y-2">
+                  <Label>Minimum severity to notify</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Events are still ingested for correlation; this only controls in-app and email alerts. &quot;Critical&quot; usually matches Sentry fatal/critical level or explicitly critical events.
+                  </p>
+                  <Select
+                    value={incidentNotificationMinSeverity}
+                    onValueChange={(v) =>
+                      setIncidentNotificationMinSeverity(v as IncidentSettingsPayload["notificationMinSeverity"])
+                    }
+                  >
+                    <SelectTrigger className="w-full max-w-md">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All (warnings, errors, and critical)</SelectItem>
+                      <SelectItem value="error">Errors and critical only (skip warning-only)</SelectItem>
+                      <SelectItem value="critical">Critical only (most quiet)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="space-y-3">
                   <Label>Who receives incidents</Label>
                   <RadioGroup

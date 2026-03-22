@@ -641,6 +641,7 @@ export class DatabaseStorage implements IStorage {
       specificRoles?: string[] | null;
       priorityUserIds?: string[] | null;
       includeViewers?: boolean;
+      notificationMinSeverity?: string;
     }
   ): Promise<OrganizationIncidentSettings> {
     const now = new Date().toISOString();
@@ -650,6 +651,7 @@ export class DatabaseStorage implements IStorage {
       specificRoles: settings.specificRoles ?? null,
       priorityUserIds: settings.priorityUserIds ?? null,
       includeViewers: settings.includeViewers ?? false,
+      notificationMinSeverity: settings.notificationMinSeverity ?? "all",
       updatedAt: now,
     };
     const [row] = await db
