@@ -21,6 +21,11 @@ on:
 permissions:
   contents: read
 
+# Use Node 24 for JavaScript-based actions (checkout, setup-node, cache inside composite actions).
+# See https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   codeql:
     name: CodeQL (JavaScript / TypeScript)
@@ -36,20 +41,20 @@ jobs:
         language: [javascript-typescript]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           # Extra security queries beyond the default suite (more OWASP/CWE coverage)
           queries: security-extended
 
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@v4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:${{ matrix.language }}"
 
@@ -60,7 +65,7 @@ jobs:
       image: semgrep/semgrep
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Run Semgrep
         run: |
@@ -75,11 +80,11 @@ jobs:
     name: npm audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -98,7 +103,7 @@ jobs:
     name: Trivy (deps + secrets)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Trivy filesystem scanner
         uses: aquasecurity/trivy-action@v0.35.0
@@ -107,6 +112,8 @@ jobs:
           scan-ref: .
           severity: CRITICAL,HIGH
           exit-code: "1"
+          # Composite action pins actions/cache@… on Node 20; disabling avoids that step + deprecation noise.
+          cache: "false"
           skip-dirs: node_modules,dist,target,.git,carter.pushlog.ai/node_modules,carter.pushlog.ai/dist
           scanners: vuln,secret
 
@@ -114,7 +121,7 @@ jobs:
     name: cargo audit (Rust workspace)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
 

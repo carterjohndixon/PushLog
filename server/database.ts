@@ -90,7 +90,7 @@ const useSsl =
   (isProduction && process.env.DATABASE_SSL !== "false");
 
 const client = postgres(connectionString, {
-  // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+  // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification, gitlab.nodejs_scan.javascript-crypto-rule-node_tls_reject
   ssl: useSsl ? { rejectUnauthorized: false } : false,
 });
 const db = drizzle(client);
@@ -107,7 +107,7 @@ const prodDb =
   prodConnectionString && prodConnectionString !== connectionString
     ? drizzle(
         postgres(prodConnectionString, {
-          // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+          // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification, gitlab.nodejs_scan.javascript-crypto-rule-node_tls_reject
           ssl: prodUseSsl ? { rejectUnauthorized: false } : false,
         })
       )

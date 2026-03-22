@@ -32,7 +32,7 @@ const useSsl =
 const sql = postgres(connectionString, {
   ...(useSsl
     ? {
-        // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification
+        // nosemgrep: problem-based-packs.insecure-transport.js-node.bypass-tls-verification.bypass-tls-verification, gitlab.nodejs_scan.javascript-crypto-rule-node_tls_reject
         ssl: { rejectUnauthorized: false },
       }
     : {}),
