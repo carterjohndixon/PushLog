@@ -1,0 +1,23 @@
+# Comments on PRs when new dependencies introduce known vulnerabilities.
+# https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/about-dependency-review
+
+name: Dependency review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          # Fail the check if the PR adds a dependency with a moderate+ advisory
+          fail-on-severity: moderate

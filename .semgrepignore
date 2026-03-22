@@ -1,0 +1,9 @@
+# Speed + noise reduction for Semgrep in CI (matches security workflow intent)
+node_modules/
+dist/
+target/
+.git/
+carter.pushlog.ai/node_modules/
+carter.pushlog.ai/dist/
+*.min.js
+package-lock.json
