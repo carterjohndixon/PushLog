@@ -15,6 +15,7 @@ import {
   ingestIncidentEvent,
   type IncidentEventInput,
 } from "./incidentEngine";
+import { shouldSendIncidentNotification } from "./helper/incidentNotificationPolicy";
 import { isSentryAllowed, type PlanName } from "./billing";
 
 const APP_ENV = process.env.APP_ENV || "production";
@@ -439,6 +440,11 @@ export async function handleSentryWebhook(req: Request, res: Response, options?:
     const dedupeKey = getDedupeKey(issue as any, ev as any);
     const incidentAction = body?.action != null ? String(body.action) : undefined;
     if (shouldSkipDirectNotification(dedupeKey, incidentAction, !!ev)) {
+      res.status(202).json({ accepted: true });
+      return;
+    }
+
+    if (!shouldSendIncidentNotification(event.severity)) {
       res.status(202).json({ accepted: true });
       return;
     }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,6 +27,8 @@ type Config struct {
 	Token       string         `yaml:"token"`
 	Environment string         `yaml:"environment"`
 	Service     string         `yaml:"service"`
+	// NoisePreset: "generic" (default) for customer app logs; "pushlog_api" when tailing PushLog's own API/worker containers.
+	NoisePreset string         `yaml:"noise_preset,omitempty"`
 	Sources     []SourceConfig `yaml:"sources"`
 	SpoolDir    string         `yaml:"spool_dir,omitempty"`
 }
@@ -53,6 +56,14 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.SpoolDir == "" {
 		cfg.SpoolDir = DefaultSpoolDir
+	}
+	switch strings.TrimSpace(strings.ToLower(cfg.NoisePreset)) {
+	case "", "generic":
+		cfg.NoisePreset = "generic"
+	case "pushlog_api":
+		cfg.NoisePreset = "pushlog_api"
+	default:
+		return nil, fmt.Errorf("config: noise_preset must be generic or pushlog_api, got %q", cfg.NoisePreset)
 	}
 	return &cfg, nil
 }

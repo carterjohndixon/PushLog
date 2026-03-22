@@ -194,17 +194,15 @@ export function onIncidentSummary(listener: IncidentListener): () => void {
   };
 }
 
-/** Expected/non-critical patterns that should not trigger incidents or alerts. */
-const NOISE_PATTERNS = [
-  // HTTP API request log lines (Express middleware): "METHOD /path STATUS in Xms"
+/**
+ * Universal noise — applied to every ingest path (customer apps + PushLog).
+ * Aligned with pushlog-agent `universalIgnorePatterns` (generic preset).
+ */
+const UNIVERSAL_NOISE_PATTERNS = [
   /(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/\S+\s+\d{3}\s+in\s+\d+ms/,
-
-  // Auth/expected status codes
   /\b401\b/,
   /\b403\b/,
   /\b404\b/,
-
-  // Expected auth/session messages
   /not authenticated/i,
   /unauthorized/i,
   /forbidden/i,
@@ -214,22 +212,52 @@ const NOISE_PATTERNS = [
   /invalid code/i,
   /session expired/i,
   /mfa not configured/i,
+  /serving\s+on\s+port/i,
+  /\[pushlog-agent\]/,
+  /sentry.*captured|sentry.*dsn|sentry.*init/i,
+  /pm2.*restart|pm2.*stop|pm2.*reload/i,
+  /error\s+response\s+from\s+daemon/i,
+  /no\s+such\s+container/i,
+  /cannot\s+connect\s+to\s+the\s+docker\s+daemon/i,
+];
 
-  // PushLog operational noise
-  /\[incident-engine\]\s+incident/,
+/**
+ * PushLog stack only — applied when `source === "agent"` and `tags.noise_preset === "pushlog_api"`.
+ * Aligned with pushlog-agent `pushlogAPIIgnorePatterns`.
+ */
+const PUSHLOG_API_NOISE_PATTERNS = [
+  /\[incident-engine\]/i,
+  /\[incident\]/i,
   /\[webhooks\/sentry\]/,
   /\[broadcastNotification\]/,
   /\[agentBuffer\]/,
-  /serving\s+on\s+port/i,
   /ENCRYPTION_KEY is missing/i,
   /ENCRYPTION_KEY is invalid/i,
   /❌ Auth failed/,
-  /\[pushlog-agent\]/,
+  /incident-engine:\s*read error/i,
+  /\[risk-engine\]/i,
+  /\[sentry-apps\]/i,
+  /\[sentry\/tunnel\]/i,
+  /\[Sentry\]\s+Failed to check plan/i,
+  /\[Webhook\]\s+Failed to check plan/i,
+  /\[productionDeployClient\]/i,
+  /\[Stripe webhook\]/i,
+  /\[email\]\s+Failed/i,
+  /\[trigger-error\]/i,
+  /\[github\]\s+listCommitsByPath/i,
+  /\[profile\]\s+Failed to backfill/i,
+  /GitHub token validation error/i,
+  /undici\.error\.UND_ERR/i,
+  /Symbol\(undici\.error/i,
 ];
 
 export function isNoiseEvent(event: IncidentEventInput): boolean {
   const text = `${event.message ?? ""} ${event.exception_type ?? ""}`;
-  return NOISE_PATTERNS.some((re) => re.test(text));
+  if (UNIVERSAL_NOISE_PATTERNS.some((re) => re.test(text))) return true;
+  const pushlogAgentPreset =
+    event.source === "agent" && event.tags?.noise_preset === "pushlog_api";
+  if (pushlogAgentPreset && PUSHLOG_API_NOISE_PATTERNS.some((re) => re.test(text))) return true;
+  return false;
 }
 
 export function ingestIncidentEvent(event: IncidentEventInput): void {

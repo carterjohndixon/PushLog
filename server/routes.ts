@@ -77,6 +77,7 @@ import { bufferAgentEvent } from "./helper/agentBuffer";
 import { hashToken, generateAgentToken } from "./helper/tokens";
 import { generateRecoveryCodes, looksLikeRecoveryCode } from "./helper/recoveryCodes";
 import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
+import { shouldSendIncidentNotification } from "./helper/incidentNotificationPolicy";
 import { listCommitsByPath } from "./github";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
@@ -612,6 +613,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log(
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`
     );
+
+    if (!shouldSendIncidentNotification(summary.severity)) {
+      return;
+    }
 
     // Route to one user when payload includes links.pushlog_user_id; otherwise users with repos + "Receive incident notifications" on.
     const targetUsers = new Set<string>();

@@ -16,9 +16,9 @@ const (
 )
 
 // TailFile follows a file like tail -F: reads appended lines and reopens on rotation.
-func TailFile(ctx context.Context, path, service, env string, out chan<- *parser.InboundEvent) {
+func TailFile(ctx context.Context, path, service, env, noisePreset string, out chan<- *parser.InboundEvent) {
 	for {
-		if err := tailFileOnce(ctx, path, service, env, out); err != nil {
+		if err := tailFileOnce(ctx, path, service, env, noisePreset, out); err != nil {
 			if ctx.Err() != nil {
 				return
 			}
@@ -32,7 +32,7 @@ func TailFile(ctx context.Context, path, service, env string, out chan<- *parser
 	}
 }
 
-func tailFileOnce(ctx context.Context, path, service, env string, out chan<- *parser.InboundEvent) error {
+func tailFileOnce(ctx context.Context, path, service, env, noisePreset string, out chan<- *parser.InboundEvent) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func tailFileOnce(ctx context.Context, path, service, env string, out chan<- *pa
 				line = scanner.Text()
 			}
 
-			ev := parser.ParseLine(line, service, env)
+			ev := parser.ParseLine(line, service, env, noisePreset)
 			if ev == nil {
 				continue
 			}
@@ -93,7 +93,7 @@ func tailFileOnce(ctx context.Context, path, service, env string, out chan<- *pa
 			}
 
 			if len(block) > 1 {
-				ev = parser.ParseLines(block, service, env)
+				ev = parser.ParseLines(block, service, env, noisePreset)
 				if ev == nil {
 					continue
 				}

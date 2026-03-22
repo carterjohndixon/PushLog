@@ -163,9 +163,15 @@ func cmdRun() {
 	sh := shipper.New(cfg.Endpoint, cfg.Token, q, sp)
 	eventCh := make(chan *parser.InboundEvent, 1000)
 
-	// Fan-in: move events from channel to queue
+	// Fan-in: move events from channel to queue (tag preset so API can apply PushLog-only noise rules)
 	go func() {
 		for ev := range eventCh {
+			if cfg.NoisePreset == "pushlog_api" {
+				if ev.Tags == nil {
+					ev.Tags = make(map[string]string)
+				}
+				ev.Tags["noise_preset"] = "pushlog_api"
+			}
 			q.Push(ev)
 		}
 	}()
@@ -175,13 +181,13 @@ func cmdRun() {
 		switch src.Type {
 		case "file":
 			log.Printf("Starting file source: %s", src.Path)
-			go source.TailFile(ctx, src.Path, cfg.Service, cfg.Environment, eventCh)
+			go source.TailFile(ctx, src.Path, cfg.Service, cfg.Environment, cfg.NoisePreset, eventCh)
 		case "journald":
 			log.Printf("Starting journald source: unit=%s", src.Unit)
-			go source.TailJournald(ctx, src.Unit, cfg.Service, cfg.Environment, eventCh)
+			go source.TailJournald(ctx, src.Unit, cfg.Service, cfg.Environment, cfg.NoisePreset, eventCh)
 		case "docker":
 			log.Printf("Starting docker source: container=%s", src.Container)
-			go source.TailDocker(ctx, src.Container, cfg.Service, cfg.Environment, eventCh)
+			go source.TailDocker(ctx, src.Container, cfg.Service, cfg.Environment, cfg.NoisePreset, eventCh)
 		default:
 			log.Printf("Unknown source type %q, skipping", src.Type)
 		}
@@ -337,7 +343,7 @@ func cmdParse() {
 
 Options:
   --file <path>    Parse lines from this file (default: read from stdin)
-  --config <path>  Use service/env from config (default: app, production)
+  --config <path>  Use service/env/noise_preset from config (default: app, production, generic)
 
 Output legend:
   FILTERED (noise)   Line matches 401/403/auth patterns — never shipped
@@ -353,9 +359,11 @@ Examples:
 	}
 
 	service, env := "app", "production"
+	noisePreset := parser.NoisePresetGeneric
 	if cfg, err := config.Load(cfgPath); err == nil {
 		service = cfg.Service
 		env = cfg.Environment
+		noisePreset = cfg.NoisePreset
 	}
 
 	var input io.Reader
@@ -370,7 +378,7 @@ Examples:
 		input = os.Stdin
 	}
 
-	fmt.Printf("Parsing as service=%q environment=%q\n", service, env)
+	fmt.Printf("Parsing as service=%q environment=%q noise_preset=%q\n", service, env, noisePreset)
 	fmt.Println("Legend: FILTERED = noise (401/403/auth), SKIP = no severity, SHIP = would be sent to server")
 	fmt.Println()
 
@@ -382,10 +390,10 @@ Examples:
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		ev := parser.ParseLine(line, service, env)
+		ev := parser.ParseLine(line, service, env, noisePreset)
 		if ev == nil {
 			// Could be filtered (noise) or no severity
-			if parser.MatchesIgnorePattern(line) {
+			if parser.MatchesIgnorePatternWithPreset(line, noisePreset) {
 				fmt.Printf("%d: FILTERED (noise)  %s\n", lineNum, truncate(line, 80))
 			} else {
 				fmt.Printf("%d: SKIP (no severity) %s\n", lineNum, truncate(line, 80))

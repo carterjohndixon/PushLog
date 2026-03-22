@@ -15,12 +15,12 @@ const dockerRestartDelay = 2 * time.Second
 
 // TailDocker spawns `docker logs -f <container>` and reads both stdout and stderr.
 // Restarts on exit (e.g. container stopped) with backoff.
-func TailDocker(ctx context.Context, container, service, env string, out chan<- *parser.InboundEvent) {
+func TailDocker(ctx context.Context, container, service, env, noisePreset string, out chan<- *parser.InboundEvent) {
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		err := runDockerLogs(ctx, container, service, env, out)
+		err := runDockerLogs(ctx, container, service, env, noisePreset, out)
 		if ctx.Err() != nil {
 			return
 		}
@@ -37,7 +37,7 @@ func TailDocker(ctx context.Context, container, service, env string, out chan<- 
 	}
 }
 
-func runDockerLogs(ctx context.Context, container, service, env string, out chan<- *parser.InboundEvent) error {
+func runDockerLogs(ctx context.Context, container, service, env, noisePreset string, out chan<- *parser.InboundEvent) error {
 	cmd := exec.CommandContext(ctx, "docker", "logs", "-f", "--tail", "0", container)
 
 	// docker logs sends container stdout and stderr on separate fd's.
@@ -93,7 +93,7 @@ func runDockerLogs(ctx context.Context, container, service, env string, out chan
 			line = scanner.Text()
 		}
 
-		ev := parser.ParseLine(line, service, env)
+		ev := parser.ParseLine(line, service, env, noisePreset)
 		if ev == nil {
 			continue
 		}
@@ -117,7 +117,7 @@ func runDockerLogs(ctx context.Context, container, service, env string, out chan
 		}
 
 		if len(block) > 1 {
-			ev = parser.ParseLines(block, service, env)
+			ev = parser.ParseLines(block, service, env, noisePreset)
 			if ev == nil {
 				continue
 			}

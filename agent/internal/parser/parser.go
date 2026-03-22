@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// Noise presets: generic = any customer app; pushlog_api = tailing PushLog's own server logs.
+const (
+	NoisePresetGeneric    = "generic"
+	NoisePresetPushlogAPI = "pushlog_api"
+)
+
 type StackFrame struct {
 	File     string `json:"file"`
 	Function string `json:"function,omitempty"`
@@ -36,18 +42,13 @@ var (
 		{"warning", regexp.MustCompile(`(?i)\b(warn(ing)?)\b`)},
 	}
 
-	// Expected/operational/auth lines that should never trigger incidents.
-	ignorePatterns = []*regexp.Regexp{
-		// HTTP API request log lines (Express middleware): "METHOD /path STATUS in Xms"
-		// These are operational logs, not errors — even if the JSON body happens to contain "error".
+	// Universal: safe for any customer application log stream.
+	// Keep aligned with server/incidentEngine.ts UNIVERSAL_NOISE_PATTERNS.
+	universalIgnorePatterns = []*regexp.Regexp{
 		regexp.MustCompile(`(?:GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+/\S+\s+\d{3}\s+in\s+\d+ms`),
-
-		// Auth/expected HTTP status codes
 		regexp.MustCompile(`\b401\b`),
 		regexp.MustCompile(`\b403\b`),
 		regexp.MustCompile(`\b404\b`),
-
-		// Expected auth messages
 		regexp.MustCompile(`(?i)not authenticated`),
 		regexp.MustCompile(`(?i)unauthorized`),
 		regexp.MustCompile(`(?i)forbidden`),
@@ -57,28 +58,40 @@ var (
 		regexp.MustCompile(`(?i)invalid code`),
 		regexp.MustCompile(`(?i)session expired`),
 		regexp.MustCompile(`(?i)mfa not configured`),
-
-		// PushLog operational noise
-		regexp.MustCompile(`\[incident-engine\]\s+incident`),
-		regexp.MustCompile(`\[webhooks/sentry\]`),
-		regexp.MustCompile(`\[broadcastNotification\]`),
-		regexp.MustCompile(`\[agentBuffer\]`),
 		regexp.MustCompile(`(?i)serving\s+on\s+port`),
-		regexp.MustCompile(`(?i)ENCRYPTION_KEY is missing`),
-		regexp.MustCompile(`(?i)ENCRYPTION_KEY is invalid`),
-		regexp.MustCompile(`❌ Auth failed`),
 		regexp.MustCompile(`\[pushlog-agent\]`),
-
-		// Sentry SDK noise
 		regexp.MustCompile(`(?i)sentry.*captured|sentry.*dsn|sentry.*init`),
-
-		// PM2/process manager operational
 		regexp.MustCompile(`(?i)pm2.*restart|pm2.*stop|pm2.*reload`),
-
-		// Docker CLI on the agent host (merged into docker logs stderr) — not app errors
 		regexp.MustCompile(`(?i)error\s+response\s+from\s+daemon`),
 		regexp.MustCompile(`(?i)no\s+such\s+container`),
 		regexp.MustCompile(`(?i)cannot\s+connect\s+to\s+the\s+docker\s+daemon`),
+	}
+
+	// PushLog stack only — use noise_preset: pushlog_api in config. Aligned with PUSHLOG_API_NOISE_PATTERNS on server.
+	pushlogAPIIgnorePatterns = []*regexp.Regexp{
+		regexp.MustCompile(`(?i)\[incident-engine\]`),
+		regexp.MustCompile(`(?i)\[incident\]`),
+		regexp.MustCompile(`\[webhooks/sentry\]`),
+		regexp.MustCompile(`\[broadcastNotification\]`),
+		regexp.MustCompile(`\[agentBuffer\]`),
+		regexp.MustCompile(`(?i)ENCRYPTION_KEY is missing`),
+		regexp.MustCompile(`(?i)ENCRYPTION_KEY is invalid`),
+		regexp.MustCompile(`❌ Auth failed`),
+		regexp.MustCompile(`(?i)incident-engine:\s*read error`),
+		regexp.MustCompile(`(?i)\[risk-engine\]`),
+		regexp.MustCompile(`(?i)\[sentry-apps\]`),
+		regexp.MustCompile(`(?i)\[sentry/tunnel\]`),
+		regexp.MustCompile(`(?i)\[Sentry\]\s+Failed to check plan`),
+		regexp.MustCompile(`(?i)\[Webhook\]\s+Failed to check plan`),
+		regexp.MustCompile(`(?i)\[productionDeployClient\]`),
+		regexp.MustCompile(`(?i)\[Stripe webhook\]`),
+		regexp.MustCompile(`(?i)\[email\]\s+Failed`),
+		regexp.MustCompile(`(?i)\[trigger-error\]`),
+		regexp.MustCompile(`(?i)\[github\]\s+listCommitsByPath`),
+		regexp.MustCompile(`(?i)\[profile\]\s+Failed to backfill`),
+		regexp.MustCompile(`(?i)GitHub token validation error`),
+		regexp.MustCompile(`undici\.error\.UND_ERR`),
+		regexp.MustCompile(`Symbol\(undici\.error`),
 	}
 
 	// Lines where the word "error" is followed by a space (not ":") are usually CLI/stderr
@@ -108,6 +121,28 @@ var (
 	logPrefixRe = regexp.MustCompile(`^(?:\d+\|[^\s|]+\s*\|\s*)?(?:\d{4}-\d{2}-\d{2}T[\d:.]+Z?\s*)?`)
 )
 
+// NormalizeNoisePreset returns a known preset; unknown values default to generic (lenient for CLI/tests).
+func NormalizeNoisePreset(p string) string {
+	switch strings.TrimSpace(strings.ToLower(p)) {
+	case "", NoisePresetGeneric:
+		return NoisePresetGeneric
+	case NoisePresetPushlogAPI:
+		return NoisePresetPushlogAPI
+	default:
+		return NoisePresetGeneric
+	}
+}
+
+func ignorePatternsForPreset(preset string) []*regexp.Regexp {
+	if NormalizeNoisePreset(preset) == NoisePresetPushlogAPI {
+		out := make([]*regexp.Regexp, 0, len(universalIgnorePatterns)+len(pushlogAPIIgnorePatterns))
+		out = append(out, universalIgnorePatterns...)
+		out = append(out, pushlogAPIIgnorePatterns...)
+		return out
+	}
+	return universalIgnorePatterns
+}
+
 // stripLogPrefix removes Docker/PM2 prefixes so stack detection works on the actual content.
 func stripLogPrefix(line string) string {
 	return strings.TrimSpace(logPrefixRe.ReplaceAllString(line, ""))
@@ -122,12 +157,12 @@ type JournaldEntry struct {
 	RealtimeTimestamp    string `json:"__REALTIME_TIMESTAMP"` // microseconds since epoch
 }
 
-func ParseLine(line, service, environment string) *InboundEvent {
+func ParseLine(line, service, environment, noisePreset string) *InboundEvent {
 	line = strings.TrimSpace(line)
 	if line == "" {
 		return nil
 	}
-	if MatchesIgnorePattern(line) {
+	if MatchesIgnorePatternWithPreset(line, noisePreset) {
 		return nil
 	}
 
@@ -160,17 +195,17 @@ func ParseLine(line, service, environment string) *InboundEvent {
 	}
 }
 
-func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
+func ParseJournaldLine(raw []byte, service, environment, noisePreset string) *InboundEvent {
 	var entry JournaldEntry
 	if err := json.Unmarshal(raw, &entry); err != nil {
-		return ParseLine(string(raw), service, environment)
+		return ParseLine(string(raw), service, environment, noisePreset)
 	}
 
 	msg := strings.TrimSpace(entry.Message)
 	if msg == "" {
 		return nil
 	}
-	if MatchesIgnorePattern(msg) {
+	if MatchesIgnorePatternWithPreset(msg, noisePreset) {
 		return nil
 	}
 
@@ -207,14 +242,19 @@ func ParseJournaldLine(raw []byte, service, environment string) *InboundEvent {
 	}
 }
 
-// MatchesIgnorePattern returns true if the line matches noise patterns (401, 403, auth errors) and would not be shipped.
-func MatchesIgnorePattern(line string) bool {
-	for _, re := range ignorePatterns {
+// MatchesIgnorePatternWithPreset returns true if the line is filtered for the given noise preset.
+func MatchesIgnorePatternWithPreset(line, noisePreset string) bool {
+	for _, re := range ignorePatternsForPreset(noisePreset) {
 		if re.MatchString(line) {
 			return true
 		}
 	}
 	return false
+}
+
+// MatchesIgnorePattern is shorthand for the generic (customer app) preset.
+func MatchesIgnorePattern(line string) bool {
+	return MatchesIgnorePatternWithPreset(line, NoisePresetGeneric)
 }
 
 func classifySeverity(line string) string {
@@ -340,7 +380,7 @@ func IsStackLikeLine(line string) bool {
 
 // ParseLines parses a multi-line block (e.g. full stack trace) into one event.
 // The first line must have severity; subsequent stack-like lines are merged into the stacktrace.
-func ParseLines(lines []string, service, environment string) *InboundEvent {
+func ParseLines(lines []string, service, environment, noisePreset string) *InboundEvent {
 	if len(lines) == 0 {
 		return nil
 	}
@@ -348,7 +388,7 @@ func ParseLines(lines []string, service, environment string) *InboundEvent {
 	if first == "" {
 		return nil
 	}
-	ev := ParseLine(first, service, environment)
+	ev := ParseLine(first, service, environment, noisePreset)
 	if ev == nil {
 		return nil
 	}

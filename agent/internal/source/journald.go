@@ -14,12 +14,12 @@ const journaldRestartDelay = 2 * time.Second
 
 // TailJournald spawns journalctl -u <unit> -f -o json and reads stdout.
 // Restarts on exit with backoff.
-func TailJournald(ctx context.Context, unit, service, env string, out chan<- *parser.InboundEvent) {
+func TailJournald(ctx context.Context, unit, service, env, noisePreset string, out chan<- *parser.InboundEvent) {
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		err := runJournalctl(ctx, unit, service, env, out)
+		err := runJournalctl(ctx, unit, service, env, noisePreset, out)
 		if ctx.Err() != nil {
 			return
 		}
@@ -36,7 +36,7 @@ func TailJournald(ctx context.Context, unit, service, env string, out chan<- *pa
 	}
 }
 
-func runJournalctl(ctx context.Context, unit, service, env string, out chan<- *parser.InboundEvent) error {
+func runJournalctl(ctx context.Context, unit, service, env, noisePreset string, out chan<- *parser.InboundEvent) error {
 	cmd := exec.CommandContext(ctx, "journalctl", "-u", unit, "-f", "-o", "json", "-n", "0")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -57,7 +57,7 @@ func runJournalctl(ctx context.Context, unit, service, env string, out chan<- *p
 		if ctx.Err() != nil {
 			return nil
 		}
-		ev := parser.ParseJournaldLine(scanner.Bytes(), service, env)
+		ev := parser.ParseJournaldLine(scanner.Bytes(), service, env, noisePreset)
 		if ev != nil {
 			select {
 			case out <- ev:
