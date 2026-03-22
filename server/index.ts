@@ -151,9 +151,18 @@ app.use(helmet({
 const isDevelopment = process.env.NODE_ENV !== 'production';
 const isLoadTesting = process.env.LOAD_TESTING === 'true';
 
+const productionApiRateLimitMax = (() => {
+  const parsed = parseInt(process.env.API_RATE_LIMIT_MAX ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 100 ? parsed : 1200;
+})();
+
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isLoadTesting ? 10000 : (isDevelopment ? 1000 : 100), // More permissive in dev/load testing
+  // Production was 100 — too low for the SPA: notifications poll every 15s (~60/15min) plus
+  // stats + repos refetch every 25s (~72/15min), before profile, mutations, or other pages.
+  max: isLoadTesting
+    ? 10000
+    : (isDevelopment ? 1000 : productionApiRateLimitMax),
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -175,6 +184,10 @@ const limiter = rateLimit({
     return apiPath === "/health" ||
            apiPath === "/health/detailed" ||
            apiPath === "/profile" ||
+           // Dashboard: session-authenticated reads polled/refetched on an interval (see client)
+           apiPath === "/stats" ||
+           apiPath === "/repositories-and-integrations" ||
+           apiPath === "/notifications/all" ||
            apiPath.startsWith("/admin/staging/status") ||
            apiPath.startsWith("/admin/staging/promote") ||
            apiPath.startsWith("/admin/staging/cancel-promote") ||
