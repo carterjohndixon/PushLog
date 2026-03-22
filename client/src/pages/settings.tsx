@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { ExactLineMatchTestRunner } from "@/components/exact-line-match-test-runner";
 import { formatLocalDate } from "@/lib/date";
 import { 
   Download, 
@@ -1821,6 +1822,9 @@ export default function Settings() {
                       >
                         Test agent + correlation
                       </Button>
+                      <div className="w-full min-w-[200px] max-w-md border border-dashed border-emerald-500/30 rounded-md p-2 bg-emerald-500/[0.03]">
+                        <ExactLineMatchTestRunner />
+                      </div>
                       <Button
                         variant="outline"
                         size="sm"

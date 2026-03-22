@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -7,6 +8,13 @@ import { GitBranch, MessageSquare, AlertCircle, Mail, ExternalLink, UserPlus } f
 import { getAiModelDisplayName, getIncidentSourceLabel } from "@/lib/utils";
 import { formatCreatedAt, formatRelativeOrLocal } from "@/lib/date";
 import { useNotifications } from "@/hooks/use-notifications";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import {
+  getExactLineMatchEvidence,
+  hasExactLineMatch,
+  trimCodeText,
+} from "@/lib/exactLineMatchUi";
+import { ExactLineMatchTestRunner } from "@/components/exact-line-match-test-runner";
 
 const MAX_PREVIEW = 120;
 
@@ -58,11 +66,43 @@ function messageIsRedundant(title: string, msg: string): boolean {
   return t === m || t.includes(m) || m.includes(t);
 }
 
+function ExactLineCodeBlock({ label, text }: { label: string; text: string }) {
+  const t = trimCodeText(text);
+  if (!t) return null;
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-0.5 max-h-24 overflow-auto rounded border border-border bg-muted/50 px-2 py-1.5">
+        <code className="block text-[11px] font-mono whitespace-pre-wrap break-all text-foreground">{t}</code>
+      </div>
+    </div>
+  );
+}
+
+const EXACT_LINE_BADGE_CLASS =
+  "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/35";
+
 export function NotificationDetailsModal() {
   const { notifications, readNotification, removeNotification } = useNotifications();
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showIncidentDetails = dialogOpen && selectedNotification?.type === "incident_alert";
+  const { data: profileData } = useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+    enabled: showIncidentDetails,
+  });
+
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isProductionHost = hostname === "pushlog.ai" || hostname === "www.pushlog.ai";
+  const profileUser = profileData?.user as { isStagingAdmin?: boolean; devMode?: boolean } | undefined;
+  const showExactLineMatchTest =
+    !import.meta.env.PROD &&
+    !isProductionHost &&
+    (import.meta.env.DEV ||
+      (hostname === "staging.pushlog.ai" && !!profileUser?.isStagingAdmin && !!profileUser?.devMode));
 
   useEffect(() => {
     const handle = (e: CustomEvent<{ id?: string | number; notification?: any }>) => {
@@ -145,6 +185,18 @@ export function NotificationDetailsModal() {
           const commitUrl = metadata?.repositoryFullName && metadata?.commitSha
             ? `https://github.com/${metadata.repositoryFullName}/commit/${metadata.commitSha}`
             : null;
+
+          const relatedCommitsRaw = Array.isArray(metadata?.relatedCommits) ? metadata.relatedCommits : [];
+          const anyCommitHasExactEvidence = relatedCommitsRaw.some((c: unknown) => hasExactLineMatch(c as any));
+          const metaExact = metadata?.exactLineMatch as
+            | { matched?: boolean; sourceLine?: string; matchedLine?: string }
+            | undefined;
+          const metaExactActive =
+            !!metaExact &&
+            metaExact.matched === true &&
+            (trimCodeText(metaExact.sourceLine) !== "" || trimCodeText(metaExact.matchedLine) !== "");
+          const showExactLineBadgeGlobal = metaExactActive || anyCommitHasExactEvidence;
+          const showMetaExactFallback = metaExactActive && !anyCommitHasExactEvidence;
 
           const title = selectedNotification.title ?? "";
           const msg = selectedNotification.message ?? "";
@@ -356,6 +408,16 @@ export function NotificationDetailsModal() {
                         {getIncidentSourceLabel(metadata)}
                       </span>
                     )}
+                    {showExactLineBadgeGlobal && (
+                      <span className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                        <span className={EXACT_LINE_BADGE_CLASS} title="Normalized source line equals an added line in a recent patch">
+                          Exact line match
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-normal max-w-[220px] sm:max-w-none leading-tight">
+                          Recent commit added the same source line text
+                        </span>
+                      </span>
+                    )}
                   </h4>
 
                   {/* API route and file:line — shown when available (Sentry webhook) */}
@@ -473,9 +535,30 @@ export function NotificationDetailsModal() {
                     </div>
                   )}
 
+                  {showMetaExactFallback && (
+                    <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide flex flex-wrap items-center gap-2">
+                        Exact line match detected
+                        <span className={EXACT_LINE_BADGE_CLASS}>Exact line match</span>
+                      </h5>
+                      <p className="text-xs text-muted-foreground">
+                        High-confidence correlation: recent commit added the same source line text (normalized). Not a guarantee of causality.
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-1">
+                        <ExactLineCodeBlock label="Source line:" text={String(metaExact?.sourceLine ?? "")} />
+                        <ExactLineCodeBlock label="Matched patch line:" text={String(metaExact?.matchedLine ?? "")} />
+                      </div>
+                    </div>
+                  )}
+
                   {Array.isArray(metadata?.relatedCommits) && metadata.relatedCommits.length > 0 && (
                     <div className="rounded-lg border border-log-green/30 bg-log-green/5 p-3 space-y-2">
-                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Correlated commits</h5>
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide flex flex-wrap items-center gap-2">
+                        Correlated commits
+                        {showExactLineBadgeGlobal && anyCommitHasExactEvidence && (
+                          <span className={EXACT_LINE_BADGE_CLASS}>Exact line match</span>
+                        )}
+                      </h5>
                       {metadata.correlatedFile && (
                         <p className="text-xs text-muted-foreground">
                           {(() => {
@@ -539,41 +622,83 @@ export function NotificationDetailsModal() {
                         </p>
                       )}
                       <div className="space-y-2">
-                        {metadata.relatedCommits.map((c: { sha?: string; shortSha?: string; message?: string; author?: { login?: string; name?: string | null }; htmlUrl?: string; timestamp?: string; touchesErrorLine?: boolean; fromBlame?: boolean; lineDistance?: number; score?: number }, i: number) => (
-                          <div key={c.sha ?? c.shortSha ?? `commit-${i}`} className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine || c.fromBlame ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <a
-                                href={c.htmlUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-mono text-xs text-sky-blue hover:underline"
+                        {metadata.relatedCommits.map(
+                          (
+                            c: {
+                              sha?: string;
+                              shortSha?: string;
+                              message?: string;
+                              author?: { login?: string; name?: string | null };
+                              htmlUrl?: string;
+                              timestamp?: string;
+                              touchesErrorLine?: boolean;
+                              fromBlame?: boolean;
+                              lineDistance?: number;
+                              score?: number;
+                              correlationEvidence?: unknown;
+                            },
+                            i: number,
+                          ) => {
+                            const exactEv = getExactLineMatchEvidence(c);
+                            return (
+                              <div
+                                key={c.sha ?? c.shortSha ?? `commit-${i}`}
+                                className={`text-sm pl-3 space-y-1 ${c.touchesErrorLine || c.fromBlame ? "border-l-2 border-red-500/70" : "border-l-2 border-log-green/50"}`}
                               >
-                                {c.shortSha ?? c.sha?.slice(0, 7) ?? "—"}
-                              </a>
-                              <span className="text-foreground text-sm">{c.message ?? ""}</span>
-                              {c.fromBlame && (
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-                                  last change at this line
-                                </span>
-                              )}
-                              {!c.fromBlame && c.touchesErrorLine && (
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
-                                  added this line (diff)
-                                </span>
-                              )}
-                              {!c.touchesErrorLine && !c.fromBlame && c.lineDistance != null && c.lineDistance <= 30 && (
-                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
-                                  {c.lineDistance} lines away
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              {c.author?.login && <span>@{c.author.login}</span>}
-                              {c.author?.login && c.timestamp && <span className="text-border">·</span>}
-                              {c.timestamp && <span>{formatRelativeOrLocal(c.timestamp)}</span>}
-                            </div>
-                          </div>
-                        ))}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <a
+                                    href={c.htmlUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="font-mono text-xs text-sky-blue hover:underline"
+                                  >
+                                    {c.shortSha ?? c.sha?.slice(0, 7) ?? "—"}
+                                  </a>
+                                  <span className="text-foreground text-sm min-w-0">{c.message ?? ""}</span>
+                                  {exactEv && (
+                                    <span
+                                      className={EXACT_LINE_BADGE_CLASS}
+                                      title="This commit’s patch includes the same normalized line as the stack location"
+                                    >
+                                      Exact line match
+                                    </span>
+                                  )}
+                                  {c.fromBlame && (
+                                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
+                                      last change at this line
+                                    </span>
+                                  )}
+                                  {!c.fromBlame && c.touchesErrorLine && (
+                                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-red-500/15 text-red-500 border border-red-500/30">
+                                      added this line (diff)
+                                    </span>
+                                  )}
+                                  {!c.touchesErrorLine && !c.fromBlame && c.lineDistance != null && c.lineDistance <= 30 && (
+                                    <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-500 border border-amber-500/30">
+                                      {c.lineDistance} lines away
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                  {c.author?.login && <span>@{c.author.login}</span>}
+                                  {c.author?.login && c.timestamp && <span className="text-border">·</span>}
+                                  {c.timestamp && <span>{formatRelativeOrLocal(c.timestamp)}</span>}
+                                </div>
+                                {exactEv && (
+                                  <details className="mt-1.5 text-xs group">
+                                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground select-none">
+                                      Exact line evidence
+                                    </summary>
+                                    <div className="mt-2 space-y-2 pl-1 border-l-2 border-emerald-500/40 min-w-0">
+                                      <ExactLineCodeBlock label="Source line:" text={exactEv.sourceLine} />
+                                      <ExactLineCodeBlock label="Matched patch line:" text={exactEv.matchedPatchLine} />
+                                    </div>
+                                  </details>
+                                )}
+                              </div>
+                            );
+                          },
+                        )}
                       </div>
                       {Array.isArray(metadata?.relevantAuthors) && metadata.relevantAuthors.length >= 2 && (
                         <div className="text-xs text-muted-foreground pt-2 border-t border-border">
@@ -619,6 +744,14 @@ export function NotificationDetailsModal() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {showExactLineMatchTest && (
+                    <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/[0.04] p-3">
+                      <ExactLineMatchTestRunner
+                        incidentId={metadata?.incidentId ? String(metadata.incidentId) : undefined}
+                      />
                     </div>
                   )}
 

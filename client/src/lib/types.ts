@@ -71,3 +71,10 @@ export interface IntegrationFormData {
   notificationLevel: 'all' | 'main_only' | 'tagged_only';
   includeCommitSummaries: boolean;
 }
+
+export type {
+  ExactNormalizedLineMatchEvidence,
+  IncidentExactLineMatch,
+  RelatedCommitForCorrelation,
+  ExactLineMatchTestResponse,
+} from "./exactLineMatchUi";

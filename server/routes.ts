@@ -76,7 +76,7 @@ import { agentRateLimit } from "./middleware/agentRateLimit";
 import { bufferAgentEvent } from "./helper/agentBuffer";
 import { hashToken, generateAgentToken } from "./helper/tokens";
 import { generateRecoveryCodes, looksLikeRecoveryCode } from "./helper/recoveryCodes";
-import { enrichIncidentWithGitHubCorrelation } from "./helper/incidentCorrelation";
+import { enrichIncidentWithGitHubCorrelation, extractBestCodeLocation } from "./helper/incidentCorrelation";
 import {
   shouldSendIncidentNotification,
   resolveIncidentNotificationFloor,
@@ -6320,6 +6320,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ok: true,
       message: "Real stack trace written to stderr. Agent should pick it up and create an incident with related commits.",
     });
+  });
+
+  /**
+   * TEMPORARY — staging/dev only. Re-run GitHub correlation (incl. exact normalized line match) for debugging.
+   * Do not rely on this in production clients.
+   */
+  app.post("/api/debug/test-exact-line-match", authenticateToken, async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (APP_ENV === "production") {
+      return res.status(404).json({ ok: false, error: "Not found" });
+    }
+    const user = await getCurrentUser(req);
+    if (!user) {
+      return res.status(401).json({ ok: false, error: "Not authenticated" });
+    }
+    if (APP_ENV === "staging" && !isStagingAdminUser(user)) {
+      return res.status(403).json({ ok: false, error: "Admin access required" });
+    }
+    if (APP_ENV !== "staging" && process.env.NODE_ENV !== "development") {
+      return res.status(404).json({ ok: false, error: "Not found" });
+    }
+
+    const orgId = (req.user as any)?.organizationId ?? (user as any)?.organizationId ?? null;
+    if (!orgId) {
+      return res.status(400).json({
+        ok: false,
+        error: "No organization",
+        hint: "Join or create an org with a linked GitHub repo.",
+      });
+    }
+
+    const userId = (req.user as any)?.userId as string;
+    const body = req.body as {
+      mode?: string;
+      incidentId?: string;
+      service?: string;
+      stacktrace?: Array<{ file?: string; line?: number }>;
+    };
+    if (body.mode != null && body.mode !== "" && body.mode !== "exact_line_match") {
+      return res.status(400).json({ ok: false, error: "Unsupported mode" });
+    }
+
+    const defaultStack = [{ file: "server/helper/incidentCorrelation.ts", line: 275 }];
+    let stacktrace: Array<{ file?: string; line?: number }> = defaultStack;
+    let service = String(body.service ?? "correlation-debug");
+    let startTime = new Date().toISOString();
+    let incidentIdOut: string | undefined;
+    let notificationIdOut: string | undefined;
+
+    const incidentIdIn = typeof body.incidentId === "string" ? body.incidentId.trim() : "";
+    if (incidentIdIn) {
+      const rows = await databaseStorage.getNotificationsByUserId(userId, { limit: 400 });
+      let found: { metadata: Record<string, unknown>; notificationId: string } | null = null;
+      for (const n of rows as any[]) {
+        if (n.type !== "incident_alert") continue;
+        let meta: Record<string, unknown>;
+        try {
+          meta = typeof n.metadata === "string" ? JSON.parse(n.metadata) : n.metadata;
+        } catch {
+          continue;
+        }
+        if (!meta || String(meta.incidentId ?? "") !== incidentIdIn) continue;
+        found = { metadata: meta, notificationId: String(n.id) };
+        break;
+      }
+      if (!found) {
+        return res.status(404).json({
+          ok: false,
+          error: "Incident notification not found",
+          hint: "No incident_alert in your notifications with this incidentId. Open an incident from the bell menu first, or omit incidentId to use the built-in fallback stack.",
+          incidentId: incidentIdIn,
+        });
+      }
+      const st = found.metadata.stacktrace;
+      if (!Array.isArray(st) || st.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          error: "Stored incident has no stack trace",
+          incidentId: incidentIdIn,
+          notificationId: found.notificationId,
+        });
+      }
+      stacktrace = st as Array<{ file?: string; line?: number }>;
+      service = String(found.metadata.service ?? service);
+      startTime = String(found.metadata.startTime ?? found.metadata.lastSeen ?? startTime);
+      incidentIdOut = incidentIdIn;
+      notificationIdOut = found.notificationId;
+    } else if (Array.isArray(body.stacktrace) && body.stacktrace.length > 0) {
+      stacktrace = body.stacktrace;
+      if (body.service) service = String(body.service);
+    }
+
+    try {
+      const correlation = await enrichIncidentWithGitHubCorrelation(
+        {
+          service,
+          start_time: startTime,
+          stacktrace,
+        },
+        orgId,
+        databaseStorage as any,
+        listCommitsByPath,
+      );
+
+      const loc = extractBestCodeLocation(stacktrace as any);
+      const codeLocation = loc
+        ? { file: loc.file, repoPath: loc.repoPath, line: loc.line }
+        : undefined;
+
+      const relatedCommits = correlation.relatedCommits ?? [];
+      const matchedCommitShas = relatedCommits
+        .filter((c: any) =>
+          Array.isArray(c.correlationEvidence) &&
+          c.correlationEvidence.some((e: any) => e?.type === "exact_normalized_line_match"),
+        )
+        .map((c: any) => c.sha)
+        .filter(Boolean);
+
+      const exactNormalizedEvidence: Array<{
+        commitSha?: string;
+        type: string;
+        sourceLine: string;
+        matchedPatchLine: string;
+      }> = [];
+      for (const c of relatedCommits as any[]) {
+        const sha = c.sha as string | undefined;
+        if (!Array.isArray(c.correlationEvidence)) continue;
+        for (const e of c.correlationEvidence) {
+          if (e?.type !== "exact_normalized_line_match") continue;
+          exactNormalizedEvidence.push({
+            commitSha: sha,
+            type: "exact_normalized_line_match",
+            sourceLine: String(e.sourceLine ?? ""),
+            matchedPatchLine: String(e.matchedPatchLine ?? ""),
+          });
+        }
+      }
+
+      const hint =
+        relatedCommits.length === 0
+          ? "No correlated commits: check GitHub token, repo mapping, incidentServiceName vs service, or stack path. For fallback mode, single-repo orgs still resolve."
+          : "Exact line match needs a distinctive source line and a recent patch that adds the same normalized text.";
+
+      return res.status(200).json({
+        ok: true,
+        incidentId: incidentIdOut,
+        notificationId: notificationIdOut,
+        codeLocation,
+        exactLineMatch: correlation.exactLineMatch,
+        relatedCommits,
+        correlationMatch: correlation.correlationMatch,
+        correlatedFile: correlation.correlatedFile,
+        correlatedLine: correlation.correlatedLine,
+        resolvedSourceLine: correlation.resolvedSourceLine ?? null,
+        debug: {
+          sourceLine: correlation.resolvedSourceLine ?? null,
+          matchedCommitShas,
+          exactNormalizedEvidence,
+          checkedCommitCount: correlation.commitsCheckedForDiff ?? 0,
+          correlationSource: correlation.correlationSource ?? null,
+        },
+        stacktraceUsed: stacktrace,
+        correlationFull: correlation,
+        hint,
+      });
+    } catch (err: any) {
+      console.warn("[debug/test-exact-line-match]", err?.message || err);
+      return res.status(500).json({
+        ok: false,
+        error: "Correlation run failed",
+        detail: err?.message || String(err),
+      });
+    }
   });
 
   // Test route: report a real error to Sentry. Staging + admin only.

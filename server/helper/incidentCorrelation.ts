@@ -495,6 +495,10 @@ export interface EnrichedCorrelation {
     sourceLine: string;
     matchedLine: string;
   };
+  /** Raw line text fetched from GitHub for exact-match comparison (null if not fetched). */
+  resolvedSourceLine?: string | null;
+  /** Recent commits whose per-commit diffs were inspected (cap 20). */
+  commitsCheckedForDiff?: number;
 }
 
 function emptyCorrelation(): EnrichedCorrelation {
@@ -717,5 +721,7 @@ export async function enrichIncidentWithGitHubCorrelation(
     correlatedLine: location.line,
     correlationMatch: matchMode,
     ...(exactLineMatch ? { exactLineMatch } : {}),
+    resolvedSourceLine: rawSourceLine ?? null,
+    commitsCheckedForDiff: toCheck.length,
   };
 }
