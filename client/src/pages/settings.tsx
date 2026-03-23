@@ -638,6 +638,7 @@ export default function Settings() {
     queryFn: fetchProfile,
     refetchOnMount: "always",
   });
+
   const { data: orgResponse } = useQuery<{ id: string; name: string; domain: string | null; type: string; memberCount: number }>({
     queryKey: ["/api/org"],
     queryFn: () => fetch("/api/org", { credentials: "include", headers: { Accept: "application/json" } }).then((r) => { if (!r.ok) throw new Error("Failed to load org"); return r.json(); }),
@@ -1178,8 +1179,9 @@ export default function Settings() {
                   const summaryCount = profileResponse.user.monthlySummaryCount ?? 0;
                   const summaryCap = profileResponse.user.monthlySummaryCap ?? 200;
                   const usagePercent = summaryCap > 0 ? (summaryCount / summaryCap) * 100 : 0;
-                  const daysLeft = periodEnd
-                    ? Math.max(0, Math.ceil((new Date(periodEnd).getTime() - Date.now()) / 86_400_000))
+                  const periodEndMs = periodEnd ? new Date(periodEnd).getTime() : NaN;
+                  const daysLeft = Number.isFinite(periodEndMs)
+                    ? Math.max(0, Math.ceil((periodEndMs - Date.now()) / 86_400_000))
                     : null;
                   const planLabels: Record<string, string> = { free: "Free", pro: "Pro", team: "Team" };
                   const planPrices: Record<string, string> = { free: "$0/mo", pro: "$12/mo", team: "$39/mo" };

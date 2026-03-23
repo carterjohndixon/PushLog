@@ -48,6 +48,7 @@ import { databaseStorage } from "./database";
 import { sendVerificationEmail, sendPasswordResetEmail, sendIncidentAlertEmail, sendOrgInviteEmail } from './email';
 import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
+import { syncOrganizationPeriodEndFromStripe } from "./orgStripeSubscriptionSync";
 import { isUnderRepoLimit, isUnderSummaryCap, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
 import { isValidPushLogMode } from './pushlogModes';
 import { estimateTokenCostFromUsage } from './aiCost';
@@ -6745,19 +6746,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const caps: Record<string, number> = { free: 200, pro: 2000, team: 10000 };
           monthlySummaryCap = caps[orgPlan] ?? 200;
 
-          // Backfill currentPeriodEnd from Stripe if missing (e.g. webhook was misconfigured at purchase time)
-          if (!currentPeriodEnd && (org as any).stripeSubscriptionId && isBillingEnabled()) {
+          // Backfill currentPeriodEnd from Stripe if missing (subscription id and/or customer list)
+          if (!currentPeriodEnd && orgPlan !== "free" && isBillingEnabled()) {
             try {
-              const sub = await stripe.subscriptions.retrieve((org as any).stripeSubscriptionId) as any;
-              if (sub.current_period_end) {
-                currentPeriodEnd = new Date(sub.current_period_end * 1000).toISOString();
-                await databaseStorage.updateOrganization(organizationId, {
-                  currentPeriodEnd,
-                  ...(sub.status ? { stripeSubscriptionStatus: sub.status } : {}),
-                });
+              const synced = await syncOrganizationPeriodEndFromStripe(organizationId);
+              if (synced) {
+                currentPeriodEnd = synced.currentPeriodEnd;
+                subscriptionStatus = synced.subscriptionStatus ?? subscriptionStatus;
               }
             } catch (e: any) {
-              console.warn("[profile] Failed to backfill currentPeriodEnd from Stripe:", e?.message);
+              console.warn("[profile] Failed to sync billing period from Stripe:", e?.message);
             }
           }
         }
