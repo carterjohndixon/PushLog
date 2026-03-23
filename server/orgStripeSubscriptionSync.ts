@@ -1,13 +1,7 @@
 import type Stripe from "stripe";
 import { stripe, isBillingEnabled } from "./stripe";
 import { databaseStorage } from "./database";
-
-/** Stripe Node types use camelCase; webhook payloads use snake_case. */
-function subscriptionPeriodEndUnix(sub: Stripe.Subscription): number {
-  const raw = sub as unknown as { current_period_end?: number; currentPeriodEnd?: number };
-  const v = raw.current_period_end ?? raw.currentPeriodEnd;
-  return typeof v === "number" ? v : 0;
-}
+import { getSubscriptionCurrentPeriodEndUnix } from "./stripeSubscriptionPeriod";
 
 function pickRelevantSubscription(subs: Stripe.Subscription[]): Stripe.Subscription | null {
   if (!subs.length) return null;
@@ -17,7 +11,7 @@ function pickRelevantSubscription(subs: Stripe.Subscription[]): Stripe.Subscript
     byStatus("active") ??
     byStatus("trialing") ??
     byStatus("past_due") ??
-    subs.find((s) => s.status === "canceled" && subscriptionPeriodEndUnix(s) > nowSec) ??
+    subs.find((s) => s.status === "canceled" && getSubscriptionCurrentPeriodEndUnix(s) > nowSec) ??
     subs[0]
   );
 }
@@ -56,7 +50,7 @@ export async function syncOrganizationPeriodEndFromStripe(
   }
 
   const persistFromSubscription = async (sub: Stripe.Subscription): Promise<OrgBillingPeriodSyncResult | null> => {
-    const end = subscriptionPeriodEndUnix(sub);
+    const end = getSubscriptionCurrentPeriodEndUnix(sub);
     if (!end) return null;
     const iso = new Date(end * 1000).toISOString();
     const updates: Parameters<typeof databaseStorage.updateOrganization>[1] = {

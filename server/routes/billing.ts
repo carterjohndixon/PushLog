@@ -3,10 +3,12 @@
  */
 
 import { Router, type Request, type Response } from "express";
+import type Stripe from "stripe";
 import { stripe, isBillingEnabled, createStripeCustomer } from "../stripe";
 import { databaseStorage } from "../database";
 import { stripePriceIdToPlan, planToStripePriceId, type PlanName } from "../billing";
 import { authenticateToken } from "../middleware/auth";
+import { getSubscriptionCurrentPeriodEndUnix } from "../stripeSubscriptionPeriod";
 
 const router = Router();
 
@@ -168,13 +170,13 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
         if (session.mode === "subscription" && session.metadata?.organizationId) {
           const orgId = session.metadata.organizationId;
           const subscriptionId = session.subscription as string;
-          const sub = await stripe.subscriptions.retrieve(subscriptionId) as any;
+          const sub = await stripe.subscriptions.retrieve(subscriptionId);
           const priceId = sub.items?.data?.[0]?.price?.id ?? null;
           const mappedPlan = priceId ? stripePriceIdToPlan(priceId) : null;
           const sessionPlan = (session.metadata?.plan as string)?.toLowerCase() as PlanName | undefined;
           const plan: PlanName = (mappedPlan ?? (sessionPlan === "pro" || sessionPlan === "team" ? sessionPlan : undefined)) ?? "pro";
 
-          const periodEnd = sub.current_period_end;
+          const periodEndUnix = getSubscriptionCurrentPeriodEndUnix(sub);
           console.log("[Stripe webhook] checkout.session.completed", {
             orgId,
             subscriptionId,
@@ -189,7 +191,7 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
             stripeSubscriptionId: subscriptionId,
             stripeSubscriptionStatus: sub.status,
             stripePriceId: priceId,
-            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+            currentPeriodEnd: periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null,
             stripeCustomerId: session.customer as string,
           });
           console.log("[Stripe webhook] updated org", orgId, "to plan", plan);
@@ -204,7 +206,7 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
 
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const sub = event.data.object as any;
+        const sub = event.data.object as Stripe.Subscription;
         const priceId = sub.items?.data?.[0]?.price?.id ?? null;
         const mappedPlan = priceId ? stripePriceIdToPlan(priceId) : null;
         const subscriptionPlan = sub.metadata?.plan as PlanName | undefined;
@@ -219,7 +221,7 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
           (customerId ? await databaseStorage.getOrganizationByStripeCustomerId(customerId) : null);
 
         if (org) {
-          const periodEnd = sub.current_period_end;
+          const periodEndUnix = getSubscriptionCurrentPeriodEndUnix(sub);
           console.log("[Stripe webhook] customer.subscription.created/updated", {
             orgId: org.id,
             subscriptionId: sub.id,
@@ -234,7 +236,7 @@ export async function handleStripeSubscriptionWebhook(req: Request, res: Respons
             stripeSubscriptionId: sub.id,
             stripeSubscriptionStatus: sub.status,
             ...(priceId ? { stripePriceId: priceId } : {}),
-            currentPeriodEnd: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+            currentPeriodEnd: periodEndUnix ? new Date(periodEndUnix * 1000).toISOString() : null,
           });
         }
         break;
