@@ -95,7 +95,7 @@ jobs:
           sudo install -m 755 /tmp/gitleaks /usr/local/bin/gitleaks
 
       - name: Run Gitleaks
-        run: gitleaks detect --source . --redact --verbose
+        run: gitleaks detect --source . --config .gitleaks.toml --redact --verbose
 
   npm-audit:
     name: npm audit
