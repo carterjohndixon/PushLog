@@ -72,6 +72,7 @@ services:
       RISK_ENGINE_BIN: /app/bin/risk-engine
       STATS_ENGINE_URL: http://staging-streaming-stats:5004
       SLACK_NOTIFICATIONS_ENABLED: "false"
+      # Disables checkout/portal only; subscription renewal dates still sync from Stripe for Settings UI.
       BILLING_ENABLED: "false"
       PROMOTE_PROD_WEBHOOK_URL: "http://pushlog-promote:3999"
     ports:

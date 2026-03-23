@@ -1,0 +1,54 @@
+# OWASP ZAP baseline against staging. Set repo secret STAGING_URL (e.g. https://staging.pushlog.ai).
+# If STAGING_URL is unset, the scan step exits 0 (fork PRs and repos without the secret).
+# Staging may lag behind main right after a push; use workflow_dispatch after deploy to re-check.
+name: ZAP baseline (staging)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+  actions: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  zap:
+    name: ZAP baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: ZAP baseline scan
+        env:
+          STAGING_URL: ${{ secrets.STAGING_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${STAGING_URL}" ]; then
+            echo "STAGING_URL secret not set — skipping ZAP baseline (add repo secret STAGING_URL to enable)."
+            exit 0
+          fi
+          docker run --rm \
+            --user 0 \
+            -v "${GITHUB_WORKSPACE}:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${STAGING_URL}" -I -m 5 -r /zap/wrk/zap-report.html -w /zap/wrk/zap-warn.txt
+
+      - name: Upload ZAP report
+        if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-baseline-report
+          path: |
+            zap-report.html
+            zap-warn.txt
+          if-no-files-found: ignore
