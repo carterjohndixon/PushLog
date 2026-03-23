@@ -6,12 +6,13 @@ import { EyeIcon, EyeOffIcon } from "lucide-react";
 import { Github } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AuthLayout } from "@/components/auth-layout";
 import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 
 export default function Login() {
   const { toast } = useToast();
@@ -33,6 +34,19 @@ export default function Login() {
   const [password, setPassword] = React.useState("");
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
+  const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null);
+  const [turnstileNonce, setTurnstileNonce] = React.useState(0);
+  const onTurnstileToken = React.useCallback((t: string | null) => setTurnstileToken(t), []);
+
+  const { data: turnstileConfig } = useQuery({
+    queryKey: ["turnstile-config"],
+    queryFn: async () => {
+      const r = await fetch("/api/turnstile/config", { credentials: "include" });
+      if (!r.ok) return { enabled: false, siteKey: null as string | null };
+      return r.json() as Promise<{ enabled: boolean; siteKey: string | null }>;
+    },
+    staleTime: 5 * 60_000,
+  });
 
   // Check if user is already authenticated - redirect to dashboard or MFA if needed.
   // Do NOT redirect to MFA when user is on /login or /signup; they chose to be here (e.g. "use a different account").
@@ -99,13 +113,17 @@ export default function Login() {
   const loginMutation = useMutation<
     { success?: boolean; needsMfaVerify?: boolean; redirectTo?: string },
     Error,
-    { identifier: string; password: string }
+    void
   >({
-      mutationFn: async (loginData: any) => {
-        const response = await apiRequest("POST", "/api/login", {
-          identifier, // Either email or username
+      mutationFn: async () => {
+        const body: Record<string, string> = {
+          identifier,
           password,
-        });
+        };
+        if (turnstileConfig?.enabled && turnstileToken) {
+          body.turnstileToken = turnstileToken;
+        }
+        const response = await apiRequest("POST", "/api/login", body);
 
         return response.json();
       },
@@ -132,6 +150,10 @@ export default function Login() {
         setLocation("/dashboard");
       },
       onError: (error: any) => {
+        if (turnstileConfig?.enabled) {
+          setTurnstileNonce((n) => n + 1);
+          setTurnstileToken(null);
+        }
         toast({
           title: "Login Failed",
           description: error.message || "Failed to Login.",
@@ -150,10 +172,16 @@ export default function Login() {
       return;
     }
 
-    loginMutation.mutate({
-      identifier,
-      password
-    });
+    if (turnstileConfig?.enabled && !turnstileToken) {
+      toast({
+        title: "Verification required",
+        description: "Complete the security check below, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    loginMutation.mutate();
   };
 
   // OAuth: GitHub uses server-side init (/api/auth/github/init). Google uses client ID from env.
@@ -226,6 +254,15 @@ export default function Login() {
               </a>
             </div>
           </div>
+          {turnstileConfig?.enabled && turnstileConfig.siteKey ? (
+            <div className="flex justify-center min-h-[65px]">
+              <TurnstileWidget
+                key={turnstileNonce}
+                siteKey={turnstileConfig.siteKey}
+                onToken={onTurnstileToken}
+              />
+            </div>
+          ) : null}
           <Button 
             variant="glow"
             onClick={(e) => {

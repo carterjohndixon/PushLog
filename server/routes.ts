@@ -83,6 +83,7 @@ import {
   resolveIncidentNotificationFloor,
 } from "./helper/incidentNotificationPolicy";
 import { listCommitsByPath } from "./github";
+import { requireTurnstileIfConfigured } from "./helper/turnstile";
 
 /** Strip sensitive integration fields and add hasOpenRouterKey for API responses */
 function sanitizeIntegrationForClient(integration: any) {
@@ -1729,6 +1730,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/turnstile/config", (_req: Request, res: Response) => {
+    const siteKey = process.env.WIDGET_SITE_KEY?.trim() || "";
+    const secret = process.env.WIDGET_SECRET_KEY?.trim() || "";
+    const enabled = Boolean(siteKey && secret);
+    res.status(200).json({
+      enabled,
+      siteKey: enabled ? siteKey : null,
+    });
+  });
+
   // Login route
   app.post("/api/login", [
     body('identifier').trim().isLength({ min: 1 }).withMessage('Email/username is required'),
@@ -1741,6 +1752,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "Validation failed", 
           details: errors.array() 
         });
+      }
+
+      const turnstileCheck = await requireTurnstileIfConfigured(req);
+      if (!turnstileCheck.ok) {
+        return res.status(turnstileCheck.status).json(turnstileCheck.payload);
       }
 
       const { identifier, password } = req.body;
@@ -2548,6 +2564,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           error: "Validation failed", 
           details: errors.array() 
         });
+      }
+
+      const turnstileCheck = await requireTurnstileIfConfigured(req);
+      if (!turnstileCheck.ok) {
+        return res.status(turnstileCheck.status).json(turnstileCheck.payload);
       }
 
       const { username, email, password } = req.body;

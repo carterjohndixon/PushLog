@@ -6,10 +6,11 @@ import { EyeIcon, EyeOffIcon, Check, X } from "lucide-react";
 import { Github } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { AuthLayout } from "@/components/auth-layout";
 import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
+import { TurnstileWidget } from "@/components/turnstile-widget";
 
 // Safe redirect path from ?redirect= (same-origin path only, e.g. /join/TOKEN)
 function getRedirectPath(): string | null {
@@ -66,6 +67,19 @@ export default function Signup() {
   const [passwordFocused, setPasswordFocused] = React.useState(false);
   const [isOAuthLoading, setIsOAuthLoading] = React.useState(false);
   const [oauthProvider, setOauthProvider] = React.useState<"GitHub" | "Google" | null>(null);
+  const [turnstileToken, setTurnstileToken] = React.useState<string | null>(null);
+  const [turnstileNonce, setTurnstileNonce] = React.useState(0);
+  const onTurnstileToken = React.useCallback((t: string | null) => setTurnstileToken(t), []);
+
+  const { data: turnstileConfig } = useQuery({
+    queryKey: ["turnstile-config"],
+    queryFn: async () => {
+      const r = await fetch("/api/turnstile/config", { credentials: "include" });
+      if (!r.ok) return { enabled: false, siteKey: null as string | null };
+      return r.json() as Promise<{ enabled: boolean; siteKey: string | null }>;
+    },
+    staleTime: 5 * 60_000,
+  });
 
   const passwordStrength = React.useMemo(() => {
     return passwordRequirements.map(req => ({
@@ -77,12 +91,16 @@ export default function Signup() {
   const isPasswordValid = passwordStrength.every(req => req.isMet);
 
   const signupMutation = useMutation({
-      mutationFn: async (signupData: any) => {
-        const response = await apiRequest("POST", "/api/signup", {
+    mutationFn: async () => {
+        const body: Record<string, string> = {
           email,
           username,
           password,
-        });
+        };
+        if (turnstileConfig?.enabled && turnstileToken) {
+          body.turnstileToken = turnstileToken;
+        }
+        const response = await apiRequest("POST", "/api/signup", body);
 
         if (!response.ok) {
           throw new Error(await response.text());
@@ -112,6 +130,10 @@ export default function Signup() {
         }
       },
       onError: (error: any) => {
+        if (turnstileConfig?.enabled) {
+          setTurnstileNonce((n) => n + 1);
+          setTurnstileToken(null);
+        }
         toast({
           title: "Signup Failed",
           description: error.message || "Failed to create account.",
@@ -139,11 +161,16 @@ export default function Signup() {
       return;
     }
 
-    signupMutation.mutate({
-      email,
-      username,
-      password
-    });
+    if (turnstileConfig?.enabled && !turnstileToken) {
+      toast({
+        title: "Verification required",
+        description: "Complete the security check below, then try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    signupMutation.mutate();
   };
 
   // OAuth: GitHub uses server-side init (/api/auth/github/init). Google uses env.
@@ -242,6 +269,15 @@ export default function Signup() {
               ))}
             </div>
           </div>
+          {turnstileConfig?.enabled && turnstileConfig.siteKey ? (
+            <div className="flex justify-center min-h-[65px]">
+              <TurnstileWidget
+                key={turnstileNonce}
+                siteKey={turnstileConfig.siteKey}
+                onToken={onTurnstileToken}
+              />
+            </div>
+          ) : null}
           <Button 
             onClick={(e) => {
               e.preventDefault(); 
