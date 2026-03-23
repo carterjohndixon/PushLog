@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { stripe, isBillingEnabled } from "./stripe";
+import { stripe } from "./stripe";
 import { databaseStorage } from "./database";
 import { getSubscriptionCurrentPeriodEndUnix } from "./stripeSubscriptionPeriod";
 
@@ -28,7 +28,8 @@ export type OrgBillingPeriodSyncResult = {
 export async function syncOrganizationPeriodEndFromStripe(
   organizationId: string
 ): Promise<OrgBillingPeriodSyncResult | null> {
-  if (!isBillingEnabled()) return null;
+  // Intentionally not gated on isBillingEnabled(): staging often sets BILLING_ENABLED=false
+  // to disable checkout while Stripe keys still exist — we still need renewal dates for the UI.
 
   const org = await databaseStorage.getOrganization(organizationId);
   if (!org) return null;
@@ -37,10 +38,11 @@ export async function syncOrganizationPeriodEndFromStripe(
   const stripeSubscriptionId = (org as { stripeSubscriptionId?: string | null }).stripeSubscriptionId;
   const stripeCustomerId = (org as { stripeCustomerId?: string | null }).stripeCustomerId;
 
-  const existingEnd = (org as { currentPeriodEnd?: string | null }).currentPeriodEnd;
-  if (existingEnd) {
+  const rawEnd = (org as { currentPeriodEnd?: string | null }).currentPeriodEnd;
+  const trimmed = rawEnd != null && String(rawEnd).trim() !== "" ? String(rawEnd).trim() : "";
+  if (trimmed && Number.isFinite(new Date(trimmed).getTime())) {
     return {
-      currentPeriodEnd: existingEnd,
+      currentPeriodEnd: trimmed,
       subscriptionStatus: (org as { stripeSubscriptionStatus?: string | null }).stripeSubscriptionStatus ?? undefined,
     };
   }

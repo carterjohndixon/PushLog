@@ -6741,13 +6741,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           needsAccountTypeStep = (org as any).accountTypeChosenAt == null;
           orgPlan = (org as any).plan || "free";
           subscriptionStatus = (org as any).stripeSubscriptionStatus ?? undefined;
-          currentPeriodEnd = (org as any).currentPeriodEnd ?? undefined;
+          {
+            const raw = (org as any).currentPeriodEnd;
+            const s = raw != null && String(raw).trim() !== "" ? String(raw).trim() : "";
+            currentPeriodEnd =
+              s && Number.isFinite(new Date(s).getTime()) ? s : undefined;
+          }
           monthlySummaryCount = (org as any).monthlySummaryCount ?? 0;
           const caps: Record<string, number> = { free: 200, pro: 2000, team: 10000 };
           monthlySummaryCap = caps[orgPlan] ?? 200;
 
-          // Backfill currentPeriodEnd from Stripe if missing (subscription id and/or customer list)
-          if (!currentPeriodEnd && orgPlan !== "free" && isBillingEnabled()) {
+          // Backfill currentPeriodEnd from Stripe if missing (subscription id and/or customer list).
+          // Not gated on isBillingEnabled() — same as syncOrganizationPeriodEndFromStripe (staging may disable checkout only).
+          if (!currentPeriodEnd && orgPlan !== "free") {
             try {
               const synced = await syncOrganizationPeriodEndFromStripe(organizationId);
               if (synced) {
