@@ -1,9 +1,4 @@
-[allowlist]
-description = "Known false positives in historical commits and public OAuth client IDs"
-fingerprints = [
-  "6c5fb1a59f737d46df07c833b0f0f7dd3fca134f:server/github.ts:generic-api-key:55",
-  "6c5fb1a59f737d46df07c833b0f0f7dd3fca134f:server/github.ts:generic-api-key:59",
-  "4e16b36387ee0e499addea45fb5b3400e9085748:server/github.ts:generic-api-key:55",
-  "13a0fc3b8d948eaf932826ca00a2c3934655ffde:fix-supabase-security.js:curl-auth-header:179",
-  "1d1fb8ca3e32222214d5f7cd886f31658ae904e7:fix-supabase-security.js:curl-auth-header:179",
-]
+# Use gitleaks' built-in rules and global path/regex allowlists.
+# Repo-specific historical false positives live in .gitleaksignore (fingerprint format).
+[extend]
+useDefault = true
