@@ -27,7 +27,9 @@ RUN npm prune --omit=dev
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    cargo build --release -p incident-engine \
+    export PATH="/root/.cargo/bin:${PATH}" \
+ && command -v cargo \
+ && cargo build --release -p incident-engine \
  && cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
  && cp target/release/incident-engine /rust-out/ \
