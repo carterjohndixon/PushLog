@@ -24,11 +24,13 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 RUN npm run build
 RUN npm prune --omit=dev
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
-    --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+# Cache Cargo’s real home (~/.cargo), not /usr/local/cargo (rustup defaults to /root/.cargo).
+# Do not re-export PATH here: Docker may mangle ${PATH} and drop /usr/bin, then cc/gcc return exit 127.
+RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
+    --mount=type=cache,target=/root/.cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    export PATH="/root/.cargo/bin:${PATH}" \
- && command -v cargo \
+    command -v cargo \
+ && command -v cc \
  && cargo build --release -p incident-engine \
  && cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
