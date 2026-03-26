@@ -12,6 +12,9 @@ cd "$ROOT"
 
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pushlog}"
 STAGING_COMPOSE="${STAGING_COMPOSE:-docker-compose.staging.yml}"
+# Include promote by default so `docker-staging-up.sh` rebuilds pushlog-promote (staging → prod webhook).
+# Set STAGING_INCLUDE_PROMOTE=0 to skip if you don't use .env.production on this machine.
+STAGING_INCLUDE_PROMOTE="${STAGING_INCLUDE_PROMOTE:-1}"
 
 if [[ -z "${STAGING_ENV_FILE:-}" ]]; then
   STAGING_ENV_FILE="${ROOT}/.env.staging"
@@ -24,12 +27,30 @@ if [[ ! -f "${STAGING_ENV_FILE}" ]]; then
   exit 1
 fi
 
+PROMOTE_COMPOSE_ARGS=()
+if [[ "${STAGING_INCLUDE_PROMOTE}" == "1" ]]; then
+  if [[ ! -f "${ROOT}/.env.production" ]]; then
+    echo "warn: ${ROOT}/.env.production not found — skipping docker-compose.promote.yml (pushlog-promote will not be started)." >&2
+    echo "      Create .env.production or set STAGING_INCLUDE_PROMOTE=0 to silence this." >&2
+  else
+    PROMOTE_COMPOSE_ARGS=(-f "${ROOT}/docker-compose.promote.yml")
+  fi
+fi
+
 echo "==> [staging] Pruning stopped containers (docker container prune -f)..."
 docker container prune -f
 
 echo "==> [staging] Using env file: ${STAGING_ENV_FILE}"
-echo "==> [staging] docker compose --env-file ... -p ${COMPOSE_PROJECT_NAME} -f ${STAGING_COMPOSE} up -d --build $@"
-docker compose --env-file "${STAGING_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${STAGING_COMPOSE}" up -d --build "$@"
+if ((${#PROMOTE_COMPOSE_ARGS[@]})); then
+  echo "==> [staging] Also applying docker-compose.promote.yml (pushlog-promote)"
+fi
+docker compose --env-file "${STAGING_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" \
+  -f "${STAGING_COMPOSE}" \
+  "${PROMOTE_COMPOSE_ARGS[@]}" \
+  up -d --build "$@"
 
 echo "==> [staging] Done."
-docker compose --env-file "${STAGING_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" -f "${STAGING_COMPOSE}" ps
+docker compose --env-file "${STAGING_ENV_FILE}" -p "${COMPOSE_PROJECT_NAME}" \
+  -f "${STAGING_COMPOSE}" \
+  "${PROMOTE_COMPOSE_ARGS[@]}" \
+  ps

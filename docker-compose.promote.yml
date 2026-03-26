@@ -33,7 +33,9 @@ services:
     networks:
       - pushlog
 
+# Same network as docker-compose.staging.yml so `compose -f staging -f promote` merges cleanly.
+# (external: true prevented one-command staging+promote and left promote easy to forget to rebuild.)
 networks:
   pushlog:
     name: pushlog
-    external: true
+    driver: bridge
