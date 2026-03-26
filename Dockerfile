@@ -14,8 +14,11 @@ RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl bu
 # ~/.cargo/bin on some builders, which yields: /root/.cargo/bin/cargo: not found.
 ENV RUSTUP_HOME=/opt/rustup
 ENV CARGO_HOME=/opt/cargo
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/opt/cargo/bin:${NODE_IMAGE_PATH}"
+# Verify install so this layer cannot be "successfully" cached from an older layout (~/.cargo only).
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal \
+ && test -x "${CARGO_HOME}/bin/cargo" \
+ && "${CARGO_HOME}/bin/cargo" --version
+ENV PATH="${CARGO_HOME}/bin:${NODE_IMAGE_PATH}"
 
 WORKDIR /app
 COPY package*.json ./
@@ -33,20 +36,21 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 RUN npm run build
 RUN npm prune --omit=dev
 
-# Cache only registry/git + target; leave /opt/cargo/bin from the image layer intact.
-# Call cargo by absolute path so this RUN does not depend on PATH (BuildKit + cache quirks).
+# Cache registry/git + target only (matches CARGO_HOME). Mounts must not cover ${CARGO_HOME}/bin.
+# Use one env PATH + sh -c so every cargo/cc sees the same PATH (env X a && b only sets PATH for a).
 RUN --mount=type=cache,target=/opt/cargo/registry,sharing=locked \
     --mount=type=cache,target=/opt/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    /opt/cargo/bin/cargo --version \
+    env PATH="${CARGO_HOME}/bin:${NODE_IMAGE_PATH}" \
+    sh -eu -c "cargo --version \
  && command -v cc \
  && command -v gcc \
- && /opt/cargo/bin/cargo build --release -p incident-engine \
- && /opt/cargo/bin/cargo build --release -p risk-engine \
+ && cargo build --release -p incident-engine \
+ && cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
  && cp target/release/incident-engine /rust-out/ \
  && cp target/release/risk-engine /rust-out/ \
- && rm -rf /opt/rustup/toolchains/*/share
+ && rm -rf /opt/rustup/toolchains/*/share"
 
 # Minimal runtime
 FROM node:20-bookworm-slim AS runtime
