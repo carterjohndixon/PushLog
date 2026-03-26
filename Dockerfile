@@ -8,7 +8,8 @@ FROM node:20-bookworm-slim AS build
 # `cc`/`gcc` disappear and `cargo`/rustc fail with exit 127.
 ARG NODE_IMAGE_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl build-essential && rm -rf /var/lib/apt/lists/*
+# ca-certificates: curl needs /etc/ssl/certs for https://rustup.rs (else curl exit 77).
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ca-certificates curl build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install Rust outside $HOME/.cargo. BuildKit cache mounts on ~/.cargo/registry|git can hide
 # ~/.cargo/bin on some builders, which yields: /root/.cargo/bin/cargo: not found.
