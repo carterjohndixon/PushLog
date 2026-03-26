@@ -12,6 +12,10 @@ services:
       context: .
       dockerfile: Dockerfile.promote
     container_name: pushlog-promote
+    # Dockerfile runs as `app` (non-root). The bind mount `.:/workspace` usually matches *host* ownership
+    # (often root). Without this, writes to `.promote-production.lock` and logs fail with EACCES.
+    # Alternative: on the host, `chown -R $(docker exec pushlog-promote id -u):$(docker exec pushlog-promote id -g) /path/to/repo`
+    user: "0:0"
     restart: unless-stopped
     env_file:
       - .env.production
