@@ -248,7 +248,20 @@ const server = createServer(async (req, res) => {
       targetSha: targetSha || undefined,
       isRollback: isRollback || undefined,
     };
-    writeFileSync(LOCK_FILE, JSON.stringify(lockData, null, 2));
+    try {
+      writeFileSync(LOCK_FILE, JSON.stringify(lockData, null, 2));
+    } catch (e) {
+      console.error("[promote-http] Failed to write lock file:", e);
+      return json(
+        res,
+        {
+          error:
+            `Cannot write ${LOCK_FILE}: ${e.message}. On the host, chown the bind-mounted repo to the UID/GID ` +
+            `reported by: docker exec pushlog-promote id`,
+        },
+        500
+      );
+    }
 
     const logPath = join(WORKSPACE, "deploy-promotion-stdout.log");
     const cmd = `nohup setsid bash "${PROMOTE_SCRIPT}" </dev/null >>"${logPath}" 2>&1 &`;
