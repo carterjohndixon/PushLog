@@ -21,6 +21,30 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+/** One file's compact diff excerpt list for the summarization prompt (not full patches). */
+export interface CompactDiffFile {
+  filename: string;
+  additions: number;
+  deletions: number;
+  /** Reserved for future one-line heuristics; optional. */
+  summary?: string;
+  /** Small number of text chunks (often one) with +/-/@@ lines only. */
+  excerpts: string[];
+}
+
+/**
+ * Cost/debug metadata for optional diff enrichment.
+ * When `used` is false, `reason` explains why (no token, huge commit, API failure, etc.).
+ */
+export interface DiffContext {
+  used: boolean;
+  reason?: string;
+  totalFilesConsidered: number;
+  totalFilesIncluded: number;
+  totalCharsIncluded: number;
+  files: CompactDiffFile[];
+}
+
 export interface PushEventData {
   repositoryName: string;
   branch: string;
@@ -29,6 +53,8 @@ export interface PushEventData {
   additions: number;
   deletions: number;
   commitSha: string;
+  /** Optional compact diff excerpts from GitHub commit patches (see pushDiffEnrichment.ts). */
+  diffContext?: DiffContext;
 }
 
 export interface CodeSummary {
@@ -53,6 +79,37 @@ export interface AiUsageResult {
   isFallback?: boolean;
   /** When set, the failure was an OpenRouter error (rate limit, data policy, etc.) so the caller can notify the user. */
   openRouterError?: string;
+}
+
+/** User-visible instructions for optional diff excerpts (honest about gaps). */
+function buildDiffPromptSection(pushData: PushEventData): string {
+  const dc = pushData.diffContext;
+  if (!dc) {
+    return `
+Note: No diff enrichment was performed for this push (metadata-only). Base your summary on the fields above. In "details", briefly mention that only commit metadata was available—do not invent specific code edits.`;
+  }
+  if (!dc.used) {
+    const why = dc.reason ? ` Reason: ${dc.reason}.` : "";
+    return `
+Note: Diff excerpts were not included.${why} Summarize using only the metadata above. In "details", state clearly that code-level detail was not available (metadata-only). Do not guess specific implementations.`;
+  }
+
+  const parts: string[] = [
+    `
+Diff context (compact excerpts: high-signal +/− lines and limited @@ headers; not full files):
+- Excerpt coverage: ${dc.totalFilesIncluded} of ${dc.totalFilesConsidered} changed files, ~${dc.totalCharsIncluded} characters total. This is intentionally partial—do not infer changes outside these excerpts.`,
+  ];
+
+  for (const f of dc.files) {
+    parts.push(`--- ${f.filename} (+${f.additions} -${f.deletions})`);
+    for (const ex of f.excerpts) {
+      parts.push(ex);
+    }
+  }
+
+  parts.push(`
+Ground your summary in the excerpts when they help; if they are ambiguous or incomplete, say so. Focus on what likely changed, why it might matter, and possible impact.`);
+  return parts.join("\n");
 }
 
 export interface GenerateCodeSummaryOptions {
@@ -317,6 +374,8 @@ export async function generateCodeSummary(
   try {
     const modeConfig = getModeConfig(options?.pushlogMode ?? "clean_summary");
 
+    const diffSection = buildDiffPromptSection(pushData);
+
     const prompt = `Analyze this git push and provide a summary.
 
 Repository: ${pushData.repositoryName}
@@ -324,6 +383,7 @@ Branch: ${pushData.branch}
 Commit Message: ${pushData.commitMessage}
 Files Changed: ${pushData.filesChanged.join(', ')}
 Changes: +${pushData.additions} -${pushData.deletions} lines
+${diffSection}
 
 Please provide a summary in this JSON format:
 {
@@ -717,7 +777,9 @@ Respond with only valid JSON:
       branch: pushData.branch,
       filesChanged: pushData.filesChanged.length,
       additions: pushData.additions,
-      deletions: pushData.deletions
+      deletions: pushData.deletions,
+      diffEnrichmentUsed: pushData.diffContext?.used,
+      diffSkipReason: pushData.diffContext?.used ? undefined : pushData.diffContext?.reason,
     });
 
     const openRouterErrorMsg = (error instanceof Error && String(error.message).includes('OpenRouter')) ? (error instanceof Error ? error.message : String(error)) : undefined;

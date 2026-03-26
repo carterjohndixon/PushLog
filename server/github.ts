@@ -860,39 +860,96 @@ export async function fetchBlameCommitForLine(
   }
 }
 
+const GITHUB_COMMIT_DETAIL_TIMEOUT_MS = 12_000;
+
+/** One file entry from GET /repos/{owner}/{repo}/commits/{sha} (includes optional unified patch). */
+export interface GitHubCommitFilePatch {
+  filename: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  patch?: string;
+}
+
+/** Full commit payload used for stats + per-file patches (avoids a second request for diff enrichment). */
+export interface GitHubCommitDetail {
+  stats: { total?: number; additions: number; deletions: number };
+  files: GitHubCommitFilePatch[];
+}
+
 /**
- * Get a single commit (includes stats: additions, deletions).
- * Use for push webhooks since the push payload does not include line counts.
- * @param owner - repo owner
- * @param repo - repo name (no .git)
- * @param ref - commit SHA, branch name, or tag
- * @param accessToken - optional; uses GITHUB_PERSONAL_ACCESS_TOKEN if not provided
+ * Fetch a single commit with stats and per-file patches (REST).
+ * @see https://docs.github.com/en/rest/commits/commits#get-a-commit
  */
-export async function getCommit(
+export async function getCommitDetail(
   owner: string,
   repo: string,
   ref: string,
   accessToken?: string | null
-): Promise<{ additions: number; deletions: number } | null> {
+): Promise<GitHubCommitDetail | null> {
   const token = (accessToken && accessToken.trim()) || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || "";
   const headers: Record<string, string> = {
     Accept: "application/vnd.github.v3+json",
   };
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
+  const o = String(owner || "").trim();
+  const r = String(repo || "").trim();
+  const rf = String(ref || "").trim();
+  if (!o || !r || !rf) return null;
+
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GITHUB_COMMIT_DETAIL_TIMEOUT_MS);
     const response = await fetch(
-      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(ref)}`,
-      { headers }
+      `https://api.github.com/repos/${encodeURIComponent(o)}/${encodeURIComponent(r)}/commits/${encodeURIComponent(rf)}`,
+      { headers, signal: controller.signal }
     );
+    clearTimeout(timeoutId);
     if (!response.ok) return null;
-    const data = await response.json();
+    const data = (await response.json()) as {
+      stats?: { total?: number; additions?: number; deletions?: number };
+      files?: Array<{
+        filename?: string;
+        status?: string;
+        additions?: number;
+        deletions?: number;
+        patch?: string;
+      }>;
+    };
     const additions = data.stats?.additions ?? 0;
     const deletions = data.stats?.deletions ?? 0;
-    return { additions, deletions };
-  } catch {
+    const files: GitHubCommitFilePatch[] = Array.isArray(data.files)
+      ? data.files.map((f) => ({
+          filename: String(f.filename ?? ""),
+          status: String(f.status ?? "modified"),
+          additions: typeof f.additions === "number" ? f.additions : 0,
+          deletions: typeof f.deletions === "number" ? f.deletions : 0,
+          ...(typeof f.patch === "string" && f.patch.length > 0 ? { patch: f.patch } : {}),
+        }))
+      : [];
+    return {
+      stats: { total: data.stats?.total, additions, deletions },
+      files,
+    };
+  } catch (err: unknown) {
+    if ((err as { name?: string })?.name === "AbortError") {
+      console.warn("[github] getCommitDetail timeout:", o, r, rf.slice(0, 12));
+    }
     return null;
   }
+}
+
+/** Stats-only; implemented via getCommitDetail. */
+export async function getCommit(
+  owner: string,
+  repo: string,
+  ref: string,
+  accessToken?: string | null
+): Promise<{ additions: number; deletions: number } | null> {
+  const detail = await getCommitDetail(owner, repo, ref, accessToken);
+  if (!detail) return null;
+  return { additions: detail.stats.additions, deletions: detail.stats.deletions };
 }
 
 /** GitHub org (from GET /user/orgs). Requires read:org scope. */

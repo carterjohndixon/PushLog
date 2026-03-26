@@ -7,7 +7,8 @@
 import type { Request, Response } from "express";
 import { storage } from "./storage";
 import { databaseStorage } from "./database";
-import { getCommit } from "./github";
+import { getCommitDetail, type GitHubCommitDetail } from "./github";
+import { attachCompactDiffContextToPushData } from "./pushDiffEnrichment";
 import { decrypt } from "./encryption";
 import { generateCodeSummary, generateSlackMessage } from "./ai";
 import { type PushLogMode, isValidPushLogMode } from "./pushlogModes";
@@ -148,6 +149,7 @@ export async function buildPushData(
   let additions = commit?.additions ?? 0;
   let deletions = commit?.deletions ?? 0;
 
+  let prefetchedCommit: GitHubCommitDetail | null = null;
   if (eventType === "push" && additions === 0 && deletions === 0) {
     const repoName = repository.full_name || repository.name || "unknown";
     const commitSha = commit?.id || commit?.sha;
@@ -159,15 +161,25 @@ export async function buildPushData(
         const raw = (user as any)?.githubToken;
         token = raw && typeof raw === "string" ? raw : null;
       }
-      const stats = await getCommit(owner, repo, commitSha, token);
-      if (stats) {
-        additions = stats.additions;
-        deletions = stats.deletions;
+      const detail = await getCommitDetail(owner, repo, commitSha, token);
+      if (detail) {
+        additions = detail.stats.additions;
+        deletions = detail.stats.deletions;
+        prefetchedCommit = detail;
       }
     }
   }
 
-  const pushData = {
+  const pushData: {
+    repositoryName: string;
+    branch: string;
+    commitMessage: string;
+    filesChanged: string[];
+    additions: number;
+    deletions: number;
+    commitSha: string;
+    _githubCommitDetail?: GitHubCommitDetail;
+  } = {
     repositoryName: repository.full_name || repository.name || "unknown",
     branch,
     commitMessage: commit?.message?.trim() || "(no message)",
@@ -176,6 +188,10 @@ export async function buildPushData(
     deletions,
     commitSha: commit?.id || commit?.sha || "unknown",
   };
+  if (prefetchedCommit) {
+    // Reused by attachCompactDiffContextToPushData to avoid a second GET /commits/{sha}.
+    pushData._githubCommitDetail = prefetchedCommit;
+  }
   return { pushData, authorName };
 }
 
@@ -444,6 +460,15 @@ export async function persistPushAndNotifications(
       change_type_tags: riskResult.change_type_tags,
       hotspot_files: riskResult.hotspot_files,
       explanations: riskResult.explanations,
+      diff_enrichment: pushData.diffContext
+        ? {
+            used: pushData.diffContext.used,
+            reason: pushData.diffContext.reason,
+            totalFilesConsidered: pushData.diffContext.totalFilesConsidered,
+            totalFilesIncluded: pushData.diffContext.totalFilesIncluded,
+            totalCharsIncluded: pushData.diffContext.totalCharsIncluded,
+          }
+        : undefined,
     },
   });
 
@@ -558,6 +583,11 @@ export async function persistPushAndNotifications(
     additions: pushData.additions ?? 0,
     deletions: pushData.deletions ?? 0,
     filesChanged: pushData.filesChanged?.length ?? 0,
+    diffEnrichmentUsed: Boolean(pushData.diffContext?.used),
+    diffFilesConsidered: pushData.diffContext?.totalFilesConsidered ?? 0,
+    diffFilesIncluded: pushData.diffContext?.totalFilesIncluded ?? 0,
+    diffCharsIncluded: pushData.diffContext?.totalCharsIncluded ?? 0,
+    diffSkipReason: pushData.diffContext?.used ? null : (pushData.diffContext?.reason ?? null),
     aiModel: (aiResult.summary?.actualModel || aiResult.effectiveAiModel) ?? null,
     aiSummary: aiResult.aiSummary ?? null,
     aiImpact: aiResult.aiImpact ?? null,
@@ -597,6 +627,25 @@ export async function handleGitHubWebhook(req: Request, res: Response): Promise<
     const { storedRepo, integration } = resolved;
 
     const { pushData, authorName } = await buildPushData(eventType, branch, repository, commit, integration);
+
+    try {
+      await attachCompactDiffContextToPushData(pushData as any, {
+        repositoryFullName: String(pushData.repositoryName),
+        commitSha: String(pushData.commitSha),
+        integrationUserId: integration.userId,
+      });
+    } catch (diffErr) {
+      console.warn("⚠️ [Webhook] Diff enrichment failed (non-fatal), metadata-only summary:", diffErr);
+      delete (pushData as { _githubCommitDetail?: unknown })._githubCommitDetail;
+      (pushData as Record<string, unknown>).diffContext = {
+        used: false,
+        reason: "enrichment_error",
+        totalFilesConsidered: 0,
+        totalFilesIncluded: 0,
+        totalCharsIncluded: 0,
+        files: [],
+      };
+    }
 
     const workspaceToken = await getSlackWorkspaceToken(integration, res);
     if (!workspaceToken) return;

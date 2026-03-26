@@ -212,7 +212,19 @@ export const pushEvents = pgTable("push_events", {
   // Risk engine (Part 2.1)
   impactScore: integer("impact_score"),
   riskFlags: jsonb("risk_flags").$type<string[]>(),
-  riskMetadata: jsonb("risk_metadata").$type<{ change_type_tags?: string[]; hotspot_files?: string[]; explanations?: string[] }>(),
+  riskMetadata: jsonb("risk_metadata").$type<{
+    change_type_tags?: string[];
+    hotspot_files?: string[];
+    explanations?: string[];
+    /** Optional: compact diff enrichment audit from push webhook (see server/pushDiffEnrichment.ts). */
+    diff_enrichment?: {
+      used: boolean;
+      reason?: string;
+      totalFilesConsidered: number;
+      totalFilesIncluded: number;
+      totalCharsIncluded: number;
+    };
+  }>(),
   // Full-text search (Part 2.2) – generated column, kept in schema so db:push does not drop it
   searchVector: tsvector("search_vector").generatedAlwaysAs(
     (): SQL => sql`to_tsvector('english', coalesce(ai_summary, '') || ' ' || coalesce(commit_message, '') || ' ' || coalesce(author, '') || ' ' || coalesce(ai_impact, '') || ' ' || coalesce(ai_category, ''))`
