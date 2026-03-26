@@ -247,6 +247,12 @@ const PUSHLOG_API_NOISE_PATTERNS = [
   /\[github\]\s+listCommitsByPath/i,
   /\[profile\]\s+Failed to backfill/i,
   /GitHub token validation error/i,
+  /github oauth error from callback/i,
+  /failed to exchange code for token/i,
+  /bad_verification_code/i,
+  /the code passed is incorrect or expired/i,
+  /unexpected token '<'.*doctype/i,
+  /\/login\?error=token%20exchange%20failed/i,
   /undici\.error\.UND_ERR/i,
   /Symbol\(undici\.error/i,
 ];

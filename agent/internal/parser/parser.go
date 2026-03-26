@@ -90,6 +90,12 @@ var (
 		regexp.MustCompile(`(?i)\[github\]\s+listCommitsByPath`),
 		regexp.MustCompile(`(?i)\[profile\]\s+Failed to backfill`),
 		regexp.MustCompile(`(?i)GitHub token validation error`),
+		regexp.MustCompile(`(?i)github oauth error from callback`),
+		regexp.MustCompile(`(?i)failed to exchange code for token`),
+		regexp.MustCompile(`(?i)bad_verification_code`),
+		regexp.MustCompile(`(?i)the code passed is incorrect or expired`),
+		regexp.MustCompile(`(?i)unexpected token '<'.*doctype`),
+		regexp.MustCompile(`(?i)\/login\?error=token%20exchange%20failed`),
 		regexp.MustCompile(`undici\.error\.UND_ERR`),
 		regexp.MustCompile(`Symbol\(undici\.error`),
 	}

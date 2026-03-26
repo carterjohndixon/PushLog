@@ -67,6 +67,10 @@ func TestParseLine_NoiseFiltered_PushlogAPIPreset(t *testing.T) {
 		`⚠️ ENCRYPTION_KEY is missing. Add it to .env`,
 		`❌ Auth failed: { hasSession: true, hasUserId: false }`,
 		`GitHub token validation error: TypeError: fetch failed`,
+		`GitHub OAuth error from callback: { error: 'bad_verification_code' }`,
+		`Failed to exchange code for token: Error: GitHub OAuth error: The code passed is incorrect or expired.`,
+		`Failed to exchange code for token: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON`,
+		`172.69.23.109 - - [26/Mar/2026:17:55:15 +0000] "GET /login?error=Token%20exchange%20failed.%20Please%20try%20again. HTTP/1.1" 200 956`,
 		`Error: [Symbol(undici.error.UND_ERR_CONNECT_TIMEOUT)]: true`,
 	}
 	for _, line := range noise {
