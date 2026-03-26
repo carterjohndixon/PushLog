@@ -10,9 +10,12 @@ ARG NODE_IMAGE_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl build-essential && rm -rf /var/lib/apt/lists/*
 
-# Install Rust (minimal)
+# Install Rust outside $HOME/.cargo. BuildKit cache mounts on ~/.cargo/registry|git can hide
+# ~/.cargo/bin on some builders, which yields: /root/.cargo/bin/cargo: not found.
+ENV RUSTUP_HOME=/opt/rustup
+ENV CARGO_HOME=/opt/cargo
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/root/.cargo/bin:${NODE_IMAGE_PATH}"
+ENV PATH="/opt/cargo/bin:${NODE_IMAGE_PATH}"
 
 WORKDIR /app
 COPY package*.json ./
@@ -30,19 +33,19 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 RUN npm run build
 RUN npm prune --omit=dev
 
-# Cache Cargo’s real home (~/.cargo), not /usr/local/cargo (rustup defaults to /root/.cargo).
-RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
-    --mount=type=cache,target=/root/.cargo/git,sharing=locked \
+# Cache only registry/git + target; leave /opt/cargo/bin from the image layer intact.
+RUN --mount=type=cache,target=/opt/cargo/registry,sharing=locked \
+    --mount=type=cache,target=/opt/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    /root/.cargo/bin/cargo --version \
+    cargo --version \
  && command -v cc \
  && command -v gcc \
- && /root/.cargo/bin/cargo build --release -p incident-engine \
- && /root/.cargo/bin/cargo build --release -p risk-engine \
+ && cargo build --release -p incident-engine \
+ && cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
  && cp target/release/incident-engine /rust-out/ \
  && cp target/release/risk-engine /rust-out/ \
- && rm -rf /root/.rustup/toolchains/*/share
+ && rm -rf /opt/rustup/toolchains/*/share
 
 # Minimal runtime
 FROM node:20-bookworm-slim AS runtime
