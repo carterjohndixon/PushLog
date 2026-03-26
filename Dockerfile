@@ -34,14 +34,15 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Cache only registry/git + target; leave /opt/cargo/bin from the image layer intact.
+# Call cargo by absolute path so this RUN does not depend on PATH (BuildKit + cache quirks).
 RUN --mount=type=cache,target=/opt/cargo/registry,sharing=locked \
     --mount=type=cache,target=/opt/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    cargo --version \
+    /opt/cargo/bin/cargo --version \
  && command -v cc \
  && command -v gcc \
- && cargo build --release -p incident-engine \
- && cargo build --release -p risk-engine \
+ && /opt/cargo/bin/cargo build --release -p incident-engine \
+ && /opt/cargo/bin/cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
  && cp target/release/incident-engine /rust-out/ \
  && cp target/release/risk-engine /rust-out/ \
