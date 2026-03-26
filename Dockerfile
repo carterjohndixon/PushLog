@@ -2,11 +2,17 @@
 # Single build stage to reduce peak disk usage (avoids parallel Node + Rust builds)
 FROM node:20-bookworm-slim AS build
 
+# Default matches `node:*-bookworm-slim` PATH. We intentionally do **not** write
+# `ENV PATH="/root/.cargo/bin:$PATH"` because Docker may expand `$PATH` from the
+# **host** running `docker build` (sometimes empty), not from this image — then
+# `cc`/`gcc` disappear and `cargo`/rustc fail with exit 127.
+ARG NODE_IMAGE_PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends curl build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install Rust (minimal)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.cargo/bin:${NODE_IMAGE_PATH}"
 
 WORKDIR /app
 COPY package*.json ./
@@ -25,14 +31,14 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Cache Cargo’s real home (~/.cargo), not /usr/local/cargo (rustup defaults to /root/.cargo).
-# Do not re-export PATH here: Docker may mangle ${PATH} and drop /usr/bin, then cc/gcc return exit 127.
 RUN --mount=type=cache,target=/root/.cargo/registry,sharing=locked \
     --mount=type=cache,target=/root/.cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
-    command -v cargo \
+    /root/.cargo/bin/cargo --version \
  && command -v cc \
- && cargo build --release -p incident-engine \
- && cargo build --release -p risk-engine \
+ && command -v gcc \
+ && /root/.cargo/bin/cargo build --release -p incident-engine \
+ && /root/.cargo/bin/cargo build --release -p risk-engine \
  && mkdir -p /rust-out \
  && cp target/release/incident-engine /rust-out/ \
  && cp target/release/risk-engine /rust-out/ \
