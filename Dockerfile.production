@@ -2,11 +2,17 @@
 FROM node:20-bookworm-slim AS build
 
 RUN apt-get update -qq \
- && apt-get install -y -qq --no-install-recommends curl build-essential \
+ && apt-get install -y -qq --no-install-recommends curl ca-certificates build-essential \
  && rm -rf /var/lib/apt/lists/*
 
 # Build incident-engine in the same stage to avoid extra artifact wiring.
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+# Avoid `curl | sh` so failed downloads cannot silently pass.
+RUN set -eux; \
+    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh; \
+    sh /tmp/rustup.sh -y --default-toolchain stable --profile minimal; \
+    rm -f /tmp/rustup.sh; \
+    /root/.cargo/bin/rustc --version; \
+    /root/.cargo/bin/cargo --version
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app
