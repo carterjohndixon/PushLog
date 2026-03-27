@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 import { PENDING_ORG_INVITE_KEY } from "@/lib/utils";
 import { 
   Github, 
@@ -850,14 +851,39 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          <Link href="/billing" className="outline-none focus:outline-none focus-visible:ring-0 rounded-lg block">
-            <Card className="cursor-pointer transition-shadow card-lift hover:shadow-glow border-border">
+          {isPayingUiEnabled() ? (
+            <Link href="/billing" className="outline-none focus:outline-none focus-visible:ring-0 rounded-lg block">
+              <Card className="cursor-pointer transition-shadow card-lift hover:shadow-glow border-border">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">
+                        Summaries ({userProfile?.plan ? userProfile.plan.charAt(0).toUpperCase() + userProfile.plan.slice(1) : "Free"})
+                      </p>
+                      {statsLoading ? (
+                        <Skeleton className="h-8 w-20 mt-1" />
+                      ) : (
+                        <p className="text-2xl font-bold text-log-green">
+                          {userProfile?.monthlySummaryCount ?? 0}
+                          <span className="text-base font-normal text-muted-foreground">
+                            {" "}/ {(userProfile?.monthlySummaryCap ?? 200).toLocaleString()}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                      <CreditCard className="text-log-green w-6 h-6" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Card className="border-border">
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">
-                      Summaries ({userProfile?.plan ? userProfile.plan.charAt(0).toUpperCase() + userProfile.plan.slice(1) : "Free"})
-                    </p>
+                    <p className="text-sm text-muted-foreground">Summaries this period</p>
                     {statsLoading ? (
                       <Skeleton className="h-8 w-20 mt-1" />
                     ) : (
@@ -875,7 +901,7 @@ export default function Dashboard() {
                 </div>
               </CardContent>
             </Card>
-          </Link>
+          )}
         </div>
 
         {/* Main Content Grid */}

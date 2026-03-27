@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 import { ExactLineMatchTestRunner } from "@/components/exact-line-match-test-runner";
 import { formatLocalDate } from "@/lib/date";
 import { 
@@ -1159,8 +1160,8 @@ export default function Settings() {
             </Card>
           )}
 
-          {/* Plan & Subscription */}
-          {profileResponse?.user && (
+          {/* Plan & Subscription — hidden when VITE_IS_PAYING_ENABLED is false */}
+          {profileResponse?.user && isPayingUiEnabled() && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">

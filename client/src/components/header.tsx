@@ -16,6 +16,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NotificationsDropdown } from "./notifications-dropdown";
 import { useTheme, type Theme } from "@/lib/theme";
 import { PROFILE_QUERY_KEY, fetchProfile, type ProfileUser } from "@/lib/profile";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 
 export function Header() {
   const { data: profileResponse, isLoading } = useQuery({
@@ -183,12 +184,14 @@ export function Header() {
                         <span>Settings</span>
                       </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/billing" className="cursor-pointer flex items-center">
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        <span>Billing</span>
-                      </Link>
-                    </DropdownMenuItem>
+                    {isPayingUiEnabled() && (
+                      <DropdownMenuItem asChild>
+                        <Link href="/billing" className="cursor-pointer flex items-center">
+                          <CreditCard className="mr-2 h-4 w-4" />
+                          <span>Billing</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       onClick={handleLogout} 

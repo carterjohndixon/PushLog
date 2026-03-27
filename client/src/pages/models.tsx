@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Sparkles, Loader2, Lock, ChevronDown, ChevronRight, Settings, Eye, Check } from "lucide-react";
 import { Link } from "wouter";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
 
@@ -341,9 +342,13 @@ export default function Models() {
                   )}
                   {!accessible && (
                     <div className="mt-3">
-                      <Link href="/pricing" className="text-xs text-log-green hover:underline">
-                        Upgrade to {card.requiredPlan}
-                      </Link>
+                      {isPayingUiEnabled() ? (
+                        <Link href="/pricing" className="text-xs text-log-green hover:underline">
+                          Upgrade to {card.requiredPlan}
+                        </Link>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">This mode requires a higher tier.</p>
+                      )}
                     </div>
                   )}
                 </button>

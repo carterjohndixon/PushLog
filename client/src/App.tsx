@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 import { Suspense, lazy, useEffect } from "react";
 
 const CHUNK_RELOAD_KEY = "pushlog_chunk_error_reload";
@@ -34,6 +35,7 @@ import { NotificationSSE } from "@/components/notification-sse";
 import { NotificationDetailsModal } from "@/components/notification-details-modal";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
+import { TeamOrganizationOnly } from "@/components/team-organization-only";
 import { ErrorBoundary } from "@/components/error-boundary";
 
 const Header = lazy(() => import("@/components/header").then((m) => ({ default: m.Header })));
@@ -87,13 +89,20 @@ const PageLoader = () => (
   </div>
 );
 
-const PERSISTENT_HEADER_PATHS = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/organization", "/billing"];
+const PERSISTENT_HEADER_PATHS_BASE = ["/dashboard", "/integrations", "/repositories", "/search", "/analytics", "/models", "/settings", "/organization", "/billing"] as const;
 
 function Router() {
   const [location] = useLocation();
   const host = typeof window !== "undefined" ? window.location.hostname : "";
   const isStagingHost = host === "staging.pushlog.ai" || host === "localhost" || host === "127.0.0.1";
-  const showPersistentHeader = PERSISTENT_HEADER_PATHS.includes(location) || (location === "/admin" && isStagingHost) || (location === "/admin/pricing" && isStagingHost);
+  const payingUi = isPayingUiEnabled();
+  const persistentHeaderPaths: readonly string[] = payingUi
+    ? PERSISTENT_HEADER_PATHS_BASE
+    : PERSISTENT_HEADER_PATHS_BASE.filter((p) => p !== "/billing");
+  const showPersistentHeader =
+    persistentHeaderPaths.includes(location) ||
+    (location === "/admin" && isStagingHost) ||
+    (location === "/admin/pricing" && isStagingHost);
 
   // Scroll to top on route change
   useEffect(() => {
@@ -174,7 +183,9 @@ function Router() {
       </Route>
       <Route path="/organization">
         <ProtectedRoute pageName="organization">
-          <Organization />
+          <TeamOrganizationOnly>
+            <Organization />
+          </TeamOrganizationOnly>
         </ProtectedRoute>
       </Route>
       <Route path="/change-password">
@@ -183,9 +194,13 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/billing">
-        <ProtectedRoute pageName="billing">
-          <Billing />
-        </ProtectedRoute>
+        {payingUi ? (
+          <ProtectedRoute pageName="billing">
+            <Billing />
+          </ProtectedRoute>
+        ) : (
+          <Redirect to="/dashboard" />
+        )}
       </Route>
       {isStagingHost && (
         <Route path="/admin">

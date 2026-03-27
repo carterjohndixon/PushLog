@@ -22,6 +22,7 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 import type { ActiveIntegration } from "@/lib/types";
 
 type PushlogMode = "clean_summary" | "slack_friendly" | "detailed_engineering" | "executive_summary" | "incident_aware";
@@ -515,12 +516,13 @@ export function IntegrationSettingsModal({
                   {PUSHLOG_MODE_OPTIONS.map((opt) => {
                     const userPlan = profileResponse?.user?.plan ?? "free";
                     const accessible = (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[opt.requiredPlan] ?? 0);
+                    const showPlanBadges = isPayingUiEnabled();
                     return (
                       <SelectItem key={opt.mode} value={opt.mode} disabled={!accessible}>
                         <span className="flex items-center gap-2">
                           {opt.label}
                           {!accessible && <Lock className="w-3 h-3 text-muted-foreground" />}
-                          {opt.requiredPlan !== "free" && (
+                          {showPlanBadges && opt.requiredPlan !== "free" && (
                             <Badge variant="outline" className="text-[10px] capitalize px-1 py-0">{opt.requiredPlan}</Badge>
                           )}
                         </span>

@@ -9,6 +9,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { isPayingUiEnabled } from "@/lib/payingUi";
 
 type PlanName = "free" | "pro" | "team";
 
@@ -100,6 +101,20 @@ export default function Pricing() {
   };
 
   const isCurrentPlan = (plan: PlanName) => currentPlan === plan;
+
+  if (!isPayingUiEnabled()) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background">
+        <Header />
+        <main className="flex-1 py-16 px-4 flex items-center justify-center">
+          <p className="text-center text-muted-foreground max-w-md">
+            Plan upgrades and self-service billing are not available in this deployment.
+          </p>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
