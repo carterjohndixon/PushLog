@@ -3,8 +3,6 @@
  * Uses GitHub commit file patches (when present), filters noise, and enforces strict size limits.
  */
 
-// PushLog self-test: after pushing, Slack summary should mention this line if diff enrichment is working.
-
 import { databaseStorage } from "./database";
 import { getCommitDetail, type GitHubCommitDetail, type GitHubCommitFilePatch } from "./github";
 import type { CompactDiffFile, DiffContext, PushEventData } from "./ai";
