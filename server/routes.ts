@@ -82,6 +82,10 @@ import {
   shouldSendIncidentNotification,
   resolveIncidentNotificationFloor,
 } from "./helper/incidentNotificationPolicy";
+import {
+  shouldSuppressLowSignalIncident,
+  type IncidentSummaryPayload,
+} from "./helper/incidentNotificationQuality";
 import { listCommitsByPath } from "./github";
 import { requireTurnstileIfConfigured } from "./helper/turnstile";
 
@@ -622,6 +626,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const orgId = await databaseStorage.getOrganizationIdByIncidentServiceName(summary.service);
     const notificationFloor = await resolveIncidentNotificationFloor(orgId);
     if (!shouldSendIncidentNotification(summary.severity, notificationFloor)) {
+      return;
+    }
+
+    const quality = shouldSuppressLowSignalIncident(summary as IncidentSummaryPayload);
+    if (quality.suppress) {
+      console.log(
+        `[incident-engine] notification suppressed (${quality.reason}): ${summary.incident_id} ${summary.service}/${summary.environment}`
+      );
       return;
     }
 

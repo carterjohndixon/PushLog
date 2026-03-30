@@ -28,7 +28,10 @@ type Config struct {
 	Environment string         `yaml:"environment"`
 	Service     string         `yaml:"service"`
 	// NoisePreset: "generic" (default) for customer app logs; "pushlog_api" when tailing PushLog's own API/worker containers.
-	NoisePreset string         `yaml:"noise_preset,omitempty"`
+	NoisePreset string `yaml:"noise_preset,omitempty"`
+	// MinSeverity: only ship events at least this severe: warning | error | critical.
+	// "critical" = fatal/panic/critical keyword lines only (see parser). Default: warning (ship all parsed severities).
+	MinSeverity string `yaml:"min_severity,omitempty"`
 	Sources     []SourceConfig `yaml:"sources"`
 	SpoolDir    string         `yaml:"spool_dir,omitempty"`
 }
@@ -64,6 +67,16 @@ func Load(path string) (*Config, error) {
 		cfg.NoisePreset = "pushlog_api"
 	default:
 		return nil, fmt.Errorf("config: noise_preset must be generic or pushlog_api, got %q", cfg.NoisePreset)
+	}
+	ms := strings.TrimSpace(strings.ToLower(cfg.MinSeverity))
+	if ms == "" {
+		ms = "warning"
+	}
+	switch ms {
+	case "warning", "error", "critical":
+		cfg.MinSeverity = ms
+	default:
+		return nil, fmt.Errorf("config: min_severity must be warning, error, or critical, got %q", cfg.MinSeverity)
 	}
 	return &cfg, nil
 }

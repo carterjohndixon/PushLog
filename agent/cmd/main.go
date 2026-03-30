@@ -20,6 +20,7 @@ import (
 	"github.com/pushlog/pushlog-agent/internal/heartbeat"
 	"github.com/pushlog/pushlog-agent/internal/parser"
 	"github.com/pushlog/pushlog-agent/internal/queue"
+	"github.com/pushlog/pushlog-agent/internal/severity"
 	"github.com/pushlog/pushlog-agent/internal/shipper"
 	"github.com/pushlog/pushlog-agent/internal/source"
 	"github.com/pushlog/pushlog-agent/internal/spool"
@@ -138,8 +139,8 @@ func cmdRun() {
 		log.Fatal("No sources configured. Edit config and add at least one source.")
 	}
 
-	log.Printf("Starting pushlog-agent %s (endpoint=%s, env=%s, sources=%d)",
-		version, cfg.Endpoint, cfg.Environment, len(cfg.Sources))
+	log.Printf("Starting pushlog-agent %s (endpoint=%s, env=%s, min_severity=%s, sources=%d)",
+		version, cfg.Endpoint, cfg.Environment, cfg.MinSeverity, len(cfg.Sources))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -166,6 +167,9 @@ func cmdRun() {
 	// Fan-in: move events from channel to queue (tag preset so API can apply PushLog-only noise rules)
 	go func() {
 		for ev := range eventCh {
+			if !severity.MeetsMinimum(ev.Severity, cfg.MinSeverity) {
+				continue
+			}
 			if cfg.NoisePreset == "pushlog_api" {
 				if ev.Tags == nil {
 					ev.Tags = make(map[string]string)
@@ -358,12 +362,14 @@ Examples:
 		}
 	}
 
+	minSev := "warning"
 	service, env := "app", "production"
 	noisePreset := parser.NoisePresetGeneric
 	if cfg, err := config.Load(cfgPath); err == nil {
 		service = cfg.Service
 		env = cfg.Environment
 		noisePreset = cfg.NoisePreset
+		minSev = cfg.MinSeverity
 	}
 
 	var input io.Reader
@@ -378,8 +384,8 @@ Examples:
 		input = os.Stdin
 	}
 
-	fmt.Printf("Parsing as service=%q environment=%q noise_preset=%q\n", service, env, noisePreset)
-	fmt.Println("Legend: FILTERED = noise (401/403/auth), SKIP = no severity, SHIP = would be sent to server")
+	fmt.Printf("Parsing as service=%q environment=%q noise_preset=%q min_severity=%q\n", service, env, noisePreset, minSev)
+	fmt.Println("Legend: FILTERED = noise, SKIP = no severity, DROP = below min_severity, SHIP = would be sent to server")
 	fmt.Println()
 
 	scanner := bufio.NewScanner(input)
@@ -399,6 +405,10 @@ Examples:
 				fmt.Printf("%d: SKIP (no severity) %s\n", lineNum, truncate(line, 80))
 			}
 		} else {
+			if !severity.MeetsMinimum(ev.Severity, minSev) {
+				fmt.Printf("%d: DROP (min_severity=%s) severity=%s — %s\n", lineNum, minSev, ev.Severity, truncate(line, 80))
+				continue
+			}
 			summary := fmt.Sprintf("severity=%s exception=%s", ev.Severity, ev.ExceptionType)
 			fmt.Printf("%d: SHIP %s\n", lineNum, summary)
 			j, _ := json.MarshalIndent(ev, "    ", "  ")

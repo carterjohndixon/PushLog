@@ -5,12 +5,18 @@
 #    docker compose ... up -d --build pushlog-agent
 #
 # Each `type: docker` entry runs: docker logs -f --tail 0 <container>
-# (only lines matching error/fatal/warn patterns are sent — see docs/PUSHLOG_AGENT_GO.md)
+# Parser still classifies lines; min_severity decides what gets shipped.
+#
+# min_severity: warning | error | critical (default in agent if omitted: warning)
+#   critical — only fatal/panic/critical keyword lines (state-breaking; developer must look)
+#   error    — error + critical
+#   warning  — warning + error + critical
 #
 # noise_preset:
 #   - generic (default) — for customer application logs; does not filter PushLog-internal lines.
 #   - pushlog_api — use when tailing PushLog's own API/worker containers (filters [incident-engine], GitHub token check noise, etc.).
 noise_preset: pushlog_api
+min_severity: critical
 
 endpoint: https://pushlog.ai
 token: plg_replace_with_real_agent_token
