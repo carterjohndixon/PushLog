@@ -451,6 +451,29 @@ export function NotificationDetailsModal() {
                     </div>
                   )}
 
+                  {metadata?.incidentSource === "agent" && (
+                    <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-3 space-y-2 text-sm break-words">
+                      <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">
+                        Host log (pushlog-agent)
+                      </h5>
+                      <p className="text-xs text-muted-foreground">
+                        The <span className="font-medium text-foreground">Message</span> under{" "}
+                        <span className="font-medium text-foreground">Top symptoms</span> is the raw log line the agent
+                        captured and sent to PushLog.
+                      </p>
+                      {metadata.agentTags != null && typeof metadata.agentTags === "object" && Object.keys(metadata.agentTags).length > 0 && (
+                        <dl className="grid gap-1 text-xs">
+                          {Object.entries(metadata.agentTags as Record<string, string>).map(([k, v]) => (
+                            <div key={k} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                              <dt className="font-medium text-foreground shrink-0">{k}</dt>
+                              <dd className="text-muted-foreground font-mono break-all min-w-0">{v}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                    </div>
+                  )}
+
                   <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2 text-sm break-words">
                     <h5 className="font-semibold text-foreground text-xs uppercase tracking-wide">Summary</h5>
                     <div className="grid gap-1.5">

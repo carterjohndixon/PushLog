@@ -712,8 +712,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.warn("[incident] GitHub correlation failed (non-blocking):", err);
     }
 
+    const rawTags = summary.tags;
+    const hasAgentTags =
+      rawTags != null &&
+      typeof rawTags === "object" &&
+      Object.keys(rawTags).length > 0 &&
+      String(summary.source || "").toLowerCase() === "agent";
+
     const metadata = JSON.stringify({
       incidentId: summary.incident_id,
+      incidentSource: summary.source ?? undefined,
       service: summary.service,
       environment: summary.environment,
       trigger: summary.trigger,
@@ -727,6 +735,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       recommendedFirstActions: (summary as any).recommended_first_actions ?? [],
       stacktrace: resolvedStacktraceForMeta,
       links: summary.links || {},
+      ...(hasAgentTags ? { agentTags: rawTags } : {}),
       ...(correlation.relatedCommits?.length ? { relatedCommits: correlation.relatedCommits } : {}),
       ...(correlation.relevantAuthors?.length ? { relevantAuthors: correlation.relevantAuthors } : {}),
       ...(correlation.correlationSource ? { correlationSource: correlation.correlationSource } : {}),

@@ -68,6 +68,8 @@ export interface IncidentSummaryOutput {
   start_time: string;
   last_seen: string;
   links?: Record<string, string>;
+  /** Echo of ingest tags (e.g. agent docker_container). */
+  tags?: Record<string, string>;
 }
 
 type IncidentListener = (summary: IncidentSummaryOutput) => void;

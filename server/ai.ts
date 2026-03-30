@@ -644,9 +644,11 @@ Respond with only valid JSON:
     };
 
     let parsed: unknown;
+    let primaryJsonParseError: string | undefined;
     try {
       parsed = JSON.parse(jsonString);
-    } catch {
+    } catch (e: unknown) {
+      primaryJsonParseError = e instanceof Error ? e.message : String(e);
       const extracted = extractSummaryJson(response);
       if (extracted) {
         try {
@@ -667,8 +669,20 @@ Respond with only valid JSON:
       }
     }
     if (parsed == null || typeof parsed !== 'object') {
-      console.error('❌ Failed to parse AI response as JSON');
-      console.error('📄 Raw AI response (first 500 chars):', jsonString.slice(0, 500));
+      const headLen = 2000;
+      const pt = unifiedUsage?.prompt_tokens;
+      const ct = unifiedUsage?.completion_tokens;
+      const tt = unifiedUsage?.total_tokens;
+      console.error(
+        `❌ Failed to parse AI response as JSON (model=${actualModel}, responseChars=${jsonString.length}` +
+          `, tokens prompt=${pt ?? "?"}/completion=${ct ?? "?"}/total=${tt ?? "?"}` +
+          (primaryJsonParseError ? `, firstParseError=${JSON.stringify(primaryJsonParseError)}` : "") +
+          ')'
+      );
+      console.error('📄 Raw AI response (head):\n' + jsonString.slice(0, headLen));
+      if (jsonString.length > headLen) {
+        console.error('📄 Raw AI response (tail):\n' + jsonString.slice(-500));
+      }
       throw new Error('Failed to parse AI response: no valid JSON found');
     }
     

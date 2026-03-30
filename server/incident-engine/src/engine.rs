@@ -217,6 +217,7 @@ impl Engine {
       recommended_first_actions: actions,
       stacktrace,
       links: event.links.clone(),
+      tags: event.tags.clone(),
       api_route: event.api_route.clone(),
       request_url: event.request_url.clone(),
     }

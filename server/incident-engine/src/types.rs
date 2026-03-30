@@ -278,6 +278,9 @@ pub struct IncidentSummary {
   pub stacktrace: Vec<StackFrameOutput>,
   #[serde(default, skip_serializing_if = "HashMap::is_empty")]
   pub links: HashMap<String, String>,
+  /// Ingest tags (e.g. pushlog-agent: docker_container, noise_preset) for notifications.
+  #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+  pub tags: HashMap<String, String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub api_route: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]

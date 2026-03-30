@@ -123,6 +123,12 @@ func runDockerLogs(ctx context.Context, container, service, env, noisePreset str
 			}
 		}
 
+		if ev.Tags == nil {
+			ev.Tags = make(map[string]string)
+		}
+		ev.Tags["docker_container"] = container
+		ev.Tags["agent_source"] = "docker"
+
 		select {
 		case out <- ev:
 		case <-ctx.Done():
