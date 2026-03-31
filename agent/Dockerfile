@@ -6,7 +6,13 @@ COPY agent/go.mod agent/go.sum ./
 RUN go mod download
 
 COPY agent/ ./
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o /out/pushlog-agent ./cmd
+# Embed commit in the binary; set when building: GIT_COMMIT=$(git rev-parse --short HEAD)
+ARG GIT_COMMIT=unknown
+RUN SEMVER="$$(tr -d ' \n\r' < VERSION 2>/dev/null | head -c64)"; \
+    if [ -z "$$SEMVER" ]; then SEMVER=0.2.0; fi; \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+      -ldflags="-s -w -X main.version=$$SEMVER+${GIT_COMMIT}" \
+      -o /out/pushlog-agent ./cmd
 
 FROM alpine:3.21 AS runtime
 

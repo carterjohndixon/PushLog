@@ -63,6 +63,9 @@ services:
     build:
       context: .
       dockerfile: agent/Dockerfile
+      args:
+        # Set at build time so `pushlog-agent version` shows a real SHA, e.g. GIT_COMMIT=$(git rev-parse --short HEAD)
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     container_name: pushlog-agent
     restart: unless-stopped
     depends_on:

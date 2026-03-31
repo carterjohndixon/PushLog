@@ -21,3 +21,13 @@ func Rank(s string) int {
 func MeetsMinimum(actual, minimum string) bool {
 	return Rank(actual) >= Rank(minimum)
 }
+
+// NormalizeMin returns warning | error | critical; invalid or empty defaults to warning.
+func NormalizeMin(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "warning", "error", "critical":
+		return strings.ToLower(strings.TrimSpace(s))
+	default:
+		return "warning"
+	}
+}

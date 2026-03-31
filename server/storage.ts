@@ -78,8 +78,10 @@ export interface IStorage {
   // Agent methods
   createOrganizationAgent(orgId: string, name: string, tokenHash: string, createdByUserId: string): Promise<{ id: string; organizationId: string; name: string; status: string; createdAt: string }>;
   getOrganizationAgentByTokenHash(tokenHash: string): Promise<{ id: string; organizationId: string; name: string; status: string } | null>;
-  listOrganizationAgents(orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]>;
+  getOrganizationAgentMinSeverity(agentId: string): Promise<string | null>;
+  listOrganizationAgents(orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; minSeverity: string | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]>;
   revokeOrganizationAgent(orgId: string, agentId: string): Promise<boolean>;
+  updateOrganizationAgentMinSeverity(orgId: string, agentId: string, minSeverity: string | null): Promise<boolean>;
   updateAgentHeartbeat(agentId: string, meta: { hostname?: string; arch?: string; environment?: string; sources?: string[] }): Promise<void>;
 
   // Repository methods
@@ -350,10 +352,16 @@ export class MemStorage implements IStorage {
   async getOrganizationAgentByTokenHash(_tokenHash: string): Promise<{ id: string; organizationId: string; name: string; status: string } | null> {
     return null;
   }
-  async listOrganizationAgents(_orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]> {
+  async getOrganizationAgentMinSeverity(_agentId: string): Promise<string | null> {
+    return null;
+  }
+  async listOrganizationAgents(_orgId: string): Promise<{ id: string; name: string; hostname: string | null; arch: string | null; environment: string | null; sources: string[] | null; minSeverity: string | null; status: string; lastSeenAt: string | null; createdAt: string; createdByUserId: string }[]> {
     return [];
   }
   async revokeOrganizationAgent(_orgId: string, _agentId: string): Promise<boolean> {
+    return false;
+  }
+  async updateOrganizationAgentMinSeverity(_orgId: string, _agentId: string, _minSeverity: string | null): Promise<boolean> {
     return false;
   }
   async updateAgentHeartbeat(_agentId: string, _meta: { hostname?: string; arch?: string; environment?: string; sources?: string[] }): Promise<void> {}

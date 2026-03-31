@@ -401,6 +401,8 @@ export const organizationAgents = pgTable("organization_agents", {
   arch: text("arch"),
   environment: text("environment"),
   sources: jsonb("sources").$type<string[]>(),
+  /** When set, agent uses this floor (from heartbeat); when null, agent uses local YAML min_severity. */
+  minSeverity: text("min_severity"),
   status: text("status").notNull().default("active"), // "active" | "revoked"
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
 }, (t) => [

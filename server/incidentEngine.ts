@@ -221,6 +221,8 @@ const UNIVERSAL_NOISE_PATTERNS = [
   /error\s+response\s+from\s+daemon/i,
   /no\s+such\s+container/i,
   /cannot\s+connect\s+to\s+the\s+docker\s+daemon/i,
+  // PushLog auth middleware diagnostic (session/cookie); not a product incident. Apply for all presets.
+  /❌\s*Auth failed/i,
 ];
 
 /**
@@ -235,7 +237,6 @@ const PUSHLOG_API_NOISE_PATTERNS = [
   /\[agentBuffer\]/,
   /ENCRYPTION_KEY is missing/i,
   /ENCRYPTION_KEY is invalid/i,
-  /❌ Auth failed/,
   /incident-engine:\s*read error/i,
   /\[risk-engine\]/i,
   /\[sentry-apps\]/i,

@@ -1221,6 +1221,17 @@ export class DatabaseStorage implements IStorage {
     return (row as any) ?? null;
   }
 
+  async getOrganizationAgentMinSeverity(agentId: string): Promise<string | null> {
+    const [row] = await db
+      .select({ minSeverity: organizationAgents.minSeverity })
+      .from(organizationAgents)
+      .where(eq(organizationAgents.id, agentId))
+      .limit(1);
+    const v = row?.minSeverity;
+    if (v == null || String(v).trim() === "") return null;
+    return String(v).trim().toLowerCase();
+  }
+
   async listOrganizationAgents(
     orgId: string,
   ): Promise<
@@ -1231,6 +1242,7 @@ export class DatabaseStorage implements IStorage {
       arch: string | null;
       environment: string | null;
       sources: string[] | null;
+      minSeverity: string | null;
       status: string;
       lastSeenAt: string | null;
       createdAt: string;
@@ -1245,6 +1257,7 @@ export class DatabaseStorage implements IStorage {
         arch: organizationAgents.arch,
         environment: organizationAgents.environment,
         sources: organizationAgents.sources,
+        minSeverity: organizationAgents.minSeverity,
         status: organizationAgents.status,
         lastSeenAt: organizationAgents.lastSeenAt,
         createdAt: organizationAgents.createdAt,
@@ -1261,6 +1274,25 @@ export class DatabaseStorage implements IStorage {
       .update(organizationAgents)
       .set({ status: "revoked" })
       .where(and(eq(organizationAgents.id, agentId), eq(organizationAgents.organizationId, orgId)))
+      .returning({ id: organizationAgents.id });
+    return result.length > 0;
+  }
+
+  async updateOrganizationAgentMinSeverity(
+    orgId: string,
+    agentId: string,
+    minSeverity: string | null,
+  ): Promise<boolean> {
+    const result = await db
+      .update(organizationAgents)
+      .set({ minSeverity })
+      .where(
+        and(
+          eq(organizationAgents.id, agentId),
+          eq(organizationAgents.organizationId, orgId),
+          eq(organizationAgents.status, "active"),
+        ),
+      )
       .returning({ id: organizationAgents.id });
     return result.length > 0;
   }

@@ -93,6 +93,13 @@ func TestParseLine_GenericPreset_ShipsGitHubFetchErrors(t *testing.T) {
 	}
 }
 
+func TestParseLine_GenericPreset_FiltersAuthFailedDiagnostic(t *testing.T) {
+	line := `❌ Auth failed: { hasSession: true, hasUserId: false }`
+	if ParseLine(line, "app", "production", NoisePresetGeneric) != nil {
+		t.Fatal("expected universal filter for PushLog auth diagnostic under generic preset")
+	}
+}
+
 func TestParseLine_ProcessOutputExceptionType(t *testing.T) {
 	// "Error " + word (not "Error:") avoids duplicate "Error: Error ..." in incident titles.
 	line := `Error something broke in worker`

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/pushlog/pushlog-agent/internal/config"
+	"github.com/pushlog/pushlog-agent/internal/minfloor"
 )
 
 const (
@@ -25,7 +26,8 @@ type payload struct {
 }
 
 // Run sends a heartbeat every 30s until ctx is cancelled.
-func Run(ctx context.Context, cfg *config.Config) {
+// gate is updated from JSON agent_config.min_severity when the server includes it.
+func Run(ctx context.Context, cfg *config.Config, gate *minfloor.Gate) {
 	client := &http.Client{Timeout: HTTPTimeout}
 	endpoint := cfg.Endpoint + "/api/ingest/heartbeat"
 
@@ -63,11 +65,39 @@ func Run(ctx context.Context, cfg *config.Config) {
 			log.Printf("[heartbeat] send error: %v", err)
 			return
 		}
-		_, _ = io.Copy(io.Discard, resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
 		resp.Body.Close()
+		if readErr != nil {
+			log.Printf("[heartbeat] read body: %v", readErr)
+			if resp.StatusCode != 200 {
+				log.Printf("[heartbeat] unexpected status %d", resp.StatusCode)
+			}
+			return
+		}
 
 		if resp.StatusCode != 200 {
 			log.Printf("[heartbeat] unexpected status %d", resp.StatusCode)
+			return
+		}
+
+		var top map[string]json.RawMessage
+		if json.Unmarshal(body, &top) != nil {
+			return
+		}
+		rawAC, ok := top["agent_config"]
+		if !ok {
+			return
+		}
+		var ac struct {
+			MinSeverity *string `json:"min_severity"`
+		}
+		if json.Unmarshal(rawAC, &ac) != nil {
+			return
+		}
+		prev := gate.Effective()
+		gate.SetFromDashboard(ac.MinSeverity)
+		if cur := gate.Effective(); cur != prev {
+			log.Printf("[heartbeat] min_severity effective=%q (PushLog dashboard override applied)", cur)
 		}
 	}
 

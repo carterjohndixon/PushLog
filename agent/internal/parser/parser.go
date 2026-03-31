@@ -65,6 +65,8 @@ var (
 		regexp.MustCompile(`(?i)error\s+response\s+from\s+daemon`),
 		regexp.MustCompile(`(?i)no\s+such\s+container`),
 		regexp.MustCompile(`(?i)cannot\s+connect\s+to\s+the\s+docker\s+daemon`),
+		// PushLog auth middleware diagnostic; universal so generic preset still drops it when tailing own API.
+		regexp.MustCompile(`❌\s*Auth failed`),
 	}
 
 	// PushLog stack only — use noise_preset: pushlog_api in config. Aligned with PUSHLOG_API_NOISE_PATTERNS on server.
@@ -76,7 +78,6 @@ var (
 		regexp.MustCompile(`\[agentBuffer\]`),
 		regexp.MustCompile(`(?i)ENCRYPTION_KEY is missing`),
 		regexp.MustCompile(`(?i)ENCRYPTION_KEY is invalid`),
-		regexp.MustCompile(`❌ Auth failed`),
 		regexp.MustCompile(`(?i)incident-engine:\s*read error`),
 		regexp.MustCompile(`(?i)\[risk-engine\]`),
 		regexp.MustCompile(`(?i)\[sentry-apps\]`),

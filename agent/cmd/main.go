@@ -18,6 +18,7 @@ import (
 
 	"github.com/pushlog/pushlog-agent/internal/config"
 	"github.com/pushlog/pushlog-agent/internal/heartbeat"
+	"github.com/pushlog/pushlog-agent/internal/minfloor"
 	"github.com/pushlog/pushlog-agent/internal/parser"
 	"github.com/pushlog/pushlog-agent/internal/queue"
 	"github.com/pushlog/pushlog-agent/internal/severity"
@@ -26,7 +27,8 @@ import (
 	"github.com/pushlog/pushlog-agent/internal/spool"
 )
 
-var version = "dev"
+// Injected at link time via -ldflags "-X main.version=..." (see agent/Makefile and agent/Dockerfile).
+var version = "0.2.0-dev"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
@@ -139,7 +141,7 @@ func cmdRun() {
 		log.Fatal("No sources configured. Edit config and add at least one source.")
 	}
 
-	log.Printf("Starting pushlog-agent %s (endpoint=%s, env=%s, min_severity=%s, sources=%d)",
+	log.Printf("Starting pushlog-agent %s (endpoint=%s, env=%s, min_severity=%s from config; PushLog can override via Settings → Agents, applied on heartbeat, sources=%d)",
 		version, cfg.Endpoint, cfg.Environment, cfg.MinSeverity, len(cfg.Sources))
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -163,11 +165,12 @@ func cmdRun() {
 
 	sh := shipper.New(cfg.Endpoint, cfg.Token, q, sp)
 	eventCh := make(chan *parser.InboundEvent, 1000)
+	sevGate := minfloor.New(cfg.MinSeverity)
 
 	// Fan-in: move events from channel to queue (tag preset so API can apply PushLog-only noise rules)
 	go func() {
 		for ev := range eventCh {
-			if !severity.MeetsMinimum(ev.Severity, cfg.MinSeverity) {
+			if !severity.MeetsMinimum(ev.Severity, sevGate.Effective()) {
 				continue
 			}
 			if cfg.NoisePreset == "pushlog_api" {
@@ -197,8 +200,8 @@ func cmdRun() {
 		}
 	}
 
-	// Start heartbeat
-	go heartbeat.Run(ctx, cfg)
+	// Start heartbeat (server may push min_severity override)
+	go heartbeat.Run(ctx, cfg, sevGate)
 
 	// Start shipper (blocks until ctx cancelled)
 	sh.Run(ctx)

@@ -5,7 +5,8 @@
  * Opt out: INCIDENT_SUPPRESS_LOW_SIGNAL=false
  *
  * Typical noise: self-referential messages containing "[incident-engine]", or
- * `new_issue` with no app stack frames and generic titles (e.g. "New issue: Error in app/production").
+ * `new_issue` with no app stack frames and generic titles (e.g. "New issue: Error in app/production"),
+ * or agent-ingested PushLog auth session diagnostics (`❌ Auth failed`).
  */
 
 import type { IncidentSummaryOutput } from "../incidentEngine";
@@ -42,6 +43,12 @@ export function shouldSuppressLowSignalIncident(summary: IncidentSummaryPayload)
   const topSymptoms = summary.top_symptoms ?? [];
   const firstMsg = topSymptoms[0]?.message != null ? String(topSymptoms[0].message).trim() : "";
   const combinedText = `${title}\n${firstMsg}`;
+  const src = String(summary.source ?? "").toLowerCase();
+
+  // PushLog session/cookie debug line when collected by pushlog-agent (any noise_preset).
+  if (src === "agent" && /❌\s*Auth failed/i.test(firstMsg)) {
+    return { suppress: true, reason: "agent_auth_session_diagnostic" };
+  }
 
   // Engine / pipeline echoing itself into the symptom (very common noise).
   if (/\[incident-engine\]/i.test(combinedText)) {

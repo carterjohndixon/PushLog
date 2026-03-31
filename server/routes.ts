@@ -973,7 +973,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         environment: environment ? String(environment) : undefined,
         sources: Array.isArray(sources) ? sources.map(String) : undefined,
       });
-      return res.status(200).json({ ok: true });
+      const minSev = await databaseStorage.getOrganizationAgentMinSeverity(req.agentId!);
+      return res.status(200).json({
+        ok: true,
+        agent_config: { min_severity: minSev },
+      });
     } catch (error) {
       console.error("Agent heartbeat error:", error);
       Sentry.captureException(error);
@@ -1013,6 +1017,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = agents.map((a) => {
         const lastSeen = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
         const connected = a.status === "active" && lastSeen > 0 && now - lastSeen < CONNECTED_THRESHOLD_MS;
+        const rawSev = a.minSeverity != null ? String(a.minSeverity).trim().toLowerCase() : "";
+        const minSeverity =
+          rawSev === "warning" || rawSev === "error" || rawSev === "critical" ? rawSev : null;
         return {
           id: a.id,
           name: a.name,
@@ -1020,6 +1027,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           arch: a.arch,
           environment: a.environment,
           sources: a.sources,
+          minSeverity,
           status: a.status,
           connected,
           lastSeenAt: a.lastSeenAt,
@@ -1031,6 +1039,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("List agents error:", error);
       Sentry.captureException(error);
       return res.status(500).json({ error: "Failed to list agents" });
+    }
+  });
+
+  app.patch("/api/agents/:id", authenticateToken, requireOrgMember, requireOrgRole(["owner", "admin"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const bodySchema = z.object({
+        minSeverity: z.union([z.enum(["warning", "error", "critical"]), z.null()]),
+      });
+      const parsed = bodySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+      }
+      const { minSeverity } = parsed.data;
+      const ok = await databaseStorage.updateOrganizationAgentMinSeverity(
+        req.user!.organizationId,
+        id,
+        minSeverity,
+      );
+      if (!ok) {
+        return res.status(404).json({ error: "Agent not found" });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error("Patch agent error:", error);
+      Sentry.captureException(error);
+      return res.status(500).json({ error: "Failed to update agent" });
     }
   });
 

@@ -59,6 +59,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { PageLoadingOverlay } from "@/components/page-loading";
 import * as Sentry from "@sentry/react";
@@ -144,6 +151,8 @@ interface Agent {
   arch: string | null;
   environment: string | null;
   sources: string[] | null;
+  /** Server override for shipped log severity; null = use agent YAML min_severity. */
+  minSeverity: "warning" | "error" | "critical" | null;
   status: string;
   connected: boolean;
   lastSeenAt: string | null;
@@ -157,6 +166,27 @@ function AgentsSection() {
   const [agentName, setAgentName] = useState("");
   const [newToken, setNewToken] = useState<string | null>(null);
   const [revokeId, setRevokeId] = useState<string | null>(null);
+
+  const patchAgentMutation = useMutation({
+    mutationFn: async ({ id, minSeverity }: { id: string; minSeverity: "warning" | "error" | "critical" | null }) => {
+      const res = await fetch(`/api/agents/${id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ minSeverity }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to update agent");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Could not update agent", description: err.message, variant: "destructive" });
+    },
+  });
 
   const { data: agents = [], isLoading } = useQuery<Agent[]>({
     queryKey: ["agents"],
@@ -274,7 +304,9 @@ function AgentsSection() {
           </AlertDialog>
         </div>
         <CardDescription>
-          Install agents on your servers to stream runtime errors to PushLog.
+          Install agents on your servers to stream runtime errors to PushLog. Set minimum log severity per agent below;
+          the running agent picks it up on the next heartbeat (~30s). Choose &quot;From agent config file&quot; to use
+          only the server&apos;s <code className="text-xs bg-muted px-1 rounded">min_severity</code> in YAML.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -285,7 +317,10 @@ function AgentsSection() {
         ) : (
           <div className="space-y-3">
             {agents.map((agent) => (
-              <div key={agent.id} className="flex items-center justify-between border rounded-lg px-4 py-3">
+              <div
+                key={agent.id}
+                className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border rounded-lg px-4 py-3"
+              >
                 <div className="flex items-center gap-3 min-w-0">
                   {agent.status === "revoked" ? (
                     <Badge variant="secondary" className="shrink-0">Revoked</Badge>
@@ -307,15 +342,41 @@ function AgentsSection() {
                   </div>
                 </div>
                 {agent.status === "active" && (
-                  <AlertDialog open={revokeId === agent.id} onOpenChange={(open) => { if (!open) setRevokeId(null); }}>
-                    <AlertDialogTrigger asChild>
-                      <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => setRevokeId(agent.id)}>
-                        Revoke
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Revoke agent "{agent.name}"?</AlertDialogTitle>
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">Ship logs</span>
+                      <Select
+                        value={agent.minSeverity ?? "inherit"}
+                        onValueChange={(v) => {
+                          const minSeverity =
+                            v === "inherit" ? null : (v as "warning" | "error" | "critical");
+                          patchAgentMutation.mutate({ id: agent.id, minSeverity });
+                        }}
+                        disabled={
+                          patchAgentMutation.isPending &&
+                          patchAgentMutation.variables?.id === agent.id
+                        }
+                      >
+                        <SelectTrigger className="h-9 w-[min(100%,220px)] sm:w-[220px]">
+                          <SelectValue placeholder="Severity floor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="inherit">From agent config file</SelectItem>
+                          <SelectItem value="warning">Warning and above</SelectItem>
+                          <SelectItem value="error">Error and above</SelectItem>
+                          <SelectItem value="critical">Critical only</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <AlertDialog open={revokeId === agent.id} onOpenChange={(open) => { if (!open) setRevokeId(null); }}>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-600" onClick={() => setRevokeId(agent.id)}>
+                          Revoke
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Revoke agent "{agent.name}"?</AlertDialogTitle>
                         <AlertDialogDescription>
                           This agent will no longer be able to send events to PushLog. This action cannot be undone.
                         </AlertDialogDescription>
@@ -332,6 +393,7 @@ function AgentsSection() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+                  </div>
                 )}
               </div>
             ))}
