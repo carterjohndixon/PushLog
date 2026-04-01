@@ -24,7 +24,7 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
     }
   }, [queryClient]);
 
-  const { data: profileResponse, isLoading, isError, error, isFetched } = useQuery<ProfileResponse>({
+  const { data: profileResponse, isPending, isError, error } = useQuery<ProfileResponse>({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: fetchProfile,
     retry: (failureCount, err) => {
@@ -37,38 +37,23 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
   const isAuthenticated = !!profileResponse?.success && !!profileResponse?.user;
   const userProfile = profileResponse?.user ?? null;
 
-  // On session/cookie or Cloudflare Access expiry, redirect to login with a full page load
-  // so the user doesn't have to refresh; full load also lets CF re-auth if needed (staging).
-  if (isFetched && !isLoading && !isAuthenticated) {
-    if (error instanceof ProfileError) {
-      const target = error.redirectTo || "/login";
-      window.location.href = target;
-      return null;
-    }
-  }
-
-  if (isLoading || !isFetched || (!isAuthenticated && !isError)) {
+  // In-flow loader: keeps persistent header visible (no full-screen overlay).
+  if (isPending) {
     return (
-      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className="bg-card border border-border rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="relative">
-              <div className="w-8 h-8 border-4 border-log-green border-t-transparent rounded-full animate-spin"></div>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-foreground mb-2">
-                Loading {pageName}...
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Please wait while we load your data.
-              </p>
-            </div>
-          </div>
+      <div className="min-h-[50vh] px-4 sm:px-6 lg:px-8 py-6 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="w-8 h-8 border-4 border-log-green border-t-transparent rounded-full animate-spin shrink-0"
+            aria-hidden
+          />
+          <p className="text-sm text-muted-foreground">Loading {pageName}…</p>
         </div>
       </div>
     );
   }
 
+  // On session/cookie or Cloudflare Access expiry, redirect to login with a full page load
+  // so the user doesn't have to refresh; full load also lets CF re-auth if needed (staging).
   if (isError && error instanceof ProfileError) {
     const target = error.redirectTo || "/login";
     window.location.href = target;

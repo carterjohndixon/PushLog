@@ -56,6 +56,35 @@ interface ConnectRepositoryData {
   private: boolean;
 }
 
+/** Aligns POST /api/repositories JSON with `/api/repositories-and-integrations` list items (instant dashboard update). */
+function dashboardRepositoryEntryFromCreatedApiRow(
+  created: Record<string, unknown>,
+  privateFlag: boolean,
+): RepositoryCardData {
+  const ownerRaw = created.owner;
+  const ownerLogin =
+    typeof ownerRaw === "string" ? ownerRaw : (ownerRaw as { login?: string })?.login ?? "";
+  const branch = (created.branch as string) ?? "main";
+  const id = created.id != null ? String(created.id) : undefined;
+  const githubId = String(created.githubId ?? "");
+  const fullName = String(created.fullName ?? (created.full_name as string) ?? "");
+  return {
+    id,
+    githubId,
+    name: String(created.name ?? ""),
+    fullName,
+    owner: ownerLogin,
+    branch,
+    isActive: created.isActive !== false,
+    isConnected: true,
+    private: privateFlag,
+    integrationCount: 0,
+    monitorAllBranches: (created.monitorAllBranches as boolean | undefined) ?? false,
+    criticalPaths: (created.criticalPaths as string[] | null | undefined) ?? null,
+    incidentServiceName: (created.incidentServiceName as string | null | undefined) ?? null,
+  } as RepositoryCardData;
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -197,11 +226,39 @@ export default function Dashboard() {
 
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-      setIsRepoModalOpen(false);
+    onSuccess: (data, variables) => {
+      const entry = dashboardRepositoryEntryFromCreatedApiRow(
+        data as Record<string, unknown>,
+        variables.private,
+      );
+      queryClient.setQueryData(
+        ["/api/repositories-and-integrations"],
+        (prev: { repositories: RepositoryCardData[]; integrations: ActiveIntegration[] } | undefined) => {
+          if (!prev) {
+            return { repositories: [entry], integrations: [] };
+          }
+          const rest = prev.repositories.filter((r) => String(r.githubId) !== String(entry.githubId));
+          return { ...prev, repositories: [entry, ...rest] };
+        },
+      );
+      queryClient.setQueryData(["/api/repositories"], (prev: unknown) => {
+        const list = Array.isArray(prev) ? (prev as RepositoryCardData[]) : [];
+        const rest = list.filter((r) => String(r.githubId) !== String(entry.githubId));
+        return [entry, ...rest];
+      });
+      void queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+
+      const warning =
+        data && typeof data === "object" && "warning" in data
+          ? String((data as { warning?: string }).warning ?? "")
+          : "";
+      if (warning) {
+        toast({
+          title: "Repository connected with warning",
+          description: warning,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -212,42 +269,18 @@ export default function Dashboard() {
     },
   });
 
-  const handleRepositorySelect = (repository: any) => {
-    // Convert from GitHub API format to our internal format
+  const handleRepositorySelect = async (repository: any) => {
     const connectData: ConnectRepositoryData = {
-      userId: "", // Will be set by server from authenticated user
+      userId: "",
       githubId: repository.githubId,
       name: repository.name,
       fullName: repository.full_name,
       owner: repository.owner.login,
       branch: repository.default_branch,
       isActive: true,
-      private: repository.private
+      private: repository.private,
     };
-    connectRepositoryMutation.mutate(connectData, {
-      onSuccess: (data) => {
-        // Close modal and refetch data after successful mutation
-        setIsRepoModalOpen(false);
-        queryClient.invalidateQueries({ queryKey: ['/api/repositories-and-integrations'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/stats'] });
-
-        if (data.warning) {
-          toast({
-            title: "Repository connected with warning",
-            description: data.warning,
-            variant: "destructive",
-          });
-        }
-      },
-      onError: (error: any) => {
-        toast({
-          title: "Connection Failed",
-          description: error.message || "Failed to connect repository.",
-          variant: "destructive",
-        });
-      }
-    });
+    await connectRepositoryMutation.mutateAsync(connectData);
   };
 
   // Fetch user profile (shared cache with ProtectedRoute – preloaded before page renders)

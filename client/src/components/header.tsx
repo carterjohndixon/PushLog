@@ -156,7 +156,13 @@ export function Header() {
             >
               {themeIcons[theme]}
             </Button>
-            {isLoading ? null : (user ? (
+            {isLoading ? (
+              <div className="flex items-center gap-2" aria-busy aria-label="Loading account">
+                <div className="h-9 w-9 rounded-full bg-muted animate-pulse shrink-0" />
+                <div className="h-9 w-9 rounded-full bg-muted animate-pulse shrink-0 hidden sm:block" />
+                <div className="h-9 w-24 rounded-md bg-muted animate-pulse hidden lg:block" />
+              </div>
+            ) : user ? (
               <>
                 <NotificationsDropdown isEmailVerified={user.emailVerified} />
                 <DropdownMenu>
@@ -210,7 +216,7 @@ export function Header() {
                   Login
                 </Button>
               </Link>
-            ))}
+            )}
           </div>
         </div>
       </div>

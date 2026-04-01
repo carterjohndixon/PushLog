@@ -153,7 +153,17 @@ export function IntegrationSettingsModal({
   const testSlackMutation = useMutation({
     mutationFn: async (integrationId: string) => {
       const res = await apiRequest("POST", `/api/integrations/${integrationId}/test-slack`);
-      return res.json();
+      return res.json() as Promise<{ success?: boolean; message?: string }>;
+    },
+    onSuccess: (data) => {
+      if (data?.success === false) return;
+      toast({
+        title: "Test message sent",
+        description:
+          typeof data?.message === "string" && data.message.trim()
+            ? data.message
+            : "Check your Slack channel for the PushLog test message.",
+      });
     },
     onError: (err: any) => {
       toast({

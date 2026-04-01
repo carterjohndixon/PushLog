@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 
 const PUBLIC_PATHS = [
   "/",
@@ -172,3 +173,11 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// Start session check as soon as the bundle loads so /api/profile is warm before first paint (401 is fine for guests).
+if (typeof window !== "undefined") {
+  void queryClient.prefetchQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: fetchProfile,
+  });
+}

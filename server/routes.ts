@@ -96,6 +96,26 @@ function sanitizeIntegrationForClient(integration: any) {
   return { ...rest, hasOpenRouterKey: !!openRouterApiKey };
 }
 
+/** ISO timestamp for client-side sorting: latest PushLog push and/or GitHub `pushed_at`. */
+function attachLastActivityAtToRepositories(
+  repositories: any[],
+  lastPushByRepoId: Map<string, string>
+): any[] {
+  return repositories.map((repo) => {
+    if (!repo.isConnected || !repo.id) return repo;
+    const dbAt = lastPushByRepoId.get(repo.id) ?? null;
+    const ghRaw = repo.pushed_at ?? repo.pushedAt;
+    let ghAt: string | null = null;
+    if (ghRaw) {
+      const t = Date.parse(String(ghRaw));
+      if (!Number.isNaN(t)) ghAt = new Date(t).toISOString();
+    }
+    let lastActivityAt: string | null = dbAt;
+    if (ghAt && (!lastActivityAt || ghAt > lastActivityAt)) lastActivityAt = ghAt;
+    return { ...repo, lastActivityAt };
+  });
+}
+
 /** True only if the string looks like a real OpenRouter API key (decrypt can return ciphertext on failure). */
 function looksLikeOpenRouterKey(s: string | null | undefined): boolean {
   return !!s?.trim().startsWith("sk-or-");
@@ -4583,7 +4603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const rid = i.repositoryId;
           if (rid != null) integrationCountByRepoId.set(rid, (integrationCountByRepoId.get(rid) ?? 0) + 1);
         }
-        const repositories = connectedRepos.map((repo) => ({
+        const repositoriesRaw = connectedRepos.map((repo) => ({
           id: repo.id,
           githubId: repo.githubId,
           name: repo.name,
@@ -4600,8 +4620,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           incidentServiceName: (repo as any).incidentServiceName ?? null,
         }));
         const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
-        const repoIdsReconnect = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
-        const lastPushByRepoReconnect = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsReconnect);
+        const connectedIdsForPush = connectedRepos.map((r) => r.id).filter(Boolean) as string[];
+        const lastPushByRepoReconnect = await databaseStorage.getLatestPushedAtByRepositoryIds(connectedIdsForPush);
+        const repositories = attachLastActivityAtToRepositories(repositoriesRaw, lastPushByRepoReconnect);
         const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
           const repoId = integration.repositoryId ?? null;
           const repository = repoId != null ? repoById.get(repoId) : null;
@@ -4682,8 +4703,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       const repoById = new Map(connectedRepos.map((r) => [r.id, r]));
-      const repoIdsMain = Array.from(new Set((Array.isArray(integrations) ? integrations : []).map((i: any) => i.repositoryId).filter(Boolean)));
-      const lastPushByRepoMain = await databaseStorage.getLatestPushedAtByRepositoryIds(repoIdsMain);
+      const connectedRepoIdsMain = Array.from(
+        new Set(repositories.filter((r: any) => r.isConnected && r.id).map((r: any) => r.id as string))
+      );
+      const lastPushByRepoMain = await databaseStorage.getLatestPushedAtByRepositoryIds(connectedRepoIdsMain);
+      const repositoriesWithActivity = attachLastActivityAtToRepositories(repositories, lastPushByRepoMain);
       const enrichedIntegrations = (Array.isArray(integrations) ? integrations : []).map((integration: any) => {
         const repoId = integration.repositoryId ?? null;
         const repository = repoId != null ? repoById.get(repoId) : null;
@@ -4698,7 +4722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
       res.setHeader("Cache-Control", "no-store, must-revalidate, private");
-      return res.status(200).json({ repositories, integrations: enrichedIntegrations });
+      return res.status(200).json({ repositories: repositoriesWithActivity, integrations: enrichedIntegrations });
     } catch (error) {
       console.error("Error fetching repositories and integrations:", error);
       Sentry.captureException(error);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,8 @@ interface RepositoryCardData {
   isConnected: boolean;
   pushEvents?: number;
   lastPush?: string;
+  /** ISO time: latest PushLog activity and/or GitHub push (from API); used for sort order. */
+  lastActivityAt?: string | null;
   private: boolean;
   monitorAllBranches?: boolean;
   integrationCount?: number;
@@ -65,6 +67,50 @@ interface RepositoriesProps {
 }
 
 const ownerLogin = (repo: RepositoryCardData) => typeof repo.owner === "string" ? repo.owner : repo.owner?.login ?? "";
+
+function repoDisplayActivityMs(
+  repo: RepositoryCardData,
+  latestEventMsByRepoId: Map<string, number>
+): number {
+  let ms = 0;
+  const iso = repo.lastActivityAt ?? (repo as { pushed_at?: string }).pushed_at ?? (repo as { pushedAt?: string }).pushedAt;
+  if (iso) {
+    const t = Date.parse(String(iso));
+    if (!Number.isNaN(t)) ms = Math.max(ms, t);
+  }
+  if (repo.isConnected && repo.id) {
+    const evMs = latestEventMsByRepoId.get(String(repo.id));
+    if (evMs != null) ms = Math.max(ms, evMs);
+  }
+  return ms;
+}
+
+function sortReposConnectedFirstThenRecent(
+  repos: RepositoryCardData[],
+  latestEventMsByRepoId: Map<string, number>
+): RepositoryCardData[] {
+  return [...repos].sort((a, b) => {
+    const ac = a.isConnected ? 1 : 0;
+    const bc = b.isConnected ? 1 : 0;
+    if (bc !== ac) return bc - ac;
+    const diff =
+      repoDisplayActivityMs(b, latestEventMsByRepoId) - repoDisplayActivityMs(a, latestEventMsByRepoId);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function sortReposByRecentActivity(
+  repos: RepositoryCardData[],
+  latestEventMsByRepoId: Map<string, number>
+): RepositoryCardData[] {
+  return [...repos].sort((a, b) => {
+    const diff =
+      repoDisplayActivityMs(b, latestEventMsByRepoId) - repoDisplayActivityMs(a, latestEventMsByRepoId);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name);
+  });
+}
 
 interface RepositoryCardProps {
   repository: RepositoryCardData;
@@ -412,6 +458,20 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     refetchInterval: 30000,
   });
 
+  const latestPushEventMsByRepoId = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!Array.isArray(pushEvents)) return m;
+    for (const ev of pushEvents as { repositoryId?: string; timestamp?: string }[]) {
+      const rid = ev.repositoryId;
+      if (!rid) continue;
+      const t = new Date(ev.timestamp ?? 0).getTime();
+      if (Number.isNaN(t)) continue;
+      const prev = m.get(rid) ?? 0;
+      if (t > prev) m.set(rid, t);
+    }
+    return m;
+  }, [pushEvents]);
+
   // Toggle repository status mutation
   const toggleRepositoryMutation = useMutation({
     mutationFn: async ({ repositoryId, isActive }: { repositoryId: string; isActive: boolean }) => {
@@ -603,12 +663,11 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
             isActive: true,
             isConnected: true,
             private: repository.private ?? false,
+            lastActivityAt: new Date().toISOString(),
           };
           return { ...prev, repositories: [...prev.repositories, newRepo] };
         }
       );
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories-and-integrations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
       if (data.warning) {
         toast({
           title: "Repository connected with warning",
@@ -631,37 +690,55 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     connectRepositoryMutation.mutate(repository);
   };
 
-  const handleRepositorySelect = (repository: RepositoryCardData) => {
-    setIsRepoModalOpen(false);
+  const handleRepositorySelect = async (repository: RepositoryCardData) => {
+    await connectRepositoryMutation.mutateAsync(repository);
   };
 
-  // Filter repositories based on search and status
-  const filteredRepositories = repositories?.filter(repo => {
-    const matchesSearch = repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ownerLogin(repo).toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const isRepositoryActive = repo.isActive !== false;
-    const isConnected = repo.isConnected;
-    
-    const matchesStatus = statusFilter === "all" || 
-                         (statusFilter === "active" && isConnected && isRepositoryActive) ||
-                         (statusFilter === "paused" && isConnected && !isRepositoryActive) ||
-                         (statusFilter === "unconnected" && !isConnected);
-    
-    return matchesSearch && matchesStatus;
-  }) || [];
+  // Filter repositories based on search and status; connected first, then by most recent activity
+  const filteredRepositories = sortReposConnectedFirstThenRecent(
+    repositories?.filter((repo) => {
+      const matchesSearch =
+        repo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ownerLogin(repo).toLowerCase().includes(searchTerm.toLowerCase());
 
-  // Group repositories by status
-  const connectedActiveRepositories = filteredRepositories.filter(repo => repo.isConnected && repo.isActive !== false);
-  const connectedPausedRepositories = filteredRepositories.filter(repo => repo.isConnected && repo.isActive === false);
-  const unconnectedRepositories = filteredRepositories.filter(repo => !repo.isConnected);
+      const isRepositoryActive = repo.isActive !== false;
+      const isConnected = repo.isConnected;
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "active" && isConnected && isRepositoryActive) ||
+        (statusFilter === "paused" && isConnected && !isRepositoryActive) ||
+        (statusFilter === "unconnected" && !isConnected);
+
+      return matchesSearch && matchesStatus;
+    }) ?? [],
+    latestPushEventMsByRepoId
+  );
+
+  // Group repositories by status (each group sorted by recent activity)
+  const connectedActiveRepositories = sortReposByRecentActivity(
+    filteredRepositories.filter((repo) => repo.isConnected && repo.isActive !== false),
+    latestPushEventMsByRepoId
+  );
+  const connectedPausedRepositories = sortReposByRecentActivity(
+    filteredRepositories.filter((repo) => repo.isConnected && repo.isActive === false),
+    latestPushEventMsByRepoId
+  );
+  const unconnectedRepositories = sortReposByRecentActivity(
+    filteredRepositories.filter((repo) => !repo.isConnected),
+    latestPushEventMsByRepoId
+  );
 
   // Search results for dropdown (all repositories, not filtered by status)
-  const searchResults = repositories?.filter(repository => {
-    const matchesSearch = repository.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ownerLogin(repository).toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesSearch && searchTerm.length > 0;
-  }) || [];
+  const searchResults = sortReposConnectedFirstThenRecent(
+    repositories?.filter((repository) => {
+      const matchesSearch =
+        repository.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        ownerLogin(repository).toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesSearch && searchTerm.length > 0;
+    }) ?? [],
+    latestPushEventMsByRepoId
+  );
 
   // Calculate events for a repository
   const getRepositoryEvents = (repository: RepositoryCardData) => {

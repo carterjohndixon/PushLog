@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,7 +46,7 @@ interface RepositoryCardData {
 interface RepositorySelectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onRepositorySelect: (repository: RepositoryCardData) => void;
+  onRepositorySelect: (repository: RepositoryCardData) => void | Promise<void>;
   /** When false (e.g. developer/viewer), hide the "reconnect GitHub" banner; they rely on owner/admin's repos. */
   showReconnectBanner?: boolean;
 }
@@ -116,25 +116,24 @@ export function RepositorySelectModal({
   const repositories = repoData?.repositories ?? [];
   const requiresGitHubReconnect = repoData?.requiresGitHubReconnect ?? false;
 
-  // Reset search query when modal closes and handle OAuth return
-  useEffect(() => {
-    if (!open) {
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
       setSearchQuery("");
-      // Remove the query data when modal closes
       queryClient.removeQueries({ queryKey: ["/api/repositories", true] });
     } else {
-      // When modal opens, refetch repositories to get fresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
-      
-      // Check if user just returned from GitHub OAuth (check for returnPath)
-      const returnPath = localStorage.getItem('returnPath');
-      if (returnPath && returnPath.includes('/repositories')) {
-        // Clear the return path and refetch data
-        localStorage.removeItem('returnPath');
-        refetch();
+      void queryClient.invalidateQueries({ queryKey: ["/api/repositories"] });
+      try {
+        const returnPath = localStorage.getItem("returnPath");
+        if (returnPath?.includes("/repositories")) {
+          localStorage.removeItem("returnPath");
+          void refetch();
+        }
+      } catch {
+        // ignore
       }
     }
-  }, [open, queryClient, refetch]);
+    onOpenChange(nextOpen);
+  };
 
   // Filter repositories based on search query
   const filteredRepositories = (repositories || []).filter((repo) =>
@@ -156,12 +155,7 @@ export function RepositorySelectModal({
       };
 
       await onRepositorySelect(repositoryData);
-      
-      // Invalidate the repositories query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ['/api/repositories'] });
-      
-      // Close modal after successful selection
-      onOpenChange(false);
+      handleDialogOpenChange(false);
     } catch (error) {
       console.error('Error selecting repository:', error);
       setSelectedRepoId(null);
@@ -174,7 +168,7 @@ export function RepositorySelectModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Select Repository</DialogTitle>

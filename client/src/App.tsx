@@ -37,8 +37,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/protected-route";
 import { TeamOrganizationOnly } from "@/components/team-organization-only";
 import { ErrorBoundary } from "@/components/error-boundary";
-
-const Header = lazy(() => import("@/components/header").then((m) => ({ default: m.Header })));
+import { Header } from "@/components/header";
 
 
 // Lazy load pages for better performance
@@ -72,18 +71,16 @@ const Organization = lazy(() => import("@/pages/organization"));
 const ChangePassword = lazy(() => import("@/pages/change-password"));
 const Billing = lazy(() => import("@/pages/billing"));
 
-// Loading component for lazy-loaded pages
-const PageLoader = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="bg-card border border-border rounded-xl shadow-lg p-8 max-w-sm w-full mx-4 text-center">
-      <div className="flex flex-col items-center space-y-4">
-        <div className="relative">
-          <div className="w-8 h-8 text-log-green animate-spin rounded-full border-4 border-border border-t-log-green"></div>
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">Loading...</h3>
-          <p className="text-sm text-muted-foreground">Please wait while we load the page.</p>
-        </div>
+/** Shown under the persistent header while a lazy route chunk loads (keeps header visible). */
+const RouteChunkFallback = () => (
+  <div className="min-h-[50vh] px-4 sm:px-6 lg:px-8 py-6">
+    <div className="max-w-6xl mx-auto space-y-4 animate-pulse">
+      <div className="h-8 w-48 rounded-md bg-muted" />
+      <div className="h-4 w-full max-w-xl rounded bg-muted/70" />
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 pt-4">
+        <div className="h-32 rounded-lg bg-muted/50 border border-border" />
+        <div className="h-32 rounded-lg bg-muted/50 border border-border" />
+        <div className="h-32 rounded-lg bg-muted/50 border border-border hidden lg:block" />
       </div>
     </div>
   </div>
@@ -111,11 +108,8 @@ function Router() {
 
   return (
     <>
-      {showPersistentHeader && (
-        <Suspense fallback={<header className="h-16 shrink-0 border-b border-border bg-background" aria-hidden />}>
-          <Header />
-        </Suspense>
-      )}
+      {showPersistentHeader && <Header />}
+      <Suspense fallback={<RouteChunkFallback />}>
       <Switch>
       <Route path="/" component={Home} />
       <Route path="/login" component={Login} />
@@ -221,6 +215,7 @@ function Router() {
         <Redirect to="/" />
       </Route>
     </Switch>
+      </Suspense>
     </>
   );
 }
@@ -231,13 +226,11 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <Suspense fallback={<PageLoader />}>
-          <Router />
-          <NotificationSSE />
-          <Toaster />
-          <IncidentToast />
-          <NotificationDetailsModal />
-        </Suspense>
+        <Router />
+        <NotificationSSE />
+        <Toaster />
+        <IncidentToast />
+        <NotificationDetailsModal />
       </TooltipProvider>
     </QueryClientProvider>
   );
