@@ -240,6 +240,10 @@ const server = createServer(async (req, res) => {
     const targetSha = String(body.headSha || "").trim();
     const isRollback = !!body.isRollback;
     const promotedBy = String(body.promotedBy || "staging-admin");
+    const vitePaying =
+      body.viteIsPayingEnabled === true || body.viteIsPayingEnabled === false
+        ? body.viteIsPayingEnabled
+        : undefined;
 
     const lockData = {
       startedAt: new Date().toISOString(),
@@ -247,6 +251,7 @@ const server = createServer(async (req, res) => {
       by: promotedBy,
       targetSha: targetSha || undefined,
       isRollback: isRollback || undefined,
+      viteIsPayingEnabled: vitePaying,
     };
     try {
       writeFileSync(LOCK_FILE, JSON.stringify(lockData, null, 2));
@@ -265,16 +270,26 @@ const server = createServer(async (req, res) => {
 
     const logPath = join(WORKSPACE, "deploy-promotion-stdout.log");
     const cmd = `nohup setsid bash "${PROMOTE_SCRIPT}" </dev/null >>"${logPath}" 2>&1 &`;
-    console.log(`[promote-http] Starting promotion: sha=${targetSha.slice(0, 10) || "latest"}, by=${promotedBy}`);
+    console.log(
+      `[promote-http] Starting promotion: sha=${targetSha.slice(0, 10) || "latest"}, by=${promotedBy}, viteIsPayingEnabled=${vitePaying === undefined ? "inherit" : vitePaying}`
+    );
+    const childEnv = {
+      ...process.env,
+      PROMOTE_WORKSPACE: WORKSPACE,
+      PROMOTED_BY: promotedBy,
+      PROMOTED_SHA: targetSha,
+      PROMOTE_LOCK_FILE: LOCK_FILE,
+    };
+    if (vitePaying === true) {
+      childEnv.VITE_IS_PAYING_ENABLED = "true";
+    } else if (vitePaying === false) {
+      childEnv.VITE_IS_PAYING_ENABLED = "false";
+    } else {
+      delete childEnv.VITE_IS_PAYING_ENABLED;
+    }
     exec(cmd, {
       cwd: WORKSPACE,
-      env: {
-        ...process.env,
-        PROMOTE_WORKSPACE: WORKSPACE,
-        PROMOTED_BY: promotedBy,
-        PROMOTED_SHA: targetSha,
-        PROMOTE_LOCK_FILE: LOCK_FILE,
-      },
+      env: childEnv,
     });
 
     return json(res, {

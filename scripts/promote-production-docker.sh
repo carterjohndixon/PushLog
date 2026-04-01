@@ -44,6 +44,30 @@ log "Working directory: $(pwd)"
 log "Triggered by: ${PROMOTED_BY:-unknown}"
 log "Target SHA: ${PROMOTED_SHA:-<not specified, will use latest main>}"
 
+# ── Frontend build flag: billing UI (VITE_IS_PAYING_ENABLED) ──
+# Staging admin can set true/false per promotion; if unset here, read from .env.production on disk.
+if [ -z "${VITE_IS_PAYING_ENABLED+x}" ]; then
+  if [ -f .env.production ]; then
+    _line="$(grep -E '^[[:space:]]*VITE_IS_PAYING_ENABLED=' .env.production 2>/dev/null | head -1 || true)"
+    if [ -n "$_line" ]; then
+      _val="${_line#*=}"
+      _val="${_val%%#*}"
+      _val="${_val%$'\r'}"
+      _val="${_val#\"}"
+      _val="${_val%\"}"
+      _val="${_val#\'}"
+      _val="${_val%\'}"
+      export VITE_IS_PAYING_ENABLED="${_val#"${_val%%[![:space:]]*}"}"
+    fi
+  fi
+fi
+if [ -n "${VITE_IS_PAYING_ENABLED:-}" ]; then
+  log "Prod web image build: VITE_IS_PAYING_ENABLED=${VITE_IS_PAYING_ENABLED}"
+else
+  log "Prod web image build: VITE_IS_PAYING_ENABLED unset (client defaults to billing UI enabled per payingUi.ts)"
+fi
+export VITE_IS_PAYING_ENABLED
+
 # ── Fetch and checkout target SHA ──
 GIT_LOG="${WORKSPACE}/deploy-production-git.log"
 if [ -d .git ]; then

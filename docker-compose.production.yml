@@ -31,6 +31,8 @@ services:
         SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN:-}
         SENTRY_ORG: ${SENTRY_ORG:-}
         SENTRY_PROJECT: ${SENTRY_PROJECT:-}
+        # Baked into client bundle (see client/src/lib/payingUi.ts). Set by promote UI or .env.production via promote-production-docker.sh.
+        VITE_IS_PAYING_ENABLED: ${VITE_IS_PAYING_ENABLED:-}
     container_name: pushlog-prod-web
     restart: unless-stopped
     depends_on:

@@ -127,6 +127,29 @@ else
   cargo build --release -p streaming-stats 2>/dev/null || log "Warning: streaming-stats build skipped (cargo/rust not available)"
 fi
 
+# ── Frontend build flag: billing UI (same semantics as promote-production-docker.sh) ──
+if [ -z "${VITE_IS_PAYING_ENABLED+x}" ]; then
+  if [ -f .env.production ]; then
+    _line="$(grep -E '^[[:space:]]*VITE_IS_PAYING_ENABLED=' .env.production 2>/dev/null | head -1 || true)"
+    if [ -n "$_line" ]; then
+      _val="${_line#*=}"
+      _val="${_val%%#*}"
+      _val="${_val%$'\r'}"
+      _val="${_val#\"}"
+      _val="${_val%\"}"
+      _val="${_val#\'}"
+      _val="${_val%\'}"
+      export VITE_IS_PAYING_ENABLED="${_val#"${_val%%[![:space:]]*}"}"
+    fi
+  fi
+fi
+if [ -n "${VITE_IS_PAYING_ENABLED:-}" ]; then
+  log "VITE_IS_PAYING_ENABLED for build: ${VITE_IS_PAYING_ENABLED}"
+else
+  log "VITE_IS_PAYING_ENABLED unset (client defaults per payingUi.ts)"
+fi
+export VITE_IS_PAYING_ENABLED
+
 log "Building production bundle..."
 npm run build:production
 

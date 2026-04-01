@@ -42,9 +42,20 @@ export async function requestProductionPromote(params: {
   promotedBy: string;
   headSha?: string;
   isRollback?: boolean;
+  /** When true/false, prod Docker/PM2 build bakes billing UI on/off. Omit to use production `.env.production`. */
+  viteIsPayingEnabled?: boolean | null;
 }): Promise<{ ok: true; data: unknown } | { ok: false; status: number; error: string }> {
   const url = baseUrl();
   if (!url) return { ok: false, status: 500, error: "Production webhook URL not configured" };
+
+  const payload: Record<string, unknown> = {
+    promotedBy: params.promotedBy,
+    headSha: params.headSha || undefined,
+    isRollback: params.isRollback || false,
+  };
+  if (params.viteIsPayingEnabled === true || params.viteIsPayingEnabled === false) {
+    payload.viteIsPayingEnabled = params.viteIsPayingEnabled;
+  }
 
   const target = `${url}/api/webhooks/promote-production`;
   let res: Awaited<ReturnType<typeof fetch>>;
@@ -52,11 +63,7 @@ export async function requestProductionPromote(params: {
     res = await fetch(target, {
       method: "POST",
       headers: authHeaders(),
-      body: JSON.stringify({
-        promotedBy: params.promotedBy,
-        headSha: params.headSha || undefined,
-        isRollback: params.isRollback || false,
-      }),
+      body: JSON.stringify(payload),
     });
   } catch (err: any) {
     const msg = err?.message || "Could not reach production server";

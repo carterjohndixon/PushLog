@@ -1132,6 +1132,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const targetSha = String(req.body?.headSha || "").trim();
       const isRollback = !!req.body?.isRollback;
+      const rawPaying = req.body?.viteIsPayingEnabled;
+      const viteIsPayingEnabled =
+        rawPaying === true || rawPaying === false
+          ? rawPaying
+          : rawPaying === "true"
+            ? true
+            : rawPaying === "false"
+              ? false
+              : undefined;
       fs.writeFileSync(
         lockFile,
         JSON.stringify(
@@ -1141,6 +1150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             by: req.body?.promotedBy || "staging-admin",
             targetSha: targetSha || undefined,
             isRollback: isRollback || undefined,
+            viteIsPayingEnabled,
           },
           null,
           2
@@ -1153,15 +1163,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const promotedBy = String(req.body?.promotedBy || "staging-admin");
       const promotedSha = String(req.body?.headSha || "").trim();
       const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
+      const promoteEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        APP_DIR: appDir,
+        PROMOTED_BY: promotedBy,
+        PROMOTED_SHA: promotedSha,
+        PROMOTE_LOCK_FILE: lockFile,
+      };
+      if (viteIsPayingEnabled === true) {
+        promoteEnv.VITE_IS_PAYING_ENABLED = "true";
+      } else if (viteIsPayingEnabled === false) {
+        promoteEnv.VITE_IS_PAYING_ENABLED = "false";
+      } else {
+        delete promoteEnv.VITE_IS_PAYING_ENABLED;
+      }
       exec(cmd, {
         cwd: appDir,
-        env: {
-          ...process.env,
-          APP_DIR: appDir,
-          PROMOTED_BY: promotedBy,
-          PROMOTED_SHA: promotedSha,
-          PROMOTE_LOCK_FILE: lockFile,
-        },
+        env: promoteEnv,
       });
 
       return res.json({
@@ -1589,13 +1607,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const promotedBy = String(admin.user.email || admin.user.username || admin.user.id || "unknown");
       const headSha = req.body?.headSha?.trim() || "";
       const isRollback = !!req.body?.isRollback;
+      const rawPaying = req.body?.viteIsPayingEnabled;
+      let viteIsPayingEnabled: boolean | null | undefined = undefined;
+      if (rawPaying === true || rawPaying === false) {
+        viteIsPayingEnabled = rawPaying;
+      } else if (rawPaying === "true") {
+        viteIsPayingEnabled = true;
+      } else if (rawPaying === "false") {
+        viteIsPayingEnabled = false;
+      } else if (rawPaying === null) {
+        viteIsPayingEnabled = null;
+      }
 
-      console.log("[staging/promote] Request:", { promotedBy, headSha: headSha.slice(0, 10), isRollback, webhookConfigured: isProductionDeployConfigured() });
+      console.log("[staging/promote] Request:", {
+        promotedBy,
+        headSha: headSha.slice(0, 10),
+        isRollback,
+        viteIsPayingEnabled,
+        webhookConfigured: isProductionDeployConfigured(),
+      });
 
       // When configured, ask the production server to start the deploy (staging doesn't run the script).
       if (isProductionDeployConfigured()) {
         console.log("[staging/promote] Forwarding to production webhook...");
-        const result = await requestProductionPromote({ promotedBy, headSha: headSha || undefined, isRollback });
+        const result = await requestProductionPromote({
+          promotedBy,
+          headSha: headSha || undefined,
+          isRollback,
+          viteIsPayingEnabled: viteIsPayingEnabled === null ? undefined : viteIsPayingEnabled,
+        });
         if (!result.ok) {
           console.error("[staging/promote] Production webhook failed:", { status: result.status, error: result.error });
           return res.status(result.status).json({ error: result.error });
@@ -1617,24 +1657,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "Promotion already in progress" });
       }
       const promotedSha = String(req.body?.headSha || "").trim();
+      const rawPayingLocal = req.body?.viteIsPayingEnabled;
+      const viteLocal =
+        rawPayingLocal === true || rawPayingLocal === false
+          ? rawPayingLocal
+          : rawPayingLocal === "true"
+            ? true
+            : rawPayingLocal === "false"
+              ? false
+              : undefined;
       fs.writeFileSync(
         lockFile,
         JSON.stringify(
-          { startedAt: new Date().toISOString(), by: promotedBy, targetSha: promotedSha || undefined, isRollback },
+          {
+            startedAt: new Date().toISOString(),
+            by: promotedBy,
+            targetSha: promotedSha || undefined,
+            isRollback,
+            viteIsPayingEnabled: viteLocal,
+          },
           null,
           2
         )
       );
       const cmd = `nohup setsid bash "${promoteScript}" </dev/null >>"${path.join(appDir, "deploy-promotion-stdout.log")}" 2>&1 &`;
+      const localPromoteEnv: NodeJS.ProcessEnv = {
+        ...process.env,
+        APP_DIR: appDir,
+        PROMOTED_BY: promotedBy,
+        PROMOTED_SHA: promotedSha,
+        PROMOTE_LOCK_FILE: lockFile,
+      };
+      if (viteLocal === true) {
+        localPromoteEnv.VITE_IS_PAYING_ENABLED = "true";
+      } else if (viteLocal === false) {
+        localPromoteEnv.VITE_IS_PAYING_ENABLED = "false";
+      } else {
+        delete localPromoteEnv.VITE_IS_PAYING_ENABLED;
+      }
       exec(cmd, {
         cwd: appDir,
-        env: {
-          ...process.env,
-          APP_DIR: appDir,
-          PROMOTED_BY: promotedBy,
-          PROMOTED_SHA: promotedSha,
-          PROMOTE_LOCK_FILE: lockFile,
-        },
+        env: localPromoteEnv,
       });
 
       return res.json({ message: "Production promotion started", startedAt: new Date().toISOString() });

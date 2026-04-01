@@ -3,6 +3,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
@@ -88,6 +96,8 @@ export default function AdminPage() {
   const [logsOpen, setLogsOpen] = useState(true);
   const [deployTarget, setDeployTarget] = useState<CommitInfo | null>(null);
   const [selectedCommit, setSelectedCommit] = useState<CommitInfo | null>(null);
+  /** Prod Docker/PM2 client build: billing UI (VITE_IS_PAYING_ENABLED). inherit = use production `.env.production`. */
+  const [prodPayingUiBuild, setProdPayingUiBuild] = useState<"inherit" | "enabled" | "disabled">("inherit");
   const prevRemoteSha = useRef<string | null>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const logLineCountAtClear = useRef<number>(0);
@@ -172,12 +182,19 @@ export default function AdminPage() {
 
   // ── Promote mutation ──
   const promoteMutation = useMutation({
-    mutationFn: async (args: { sha: string; isRollback?: boolean }) => {
+    mutationFn: async (args: { sha: string; isRollback?: boolean; payingUi?: "inherit" | "enabled" | "disabled" }) => {
+      const paying = args.payingUi ?? "inherit";
+      const body: Record<string, unknown> = {
+        headSha: args.sha,
+        isRollback: args.isRollback ?? false,
+      };
+      if (paying === "enabled") body.viteIsPayingEnabled = true;
+      if (paying === "disabled") body.viteIsPayingEnabled = false;
       const res = await fetch("/api/admin/staging/promote", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ headSha: args.sha, isRollback: args.isRollback ?? false }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -408,7 +425,32 @@ export default function AdminPage() {
                   Build production bundle and restart <code>pushlog-prod</code> via secured webhook.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
+                <div className="space-y-2 max-w-md">
+                  <Label htmlFor="prod-paying-ui-build" className="text-sm font-medium">
+                    Billing &amp; plans UI in production build
+                  </Label>
+                  <Select
+                    value={prodPayingUiBuild}
+                    onValueChange={(v) => setProdPayingUiBuild(v as "inherit" | "enabled" | "disabled")}
+                    disabled={!data.promoteAvailable || isPromotionRunning || promoteMutation.isPending}
+                  >
+                    <SelectTrigger id="prod-paying-ui-build" className="w-full">
+                      <SelectValue placeholder="Choose build flag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inherit">
+                        Use production .env.production (default)
+                      </SelectItem>
+                      <SelectItem value="enabled">Enabled (show billing UI)</SelectItem>
+                      <SelectItem value="disabled">Disabled (hide billing UI)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Baked into the client at image/build time (<code className="text-[10px]">VITE_IS_PAYING_ENABLED</code>). Does not change Stripe keys—only UI visibility.
+                  </p>
+                </div>
+
                 <div className="flex items-center gap-3">
                   <Button
                     onClick={async () => {
@@ -434,7 +476,7 @@ export default function AdminPage() {
                           toast({ title: "Cannot deploy", description: "No branch tip available. Refresh the page.", variant: "destructive" });
                           return;
                         }
-                        promoteMutation.mutate({ sha, isRollback: false });
+                        promoteMutation.mutate({ sha, isRollback: false, payingUi: prodPayingUiBuild });
                       } catch (e) {
                         toast({ title: "Failed to refresh status", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
                       }
@@ -513,6 +555,15 @@ export default function AdminPage() {
                         </>
                       )}
                     </div>
+
+                    {data.promoteRemoteStatus?.lock?.viteIsPayingEnabled !== undefined && (
+                      <p className="text-xs text-muted-foreground">
+                        Production billing UI build:{" "}
+                        <span className="font-medium text-foreground">
+                          {data.promoteRemoteStatus.lock.viteIsPayingEnabled ? "enabled" : "disabled"}
+                        </span>
+                      </p>
+                    )}
 
                     {isPromotionRunning && data.promoteRemoteStatus?.lock?.targetSha && (
                       <div className="rounded border border-border bg-background/50 px-3 py-2">
@@ -761,7 +812,11 @@ export default function AdminPage() {
             <AlertDialogAction
               onClick={() => {
                 if (deployTarget) {
-                  promoteMutation.mutate({ sha: deployTarget.sha, isRollback: commitStatus(deployTarget) === "old" });
+                  promoteMutation.mutate({
+                    sha: deployTarget.sha,
+                    isRollback: commitStatus(deployTarget) === "old",
+                    payingUi: prodPayingUiBuild,
+                  });
                   setDeployTarget(null);
                 }
               }}
