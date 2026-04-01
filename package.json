@@ -75,6 +75,7 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.18",
     "@types/nodemailer": "^6.4.17",
+    "axios": "1.14.0",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -152,6 +153,7 @@
     "bufferutil": "^4.0.8"
   },
   "overrides": {
+    "axios": "1.14.0",
     "esbuild": "^0.25.0",
     "express": {
       "path-to-regexp": "0.1.13"
