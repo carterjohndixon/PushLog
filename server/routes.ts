@@ -50,7 +50,7 @@ import { generateCodeSummary, generateSlackMessage } from './ai';
 import { createStripeCustomer, createPaymentIntent, stripe, CREDIT_PACKAGES, isBillingEnabled } from './stripe';
 import { syncOrganizationPeriodEndFromStripe } from "./orgStripeSubscriptionSync";
 import { isUnderRepoLimit, isUnderSummaryCap, isModeAllowed, isSentryAllowed, type PlanName, getPlanLimits } from './billing';
-import { isValidPushLogMode } from './pushlogModes';
+import { isValidPushLogMode, type PushLogMode } from './pushlogModes';
 import { estimateTokenCostFromUsage } from './aiCost';
 import { encrypt, decrypt } from './encryption';
 import speakeasy from "speakeasy";
@@ -6140,15 +6140,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const testMaxTokens = req.body?.maxTokens || 350;
       
       
-      // Get user's first active integration for testing (if not using direct model)
-      let activeIntegration = null;
-      if (!testModel) {
-        const userIntegrations = await storage.getIntegrationsByUserId(userId);
-        activeIntegration = userIntegrations.find(integration => integration.isActive);
-        
-        if (!activeIntegration) {
-          return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
-        }
+      // First active integration: required when not passing testModel; optional when testModel (still used for Slack + default pushlog mode).
+      const userIntegrationsForTest = await storage.getIntegrationsByUserId(userId);
+      const activeIntegration =
+        userIntegrationsForTest.find((integration) => integration.isActive) ?? null;
+      if (!testModel && !activeIntegration) {
+        return res.status(400).json({ error: "No active integrations found. Please create an integration first." });
       }
       
       // Create realistic test data for GPT-5.2 testing
@@ -6197,12 +6194,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Generate AI summary using the provided model or integration's model settings
       const aiModel = testModel || activeIntegration?.aiModel || "gpt-5.2";
       const maxTokens = testMaxTokens || activeIntegration?.maxTokens || 350;
-      
-      const summary = await generateCodeSummary(
-        testPushData, 
-        aiModel,
-        maxTokens
-      );
+
+      let pushlogModeTest: PushLogMode = "clean_summary";
+      const bodyMode = req.body?.pushlogMode;
+      if (bodyMode != null && typeof bodyMode === "string" && isValidPushLogMode(bodyMode)) {
+        pushlogModeTest = bodyMode as PushLogMode;
+      } else if (activeIntegration) {
+        const r = (activeIntegration as any).pushlogMode ?? "clean_summary";
+        pushlogModeTest = isValidPushLogMode(r) ? r : "clean_summary";
+      }
+      if (testOrgId) {
+        const orgForMode = await databaseStorage.getOrganization(testOrgId);
+        if (orgForMode) {
+          const pl = ((orgForMode as any).plan || "free") as PlanName;
+          if (!isModeAllowed(pl, pushlogModeTest)) {
+            pushlogModeTest = "clean_summary";
+          }
+        }
+      }
+
+      const summary = await generateCodeSummary(testPushData, aiModel, maxTokens, { pushlogMode: pushlogModeTest });
 
       // Send to Slack (always try to send if we have an integration, even when using direct model)
       let slackSent = false;
@@ -6241,6 +6252,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: true,
         pushEventId,
         model: aiModel,
+        pushlogMode: pushlogModeTest,
         summary: {
           summary: summary.summary.summary,
           impact: summary.summary.impact,
@@ -6308,13 +6320,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const useOpenRouter = !!openRouterKeyRaw?.trim();
       const aiModel = useOpenRouter ? aiModelStr.trim() : aiModelStr.toLowerCase();
 
+      const rawPlMode =
+        (integration as any).pushlogMode ?? (integration as any).pushlog_mode ?? "clean_summary";
+      let pushlogMode: PushLogMode = isValidPushLogMode(rawPlMode) ? rawPlMode : "clean_summary";
+      const orgIdSim = (integration as any).organizationId;
+      if (orgIdSim) {
+        const orgSim = await databaseStorage.getOrganization(orgIdSim);
+        if (orgSim) {
+          const planSim = ((orgSim as any).plan || "free") as PlanName;
+          if (!isModeAllowed(planSim, pushlogMode)) {
+            pushlogMode = "clean_summary";
+          }
+        }
+      }
+
       let summary;
       try {
         summary = await generateCodeSummary(
           pushData,
           aiModel,
           maxTokens,
-          useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim() } : undefined
+          useOpenRouter ? { openRouterApiKey: openRouterKeyRaw!.trim(), pushlogMode } : { pushlogMode }
         );
       } catch (aiErr) {
         console.error("🧪 [TEST] AI failed:", aiErr);
@@ -6414,6 +6440,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         integrationId: integration.id,
         channel: integration.slackChannelName,
         aiGenerated,
+        pushlogMode,
       });
     } catch (err) {
       console.error("🧪 [TEST] Error:", err);
