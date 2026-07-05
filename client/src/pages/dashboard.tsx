@@ -916,15 +916,17 @@ export default function Dashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-muted-foreground">Summaries this period</p>
+                    <p className="text-sm text-muted-foreground">Summaries this month</p>
                     {statsLoading ? (
                       <Skeleton className="h-8 w-20 mt-1" />
                     ) : (
                       <p className="text-2xl font-bold text-log-green">
                         {userProfile?.monthlySummaryCount ?? 0}
+                        {/* 
                         <span className="text-base font-normal text-muted-foreground">
                           {" "}/ {(userProfile?.monthlySummaryCap ?? 200).toLocaleString()}
                         </span>
+                        */}
                       </p>
                     )}
                   </div>

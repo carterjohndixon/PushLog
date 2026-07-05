@@ -169,22 +169,23 @@ export function RepositorySelectModal({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
-        <DialogHeader>
+      <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-[500px] overflow-hidden">
+        <DialogHeader className="min-w-0 pr-8">
           <DialogTitle>Select Repository</DialogTitle>
           <DialogDescription>
             Choose a repository to connect to PushLog
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4">
+        <div className="py-4 min-w-0 overflow-hidden">
           {requiresGitHubReconnect && showReconnectBanner && !error ? (
-            <div className="flex flex-col items-center justify-center space-y-4 p-6">
-              <Github className="w-12 h-12 text-gray-400" />
-              <p className="text-center text-gray-600">
+            <div className="flex flex-col items-center justify-center space-y-4 p-6 min-w-0 w-full">
+              <Github className="w-12 h-12 text-gray-400 shrink-0" />
+              <p className="text-center text-gray-600 break-words w-full px-2">
                 Reconnect your GitHub account to see all repositories and add new ones.
               </p>
               <Button
                 variant="outline"
+                className="whitespace-normal h-auto text-center max-w-full"
                 onClick={() => {
                   onOpenChange(false);
                   window.location.href = "/settings";
@@ -194,9 +195,9 @@ export function RepositorySelectModal({
               </Button>
             </div>
           ) : error ? (
-            <div className="flex flex-col items-center justify-center space-y-4 p-8">
-              <Github className="w-12 h-12 text-gray-400" />
-              <p className="text-center text-gray-600">
+            <div className="flex flex-col items-center justify-center space-y-4 p-8 min-w-0 w-full">
+              <Github className="w-12 h-12 text-gray-400 shrink-0" />
+              <p className="text-center text-gray-600 break-words w-full px-2">
                 {error instanceof Error && (error.message.includes('Authentication required') || error.message.includes('Not authenticated'))
                   ? 'Please log in or connect GitHub below.'
                   : (error instanceof Error ? error.message : 'Failed to load repositories')
@@ -304,6 +305,7 @@ export function RepositorySelectModal({
                           });
                         }
                       }}
+                      className="whitespace-normal h-auto max-w-full"
                     >
                       Refresh GitHub Connection
                     </Button>
@@ -316,9 +318,9 @@ export function RepositorySelectModal({
                 placeholder="Search repositories..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="mb-4"
+                className="mb-4 w-full min-w-0"
               />
-              <ScrollArea className="h-[300px] pr-4">
+              <ScrollArea className="h-[300px] w-full min-w-0">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <p>Loading repositories...</p>
@@ -328,22 +330,22 @@ export function RepositorySelectModal({
                     <p>No repositories found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-3 min-w-0 pr-3">
                     {filteredRepositories.map((repo) => (
-                                              <Button
-                          key={repo.githubId}
-                          variant={repo.isConnected ? "secondary" : "outline"}
-                          disabled={repo.isConnected || selectedRepoId === repo.githubId}
-                          className={`w-full justify-start group pt-6 pb-6 px-4 ${
-                            selectedRepoId === repo.githubId 
-                              ? 'bg-log-green text-white cursor-wait hover:bg-log-green' 
-                              : 'hover:bg-log-green hover:text-white'
-                          }`}
-                          onClick={() => handleSelect(repo)}
-                        >
-                        <div className="flex flex-col items-start py-4">
-                          <span className="font-medium">{repo.name}</span>
-                          <span className="text-sm text-gray-600 group-hover:text-graphite">
+                      <Button
+                        key={repo.githubId}
+                        variant={repo.isConnected ? "secondary" : "outline"}
+                        disabled={repo.isConnected || selectedRepoId === repo.githubId}
+                        className={`w-full min-w-0 h-auto justify-start group py-4 px-4 whitespace-normal ${
+                          selectedRepoId === repo.githubId
+                            ? "bg-log-green text-white cursor-wait hover:bg-log-green"
+                            : "hover:bg-log-green hover:text-white"
+                        }`}
+                        onClick={() => handleSelect(repo)}
+                      >
+                        <div className="flex min-w-0 w-full flex-col items-start overflow-hidden text-left">
+                          <span className="w-full truncate font-medium">{repo.name}</span>
+                          <span className="w-full truncate text-sm text-gray-600 group-hover:text-graphite">
                             {repo.owner.login}/{repo.name}
                           </span>
                         </div>
