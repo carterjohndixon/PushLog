@@ -23,12 +23,16 @@ export default function Carter() {
           <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-8 tracking-tight">Background</h2>
           <div className="space-y-6 text-lg text-gray-700 leading-relaxed">
             <p>
-              I started teaching myself to code in 2021, beginning with Python. From there I moved through web development, 
-              then Node.js for backend work. I spent time with C++ and Rust to understand systems programming, 
-              explored machine learning, worked with OpenGL for graphics, and eventually settled into React for frontend work.
+              I started teaching myself to code in 2021, beginning with Python. From there I moved through web development,
+              starting with HTML, CSS, and JavaScript, and then moving to flask for more complex backend web applications. 
+              I then returned back to JavaScript, using Node.js for my backend development and React for frontend development.
+              Along the way, I gained a structured understanding that no matter how long you can take writing code,
+              you will always spend more time debugging; which is what I enjoy most about programming and just part of developing.
+              I briefly spent time with C++ and Rust to understand systems programming, 
+              explored machine learning, worked with OpenGL for graphics, and eventually settled into React for fullstack development.
             </p>
             <p>
-              The progression wasn't planned—I followed what interested me and what problems I was trying to solve. 
+              This progression wasn't planned, I followed what interested me and what problems I was trying to solve. 
               Each language and framework taught me something different about how software works.
             </p>
           </div>
@@ -41,11 +45,12 @@ export default function Carter() {
           <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-8 tracking-tight">Current</h2>
           <div className="space-y-6 text-lg text-gray-700 leading-relaxed">
             <p>
-              I graduated high school and I'm working now. Most of my time goes into building tools focused on 
-              productivity and backend systems. I'm interested in making things that work reliably and don't get in the way.
+              I graduated high school and I'm a freshman at the University of Southern California studyding Electrical and Computer Engineering.
+              Most of my time goes into building tools focused on productivity and backend systems. I'm interested in making things that work reliably
+              and don't get in the way.
             </p>
             <p>
-              The backend work is what I find most engaging—designing APIs, handling data, managing state, 
+              The backend work is what I find most engaging: designing APIs, handling data, managing state, 
               and making sure things fail gracefully when they need to.
             </p>
           </div>
@@ -62,7 +67,7 @@ export default function Carter() {
                 <h3 className="text-2xl font-semibold text-gray-900">PushLog</h3>
                 <div className="flex gap-3">
                   <a
-                    href="https://github.com/carterjohndixon/PushLog"
+                    href="https://github.com/pushlog-ai/PushLog"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 hover:border-gray-300 transition-colors"
@@ -89,9 +94,9 @@ export default function Carter() {
                   session management, and real-time notifications via Server-Sent Events.
                 </p>
                 <p className="text-gray-600">
-                  This project taught me about building reliable integrations, managing state across services, 
-                  and handling edge cases in production. It's evidence of working with APIs, databases, authentication, 
-                  and real-time systems.
+                  This project taught me about building a real full-stack application fully on my own.
+                  Along the way, I learned about mangaging 3rd party APIs all at once in order to give
+                  the user a satisfying experience. 
                 </p>
               </div>
             </div>
