@@ -45,7 +45,7 @@ export default function Carter() {
           <h2 className="text-3xl md:text-4xl font-semibold text-gray-900 mb-8 tracking-tight">Current</h2>
           <div className="space-y-6 text-lg text-gray-700 leading-relaxed">
             <p>
-              I graduated high school and I'm a freshman at the University of Southern California studyding Electrical and Computer Engineering.
+              I'm a freshman at the University of Southern California studyding Electrical and Computer Engineering.
               Most of my time goes into building tools focused on productivity and backend systems. I'm interested in making things that work reliably
               and don't get in the way.
             </p>
