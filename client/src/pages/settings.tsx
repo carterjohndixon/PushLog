@@ -1691,7 +1691,8 @@ export default function Settings() {
             </Card>
           )}
 
-          {/* Incident alerts — in-app toast + optional browser notifications */}
+          {/* Incident alerts — incident reporting only (VITE_INCIDENTS_ON) */}
+          {isIncidentsEnabled() && (
           <Card className="border-amber-500/20 bg-amber-500/[0.03]">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -1775,6 +1776,7 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+          )}
 
           {/* Incident Test — staging + admin only, revealed when dev mode is on */}
           {showDevTesting && (
