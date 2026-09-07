@@ -26,6 +26,7 @@ import {
 import { RepositorySelectModal } from "@/components/repository-select-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
 import { RepositoryTeamModal } from "@/components/repository-team-modal";
+import { isOrganizationEnabled } from "@/lib/features";
 import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deletion-modal";
 import { PageLoadingOverlay } from "@/components/page-loading";
 
@@ -599,6 +600,9 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
     setIsRepositorySettingsOpen(true);
   };
 
+  // Per-repo teams are an organization feature (VITE_ORGANIZATION_ON).
+  const organizationUi = isOrganizationEnabled();
+
   const handleRepositoryTeam = (repository: RepositoryCardData) => {
     setRepositoryForTeam(repository);
     setIsRepositoryTeamOpen(true);
@@ -981,7 +985,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
-                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
+                    handleRepositoryTeam={canManageRepos && organizationUi ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -1033,7 +1037,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
-                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
+                    handleRepositoryTeam={canManageRepos && organizationUi ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -1070,7 +1074,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
-                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
+                    handleRepositoryTeam={canManageRepos && organizationUi ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}
@@ -1107,7 +1111,7 @@ export default function Repositories({ userProfile }: RepositoriesProps) {
                     handleToggleRepository={handleToggleRepository}
                     toggleRepositoryIsPending={toggleRepositoryMutation.isPending}
                     handleRepositorySettings={handleRepositorySettings}
-                    handleRepositoryTeam={canManageRepos ? handleRepositoryTeam : undefined}
+                    handleRepositoryTeam={canManageRepos && organizationUi ? handleRepositoryTeam : undefined}
                     handleDeleteRepository={handleDeleteRepository}
                     deleteRepositoryIsPending={deleteRepositoryMutation.isPending}
                     getRepositoryEvents={getRepositoryEvents}

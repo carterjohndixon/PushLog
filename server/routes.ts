@@ -63,6 +63,7 @@ import { startTimer, perfLog } from "./helper/perf";
 import { resolveToSource } from "./helper/sourceMapResolve";
 import { isAppStackFrame } from "./helper/stackTraceBundled";
 import { handleGitHubWebhook, scheduleDelayedCostUpdate } from "./githubWebhook";
+import { ORGANIZATION_ON, INCIDENTS_ON, requireFeature, logFeatureFlags } from "./features";
 import { handleSentryWebhook, getIncidentNotificationTargets, getIncidentNotificationTargetsForOrg, wasRecentSentryNotification } from "./sentryWebhook";
 import {
   ingestIncidentEvent,
@@ -642,6 +643,35 @@ export async function sentryWebhookHandler(req: Request, res: Response, options?
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ── Feature gates ──────────────────────────────────────────────────────────
+  // Organizations and incident reporting ship in the tree but are off unless the
+  // env says otherwise, so the default product is Slack commit notifications only.
+  // Mounted as prefix middleware rather than per-route so a new endpoint under a
+  // gated prefix is covered automatically instead of leaking by omission.
+  //
+  // /api/org carries two incident-owned subtrees; they follow INCIDENTS_ON, not
+  // ORGANIZATION_ON, so orgs-on/incidents-off behaves correctly.
+  const INCIDENT_SUBPATHS_UNDER_ORG = ["/incident-settings", "/sentry-apps"];
+  app.use("/api/org", (req, res, next) => {
+    const isIncidentOwned = INCIDENT_SUBPATHS_UNDER_ORG.some(
+      (sub) => req.path === sub || req.path.startsWith(`${sub}/`),
+    );
+    const enabled = isIncidentOwned ? INCIDENTS_ON : ORGANIZATION_ON;
+    const feature = isIncidentOwned ? "incidents" : "organizations";
+    return requireFeature(enabled, feature)(req, res, next);
+  });
+  for (const prefix of [
+    "/api/agents",
+    "/api/ingest",
+    "/api/webhooks/incidents",
+    "/api/webhooks/sentry",
+    "/api/health/incident-engine",
+    "/api/test/simulate-incident",
+  ]) {
+    app.use(prefix, requireFeature(INCIDENTS_ON, "incidents"));
+  }
+  logFeatureFlags();
+
   const handleIncidentSummary = async (summary: IncidentSummaryOutput) => {
     console.log(
       `[incident-engine] incident ${summary.incident_id} (${summary.trigger}) ${summary.service}/${summary.environment}: ${summary.title}`

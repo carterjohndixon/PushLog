@@ -33,6 +33,9 @@ services:
         SENTRY_PROJECT: ${SENTRY_PROJECT:-}
         # Baked into client bundle (see client/src/lib/payingUi.ts). Set by promote UI or .env.production via promote-production-docker.sh.
         VITE_IS_PAYING_ENABLED: ${VITE_IS_PAYING_ENABLED:-}
+        # Optional surfaces, baked into the client (see client/src/lib/features.ts). Off unless set.
+        VITE_ORGANIZATION_ON: ${VITE_ORGANIZATION_ON:-}
+        VITE_INCIDENTS_ON: ${VITE_INCIDENTS_ON:-}
     container_name: pushlog-prod-web
     restart: unless-stopped
     depends_on:
@@ -47,6 +50,10 @@ services:
       INCIDENT_ENGINE_BIN: /app/bin/incident-engine
       RISK_ENGINE_BIN: /app/bin/risk-engine
       STATS_ENGINE_URL: http://prod-streaming-stats:5004
+      # Runtime half of the feature gates (see server/features.ts). Keep in step with
+      # the VITE_* build args above — UI and API must agree on what is switched off.
+      ORGANIZATION_ON: ${ORGANIZATION_ON:-}
+      INCIDENTS_ON: ${INCIDENTS_ON:-}
     ports:
       - "127.0.0.1:3000:3000"
     networks:

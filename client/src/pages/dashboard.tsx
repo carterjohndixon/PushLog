@@ -38,6 +38,7 @@ import { ConfirmRepositoryDeletionModal } from "@/components/confirm-repo-deleti
 import { IntegrationSettingsModal } from "@/components/integration-settings-modal";
 import { RepositorySettingsModal } from "@/components/repository-settings-modal";
 import { RepositoryTeamModal } from "@/components/repository-team-modal";
+import { isOrganizationEnabled } from "@/lib/features";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { AiCreditsModal } from "@/components/ai-credits-modal";
 import { PageLoadingOverlay } from "@/components/page-loading";
@@ -763,6 +764,9 @@ export default function Dashboard() {
     setIsRepositorySettingsOpen(true);
   };
 
+  // Per-repo teams are an organization feature (VITE_ORGANIZATION_ON).
+  const organizationUi = isOrganizationEnabled();
+
   const handleRepositoryTeam = (repository: RepositoryCardData) => {
     setRepositoryForTeam(repository);
     setIsRepositoryTeamOpen(true);
@@ -1119,6 +1123,7 @@ export default function Dashboard() {
                           )}
                           {canManageRepos && (
                           <>
+                          {organizationUi && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -1128,6 +1133,7 @@ export default function Dashboard() {
                           >
                             <Users className="w-4 h-4" />
                           </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"

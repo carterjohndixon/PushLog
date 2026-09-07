@@ -34,6 +34,12 @@ ENV SENTRY_PROJECT=${SENTRY_PROJECT}
 ARG VITE_IS_PAYING_ENABLED
 ENV VITE_IS_PAYING_ENABLED=${VITE_IS_PAYING_ENABLED}
 
+# Client: optional surfaces, off unless true (see client/src/lib/features.ts).
+ARG VITE_ORGANIZATION_ON
+ENV VITE_ORGANIZATION_ON=${VITE_ORGANIZATION_ON}
+ARG VITE_INCIDENTS_ON
+ENV VITE_INCIDENTS_ON=${VITE_INCIDENTS_ON}
+
 # Builds:
 # - main web app (client + server bundle)
 # - carter.pushlog.ai static site

@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { isIncidentsEnabled } from "@/lib/features";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -179,6 +180,9 @@ export function RepositorySettingsModal({
               />
             </div>
 
+            {/* Critical paths + service name: incident correlation only (VITE_INCIDENTS_ON) */}
+            {isIncidentsEnabled() && (
+              <>
             {/* Critical paths for incident correlation */}
             <div className="space-y-2">
               <Label htmlFor="critical-paths">Critical paths (incident correlation)</Label>
@@ -210,6 +214,8 @@ export function RepositorySettingsModal({
                 onChange={(e) => setForm(s => ({ ...s, incidentServiceName: e.target.value }))}
               />
             </div>
+              </>
+            )}
 
             {/* Integration Status Indicator */}
             <div className="p-3 bg-muted/50 rounded-lg border border-border">

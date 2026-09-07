@@ -11,6 +11,7 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 import morgan from "morgan";
 import * as Sentry from "@sentry/node";
+import { INCIDENTS_ON, requireFeature } from "./features";
 import { registerRoutes, slackCommandsHandler, githubWebhookHandler, sentryWebhookHandler } from "./routes";
 import { verifyWebhookSignature } from "./github";
 import billingRouter, { handleStripeSubscriptionWebhook } from "./routes/billing";
@@ -383,6 +384,11 @@ app.post(
   },
   githubWebhookHandler
 );
+
+// Incident reporting is off unless INCIDENTS_ON says otherwise. Mounted here rather
+// than in registerRoutes because this route is registered first, and Express matches
+// in registration order — a guard added later would never run for it.
+app.use("/api/webhooks/sentry", requireFeature(INCIDENTS_ON, "incidents"));
 
 // Sentry webhook (per-app): POST /api/webhooks/sentry/:token — each org creates apps in Settings to get a unique URL
 app.post(

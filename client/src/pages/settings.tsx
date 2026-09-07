@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { PROFILE_QUERY_KEY, fetchProfile } from "@/lib/profile";
 import { isPayingUiEnabled } from "@/lib/payingUi";
+import { isIncidentsEnabled, isOrganizationEnabled } from "@/lib/features";
 import { ExactLineMatchTestRunner } from "@/components/exact-line-match-test-runner";
 import { formatLocalDate } from "@/lib/date";
 import { 
@@ -705,7 +706,8 @@ export default function Settings() {
   const { data: orgResponse } = useQuery<{ id: string; name: string; domain: string | null; type: string; memberCount: number }>({
     queryKey: ["/api/org"],
     queryFn: () => fetch("/api/org", { credentials: "include", headers: { Accept: "application/json" } }).then((r) => { if (!r.ok) throw new Error("Failed to load org"); return r.json(); }),
-    enabled: !!profileResponse?.user?.organizationId,
+    // /api/org 404s when organizations are off; don't retry a route that is gone.
+    enabled: isOrganizationEnabled() && !!profileResponse?.user?.organizationId,
   });
   const devMode = profileResponse?.user?.devMode ?? false;
   const incidentEmailEnabled = profileResponse?.user?.incidentEmailEnabled !== false;
@@ -1196,8 +1198,8 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Account type (Solo vs Organization) */}
-          {profileResponse?.user?.organizationId && (
+          {/* Account type (Solo vs Organization) — organizations only (VITE_ORGANIZATION_ON) */}
+          {isOrganizationEnabled() && profileResponse?.user?.organizationId && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -2018,15 +2020,17 @@ export default function Settings() {
           </Card>
           )}
 
-          {/* Agents */}
-          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
-            <AgentsSection />
-          )}
+          {/* Agents — incident reporting (VITE_INCIDENTS_ON) */}
+          {isIncidentsEnabled() &&
+            (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+              <AgentsSection />
+            )}
 
-          {/* Sentry webhooks */}
-          {(profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
-            <SentryWebhooksSection />
-          )}
+          {/* Sentry webhooks — incident reporting (VITE_INCIDENTS_ON) */}
+          {isIncidentsEnabled() &&
+            (profileResponse?.user?.role === "owner" || profileResponse?.user?.role === "admin") && (
+              <SentryWebhooksSection />
+            )}
 
           {/* Danger Zone */}
           <Card className="border-red-200 dark:border-red-900/60 bg-card">

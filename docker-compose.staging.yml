@@ -52,6 +52,10 @@ services:
         SENTRY_ORG: ${SENTRY_ORG}
         SENTRY_PROJECT: ${SENTRY_PROJECT}
         CACHEBUST: ${CACHEBUST:-unknown}
+        # Baked into the client (see client/src/lib/features.ts); the server half comes
+        # from .env.staging via env_file. Staging keeps these on.
+        VITE_ORGANIZATION_ON: ${VITE_ORGANIZATION_ON:-}
+        VITE_INCIDENTS_ON: ${VITE_INCIDENTS_ON:-}
     container_name: pushlog-staging-app
     restart: unless-stopped
     depends_on:

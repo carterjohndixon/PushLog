@@ -17,6 +17,7 @@ import { NotificationsDropdown } from "./notifications-dropdown";
 import { useTheme, type Theme } from "@/lib/theme";
 import { PROFILE_QUERY_KEY, fetchProfile, type ProfileUser } from "@/lib/profile";
 import { isPayingUiEnabled } from "@/lib/payingUi";
+import { isOrganizationEnabled } from "@/lib/features";
 
 export function Header() {
   const { data: profileResponse, isLoading } = useQuery({
@@ -57,7 +58,9 @@ export function Header() {
     { href: "/search", label: "Search" },
     { href: "/analytics", label: "Analytics" },
     { href: "/models", label: "AI Settings" },
-    ...(user?.accountType !== "solo" ? [{ href: "/organization", label: "Organization" }] : []),
+    ...(isOrganizationEnabled() && user?.accountType !== "solo"
+      ? [{ href: "/organization", label: "Organization" }]
+      : []),
     ...(isStagingHost ? [{ href: "/admin", label: "Admin" }] : []),
   ] as const;
 

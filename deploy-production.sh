@@ -168,6 +168,28 @@ else
 fi
 export VITE_IS_PAYING_ENABLED
 
+# ── Frontend build flags: optional surfaces (VITE_ORGANIZATION_ON / VITE_INCIDENTS_ON) ──
+# Off unless .env.production says otherwise; see client/src/lib/features.ts. An already
+# exported value (e.g. a one-off build) wins over the file, matching the billing flag above.
+for _flag in VITE_ORGANIZATION_ON VITE_INCIDENTS_ON; do
+  eval "_cur=\${${_flag}+x}"
+  if [ -z "${_cur:-}" ] && [ -f .env.production ]; then
+    _line="$(grep -E "^[[:space:]]*${_flag}=" .env.production 2>/dev/null | head -1 || true)"
+    if [ -n "$_line" ]; then
+      _val="${_line#*=}"
+      _val="${_val%%#*}"
+      _val="${_val%$'\r'}"
+      _val="${_val#\"}"
+      _val="${_val%\"}"
+      _val="${_val#\'}"
+      _val="${_val%\'}"
+      export "${_flag}=${_val#"${_val%%[![:space:]]*}"}"
+    fi
+  fi
+  eval "_shown=\${${_flag}:-}"
+  log "Prod web image build: ${_flag}=${_shown:-<unset, feature off>}"
+done
+
 log "Building production bundle..."
 npm run build:production
 

@@ -1,5 +1,6 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { isPayingUiEnabled } from "@/lib/payingUi";
+import { isOrganizationEnabled } from "@/lib/features";
 import { Suspense, lazy, useEffect } from "react";
 
 const CHUNK_RELOAD_KEY = "pushlog_chunk_error_reload";
@@ -93,6 +94,7 @@ function Router() {
   const host = typeof window !== "undefined" ? window.location.hostname : "";
   const isStagingHost = host === "staging.pushlog.ai" || host === "localhost" || host === "127.0.0.1";
   const payingUi = isPayingUiEnabled();
+  const organizationUi = isOrganizationEnabled();
   const persistentHeaderPaths: readonly string[] = payingUi
     ? PERSISTENT_HEADER_PATHS_BASE
     : PERSISTENT_HEADER_PATHS_BASE.filter((p) => p !== "/billing");
@@ -126,11 +128,17 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/onboarding/account-type">
+        {!organizationUi ? (
+          <Redirect to="/dashboard" />
+        ) : (
         <ProtectedRoute pageName="account-type">
           <OnboardingAccountType />
         </ProtectedRoute>
+        )}
       </Route>
-      <Route path="/join/:token" component={Join} />
+      <Route path="/join/:token">
+        {organizationUi ? <Join /> : <Redirect to="/dashboard" />}
+      </Route>
 
       <Route path="/dashboard">
         <ProtectedRoute pageName="dashboard">
@@ -176,11 +184,15 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/organization">
-        <ProtectedRoute pageName="organization">
-          <TeamOrganizationOnly>
-            <Organization />
-          </TeamOrganizationOnly>
-        </ProtectedRoute>
+        {organizationUi ? (
+          <ProtectedRoute pageName="organization">
+            <TeamOrganizationOnly>
+              <Organization />
+            </TeamOrganizationOnly>
+          </ProtectedRoute>
+        ) : (
+          <Redirect to="/dashboard" />
+        )}
       </Route>
       <Route path="/change-password">
         <ProtectedRoute pageName="change-password">
