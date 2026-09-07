@@ -1150,7 +1150,9 @@ export default function Dashboard() {
                                 <Github className="text-white w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <p className="font-medium text-foreground truncate">{repo.name}</p>
+                                <p className="font-medium text-foreground truncate">
+                                  <span className="text-muted-foreground font-normal">{repo.owner}/</span>{repo.name}
+                                </p>
                                 <p className="text-xs text-muted-foreground">
                                   {repoHasIntegration 
                                     ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')
@@ -1492,7 +1494,7 @@ export default function Dashboard() {
             (prev: { repositories: any[]; integrations: any[] } | undefined) => {
               if (!prev) return prev;
               const repositoryName =
-                repositories.find((r) => r.id?.toString() === variables.repositoryId)?.name ?? 'Unknown Repository';
+                repositories.find((r) => r.id?.toString() === variables.repositoryId)?.fullName ?? 'Unknown Repository';
               const newIntegration = {
                 ...sanitized,
                 repositoryName,
@@ -1710,7 +1712,9 @@ export default function Dashboard() {
                             <Github className="text-white w-4 h-4" />
                           </div>
                           <div>
-                            <p className="font-medium text-foreground">{repo.name}</p>
+                            <p className="font-medium text-foreground">
+                              <span className="text-muted-foreground font-normal">{repo.owner}/</span>{repo.name}
+                            </p>
                             <p className="text-sm text-muted-foreground">
                               {repoHasIntegration 
                                 ? (repoHasActiveIntegration && isRepositoryActive ? 'Active integration' : 'Integration paused')

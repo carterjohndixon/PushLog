@@ -66,7 +66,9 @@ export function ConfirmRepositoryDeletionModal({
                   <Github className="text-white w-4 h-4" />
                 </div>
                 <div>
-                  <p className="font-medium text-foreground">{repositoryToDelete.name}</p> 
+                  <p className="font-medium text-foreground">
+                    {repositoryToDelete.fullName ?? repositoryToDelete.full_name ?? repositoryToDelete.name}
+                  </p> 
                   <p className="text-sm text-muted-foreground">Repository</p>
                 </div>
               </div>

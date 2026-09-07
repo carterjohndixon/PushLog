@@ -614,7 +614,7 @@ export async function slackCommandsHandler(req: Request, res: Response): Promise
     for (const i of integrations) {
       const repo = await databaseStorage.getRepository(i.repositoryId);
       result.push({
-        repositoryName: repo?.name ?? "Unknown",
+        repositoryName: repo?.fullName ?? repo?.name ?? "Unknown",
         slackChannelName: i.slackChannelName,
         aiModel: i.aiModel ?? null,
         isActive: !!i.isActive,
@@ -4618,7 +4618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sanitized = sanitizeIntegrationForClient(integration);
         return {
           ...sanitized,
-          repositoryName: repository?.name ?? "Unknown Repository",
+          repositoryName: repository?.fullName ?? repository?.name ?? "Unknown Repository",
           lastUsed: lastPushByRepo.get(repoId!) ?? integration.createdAt ?? null,
           status: integration.isActive ? "active" : "paused",
           notificationLevel: integration.notificationLevel ?? "all",
@@ -4696,7 +4696,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const sanitized = sanitizeIntegrationForClient(integration);
           return {
             ...sanitized,
-            repositoryName: repository?.name ?? "Unknown Repository",
+            repositoryName: repository?.fullName ?? repository?.name ?? "Unknown Repository",
             lastUsed: (repoId && lastPushByRepoReconnect.get(repoId)) ?? integration.createdAt ?? null,
             status: integration.isActive ? "active" : "paused",
             notificationLevel: integration.notificationLevel ?? "all",
@@ -4781,7 +4781,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const sanitized = sanitizeIntegrationForClient(integration);
         return {
           ...sanitized,
-          repositoryName: repository?.name ?? "Unknown Repository",
+          repositoryName: repository?.fullName ?? repository?.name ?? "Unknown Repository",
           lastUsed: (repoId && lastPushByRepoMain.get(repoId)) ?? integration.createdAt ?? null,
           status: integration.isActive ? "active" : "paused",
           notificationLevel: integration.notificationLevel ?? "all",
