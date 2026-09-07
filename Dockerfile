@@ -46,6 +46,7 @@ RUN --mount=type=cache,target=/opt/cargo/registry,sharing=locked \
     --mount=type=cache,target=/opt/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
     env PATH="${CARGO_HOME}/bin:${NODE_IMAGE_PATH}" \
+    RUSTUP_TOOLCHAIN=stable RUSTUP_PERMIT_COPY_RENAME=1 \
     sh -eu -c "cargo --version \
  && command -v cc \
  && command -v gcc \

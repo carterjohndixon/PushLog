@@ -8,6 +8,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,target=/app/target,sharing=locked \
+    RUSTUP_TOOLCHAIN=stable RUSTUP_PERMIT_COPY_RENAME=1 \
     cargo build --release -p streaming-stats \
  && mkdir -p /out \
  && cp target/release/streaming-stats /out/streaming-stats
