@@ -415,6 +415,10 @@ function readLastLines(filePath: string, maxLines = 40): string[] {
 // Cache GitHub commits for 60s so polling doesn't burn through rate limits or add latency
 let _ghCommitsCache: { data: Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>; ts: number } | null = null;
 const GH_CACHE_TTL = 60_000; // 60 seconds
+// Source repo for the admin deploy timeline. Must match the git remote on the production
+// host: commits offered here are checked out there by name, so a mismatch means the admin
+// page lists commits production cannot resolve and every deploy aborts.
+const DEPLOY_SOURCE_REPO = process.env.DEPLOY_SOURCE_REPO || "pushlog-ai/PushLog";
 
 async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: string; shortSha: string; dateIso: string; author: string; subject: string }>> {
   // Return cached data if fresh and we have at least as many as requested
@@ -422,7 +426,7 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
     return _ghCommitsCache.data.slice(0, limit);
   }
   const fetchLimit = Math.max(limit, _ghCommitsCache?.data.length ?? 0, 30);
-  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${fetchLimit}`;
+  const url = `https://api.github.com/repos/${DEPLOY_SOURCE_REPO}/commits?per_page=${fetchLimit}`;
   const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
   if (GITHUB_TOKEN) {
     headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;

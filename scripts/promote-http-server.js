@@ -74,7 +74,9 @@ async function runGit(cmd, cwd = WORKSPACE) {
 
 async function fetchRecentCommitsFromGitHub(limit = 30) {
   const token = process.env.GITHUB_TOKEN || process.env.GITHUB_PERSONAL_ACCESS_TOKEN || process.env.GITHUB_PAT || "";
-  const url = `https://api.github.com/repos/carterjohndixon/PushLog/commits?per_page=${limit}`;
+  // Must match the git remote in WORKSPACE — see DEPLOY_SOURCE_REPO in server/routes.ts.
+  const repo = process.env.DEPLOY_SOURCE_REPO || "pushlog-ai/PushLog";
+  const url = `https://api.github.com/repos/${repo}/commits?per_page=${limit}`;
   const headers = { Accept: "application/vnd.github+json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   try {
