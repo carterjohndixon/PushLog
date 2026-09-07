@@ -263,8 +263,13 @@ export default function AdminPage() {
   const logSliceStart = clearIdx > allLogLines.length ? 0 : clearIdx;
   const promoteLogTail = allLogLines.slice(logSliceStart).slice(-80);
   const lastLogLine = promoteLogTail[promoteLogTail.length - 1] || "";
+  // The deploy script logs "ERROR: ..." and exits, clearing its lock — without this the UI
+  // just drops back to idle and the promotion looks like it never started.
+  const promotionFailedFromLogs = lastLogLine.includes("ERROR:");
   const promotionFinishedFromLogs =
-    lastLogLine.includes("Production promotion completed.") || lastLogLine.includes("Promotion CANCELLED");
+    lastLogLine.includes("Production promotion completed.") ||
+    lastLogLine.includes("Promotion CANCELLED") ||
+    promotionFailedFromLogs;
   const isPromotionRunning =
     (remoteInProgress || localInProgress || data?.promoteInProgress === true || forceInProgress) && !promotionFinishedFromLogs;
 
@@ -287,6 +292,7 @@ export default function AdminPage() {
     const lastLine = lastLogLine;
     if (lastLine.includes("Production promotion completed.")) return "Completed!";
     if (lastLine.includes("Promotion CANCELLED")) return "Cancelled";
+    if (lastLine.includes("ERROR:")) return "Failed — see logs";
     if (!isPromotionRunning) return "";
     if (lastLine.includes("Restarting") || lastLine.includes("Rebuilding")) return "Rebuilding Docker containers...";
     if (lastLine.includes("Building production bundle")) return "Building production bundle...";
@@ -471,7 +477,13 @@ export default function AdminPage() {
                             return res.json();
                           },
                         });
-                        const sha = fresh?.headSha ?? fresh?.recentCommits?.[0]?.sha ?? data?.headSha ?? ""
+                        // Newest commit in the timeline is the canonical target; headSha is the fallback.
+                        const sha =
+                          fresh?.recentCommits?.[0]?.sha ||
+                          fresh?.headSha ||
+                          data?.recentCommits?.[0]?.sha ||
+                          data?.headSha ||
+                          ""
                         if (!sha) {
                           toast({ title: "Cannot deploy", description: "No branch tip available. Refresh the page.", variant: "destructive" });
                           return;
@@ -548,8 +560,8 @@ export default function AdminPage() {
                         </>
                       ) : (
                         <>
-                          <span className="flex h-2.5 w-2.5 rounded-full bg-green-500" />
-                          <p className="font-medium">
+                          <span className={`flex h-2.5 w-2.5 rounded-full ${promotionFailedFromLogs ? "bg-red-500" : "bg-green-500"}`} />
+                          <p className={`font-medium ${promotionFailedFromLogs ? "text-red-600 dark:text-red-400" : ""}`}>
                             Last promotion {getProgressStep() ? `— ${getProgressStep()}` : ""}
                           </p>
                         </>

@@ -45,18 +45,31 @@ if [ -d .git ]; then
     log "Warning: git fetch failed (check deploy-production.log). Continuing with existing refs."
   fi
 
+  # `git rev-parse <40-hex>` echoes an unknown SHA back and exits 0, so it cannot tell us
+  # whether the commit is actually here. --verify with ^{commit} can.
+  resolve_commit() {
+    git rev-parse --verify --quiet "${1}^{commit}" 2>/dev/null
+  }
+
   if [ -n "${PROMOTED_SHA:-}" ]; then
-    # Normalize to full SHA for comparison
-    TARGET_FULL="$(git rev-parse "$PROMOTED_SHA" 2>/dev/null || true)"
+    TARGET_FULL="$(resolve_commit "$PROMOTED_SHA" || true)"
     if [ -z "$TARGET_FULL" ]; then
-      log "ERROR: Commit $PROMOTED_SHA not found locally. Try: git fetch origin main"
+      # Commit pushed since our last successful fetch, or the fetch above failed.
+      log "Commit $PROMOTED_SHA is not in the local object store; fetching it explicitly..."
+      git fetch origin main >> "$LOG_FILE" 2>&1 || true
+      git fetch origin "$PROMOTED_SHA" >> "$LOG_FILE" 2>&1 || true
+      TARGET_FULL="$(resolve_commit "$PROMOTED_SHA" || true)"
+    fi
+    if [ -z "$TARGET_FULL" ]; then
+      log "ERROR: Commit $PROMOTED_SHA not found after fetching origin. Check this host's git credentials/network: cd $APP_DIR && git fetch origin main"
       exit 1
     fi
     CURRENT="$(git rev-parse HEAD 2>/dev/null || true)"
     if [ "$CURRENT" != "$TARGET_FULL" ]; then
       log "Checking out target SHA: ${TARGET_FULL:0:10} (from $PROMOTED_SHA)..."
-      if ! git checkout "$TARGET_FULL" >> "$LOG_FILE" 2>&1; then
-        log "ERROR: Failed to checkout $TARGET_FULL. Aborting."
+      if ! git checkout --detach "$TARGET_FULL" >> "$LOG_FILE" 2>&1; then
+        log "ERROR: Failed to checkout $TARGET_FULL. Uncommitted changes on this host block the checkout:"
+        git status --porcelain >> "$LOG_FILE" 2>&1 || true
         exit 1
       fi
       log "Checked out ${TARGET_FULL:0:10}."
@@ -64,12 +77,17 @@ if [ -d .git ]; then
       log "Already at target SHA ${TARGET_FULL:0:10}."
     fi
   else
-    # No target SHA passed: pull latest main so we don't deploy stale code
-    log "No target SHA specified; pulling latest from origin/main..."
+    # No target SHA passed: deploy the tip of main so we don't ship stale code
+    log "No target SHA specified; deploying latest origin/main..."
     if git checkout main >> "$LOG_FILE" 2>&1 && git pull origin main >> "$LOG_FILE" 2>&1; then
       log "Updated to latest main."
     else
-      log "Warning: could not pull main. Building from current HEAD."
+      ORIGIN_MAIN="$(resolve_commit origin/main || true)"
+      if [ -n "$ORIGIN_MAIN" ] && git checkout --detach "$ORIGIN_MAIN" >> "$LOG_FILE" 2>&1; then
+        log "Could not fast-forward local main; checked out origin/main directly (${ORIGIN_MAIN:0:10})."
+      else
+        log "Warning: could not update to origin/main. Building from current HEAD."
+      fi
     fi
   fi
 fi

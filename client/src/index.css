@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
   /* Washington forest – misty morning */
   --background: 115 18% 97%; /* misty forest floor */
   --foreground: 95 22% 18%; /* bark / deep forest */
@@ -30,9 +31,12 @@
   --sky-blue: 148 35% 42%; /* pine (reused for accent vibe) */
   --graphite: 95 22% 18%; /* bark */
   --footer-bg: 115 22% 92%; /* light moss green in light mode */
+  --scrollbar-track: var(--background); /* blend into the page */
+  --scrollbar-thumb: 115 14% 80%;
 }
 
 .dark {
+  color-scheme: dark;
   /* Washington forest – night */
   --background: 140 28% 8%; /* deep forest */
   --foreground: 90 18% 92%; /* moss / moonlight */
@@ -59,6 +63,8 @@
   --sky-blue: 148 32% 48%;
   --graphite: 90 18% 92%;
   --footer-bg: 140 25% 8%; /* dark footer in dark mode */
+  --scrollbar-track: 0 0% 0%; /* black */
+  --scrollbar-thumb: 140 20% 24%;
 }
 
 @layer base {
@@ -68,6 +74,9 @@
 
   html {
     background-color: hsl(var(--background));
+    /* Windows/Linux draw a solid scrollbar track (macOS overlays it); without this
+       the UA default is white against the dark theme. Inherits to nested scrollers. */
+    scrollbar-color: hsl(var(--scrollbar-thumb)) hsl(var(--scrollbar-track));
   }
 
   body {
