@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { isOrganizationEnabled } from "@/lib/features";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { PROFILE_QUERY_KEY, fetchProfile, ProfileError, type ProfileResponse } from "@/lib/profile";
@@ -60,8 +61,16 @@ export function ProtectedRoute({ children, pageName }: ProtectedRouteProps) {
     return null;
   }
 
-  // Require account-type onboarding step when profile says so (new signups)
-  if (isAuthenticated && userProfile?.needsAccountTypeStep === true && location !== "/onboarding/account-type") {
+  // Require account-type onboarding step when profile says so (new signups).
+  // Skipped when organizations are off: solo is the only account type, so there is
+  // nothing to choose — and /onboarding/account-type then redirects back to
+  // /dashboard, which would bounce forever and render a blank page.
+  if (
+    isOrganizationEnabled() &&
+    isAuthenticated &&
+    userProfile?.needsAccountTypeStep === true &&
+    location !== "/onboarding/account-type"
+  ) {
     setLocation("/onboarding/account-type");
     return null;
   }
