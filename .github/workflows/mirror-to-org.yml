@@ -1,0 +1,62 @@
+# Promote commits from carterjohndixon/PushLog (where day-to-day work lands) to
+# pushlog-ai/PushLog (what the production server deploys from).
+#
+# The job pauses on the `promote-to-org` environment until a required reviewer
+# approves it in the Actions tab — GitHub does not allow approving your own pull
+# request, but it does allow approving your own deployment, so this is the gate
+# that actually works for a solo maintainer.
+#
+# One-time setup (all in carterjohndixon/PushLog):
+#   1. Write-enabled deploy key on pushlog-ai/PushLog ("mirror-from-carterjohndixon").
+#   2. Its private half stored here as the Actions secret ORG_MIRROR_KEY.
+#   3. Environment "promote-to-org" with Required reviewers = yourself,
+#      and prevent_self_review left false so you can approve your own runs.
+# All three are in place as of 2026-09-07.
+name: Mirror to org repo
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never let two promotions race to the same branch.
+concurrency:
+  group: mirror-to-org
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    # This file also exists in the org repo (it is mirrored there); without this
+    # guard a push to the org repo would burn an approval mirroring it to itself.
+    if: github.repository == 'carterjohndixon/PushLog'
+    runs-on: ubuntu-latest
+    environment: promote-to-org
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push main to pushlog-ai/PushLog
+        env:
+          ORG_MIRROR_KEY: ${{ secrets.ORG_MIRROR_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ORG_MIRROR_KEY}" ]; then
+            echo "ORG_MIRROR_KEY is not set — add it as an Actions secret (see header)." >&2
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          printf '%s\n' "${ORG_MIRROR_KEY}" > ~/.ssh/org_mirror
+          chmod 600 ~/.ssh/org_mirror
+          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          # IdentitiesOnly so the runner cannot fall back to any other key.
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/org_mirror -o IdentitiesOnly=yes"
+          git remote add org git@github.com:pushlog-ai/PushLog.git
+          # No --force: if the two repos have diverged, fail loudly rather than
+          # silently discarding commits that exist only on the org side.
+          git push org "${GITHUB_SHA}:refs/heads/main"
+
+      - name: Summary
+        run: |
+          echo "Mirrored ${GITHUB_SHA} to pushlog-ai/PushLog@main." >> "$GITHUB_STEP_SUMMARY"
+          echo "Deploy it from the staging admin page when ready." >> "$GITHUB_STEP_SUMMARY"
