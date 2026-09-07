@@ -86,6 +86,22 @@ function dashboardRepositoryEntryFromCreatedApiRow(
   } as RepositoryCardData;
 }
 
+/**
+ * Repo objects reach the dashboard in two shapes: DB rows, where `owner` is a string,
+ * and raw GitHub API repos (spread by /api/repositories-and-integrations), where it is
+ * `{ login }`. Rendering that object directly throws "Objects are not valid as a React
+ * child" and unmounts the page, and types.ts declaring `owner: string` hides it from tsc.
+ */
+function repoOwnerLabel(repo: { owner?: unknown; fullName?: string }): string {
+  const owner: unknown = repo?.owner;
+  if (typeof owner === "string") return owner;
+  if (owner && typeof owner === "object" && typeof (owner as { login?: unknown }).login === "string") {
+    return (owner as { login: string }).login;
+  }
+  const full = repo?.fullName ?? (repo as { full_name?: string })?.full_name;
+  return typeof full === "string" && full.includes("/") ? full.split("/")[0] : "";
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1157,7 +1173,9 @@ export default function Dashboard() {
                               </div>
                               <div className="min-w-0">
                                 <p className="font-medium text-foreground truncate">
-                                  <span className="text-muted-foreground font-normal">{repo.owner}/</span>{repo.name}
+                                  {repoOwnerLabel(repo) && (
+                                    <span className="text-muted-foreground font-normal">{repoOwnerLabel(repo)}/</span>
+                                  )}{repo.name}
                                 </p>
                                 <p className="text-xs text-muted-foreground">
                                   {repoHasIntegration 
@@ -1719,7 +1737,9 @@ export default function Dashboard() {
                           </div>
                           <div>
                             <p className="font-medium text-foreground">
-                              <span className="text-muted-foreground font-normal">{repo.owner}/</span>{repo.name}
+                              {repoOwnerLabel(repo) && (
+                                    <span className="text-muted-foreground font-normal">{repoOwnerLabel(repo)}/</span>
+                                  )}{repo.name}
                             </p>
                             <p className="text-sm text-muted-foreground">
                               {repoHasIntegration 
