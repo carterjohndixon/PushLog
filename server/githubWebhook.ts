@@ -21,7 +21,19 @@ import { ingestIncidentEvent } from "./incidentEngine";
 import { fetchOpenRouterGenerationUsage } from "./ai";
 import { resolveGenerationCost } from "./pricing";
 
-const OPENROUTER_FREE_MODEL_OVER_BUDGET = "arcee-ai/trinity-large-preview:free";
+/**
+ * The model PushLog pays for, used when a user is over the OpenRouter budget they set
+ * for themselves — summaries keep working on the plan they already bought, metered by
+ * the plan's summary cap rather than by their wallet.
+ *
+ * Deliberately a model we choose and pay for, not a ":free" endpoint. The previous
+ * pinned free model (arcee-ai/trinity-large-preview:free) was withdrawn from OpenRouter
+ * and every fallback request 404'd; free endpoints also carry daily rate limits that bite
+ * hardest under load, and training/retention terms we should not apply to customers' diffs.
+ */
+const MANAGED_MODEL = process.env.PUSHLOG_MANAGED_MODEL?.trim() || "openai/gpt-5.4-nano";
+/** Platform OpenRouter key. Unset means PushLog cannot cover a fallback, so AI is skipped. */
+const MANAGED_OPENROUTER_KEY = process.env.OPENROUTER_API_KEY?.trim() || null;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -266,7 +278,7 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
     if ((userForKey as any)?.openRouterApiKey) openRouterKeyRaw = decrypt((userForKey as any).openRouterApiKey);
   }
   if (!looksLikeOpenRouterKey(openRouterKeyRaw)) openRouterKeyRaw = null;
-  const useOpenRouter = !!openRouterKeyRaw?.trim() && modelHasSlash;
+  let useOpenRouter = !!openRouterKeyRaw?.trim() && modelHasSlash;
   let openAiKeyRaw: string | null = null;
   if (!modelHasSlash) {
     const userForKey = await databaseStorage.getUserById(integration.userId);
@@ -287,21 +299,28 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
       if (monthlySpend >= monthlyBudget) {
         const overBudgetBehavior = (userForBudget as any)?.overBudgetBehavior === "skip_ai" ? "skip_ai" : "free_model";
         const urgentMetadata = JSON.stringify({ monthlySpend, monthlyBudget, urgent: true });
-        const useFreeModel = overBudgetBehavior === "free_model";
+        // Fall back to PushLog's own model only if we can actually pay for it.
+        const useManaged = overBudgetBehavior === "free_model" && !!MANAGED_OPENROUTER_KEY;
         const budgetNotif = await storage.createNotification({
           userId: integration.userId,
           type: "budget_alert",
           title: "Monthly budget exceeded",
-          message: useFreeModel
-            ? `Your OpenRouter budget is reached. Summaries are now using the free model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
+          message: useManaged
+            ? `Your OpenRouter budget is reached. Summaries now use PushLog's included model until you raise your budget or next month. Spend: $${(monthlySpend / 10000).toFixed(4)} / $${(monthlyBudget / 10000).toFixed(2)}.`
             : `Your OpenRouter spend ($${(monthlySpend / 10000).toFixed(4)}) exceeded your budget of $${(monthlyBudget / 10000).toFixed(2)}. AI summaries via OpenRouter are paused until you raise your budget or next month (Models → When over budget).`,
           metadata: urgentMetadata,
         });
         broadcastNotification(integration.userId, { id: budgetNotif.id, type: "budget_alert", title: budgetNotif.title, message: budgetNotif.message, metadata: budgetNotif.metadata, createdAt: budgetNotif.createdAt, isRead: false });
-        if (overBudgetBehavior === "skip_ai") {
+        if (!useManaged) {
+          // Either the user asked to skip AI, or no platform key is configured to
+          // cover the fallback. Skipping loses the summary, never the notification.
           overBudgetSkipAi = true;
         } else {
-          effectiveAiModel = OPENROUTER_FREE_MODEL_OVER_BUDGET;
+          // Charge PushLog, not the account that just ran out: swap in both the
+          // managed model and the platform key, and force the OpenRouter path.
+          effectiveAiModel = MANAGED_MODEL;
+          openRouterKeyRaw = MANAGED_OPENROUTER_KEY;
+          useOpenRouter = true;
         }
       }
     }
