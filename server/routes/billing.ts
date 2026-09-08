@@ -7,6 +7,7 @@ import type Stripe from "stripe";
 import { stripe, isBillingEnabled, createStripeCustomer } from "../stripe";
 import { databaseStorage } from "../database";
 import { stripePriceIdToPlan, planToStripePriceId, type PlanName } from "../billing";
+import { ORGANIZATION_ON, INCIDENTS_ON } from "../features";
 import { authenticateToken } from "../middleware/auth";
 import { getSubscriptionCurrentPeriodEndUnix } from "../stripeSubscriptionPeriod";
 
@@ -27,6 +28,12 @@ router.post("/create-checkout-session", authenticateToken, async (req: Request, 
     const { plan } = req.body as { plan?: string };
     if (plan !== "pro" && plan !== "team") {
       return res.status(400).json({ error: "Invalid plan. Must be 'pro' or 'team'." });
+    }
+
+    // Team sells organizations and incident reporting. With both off it is not a product,
+    // so refuse it here rather than trusting the pricing page to hide the card.
+    if (plan === "team" && !ORGANIZATION_ON && !INCIDENTS_ON) {
+      return res.status(404).json({ error: "The Team plan is not available." });
     }
 
     const priceId = planToStripePriceId(plan);

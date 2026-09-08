@@ -10,6 +10,7 @@ import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import { isPayingUiEnabled } from "@/lib/payingUi";
+import { isIncidentsEnabled, isOrganizationEnabled } from "@/lib/features";
 
 type PlanName = "free" | "pro" | "team";
 
@@ -41,6 +42,22 @@ const TEAM_FEATURES = [
   "PushLog Agent (stream logs from your server)",
   "10,000 summaries/month",
 ];
+
+/**
+ * Team exists to sell incidents and teams; Pro's Sentry and agent bullets are the same
+ * machinery. With those features gated off, advertising them sells something the product
+ * does not do — so drop the bullets, and hide the tier, until the flags bring them back.
+ */
+const INCIDENT_FEATURE = /pushlog agent|sentry|incident/i;
+
+function visibleFeatures(features: string[]): string[] {
+  return isIncidentsEnabled() ? features : features.filter((f) => !INCIDENT_FEATURE.test(f));
+}
+
+/** The Team tier only means something when orgs or incidents are on. */
+function isTeamTierAvailable(): boolean {
+  return isOrganizationEnabled() || isIncidentsEnabled();
+}
 
 function FeatureItem({ text }: { text: string }) {
   return (
@@ -150,7 +167,7 @@ export default function Pricing() {
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <ul className="space-y-3 mb-6">
-                  {FREE_FEATURES.map((f) => (
+                  {visibleFeatures(FREE_FEATURES).map((f) => (
                     <FeatureItem key={f} text={f} />
                   ))}
                 </ul>
@@ -200,7 +217,7 @@ export default function Pricing() {
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <ul className="space-y-3 mb-6">
-                  {PRO_FEATURES.map((f) => (
+                  {visibleFeatures(PRO_FEATURES).map((f) => (
                     <FeatureItem key={f} text={f} />
                   ))}
                 </ul>
@@ -226,7 +243,8 @@ export default function Pricing() {
               </CardContent>
             </Card>
 
-            {/* Team */}
+            {/* Team — only meaningful when orgs or incidents are on */}
+            {isTeamTierAvailable() && (<>
             <Card
               className={`flex flex-col border-border ${
                 isCurrentPlan("team") ? "ring-2 ring-log-green" : ""
@@ -246,7 +264,7 @@ export default function Pricing() {
               </CardHeader>
               <CardContent className="flex-1 flex flex-col">
                 <ul className="space-y-3 mb-6">
-                  {TEAM_FEATURES.map((f) => (
+                  {visibleFeatures(TEAM_FEATURES).map((f) => (
                     <FeatureItem key={f} text={f} />
                   ))}
                 </ul>
@@ -272,6 +290,7 @@ export default function Pricing() {
                 </div>
               </CardContent>
             </Card>
+            </>)}
           </div>
         </div>
       </main>
