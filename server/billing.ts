@@ -28,7 +28,7 @@ export interface PlanLimits {
 export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   free: {
     repoLimit: 1,
-    summaryCap: 200,
+    summaryCap: 25,
     allowedModes: ["clean_summary"],
     sentryEnabled: false,
     incidentsEnabled: false,
@@ -36,7 +36,7 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   },
   standard: {
     repoLimit: 3,
-    summaryCap: 1000,
+    summaryCap: 100,
     allowedModes: ["clean_summary", "slack_friendly"],
     sentryEnabled: false,
     incidentsEnabled: false,
@@ -44,7 +44,7 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   },
   pro: {
     repoLimit: 10,
-    summaryCap: 5000,
+    summaryCap: 500,
     allowedModes: ["clean_summary", "slack_friendly", "detailed_engineering", "executive_summary"],
     sentryEnabled: true,
     incidentsEnabled: false,
@@ -52,7 +52,7 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
   },
   scale: {
     repoLimit: 25,
-    summaryCap: 15000,
+    summaryCap: 3000,
     allowedModes: ["clean_summary", "slack_friendly", "detailed_engineering", "executive_summary"],
     sentryEnabled: true,
     incidentsEnabled: false,

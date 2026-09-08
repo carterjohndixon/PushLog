@@ -38,7 +38,7 @@ const TIERS: Tier[] = [
     plan: "free",
     name: "Free",
     price: "$0",
-    features: ["1 repository", "Clean Summary mode", "200 summaries/month"],
+    features: ["1 repository", "Clean Summary mode", "25 summaries/month"],
   },
   {
     plan: "standard",
@@ -47,7 +47,7 @@ const TIERS: Tier[] = [
     features: [
       "Up to 3 repositories",
       "Clean Summary and Slack-Friendly modes",
-      "1,000 summaries/month",
+      "100 summaries/month",
     ],
   },
   {
@@ -58,7 +58,7 @@ const TIERS: Tier[] = [
     features: [
       "Up to 10 repositories",
       "All four summary modes",
-      "5,000 summaries/month",
+      "500 summaries/month",
       "Bring your own OpenRouter key for any model",
       "Sentry integration",
     ],
@@ -70,7 +70,7 @@ const TIERS: Tier[] = [
     features: [
       "Up to 25 repositories",
       "All four summary modes",
-      "15,000 summaries/month",
+      "3,000 summaries/month",
       "Bring your own OpenRouter key for any model",
       "Sentry integration",
       "Priority support",

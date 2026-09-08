@@ -205,7 +205,9 @@ export async function sendPushNotification(
   author: string,
   branch: string,
   commitSha: string,
-  includeCommitSummary: boolean = true
+  includeCommitSummary: boolean = true,
+  /** Appended as a context line, e.g. the monthly summary cap being reached. */
+  footerNote?: string
 ): Promise<string | undefined> {
   const commitUrl = `https://github.com/${repositoryName}/commit/${commitSha}`;
   
@@ -248,6 +250,13 @@ export async function sendPushNotification(
           text: "📝 AI Summary: Code changes detected in repository structure and functionality"
         }
       ]
+    } as any);
+  }
+
+  if (footerNote) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: footerNote }],
     } as any);
   }
 

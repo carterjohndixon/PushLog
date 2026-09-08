@@ -12,7 +12,7 @@ import { attachCompactDiffContextToPushData } from "./pushDiffEnrichment";
 import { decrypt } from "./encryption";
 import { generateCodeSummary, generateSlackMessage } from "./ai";
 import { type PushLogMode, isValidPushLogMode } from "./pushlogModes";
-import { isUnderSummaryCap, isModeAllowed, type PlanName } from "./billing";
+import { isUnderSummaryCap, isModeAllowed, getPlanLimits, type PlanName } from "./billing";
 import { sendPushNotification, sendSlackMessage } from "./slack";
 import broadcastNotification from "./helper/broadcastNotification";
 import { scorePush } from "./riskEngine";
@@ -330,13 +330,57 @@ export async function getAiConfigAndBudget(integration: any): Promise<{
   return { effectiveAiModel, useOpenRouter, openRouterKeyRaw, useOpenAi, openAiKeyRaw, overBudgetSkipAi, maxTokens };
 }
 
+/**
+ * Tell the user when summaries stop, once per calendar month.
+ *
+ * The cap is re-hit on every subsequent push, so notifying per push would be worse than
+ * silence. Without any notice, though, summaries simply vanish and the product looks
+ * broken — which converts a paying-adjacent user into churn instead of an upgrade.
+ */
+async function notifySummaryUsage(
+  userId: string,
+  kind: "reached" | "approaching",
+  plan: PlanName,
+  count: number,
+  cap: number,
+): Promise<void> {
+  try {
+    const type = kind === "reached" ? "summary_limit" : "summary_limit_warning";
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const recent = await storage.getNotificationsByUserId(userId, { limit: 50 });
+    const alreadySent = recent.some(
+      (n: any) => n.type === type && n.createdAt && new Date(n.createdAt) >= monthStart,
+    );
+    if (alreadySent) return;
+
+    const title =
+      kind === "reached" ? "Monthly AI summaries used up" : "Approaching your monthly summary limit";
+    const message =
+      kind === "reached"
+        ? `You've used all ${cap} AI summaries included in the ${plan} plan this month. Push notifications keep arriving without summaries. Upgrade to restore them now, or they resume next month.`
+        : `You've used ${count} of ${cap} AI summaries in the ${plan} plan this month.`;
+
+    const notif = await storage.createNotification({
+      userId,
+      type,
+      title,
+      message,
+      metadata: JSON.stringify({ plan, count, cap, urgent: kind === "reached" }),
+    });
+    broadcastNotification(userId, { id: notif.id, type, title: notif.title, message: notif.message });
+  } catch (err) {
+    // Never let a notification failure cost the user their push notification.
+    console.warn("[Webhook] Summary usage notification failed:", err);
+  }
+}
+
 // --- Phase 6: Run AI summary (optional) ---
 export async function runAiSummary(
   pushData: any,
   integration: any,
   repoDisplayName: string,
   opts: { effectiveAiModel: string; useOpenRouter: boolean; openRouterKeyRaw: string | null; useOpenAi: boolean; openAiKeyRaw: string | null; overBudgetSkipAi: boolean; maxTokens: number }
-): Promise<{ summary: any; aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null }> {
+): Promise<{ summary: any; aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null ; summaryCapReached?: boolean }> {
   let summary: Awaited<ReturnType<typeof generateCodeSummary>> | null = null;
   if (!opts.overBudgetSkipAi) {
     try {
@@ -352,9 +396,17 @@ export async function runAiSummary(
             const plan = ((org as any).plan || "free") as PlanName;
             const count = (org as any).monthlySummaryCount ?? 0;
 
+            const cap = getPlanLimits(plan).summaryCap;
             if (!isUnderSummaryCap(plan, count)) {
               console.log(`[Webhook] Summary limit reached for org ${orgId} (plan: ${plan}, count: ${count}). Skipping AI.`);
-              return { summary: null, aiGenerated: false, aiSummary: null, aiImpact: null, aiCategory: null, aiDetails: null };
+              await notifySummaryUsage(integration.userId, "reached", plan, count, cap);
+              return {
+                summary: null, aiGenerated: false, aiSummary: null,
+                aiImpact: null, aiCategory: null, aiDetails: null, summaryCapReached: true,
+              };
+            }
+            if (cap > 0 && count >= Math.floor(cap * 0.8)) {
+              await notifySummaryUsage(integration.userId, "approaching", plan, count, cap);
             }
 
             if (!isModeAllowed(plan, pushlogMode)) {
@@ -411,7 +463,7 @@ export async function sendSlackForPush(
   integration: any,
   pushData: any,
   authorName: string,
-  aiResult: { aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null },
+  aiResult: { aiGenerated: boolean; aiSummary: string | null; aiImpact: string | null; aiCategory: string | null; aiDetails: string | null ; summaryCapReached?: boolean },
   res: Response
 ): Promise<boolean> {
   try {
@@ -429,7 +481,11 @@ export async function sendSlackForPush(
         unfurl_links: false,
       });
     } else {
-      await sendPushNotification(workspaceToken, integration.slackChannelId, pushData.repositoryName, pushData.commitMessage, authorName, pushData.branch, pushData.commitSha, Boolean(integration.includeCommitSummaries));
+      // Say why the summary is missing, where the user is already looking.
+      const capNote = aiResult.summaryCapReached
+        ? "⚠️ Monthly AI summary limit reached — upgrade your plan to restore summaries."
+        : undefined;
+      await sendPushNotification(workspaceToken, integration.slackChannelId, pushData.repositoryName, pushData.commitMessage, authorName, pushData.branch, pushData.commitSha, Boolean(integration.includeCommitSummaries), capNote);
     }
     return true;
   } catch (slackErr) {
