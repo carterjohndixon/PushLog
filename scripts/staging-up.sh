@@ -24,11 +24,13 @@ if [ ! -f .env.staging ]; then
   exit 1
 fi
 
-# A dirty tree means the built image would not match any commit, so the SHA we record
-# would be a lie — the precise failure this script exists to prevent.
-if [ -n "$(git status --porcelain 2>/dev/null)" ]; then
-  log "ERROR: working tree has uncommitted changes; commit or stash them first."
-  git status --short
+# Modified tracked files mean the built image would not match any commit, so the SHA we
+# record would be a lie — the precise failure this script exists to prevent. Untracked
+# files are ignored: a stray file someone left in the directory is not a code change, and
+# blocking on it just teaches people to skip the script.
+if [ -n "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  log "ERROR: tracked files have uncommitted changes; commit or stash them first."
+  git status --short --untracked-files=no
   exit 1
 fi
 
