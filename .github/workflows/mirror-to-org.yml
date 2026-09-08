@@ -7,11 +7,15 @@
 # that actually works for a solo maintainer.
 #
 # One-time setup (all in carterjohndixon/PushLog):
-#   1. Write-enabled deploy key on pushlog-ai/PushLog ("mirror-from-carterjohndixon").
-#   2. Its private half stored here as the Actions secret ORG_MIRROR_KEY.
-#   3. Environment "promote-to-org" with Required reviewers = yourself,
+#   1. Fine-grained PAT on pushlog-ai/PushLog with Contents: Read and write AND
+#      Workflows: Read and write, stored as the Actions secret ORG_MIRROR_TOKEN.
+#   2. Environment "promote-to-org" with Required reviewers = yourself,
 #      and prevent_self_review left false so you can approve your own runs.
-# All three are in place as of 2026-09-07.
+#
+# Workflows write is not optional: GitHub refuses any push that touches
+# .github/workflows/ unless the credential carries workflow scope, and it rejects the
+# whole push, not just that file. A deploy key cannot hold that scope, which is why
+# this mirrors over HTTPS with a token rather than SSH.
 name: Mirror to org repo
 
 on:
@@ -38,20 +42,14 @@ jobs:
 
       - name: Push main to pushlog-ai/PushLog
         env:
-          ORG_MIRROR_KEY: ${{ secrets.ORG_MIRROR_KEY }}
+          ORG_MIRROR_TOKEN: ${{ secrets.ORG_MIRROR_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${ORG_MIRROR_KEY}" ]; then
-            echo "ORG_MIRROR_KEY is not set — add it as an Actions secret (see header)." >&2
+          if [ -z "${ORG_MIRROR_TOKEN}" ]; then
+            echo "ORG_MIRROR_TOKEN is not set — add it as an Actions secret (see header)." >&2
             exit 1
           fi
-          mkdir -p ~/.ssh
-          printf '%s\n' "${ORG_MIRROR_KEY}" > ~/.ssh/org_mirror
-          chmod 600 ~/.ssh/org_mirror
-          ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-          # IdentitiesOnly so the runner cannot fall back to any other key.
-          export GIT_SSH_COMMAND="ssh -i ~/.ssh/org_mirror -o IdentitiesOnly=yes"
-          git remote add org git@github.com:pushlog-ai/PushLog.git
+          git remote add org "https://x-access-token:${ORG_MIRROR_TOKEN}@github.com/pushlog-ai/PushLog.git"
           # No --force: if the two repos have diverged, fail loudly rather than
           # silently discarding commits that exist only on the org side.
           git push org "${GITHUB_SHA}:refs/heads/main"
