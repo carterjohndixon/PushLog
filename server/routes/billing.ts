@@ -25,9 +25,11 @@ router.post("/create-checkout-session", authenticateToken, async (req: Request, 
     const userId = req.user?.userId;
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
-    const { plan } = req.body as { plan?: string };
-    if (plan !== "pro" && plan !== "team") {
-      return res.status(400).json({ error: "Invalid plan. Must be 'pro' or 'team'." });
+    const PURCHASABLE: PlanName[] = ["standard", "pro", "scale", "team"];
+    const { plan: rawPlan } = req.body as { plan?: string };
+    const plan = rawPlan as PlanName | undefined;
+    if (!plan || !PURCHASABLE.includes(plan)) {
+      return res.status(400).json({ error: `Invalid plan. Must be one of: ${PURCHASABLE.join(", ")}.` });
     }
 
     // Team sells organizations and incident reporting. With both off it is not a product,

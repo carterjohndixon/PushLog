@@ -9,7 +9,12 @@ import type { PushLogMode } from "./pushlogModes";
 // Plan definitions
 // ---------------------------------------------------------------------------
 
-export type PlanName = "free" | "pro" | "team";
+/**
+ * "team" is retained for organizations already on it and for when ORGANIZATION_ON
+ * returns; it is not sold while orgs and incidents are off. The ladder customers
+ * see today is free → standard → pro → scale.
+ */
+export type PlanName = "free" | "standard" | "pro" | "scale" | "team";
 
 export interface PlanLimits {
   repoLimit: number;
@@ -29,13 +34,29 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
     incidentsEnabled: false,
     priceMonthly: 0,
   },
+  standard: {
+    repoLimit: 3,
+    summaryCap: 1000,
+    allowedModes: ["clean_summary", "slack_friendly"],
+    sentryEnabled: false,
+    incidentsEnabled: false,
+    priceMonthly: 9,
+  },
   pro: {
-    repoLimit: 5,
-    summaryCap: 2000,
+    repoLimit: 10,
+    summaryCap: 5000,
     allowedModes: ["clean_summary", "slack_friendly", "detailed_engineering", "executive_summary"],
     sentryEnabled: true,
     incidentsEnabled: false,
-    priceMonthly: 12,
+    priceMonthly: 19,
+  },
+  scale: {
+    repoLimit: 25,
+    summaryCap: 15000,
+    allowedModes: ["clean_summary", "slack_friendly", "detailed_engineering", "executive_summary"],
+    sentryEnabled: true,
+    incidentsEnabled: false,
+    priceMonthly: 49,
   },
   team: {
     repoLimit: 20,
@@ -51,17 +72,26 @@ export const PLAN_LIMITS: Record<PlanName, PlanLimits> = {
 // Env-var helpers for Stripe price mapping
 // ---------------------------------------------------------------------------
 
+/** Env var holding each paid plan's Stripe price id. Free has no price. */
+const PLAN_PRICE_ENV: Partial<Record<PlanName, string>> = {
+  standard: "STRIPE_PRICE_STANDARD_MONTHLY",
+  pro: "STRIPE_PRICE_PRO_MONTHLY",
+  scale: "STRIPE_PRICE_SCALE_MONTHLY",
+  team: "STRIPE_PRICE_TEAM_MONTHLY",
+};
+
 export function stripePriceIdToPlan(priceId: string): PlanName | null {
   if (!priceId) return null;
-  if (priceId === process.env.STRIPE_PRICE_PRO_MONTHLY) return "pro";
-  if (priceId === process.env.STRIPE_PRICE_TEAM_MONTHLY) return "team";
+  for (const [plan, envVar] of Object.entries(PLAN_PRICE_ENV) as [PlanName, string][]) {
+    const configured = process.env[envVar];
+    if (configured && priceId === configured) return plan;
+  }
   return null;
 }
 
 export function planToStripePriceId(plan: PlanName): string | null {
-  if (plan === "pro") return process.env.STRIPE_PRICE_PRO_MONTHLY ?? null;
-  if (plan === "team") return process.env.STRIPE_PRICE_TEAM_MONTHLY ?? null;
-  return null;
+  const envVar = PLAN_PRICE_ENV[plan];
+  return envVar ? process.env[envVar] ?? null : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,7 +103,7 @@ export function getPlanLimits(plan: PlanName): PlanLimits {
 }
 
 export function isValidPlan(plan: string): plan is PlanName {
-  return plan === "free" || plan === "pro" || plan === "team";
+  return plan === "free" || plan === "standard" || plan === "pro" || plan === "scale" || plan === "team";
 }
 
 export function isModeAllowed(plan: PlanName, mode: PushLogMode): boolean {

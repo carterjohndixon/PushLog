@@ -12,51 +12,78 @@ import { useState } from "react";
 import { isPayingUiEnabled } from "@/lib/payingUi";
 import { isIncidentsEnabled, isOrganizationEnabled } from "@/lib/features";
 
-type PlanName = "free" | "pro" | "team";
+// Mirrors server/billing.ts. "team" stays so an org already on it renders as current.
+type PlanName = "free" | "standard" | "pro" | "scale" | "team";
 
 interface ProfileUser {
   id: number;
   plan?: PlanName;
 }
 
-const FREE_FEATURES = [
-  "1 repository",
-  "BYO API key",
-  "Clean Summary mode only",
-  "200 summaries/month",
-  "No PushLog Agent",
-];
-
-const PRO_FEATURES = [
-  "Up to 5 repositories",
-  "Clean Summary, Slack-Friendly, Detailed Engineering, Executive Summary modes",
-  "Sentry integration",
-  "PushLog Agent (stream logs from your server)",
-  "2,000 summaries/month",
-];
-
-const TEAM_FEATURES = [
-  "Up to 20 repositories",
-  "All Pro modes + Incident-Aware mode",
-  "Incident-related features",
-  "PushLog Agent (stream logs from your server)",
-  "10,000 summaries/month",
-];
-
 /**
- * Team exists to sell incidents and teams; Pro's Sentry and agent bullets are the same
- * machinery. With those features gated off, advertising them sells something the product
- * does not do — so drop the bullets, and hide the tier, until the flags bring them back.
+ * The ladder customers see. Kept in step with PLAN_LIMITS in server/billing.ts, which
+ * remains the enforcement source of truth — this table only decides what is advertised.
+ * "team" is deliberately absent: it sells organizations and incidents, both gated off.
  */
+type Tier = {
+  plan: PlanName;
+  name: string;
+  price: string;
+  features: string[];
+  highlight?: boolean;
+};
+
+const TIERS: Tier[] = [
+  {
+    plan: "free",
+    name: "Free",
+    price: "$0",
+    features: ["1 repository", "Clean Summary mode", "200 summaries/month"],
+  },
+  {
+    plan: "standard",
+    name: "Standard",
+    price: "$9",
+    features: [
+      "Up to 3 repositories",
+      "Clean Summary and Slack-Friendly modes",
+      "1,000 summaries/month",
+    ],
+  },
+  {
+    plan: "pro",
+    name: "Pro",
+    price: "$19",
+    highlight: true,
+    features: [
+      "Up to 10 repositories",
+      "All four summary modes",
+      "5,000 summaries/month",
+      "Bring your own OpenRouter key for any model",
+      "Sentry integration",
+    ],
+  },
+  {
+    plan: "scale",
+    name: "Scale",
+    price: "$49",
+    features: [
+      "Up to 25 repositories",
+      "All four summary modes",
+      "15,000 summaries/month",
+      "Bring your own OpenRouter key for any model",
+      "Sentry integration",
+      "Priority support",
+    ],
+  },
+];
+
+
+/** Bullets describing incident machinery, hidden while those features are off. */
 const INCIDENT_FEATURE = /pushlog agent|sentry|incident/i;
 
 function visibleFeatures(features: string[]): string[] {
   return isIncidentsEnabled() ? features : features.filter((f) => !INCIDENT_FEATURE.test(f));
-}
-
-/** The Team tier only means something when orgs or incidents are on. */
-function isTeamTierAvailable(): boolean {
-  return isOrganizationEnabled() || isIncidentsEnabled();
 }
 
 function FeatureItem({ text }: { text: string }) {
@@ -89,7 +116,7 @@ export default function Pricing() {
 
   const currentPlan = user?.plan ?? null;
 
-  const handleCheckout = async (plan: "pro" | "team") => {
+  const handleCheckout = async (plan: Exclude<PlanName, "free">) => {
     if (!user) {
       window.location.href = "/signup";
       return;
@@ -146,151 +173,72 @@ export default function Pricing() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Free */}
-            <Card
-              className={`flex flex-col border-border outline-none focus:outline-none focus-visible:ring-0 ${
-                isCurrentPlan("free") ? "ring-2 ring-log-green" : ""
-              }`}
-            >
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">Free</CardTitle>
-                <div className="mt-2">
-                  <span className="text-3xl font-bold text-foreground">$0</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                {isCurrentPlan("free") && (
-                  <Badge variant="secondary" className="mt-2 w-fit">
-                    Current Plan
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <ul className="space-y-3 mb-6">
-                  {visibleFeatures(FREE_FEATURES).map((f) => (
-                    <FeatureItem key={f} text={f} />
-                  ))}
-                </ul>
-                <div className="mt-auto">
-                  {isCurrentPlan("free") ? (
-                    <Button variant="outline" className="w-full outline-none focus:outline-none focus-visible:ring-0" disabled>
-                      Current Plan
-                    </Button>
-                  ) : (
-                    <Link
-                      href="/signup"
-                      className="block rounded-md no-focus-ring"
-                    >
-                      <Button variant="outline" className="w-full no-focus-ring" tabIndex={-1}>
-                        Get Started
-                      </Button>
-                    </Link>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {TIERS.map((tier) => {
+              const current = isCurrentPlan(tier.plan);
+              const paidPlan = tier.plan === "free" ? null : tier.plan;
+              return (
+                <Card
+                  key={tier.plan}
+                  className={`flex flex-col relative ${
+                    tier.highlight
+                      ? `border-2 ${current ? "ring-2 ring-log-green border-log-green" : "border-log-green"}`
+                      : `border-border ${current ? "ring-2 ring-log-green" : ""}`
+                  }`}
+                >
+                  {tier.highlight && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                      <Badge className="bg-log-green text-white hover:bg-log-green/90">Most Popular</Badge>
+                    </div>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Pro */}
-            <Card
-              className={`flex flex-col relative border-2 ${
-                isCurrentPlan("pro")
-                  ? "ring-2 ring-log-green border-log-green"
-                  : "border-log-green"
-              }`}
-            >
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                <Badge className="bg-log-green text-white hover:bg-log-green/90">
-                  Most Popular
-                </Badge>
-              </div>
-              <CardHeader className="pt-6 pb-4">
-                <CardTitle className="text-xl">Pro</CardTitle>
-                <div className="mt-2">
-                  <span className="text-3xl font-bold text-foreground">$12</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                {isCurrentPlan("pro") && (
-                  <Badge variant="secondary" className="mt-2 w-fit">
-                    Current Plan
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <ul className="space-y-3 mb-6">
-                  {visibleFeatures(PRO_FEATURES).map((f) => (
-                    <FeatureItem key={f} text={f} />
-                  ))}
-                </ul>
-                <div className="mt-auto">
-                  {isCurrentPlan("pro") ? (
-                    <Button className="w-full bg-log-green" disabled>
-                      Current Plan
-                    </Button>
-                  ) : (
-                    <Button
-                      className="w-full bg-log-green hover:bg-log-green/90"
-                      onClick={() => handleCheckout("pro")}
-                      disabled={loadingPlan !== null}
-                    >
-                      {loadingPlan === "pro"
-                        ? "Redirecting..."
-                        : user
-                          ? "Upgrade to Pro"
-                          : "Sign up to subscribe"}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Team — only meaningful when orgs or incidents are on */}
-            {isTeamTierAvailable() && (<>
-            <Card
-              className={`flex flex-col border-border ${
-                isCurrentPlan("team") ? "ring-2 ring-log-green" : ""
-              }`}
-            >
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">Team</CardTitle>
-                <div className="mt-2">
-                  <span className="text-3xl font-bold text-foreground">$39</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                {isCurrentPlan("team") && (
-                  <Badge variant="secondary" className="mt-2 w-fit">
-                    Current Plan
-                  </Badge>
-                )}
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                <ul className="space-y-3 mb-6">
-                  {visibleFeatures(TEAM_FEATURES).map((f) => (
-                    <FeatureItem key={f} text={f} />
-                  ))}
-                </ul>
-                <div className="mt-auto">
-                  {isCurrentPlan("team") ? (
-                    <Button variant="outline" className="w-full" disabled>
-                      Current Plan
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      className="w-full border-log-green text-log-green hover:bg-log-green/10"
-                      onClick={() => handleCheckout("team")}
-                      disabled={loadingPlan !== null}
-                    >
-                      {loadingPlan === "team"
-                        ? "Redirecting..."
-                        : user
-                          ? "Upgrade to Team"
-                          : "Sign up to subscribe"}
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-            </>)}
+                  <CardHeader className="pt-6 pb-4">
+                    <CardTitle className="text-xl">{tier.name}</CardTitle>
+                    <div className="mt-2">
+                      <span className="text-3xl font-bold text-foreground">{tier.price}</span>
+                      <span className="text-muted-foreground">/month</span>
+                    </div>
+                    {current && (
+                      <Badge variant="secondary" className="mt-2 w-fit">
+                        Current Plan
+                      </Badge>
+                    )}
+                  </CardHeader>
+                  <CardContent className="flex-1 flex flex-col">
+                    <ul className="space-y-3 mb-6">
+                      {visibleFeatures(tier.features).map((f) => (
+                        <FeatureItem key={f} text={f} />
+                      ))}
+                    </ul>
+                    <div className="mt-auto">
+                      {current ? (
+                        <Button className={`w-full ${tier.highlight ? "bg-log-green" : ""}`} variant={tier.highlight ? "default" : "outline"} disabled>
+                          Current Plan
+                        </Button>
+                      ) : !paidPlan ? (
+                        <Link href="/signup" className="block rounded-md no-focus-ring">
+                          <Button variant="outline" className="w-full no-focus-ring" tabIndex={-1}>
+                            Get Started
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Button
+                          className={`w-full ${tier.highlight ? "bg-log-green hover:bg-log-green/90" : ""}`}
+                          variant={tier.highlight ? "default" : "outline"}
+                          onClick={() => handleCheckout(paidPlan)}
+                          disabled={loadingPlan !== null}
+                        >
+                          {loadingPlan === tier.plan
+                            ? "Redirecting..."
+                            : user
+                              ? `Upgrade to ${tier.name}`
+                              : "Sign up to subscribe"}
+                        </Button>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       </main>
