@@ -70,6 +70,8 @@ type AdminStatus = {
   promoteRemoteStatus?: RemoteStatus | null;
   recentCommits: CommitInfo[];
   pendingCommits: CommitInfo[];
+  /** Repo the commit list was read from (DEPLOY_SOURCE_REPO). */
+  deploySourceRepo?: string | null;
 };
 
 const LOCAL_PROMOTE_TTL = 120_000;
@@ -651,7 +653,8 @@ export default function AdminPage() {
                   )}
                 </div>
                 <CardDescription>
-                  Recent commits on <code>{data.branch || "main"}</code>.
+                  Recent commits on <code>{data.branch || "main"}</code>
+                  {data.deploySourceRepo ? <> from <code>{data.deploySourceRepo}</code></> : null}.
                   Pending commits are highlighted; the last deployed commit is marked.
                   {data.recentCommits.length > 0 && (
                     <span className="block mt-1 text-green-600 dark:text-green-400">
@@ -796,6 +799,7 @@ export default function AdminPage() {
                         promoteViaWebhook: data.promoteViaWebhook,
                         promoteInProgress: data.promoteInProgress,
                         promoteConfig: data.promoteConfig,
+                        deploySourceRepo: data.deploySourceRepo ?? null,
                         pendingCount: data.pendingCount,
                         recentCommitsCount: data.recentCommits.length,
                         firstCommitSha: data.recentCommits[0]?.sha?.slice(0, 10) ?? null,

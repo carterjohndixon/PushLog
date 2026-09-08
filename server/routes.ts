@@ -1577,9 +1577,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let finalHeadSha = hasLocalGit ? headSha : (remote?.headSha || "");
       const finalProdDeployedSha = prodDeployedSha || remote?.prodDeployedSha || null;
       const finalProdDeployedAt = prodDeployedAt || remote?.prodDeployedAt || null;
-      let finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remote?.recentCommits || []);
-      let finalPendingCount = hasLocalGit ? pendingCount : (remote?.pendingCount ?? 0);
-      let finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remote?.pendingCommits || []);
+      // The production promote service reports its own DEPLOY_SOURCE_REPO. Since staging
+      // deploys from a different repo than production, borrowing its commit list would
+      // present production's history as staging's — silently, and only when our own
+      // GitHub fetch happened to fail. Only fall back when both name the same repo.
+      const remoteSameRepo = !!remote && (remote.deploySourceRepo ?? DEPLOY_SOURCE_REPO) === DEPLOY_SOURCE_REPO;
+      const remoteCommits = remoteSameRepo ? remote?.recentCommits : null;
+      const remotePending = remoteSameRepo ? remote?.pendingCommits : null;
+      let finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remoteCommits || []);
+      let finalPendingCount = hasLocalGit ? pendingCount : (remoteSameRepo ? remote?.pendingCount ?? 0 : 0);
+      let finalPendingCommits = pendingCommits.length > 0 ? pendingCommits : (remotePending || []);
 
       // Always fetch from GitHub as the canonical source — production may be on old code after rollback
       if (finalRecentCommits.length === 0) {
@@ -1622,6 +1629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           webhookSecretConfigured: !!PROMOTE_PROD_WEBHOOK_SECRET,
         },
         promoteRemoteStatus,
+        deploySourceRepo: DEPLOY_SOURCE_REPO,
         recentCommits: finalRecentCommits,
         pendingCommits: finalPendingCommits,
       });

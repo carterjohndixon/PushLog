@@ -188,6 +188,7 @@ async function getStatusPayload() {
     prodDeployedAt,
     branch,
     headSha,
+    deploySourceRepo: process.env.DEPLOY_SOURCE_REPO || "pushlog-ai/PushLog",
     recentCommits,
     pendingCount,
     pendingCommits,
