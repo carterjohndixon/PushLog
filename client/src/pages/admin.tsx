@@ -72,6 +72,8 @@ type AdminStatus = {
   pendingCommits: CommitInfo[];
   /** Repo the commit list was read from (DEPLOY_SOURCE_REPO). */
   deploySourceRepo?: string | null;
+  /** SHAs production's clone can resolve. Empty means unknown — do not block on it. */
+  productionSourceShas?: string[];
 };
 
 const LOCAL_PROMOTE_TTL = 120_000;
@@ -341,6 +343,18 @@ export default function AdminPage() {
 
   function isStaging(c: CommitInfo): boolean {
     return shaMatches(c.sha, stagingSha);
+  }
+
+  /**
+   * Staging lists its own repo; production checks commits out of a different one. A commit
+   * that has not been mirrored yet aborts the promote script partway through, so mark it
+   * rather than letting it be clicked. An empty list means we could not read production's
+   * side — assume promotable rather than blocking every button on missing data.
+   */
+  const productionShas = data?.productionSourceShas ?? [];
+  function isPromotable(c: CommitInfo): boolean {
+    if (productionShas.length === 0) return true;
+    return productionShas.some((sha) => shaMatches(c.sha, sha));
   }
 
   return (
@@ -742,11 +756,22 @@ export default function AdminPage() {
                                   {isPending && !isStagingCommit && (
                                     <Badge className="bg-amber-600 hover:bg-amber-600 text-[10px] px-1.5 py-0">PENDING</Badge>
                                   )}
+                                  {data.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && !isPromotable(c) && (
+                                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-amber-600 border-amber-500/40">
+                                      NOT MIRRORED
+                                    </Badge>
+                                  )}
                                   {data.promoteAvailable && !isPromotionRunning && !promoteMutation.isPending && (
                                     <Button
                                       variant="outline"
                                       size="sm"
                                       className="h-7 text-xs gap-1"
+                                      disabled={!isPromotable(c)}
+                                      title={
+                                        isPromotable(c)
+                                          ? undefined
+                                          : "Not in the production repo yet — approve the mirror workflow first."
+                                      }
                                       onClick={() => setDeployTarget(c)}
                                     >
                                       {isPending ? (

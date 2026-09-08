@@ -1591,6 +1591,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // present production's history as staging's — silently, and only when our own
       // GitHub fetch happened to fail. Only fall back when both name the same repo.
       const remoteSameRepo = !!remote && (remote.deploySourceRepo ?? DEPLOY_SOURCE_REPO) === DEPLOY_SOURCE_REPO;
+      // What production can actually check out. When staging lists a different repo, a
+      // commit missing here is one the promote script will abort on — so the page can say
+      // "mirror this first" instead of letting the deploy fail three minutes in.
+      const productionSourceShas: string[] = Array.isArray(remote?.recentCommits)
+        ? remote.recentCommits.map((c: any) => String(c?.sha || "")).filter(Boolean)
+        : [];
       const remoteCommits = remoteSameRepo ? remote?.recentCommits : null;
       const remotePending = remoteSameRepo ? remote?.pendingCommits : null;
       let finalRecentCommits = recentCommits.length > 0 ? recentCommits : (remoteCommits || []);
@@ -1639,6 +1645,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         promoteRemoteStatus,
         deploySourceRepo: DEPLOY_SOURCE_REPO,
+        productionSourceShas,
         recentCommits: finalRecentCommits,
         pendingCommits: finalPendingCommits,
       });
