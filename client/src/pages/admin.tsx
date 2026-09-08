@@ -308,7 +308,13 @@ export default function AdminPage() {
   // ── Commit classification helpers ──
   const prodSha = data?.promoteRemoteStatus?.prodDeployedSha || data?.prodDeployedSha || null;
   const stagingShaRaw = data?.stagingDeployedSha;
-  const stagingSha = (stagingShaRaw && stagingShaRaw !== "unknown") ? stagingShaRaw : (data?.headSha || null);
+  // No fallback to headSha. Staging deploys from carterjohndixon/PushLog while this list
+  // comes from the org repo production deploys from, so the branch tip is not evidence of
+  // what staging runs — guessing here labelled the wrong commit STAGING.
+  const stagingSha = stagingShaRaw && stagingShaRaw !== "unknown" ? stagingShaRaw : null;
+  /** Staging may legitimately run a commit the org repo has never seen. */
+  const stagingShaUnlisted =
+    !!stagingSha && !(data?.recentCommits || []).some((c) => shaMatches(c.sha, stagingSha));
 
   /** Build a set of pending SHAs for quick lookup */
   const pendingShaSet = new Set((data?.pendingCommits || []).map((c) => c.sha));
@@ -388,6 +394,12 @@ export default function AdminPage() {
                       const c = data.recentCommits.find((x) => isStaging(x));
                       return c ? <p className="text-muted-foreground truncate" title={c.subject}>Commit title: {c.subject}</p> : null;
                     })()}
+                    {stagingShaUnlisted && (
+                      <p className="text-xs text-muted-foreground">
+                        Not in the list below — staging deploys from the personal repo, this list is the
+                        production source. Mirror it across before promoting.
+                      </p>
+                    )}
                   </div>
                   {/* Production */}
                   <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3 space-y-1.5">
