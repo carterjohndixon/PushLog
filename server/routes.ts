@@ -432,12 +432,21 @@ async function fetchRecentCommitsFromGitHub(limit = 30): Promise<Array<{ sha: st
   if (GITHUB_TOKEN) {
     headers["Authorization"] = `Bearer ${GITHUB_TOKEN}`;
   }
-  const opts: RequestInit = { headers };
+  let opts: RequestInit = { headers };
   const maxAttempts = 2;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       const res = await fetch(url, opts);
       if (!res.ok) {
+        // A rejected credential (401) is not a reason to lose the timeline when the repo
+        // is public: drop the header and retry anonymously. Anonymous is rate-limited to
+        // 60/hour, which the 60s cache above keeps well clear of.
+        if (res.status === 401 && headers["Authorization"]) {
+          console.error("[fetchGitHubCommits] token rejected (401); retrying without it. Replace GITHUB_TOKEN.");
+          delete headers["Authorization"];
+          opts = { headers };
+          continue;
+        }
         const remaining = res.headers.get("x-ratelimit-remaining");
         console.error(`[fetchGitHubCommits] attempt ${attempt}: HTTP ${res.status}, rate-limit-remaining: ${remaining}, token: ${GITHUB_TOKEN ? "yes" : "no"}`);
         if (attempt < maxAttempts) continue;

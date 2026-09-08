@@ -80,7 +80,12 @@ async function fetchRecentCommitsFromGitHub(limit = 30) {
   const headers = { Accept: "application/vnd.github+json" };
   if (token) headers["Authorization"] = `Bearer ${token}`;
   try {
-    const res = await fetch(url, { headers });
+    let res = await fetch(url, { headers });
+    if (res.status === 401 && headers["Authorization"]) {
+      // Public repo: a bad token should not cost us the commit list.
+      delete headers["Authorization"];
+      res = await fetch(url, { headers });
+    }
     if (!res.ok) return [];
     const arr = await res.json();
     return arr.map((c) => ({
