@@ -18,36 +18,8 @@ import {
 import { Sparkles, Loader2, Lock, ChevronDown, ChevronRight, Settings, Eye, Check } from "lucide-react";
 import { Link } from "wouter";
 import { isPayingUiEnabled } from "@/lib/payingUi";
-import { OpenAIModels } from "@/pages/OpenAIModels";
 import { OpenRouterModels, type ProfileUserForModels } from "@/pages/OpenRouterModels";
 
-type ModelsTab = "openrouter" | "openai";
-
-const MODELS_TAB_STORAGE_KEY = "pushlog-models-tab";
-const VALID_MODELS_TABS: readonly ModelsTab[] = ["openrouter", "openai"];
-const DEFAULT_MODELS_TAB: ModelsTab = "openrouter";
-
-function getStoredModelsTab(): ModelsTab {
-  if (typeof window === "undefined") return DEFAULT_MODELS_TAB;
-  try {
-    const stored = localStorage.getItem(MODELS_TAB_STORAGE_KEY);
-    if (stored !== null && (VALID_MODELS_TABS as readonly string[]).includes(stored)) {
-      return stored as ModelsTab;
-    }
-  } catch {
-    // localStorage disabled or quota exceeded
-  }
-  return DEFAULT_MODELS_TAB;
-}
-
-function setStoredModelsTab(tab: ModelsTab): void {
-  if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(MODELS_TAB_STORAGE_KEY, tab);
-  } catch {
-    // ignore
-  }
-}
 
 type PushlogMode = "clean_summary" | "slack_friendly" | "detailed_engineering" | "executive_summary" | "incident_aware";
 
@@ -145,7 +117,6 @@ interface ProfileUser extends ProfileUserForModels {
 }
 
 export default function Models() {
-  const [providerTab, setProviderTab] = useState<ModelsTab>(getStoredModelsTab);
   const [applyToIntegrationId, setApplyToIntegrationId] = useState<string>("");
   const [replaceAllConfirmOpen, setReplaceAllConfirmOpen] = useState(false);
   const [replaceAllModelId, setReplaceAllModelId] = useState<string>("");
@@ -155,10 +126,6 @@ export default function Models() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const switchProviderTab = (tab: ModelsTab) => {
-    setProviderTab(tab);
-    setStoredModelsTab(tab);
-  };
 
   const { data: profileResponse, isLoading: profileLoading } = useQuery({
     queryKey: PROFILE_QUERY_KEY,
@@ -173,7 +140,6 @@ export default function Models() {
     }
   }, [profileResponse]);
   const userHasKey = !!profileResponse?.user?.hasOpenRouterKey;
-  const userHasOpenAiKey = !!profileResponse?.user?.hasOpenAiKey;
   const profileUser = profileResponse?.user as ProfileUser | undefined;
   const savedPreferredModel = profileUser?.preferredAiModel ?? "";
 
@@ -185,7 +151,6 @@ export default function Models() {
       return res.json();
     },
   });
-  const recommendedOpenai = recommendedData?.openai ?? null;
   const recommendedOpenrouter = recommendedData?.openrouter ?? null;
 
   const { data: integrations } = useQuery<IntegrationOption[]>({
@@ -196,7 +161,7 @@ export default function Models() {
       const data = await res.json();
       return Array.isArray(data) ? data : [];
     },
-    enabled: userHasKey || userHasOpenAiKey,
+    enabled: userHasKey,
   });
 
   const applyToIntegrationMutation = useMutation({
@@ -371,45 +336,9 @@ export default function Models() {
           <CollapsibleContent>
             <div className="space-y-6">
               <p className="text-sm text-muted-foreground">
-                Choose an AI provider and model. Your API key and model selection apply to all modes.
+                Choose a model. Your OpenRouter key and model selection apply to all modes.
               </p>
-              <div
-                className="flex gap-2"
-                role="tablist"
-                aria-label="AI provider"
-              >
-                <button
-                  type="button"
-                  id="models-tab-openrouter"
-                  role="tab"
-                  aria-selected={providerTab === "openrouter"}
-                  onClick={() => switchProviderTab("openrouter")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                    providerTab === "openrouter"
-                      ? "bg-log-green/15 border-log-green text-log-green"
-                      : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  }`}
-                >
-                  OpenRouter <span className="text-xs opacity-80">(recommended)</span>
-                </button>
-                <button
-                  type="button"
-                  id="models-tab-openai"
-                  role="tab"
-                  aria-selected={providerTab === "openai"}
-                  onClick={() => switchProviderTab("openai")}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                    providerTab === "openai"
-                      ? "bg-log-green/15 border-log-green text-log-green"
-                      : "border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                  }`}
-                >
-                  OpenAI
-                </button>
-              </div>
-
-              {providerTab === "openrouter" && (
-                <div role="tabpanel" aria-labelledby="models-tab-openrouter">
+              <div>
                   <OpenRouterModels
                     userHasKey={userHasKey}
                     profileLoading={profileLoading}
@@ -425,28 +354,8 @@ export default function Models() {
                     setReplaceAllModelId={setReplaceAllModelId}
                     replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
                   />
-                </div>
-              )}
+              </div>
 
-              {providerTab === "openai" && (
-                <div role="tabpanel" aria-labelledby="models-tab-openai">
-                  <OpenAIModels
-                    userHasOpenAiKey={userHasOpenAiKey}
-                    profileLoading={profileLoading}
-                    profileUser={profileUser}
-                    savedPreferredModel={savedPreferredModel}
-                    recommendedOpenai={recommendedOpenai}
-                    integrations={integrations}
-                    applyToIntegrationId={applyToIntegrationId}
-                    setApplyToIntegrationId={setApplyToIntegrationId}
-                    applyToIntegrationMutation={applyToIntegrationMutation}
-                    setDefaultModelMutation={setDefaultModelMutation}
-                    setReplaceAllConfirmOpen={setReplaceAllConfirmOpen}
-                    setReplaceAllModelId={setReplaceAllModelId}
-                    replaceAllIntegrationsMutation={replaceAllIntegrationsMutation}
-                  />
-                </div>
-              )}
             </div>
           </CollapsibleContent>
         </Collapsible>
