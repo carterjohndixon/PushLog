@@ -4866,13 +4866,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Check if the model is currently being used by this integration
-      if (updates.aiModel && updates.aiModel === existingIntegration.aiModel) {
-        return res.status(400).json({
-          error: "The select AI Model is already in use by this integration. Please choose a different model to update."
-        })
-      }
-
       if (updates.isActive === true) {
         const workspaceId = updates.slackWorkspaceId || existingIntegration.slackWorkspaceId;
         const channelId = updates.slackChannelId || existingIntegration.slackChannelId;

@@ -691,6 +691,11 @@ export function OpenRouterModels({
                   if (!quickApplyModelId || !applyToIntegrationId) return;
                   const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                   if (int?.aiModel === quickApplyModelId) {
+                    toast({
+                      title: "No change",
+                      description: `Integration already uses ${getAiModelDisplayName(quickApplyModelId)}.`,
+                      variant: "default",
+                    });
                     return;
                   }
                   applyToIntegrationMutation.mutate(
@@ -1794,6 +1799,11 @@ export function OpenRouterModels({
                           if (!applyToIntegrationId || !selectedModel) return;
                           const int = integrations?.find((i) => String(i.id) === applyToIntegrationId);
                           if (int?.aiModel === selectedModel.id) {
+                            toast({
+                              title: "No change",
+                              description: `Integration already uses ${getAiModelDisplayName(quickApplyModelId)}.`,
+                              variant: "default",
+                            });
                             return;
                           }
                           applyToIntegrationMutation.mutate(
