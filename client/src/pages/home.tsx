@@ -225,9 +225,12 @@ export default function Home() {
             <p className="text-2xl font-semibold text-foreground mb-3 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
               Stop wondering what pushed. Start seeing it.
             </p>
-            <p className="text-lg text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
+            {/* <p className="text-lg text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
               Automate your workflow with intelligent push notifications, AI code summaries, incident reports, 
               and team collaboration—all in one place.
+            </p> */}
+            <p className="text-lg text-muted-foreground mb-8 max-w-3xl mx-auto opacity-0-init animate-landing-in animate-landing-in-delay-3">
+              Automate your workflow with intelligent push notifications and AI code summaries all in one place.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <Button 
@@ -698,9 +701,9 @@ export default function Home() {
                 </p>
               </CardContent>
             </Card>
-
+            
             {/* Custom Webhooks */}
-            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-4">
+            {/* <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-4">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Webhook className="text-white text-xl w-6 h-6" />
@@ -710,10 +713,10 @@ export default function Home() {
                   Flexible webhook configuration with custom payloads and advanced filtering capabilities.
                 </p>
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Team Management */}
-            <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-5">
+            {/* <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-5">
               <CardContent className="p-8">
                 <div className="w-12 h-12 bg-log-green rounded-lg flex items-center justify-center mb-4">
                   <Users className="text-white text-xl w-6 h-6" />
@@ -723,7 +726,7 @@ export default function Home() {
                   Role-based access control and team member management with granular permission settings.
                 </p>
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Analytics & Insights */}
             <Card className="card-lift hover:shadow-xl hover:border-primary/20 transition-all duration-300 border-border bg-card opacity-0-init animate-landing-in animate-landing-in-delay-6">
