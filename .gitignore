@@ -109,3 +109,7 @@ out/
 .aider*
 
 .agents/
+# Staging deploy state (written on the staging server)
+.staging-autodeploy.lock
+.staging_deployed_sha
+.staging_deployed_at

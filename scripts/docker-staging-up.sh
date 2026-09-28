@@ -2,7 +2,9 @@
 # Start PushLog staging stack: prune stopped containers, then docker compose up.
 # Run from anywhere: ./scripts/docker-staging-up.sh [-- extra compose args]
 #
-# Optional: COMPOSE_PROJECT_NAME=pushlog (default matches typical `docker compose ls`)
+# Optional: COMPOSE_PROJECT_NAME=pushlog-staging (must match scripts/staging-up.sh — production
+#           owns the "pushlog" project, and reusing it collides on container names such as
+#           pushlog-staging-db and mounts a different, empty DB volume)
 # Optional: STAGING_ENV_FILE=path (default: repo root .env.staging)
 
 set -euo pipefail
@@ -10,11 +12,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pushlog}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-pushlog-staging}"
 STAGING_COMPOSE="${STAGING_COMPOSE:-docker-compose.staging.yml}"
-# Include promote by default so `docker-staging-up.sh` rebuilds pushlog-promote (staging → prod webhook).
-# Set STAGING_INCLUDE_PROMOTE=0 to skip if you don't use .env.production on this machine.
-STAGING_INCLUDE_PROMOTE="${STAGING_INCLUDE_PROMOTE:-1}"
+# pushlog-promote belongs to the production project, so bringing it up under the staging
+# project collides on its container name. Set STAGING_INCLUDE_PROMOTE=1 only on a machine
+# where staging and promote share a project.
+STAGING_INCLUDE_PROMOTE="${STAGING_INCLUDE_PROMOTE:-0}"
 
 if [[ -z "${STAGING_ENV_FILE:-}" ]]; then
   STAGING_ENV_FILE="${ROOT}/.env.staging"
