@@ -116,3 +116,37 @@ out/
 
 # Go log agent (kept locally, not in the repo)
 agent/
+
+# Local-only files (kept on disk, not in the repo)
+/config/pushlog-agent.production.yaml
+/docs/PUSHLOG_AGENT_GO.md
+/docs/PUSHLOG_AGENT_PLAN.md
+/docs/SENTRY_SETUP.md
+/docs/INCIDENT_NOTIFICATION_PLAN.md
+/docs/INCIDENT_NOTIFICATION_TARGETING_PLAN.md
+/scripts/test-incident-engine.sh
+/scripts/test-sentry-webhook.sh
+/test.txt
+/run-load-test.sh
+/ecosystem.config.js
+/ecosystem.config.cjs
+/docs/PLAN_TODAY.md
+/docs/ROADMAP.md
+/docs/github-issue-slack-invite.md
+
+# Secrets and keys
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Production deploy state (written on the prod server)
+.prod_deployed_sha
+.prod_deployed_at
+.promote-production.lock
+
+# Claude Code local settings
+.claude/
