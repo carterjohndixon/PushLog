@@ -24,6 +24,8 @@ function flagEnabled(raw: string | undefined): boolean {
 /** Teams, invites, seats, per-repo membership, organization endpoints. */
 export const ORGANIZATION_ON = flagEnabled(process.env.ORGANIZATION_ON);
 
+export const BILLING_ENABLED = flagEnabled(process.env.VITE_IS_PAYING_ENABLED);
+
 /** Incident reporting: the PushLog agent, Sentry webhooks, incident/risk engines. */
 export const INCIDENTS_ON = flagEnabled(process.env.INCIDENTS_ON);
 

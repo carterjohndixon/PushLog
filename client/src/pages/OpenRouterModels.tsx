@@ -808,7 +808,8 @@ export function OpenRouterModels({
           </CardContent>
         </Card>
       )}
-
+        
+    {/*
       {userHasKey && (
         <Card className="card-lift mb-8 border-border shadow-forest">
           <CardHeader>
@@ -1336,6 +1337,7 @@ export function OpenRouterModels({
           </CardContent>
         </Card>
       )}
+    */}
 
       <Card className="card-lift border-border shadow-forest">
         <CardHeader>

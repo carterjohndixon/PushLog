@@ -42,8 +42,14 @@ export function Footer() {
                 {status === "up" ? "All systems operational" : "Service temporarily unavailable"}
               </p>
             )}
+            {/*
             <p className="text-muted-foreground dark:text-gray-400 mb-4 max-w-md">
               Stop wondering what pushed. Start seeing it. PushLog streamlines your workflow with intelligent GitHub and Slack integration, incident reports, and AI-powered code summaries.
+            </p>
+            */}
+            <p className="text-muted-foreground dark:text-gray-400 mb-4 max-w-md">
+              Stop wondering what pushed. Start seeing it. PushLog streamlines your workflows with intelligent GitHub
+              and Slack integration to create AI-powered code summaries.
             </p>
             <div className="flex space-x-4">
               <a 

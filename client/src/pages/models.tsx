@@ -48,7 +48,7 @@ const MODE_CARDS: ModeCard[] = [
     mode: "slack_friendly",
     label: "Slack-Friendly",
     description: "Short, scannable summaries designed for quick reading in Slack.",
-    requiredPlan: "pro",
+    requiredPlan: "free",
     example: {
       summary: "Avatar upload + cropping in profile settings",
       impact: "medium",
@@ -60,7 +60,7 @@ const MODE_CARDS: ModeCard[] = [
     mode: "detailed_engineering",
     label: "Detailed Engineering",
     description: "Technical deep-dives with implementation details for engineers.",
-    requiredPlan: "pro",
+    requiredPlan: "free",
     example: {
       summary: "Implement multipart avatar upload pipeline with sharp-based cropping and S3 lifecycle policies",
       impact: "medium",
@@ -72,7 +72,7 @@ const MODE_CARDS: ModeCard[] = [
     mode: "executive_summary",
     label: "Executive Summary",
     description: "Non-technical summaries focused on business value and user outcomes.",
-    requiredPlan: "pro",
+    requiredPlan: "free",
     example: {
       summary: "Users can now personalize their profile with a custom photo",
       impact: "medium",
@@ -84,7 +84,7 @@ const MODE_CARDS: ModeCard[] = [
     mode: "incident_aware",
     label: "Incident-Aware",
     description: "Risk-focused analysis highlighting potential production issues and breaking changes.",
-    requiredPlan: "team",
+    requiredPlan: "free",
     example: {
       summary: "Avatar upload endpoint introduced \u2014 review file-size limits and S3 IAM permissions",
       impact: "high",

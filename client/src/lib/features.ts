@@ -24,6 +24,10 @@ export function isOrganizationEnabled(): boolean {
   return flagEnabled(import.meta.env.VITE_ORGANIZATION_ON);
 }
 
+export function isBillingEnabled(): boolean {
+    return flagEnabled(import.meta.env.VITE_IS_PAYING_ENABLED);
+}
+
 /** Incident reporting: the PushLog agent, Sentry webhooks, incident/risk engines. */
 export function isIncidentsEnabled(): boolean {
   return flagEnabled(import.meta.env.VITE_INCIDENTS_ON);

@@ -376,7 +376,7 @@ export async function generateCodeSummary(
 
     const diffSection = buildDiffPromptSection(pushData);
 
-    const prompt = `Analyze this git push and provide a summary.
+    const prompt = `Summarize this git push for a team notification. Answer directly; this is a quick summary, not a code review.
 
 Repository: ${pushData.repositoryName}
 Branch: ${pushData.branch}
@@ -385,24 +385,18 @@ Files Changed: ${pushData.filesChanged.join(', ')}
 Changes: +${pushData.additions} -${pushData.deletions} lines
 ${diffSection}
 
-Please provide a summary in this JSON format:
-{
-  "summary": "Brief 1-2 sentence summary of what changed",
-  "impact": "low|medium|high - based on the scope and nature of changes",
-  "category": "feature|bugfix|refactor|docs|test|security|other",
-  "details": "More detailed explanation of the changes and their purpose"
-}
-
-Focus on:
-- What functionality was added/modified/fixed
-- The business impact or user benefit
-- Any important technical details
-- Keep it concise but informative
-
 ${modeConfig.promptModifier}
 
-Respond with only valid JSON:
-`;
+Rules:
+- "summary": one sentence, under 25 words. Say what changed and why.
+- "details": plain prose, no lists, within the length given above.
+- For large pushes, group the changes into 2-3 themes. Never list individual files.
+- Base everything on the commit message and diff. Don't guess at intent that isn't shown.
+- "impact": "low", "medium", or "high", based on the effect on users or production, not line count.
+- "category": one of feature, bugfix, refactor, docs, test, security, other.
+
+Respond with only a JSON object in exactly this shape, and nothing else:
+{"summary": "Removed unused agent and incident files from the repo and tightened .gitignore.", "impact": "low", "category": "refactor", "details": "Untracked leftover docs, configs and scripts from the retired log agent and incident features so they stay local only. Added ignore rules for env files, keys and deploy state to prevent accidental commits."}`;
     const requestParams: any = {
       model: model,
       messages: [
@@ -418,6 +412,10 @@ Respond with only valid JSON:
       max_completion_tokens: effectiveMaxTokens,
       temperature: modeConfig.temperature,
     };
+    // Reasoning models (gpt-5*, etc.) count hidden reasoning against max_completion_tokens; on large
+    // diffs they can spend the whole budget thinking and truncate the JSON. A summary needs little
+    // reasoning. OpenRouter ignores this for non-reasoning models.
+    if (useOpenRouter) requestParams.reasoning = { effort: 'minimal' };
 
     let openAIResult: NormalizedOpenAIResult | null = null;
     let completion: OpenAI.Chat.Completions.ChatCompletion | undefined;
@@ -448,7 +446,8 @@ Respond with only valid JSON:
           openRouterGenerationId = res.headers.get(OPENROUTER_GENERATION_ID_HEADER)?.trim() || null;
           if (!openRouterGenerationId && typeof res.headers.get === 'function') {
             const tryHeader = (name: string) => res.headers.get(name)?.trim() || null;
-            openRouterGenerationId = tryHeader('x-openrouter-generation-id')
+            openRouterGenerationId = tryHeader('x-generation-id')
+              || tryHeader('x-openrouter-generation-id')
               || tryHeader('X-OpenRouter-Generation-Id')
               || tryHeader('openrouter-generation-id');
           }
@@ -462,6 +461,11 @@ Respond with only valid JSON:
           if (!res.ok) {
             lastErrBody = await res.text();
             const retryable = (res.status === 503 || res.status === 429) && attempt < openRouterMaxRetries;
+            if (res.status === 400 && requestParams.reasoning && /reasoning|effort/i.test(lastErrBody) && attempt < openRouterMaxRetries) {
+              console.warn('⚠️ OpenRouter rejected reasoning effort for this model, retrying without it:', lastErrBody.slice(0, 150));
+              delete requestParams.reasoning;
+              continue;
+            }
             if (retryable) {
               console.warn(`⚠️ OpenRouter ${res.status} (attempt ${attempt + 1}/${openRouterMaxRetries + 1}), will retry:`, lastErrBody.slice(0, 150));
               continue;
@@ -616,7 +620,7 @@ Respond with only valid JSON:
       if (!t.startsWith('{') || !t.includes('"summary"')) return null;
       let inString = false;
       let escape = false;
-      let lastGood = -1;
+      let depth = 0;
       for (let i = 0; i < t.length; i++) {
         const c = t[i];
         if (escape) {
@@ -629,18 +633,16 @@ Respond with only valid JSON:
         }
         if (c === '"') {
           inString = !inString;
-          if (!inString) lastGood = i;
           continue;
         }
+        if (!inString && c === '{') depth++;
+        if (!inString && c === '}') depth--;
       }
-      if (inString && lastGood >= 0) {
-        let truncated = t.slice(0, lastGood + 1);
-        truncated = truncated.replace(/,(\s*)$/, '$1'); // no trailing comma
-        const openBraces = (truncated.match(/\{/g)?.length ?? 0) - (truncated.match(/\}/g)?.length ?? 0);
-        const repaired = truncated + '}'.repeat(Math.max(0, openBraces) + 1);
-        return repaired;
-      }
-      return null;
+      if (!inString || depth <= 0) return null;
+      // Cut off mid-value (e.g. `"details": "Deleted a large set of`): keep the partial text and
+      // close the string, rather than backing up to the key and leaving `"details"}` (invalid JSON).
+      const body = escape ? t.slice(0, -1) : t;
+      return body.trimEnd() + '"' + '}'.repeat(depth);
     };
 
     let parsed: unknown;
