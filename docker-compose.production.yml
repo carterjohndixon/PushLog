@@ -68,42 +68,9 @@ services:
     # volumes:
     #   - ./config/supabase-db.crt:/app/config/supabase-db.crt:ro
 
-  pushlog-agent:
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-      args:
-        # Set at build time so `pushlog-agent version` shows a real SHA, e.g. GIT_COMMIT=$(git rev-parse --short HEAD)
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
-    container_name: pushlog-agent
-    restart: unless-stopped
-    depends_on:
-      pushlog-prod-web:
-        condition: service_healthy
-    # Root is required for default docker.sock permissions (root:docker on the host).
-    # Config and spool are still explicit mounts; only the agent binary runs with elevated in-container uid.
-    user: "0:0"
-    command: ["run", "--config", "/etc/pushlog-agent/config.yaml"]
-    volumes:
-      - ./config/pushlog-agent.production.yaml:/etc/pushlog-agent/config.yaml:ro
-      - pushlog_agent_spool:/var/lib/pushlog-agent/spool
-      # Required for `type: docker` sources in agent config (docker logs -f <container>).
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - pushlog_prod
-    healthcheck:
-      test: ["CMD-SHELL", "pidof pushlog-agent >/dev/null || exit 1"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-
 # Shared prod network — create once: `docker network create pushlog_prod`
 # (promote-production-docker.sh creates it if missing). external: true avoids
 # "network exists but was not created for project …" when compose project names differ.
 networks:
   pushlog_prod:
     external: true
-
-volumes:
-  pushlog_agent_spool:

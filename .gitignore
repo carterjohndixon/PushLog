@@ -113,3 +113,6 @@ out/
 .staging-autodeploy.lock
 .staging_deployed_sha
 .staging_deployed_at
+
+# Go log agent (kept locally, not in the repo)
+agent/
