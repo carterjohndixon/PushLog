@@ -164,7 +164,7 @@ fi
 if [ -n "${VITE_IS_PAYING_ENABLED:-}" ]; then
   log "VITE_IS_PAYING_ENABLED for build: ${VITE_IS_PAYING_ENABLED}"
 else
-  log "VITE_IS_PAYING_ENABLED unset (client defaults per payingUi.ts)"
+  log "VITE_IS_PAYING_ENABLED unset (billing UI off by default, see client/src/lib/payingUi.ts)"
 fi
 export VITE_IS_PAYING_ENABLED
 

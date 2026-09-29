@@ -4,6 +4,8 @@
  */
 
 import type { PushLogMode } from "./pushlogModes";
+import { PUSHLOG_MODES } from "./pushlogModes";
+import { BILLING_ENABLED } from "./features";
 
 // ---------------------------------------------------------------------------
 // Plan definitions
@@ -98,7 +100,22 @@ export function planToStripePriceId(plan: PlanName): string | null {
 // Pure entitlement checks (no DB — caller provides data)
 // ---------------------------------------------------------------------------
 
+/**
+ * While billing is off there is no way to upgrade, so plans must not limit anyone:
+ * every account gets every mode and no repo or summary caps. Incident features are
+ * still gated separately by INCIDENTS_ON.
+ */
+const UNLIMITED: PlanLimits = {
+  repoLimit: Infinity,
+  summaryCap: Infinity,
+  allowedModes: [...PUSHLOG_MODES],
+  sentryEnabled: true,
+  incidentsEnabled: true,
+  priceMonthly: 0,
+};
+
 export function getPlanLimits(plan: PlanName): PlanLimits {
+  if (!BILLING_ENABLED) return UNLIMITED;
   return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
 }
 

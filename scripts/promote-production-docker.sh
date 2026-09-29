@@ -64,7 +64,7 @@ fi
 if [ -n "${VITE_IS_PAYING_ENABLED:-}" ]; then
   log "Prod web image build: VITE_IS_PAYING_ENABLED=${VITE_IS_PAYING_ENABLED}"
 else
-  log "Prod web image build: VITE_IS_PAYING_ENABLED unset (client defaults to billing UI enabled per payingUi.ts)"
+  log "Prod web image build: VITE_IS_PAYING_ENABLED unset (billing UI off by default, see client/src/lib/payingUi.ts)"
 fi
 export VITE_IS_PAYING_ENABLED
 

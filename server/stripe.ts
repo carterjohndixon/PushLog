@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { BILLING_ENABLED } from './features';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -21,8 +22,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: '2025-08-27.basil',
 });
 
+/** See BILLING_ENABLED in ./features: off unless BILLING_ENABLED is set to a truthy value. */
 export function isBillingEnabled(): boolean {
-  return process.env.BILLING_ENABLED !== 'false';
+  return BILLING_ENABLED;
 }
 
 /**

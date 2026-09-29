@@ -1,16 +1,16 @@
 /**
  * Optional product surfaces, read at runtime from the environment.
  *
- * PushLog's core product is Slack commit notifications. Organizations/teams and
- * incident reporting are shipped but switched off by default, so a fresh deploy is
+ * PushLog's core product is Slack commit notifications. Organizations/teams, incident
+ * reporting and billing are shipped but switched off by default, so a fresh deploy is
  * the simple product. The code stays in the tree — these flags decide whether it is
  * reachable.
  *
  * - Unset / empty / anything falsy → **off**
  * - `true`, `1`, `yes`, `on` → **on**
  *
- * The client mirrors these as VITE_ORGANIZATION_ON / VITE_INCIDENTS_ON (baked at
- * build time, see client/src/lib/features.ts). Set both halves together: hiding a
+ * The client mirrors these as VITE_ORGANIZATION_ON / VITE_INCIDENTS_ON /
+ * VITE_IS_PAYING_ENABLED (baked at build time, see client/src/lib/features.ts). Set both halves together: hiding a
  * feature in the UI while its API answers is not the same as turning it off.
  */
 import type { Request, Response, NextFunction } from "express";
@@ -24,7 +24,11 @@ function flagEnabled(raw: string | undefined): boolean {
 /** Teams, invites, seats, per-repo membership, organization endpoints. */
 export const ORGANIZATION_ON = flagEnabled(process.env.ORGANIZATION_ON);
 
-export const BILLING_ENABLED = flagEnabled(process.env.VITE_IS_PAYING_ENABLED);
+/**
+ * Billing: Stripe checkout/portal, paid plans and plan limits. While off, every account
+ * gets the full product (no repo, summary or mode limits) and nothing can be bought.
+ */
+export const BILLING_ENABLED = flagEnabled(process.env.BILLING_ENABLED);
 
 /** Incident reporting: the PushLog agent, Sentry webhooks, incident/risk engines. */
 export const INCIDENTS_ON = flagEnabled(process.env.INCIDENTS_ON);
@@ -45,6 +49,6 @@ export function requireFeature(enabled: boolean, feature: string) {
 
 export function logFeatureFlags(log: (msg: string) => void = console.log): void {
   log(
-    `[features] organizations=${ORGANIZATION_ON ? "on" : "off"} incidents=${INCIDENTS_ON ? "on" : "off"}`,
+    `[features] organizations=${ORGANIZATION_ON ? "on" : "off"} incidents=${INCIDENTS_ON ? "on" : "off"} billing=${BILLING_ENABLED ? "on" : "off"}`,
   );
 }

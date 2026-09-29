@@ -24,8 +24,12 @@ export function isOrganizationEnabled(): boolean {
   return flagEnabled(import.meta.env.VITE_ORGANIZATION_ON);
 }
 
+/**
+ * Billing UI: pricing, billing page, plan badges, upgrade prompts. Off until billing
+ * is fully set up. Server half: BILLING_ENABLED (see server/features.ts).
+ */
 export function isBillingEnabled(): boolean {
-    return flagEnabled(import.meta.env.VITE_IS_PAYING_ENABLED);
+  return flagEnabled(import.meta.env.VITE_IS_PAYING_ENABLED);
 }
 
 /** Incident reporting: the PushLog agent, Sentry webhooks, incident/risk engines. */

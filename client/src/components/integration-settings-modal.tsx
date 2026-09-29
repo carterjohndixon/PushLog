@@ -525,8 +525,8 @@ export function IntegrationSettingsModal({
                 <SelectContent className="max-w-[var(--radix-select-trigger-width)] bg-popover border-border" position="popper">
                   {PUSHLOG_MODE_OPTIONS.map((opt) => {
                     const userPlan = profileResponse?.user?.plan ?? "free";
-                    const accessible = (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[opt.requiredPlan] ?? 0);
                     const showPlanBadges = isPayingUiEnabled();
+                    const accessible = !showPlanBadges || (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[opt.requiredPlan] ?? 0);
                     return (
                       <SelectItem key={opt.mode} value={opt.mode} disabled={!accessible}>
                         <span className="flex items-center gap-2">

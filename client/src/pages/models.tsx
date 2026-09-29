@@ -97,6 +97,8 @@ const MODE_CARDS: ModeCard[] = [
 const PLAN_RANK: Record<string, number> = { free: 0, pro: 1, team: 2 };
 
 function isModeAccessible(userPlan: string, requiredPlan: string): boolean {
+  // No plans to upgrade to while billing is off, so nothing is locked.
+  if (!isPayingUiEnabled()) return true;
   return (PLAN_RANK[userPlan] ?? 0) >= (PLAN_RANK[requiredPlan] ?? 0);
 }
 
