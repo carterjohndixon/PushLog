@@ -153,36 +153,52 @@ else
   log "  Network $PROD_NETWORK_NAME already exists"
 fi
 
-# ── Remove fixed-name containers (any compose project / leftover duplicates) ──
-log "Removing conflicting production containers (if any)..."
+# ── Build new images while the current production containers keep serving ──
+# Building before touching any container keeps downtime to the container swap below
+# instead of the whole npm + cargo build. A failed build leaves production untouched.
+log "Building production images (compose project=$COMPOSE_PROJECT_NAME); current containers stay up..."
+if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" build >> "$DOCKER_LOG" 2>&1; then
+  log "ERROR: docker compose build failed; production was not changed. See deploy-production-docker.log for details."
+  tail -20 "$DOCKER_LOG" | while IFS= read -r line; do log "  $line"; done
+  exit 1
+fi
+log "Images built."
+
+# ── Remove fixed-name containers owned by a different compose project ──
+# Containers already in $COMPOSE_PROJECT_NAME are recreated in place by `up` below, so only
+# leftovers from another project (or created outside compose) would cause a name conflict.
+log "Removing conflicting production containers from other compose projects (if any)..."
 for cname in "${PROD_FIXED_CONTAINERS[@]}"; do
   if docker inspect "$cname" >/dev/null 2>&1; then
-    log "  docker rm -f $cname"
-    docker rm -f "$cname" >> "$DOCKER_LOG" 2>&1 || true
+    owner="$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project" }}' "$cname" 2>/dev/null || true)"
+    if [ "$owner" != "$COMPOSE_PROJECT_NAME" ]; then
+      log "  docker rm -f $cname (project=${owner:-<none>})"
+      docker rm -f "$cname" >> "$DOCKER_LOG" 2>&1 || true
+    fi
   fi
 done
 
-# ── Drop production stack only (keeps external network + named volumes) ──
-# IMPORTANT: Do NOT use --remove-orphans here. Staging often uses the same
-# COMPOSE_PROJECT_NAME (e.g. pushlog) with docker-compose.staging.yml; orphans would
-# include every staging + pushlog-promote container and this script would nuke the host.
-log "docker compose -p $COMPOSE_PROJECT_NAME down (production file only, no --remove-orphans) ..."
-docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" down >> "$DOCKER_LOG" 2>&1 || true
-
-# ── Rebuild and restart production containers ──
-log "Rebuilding and restarting (compose project=$COMPOSE_PROJECT_NAME)..."
-# Same: no --remove-orphans on up — would delete staging/promote as "orphans" of this file set.
-if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --build --force-recreate >> "$DOCKER_LOG" 2>&1; then
+# ── Swap in the new containers ──
+# Without --force-recreate, compose only recreates services whose image or config changed,
+# so an unchanged streaming-stats keeps running and the web container doesn't wait on it.
+# IMPORTANT: Do NOT use --remove-orphans. Staging often uses the same COMPOSE_PROJECT_NAME
+# (e.g. pushlog) with docker-compose.staging.yml; orphans would include every staging +
+# pushlog-promote container and this script would nuke the host.
+log "Recreating changed production containers..."
+if ! docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d >> "$DOCKER_LOG" 2>&1; then
   log "ERROR: docker compose up failed. See deploy-production-docker.log for details."
   tail -20 "$DOCKER_LOG" | while IFS= read -r line; do log "  $line"; done
   exit 1
 fi
-log "Docker containers rebuilt successfully."
+log "Production containers up to date."
 
-# ── Light cleanup: dangling images, stopped containers, unused networks (not volumes) ──
+# ── Light cleanup: stopped containers and dangling images only ──
+# Not `docker system prune`: that also drops unused build cache, including the BuildKit
+# cargo cache mounts (shared with staging) that make incremental Rust builds fast.
 if [ "${DOCKER_PROMOTE_PRUNE:-true}" = "true" ]; then
-  log "docker system prune -f (quick cleanup, preserves volumes)..."
-  docker system prune -f >> "$DOCKER_LOG" 2>&1 || true
+  log "Pruning stopped containers and dangling images (build cache kept)..."
+  docker container prune -f >> "$DOCKER_LOG" 2>&1 || true
+  docker image prune -f >> "$DOCKER_LOG" 2>&1 || true
 fi
 
 # ── Write deployed metadata ──

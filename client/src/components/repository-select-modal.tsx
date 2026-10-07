@@ -314,12 +314,17 @@ export function RepositorySelectModal({
             </div>
           ) : (
             <>
-              <Input
-                placeholder="Search repositories..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="mb-4 w-full min-w-0"
-              />
+              {/* Same insets as the repo list below so the input and buttons line up: pl-1 leaves
+                  room for the 4px focus ring (ring-2 + ring-offset-2), pr-4 for the ring plus the
+                  10px scrollbar. Without them the overflow-hidden wrapper clips the ring. */}
+              <div className="mb-4 min-w-0 pl-1 pr-4">
+                <Input
+                  placeholder="Search repositories..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full min-w-0"
+                />
+              </div>
               <ScrollArea className="h-[300px] w-full min-w-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
@@ -330,7 +335,7 @@ export function RepositorySelectModal({
                     <p>No repositories found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 min-w-0 pr-3">
+                  <div className="space-y-3 min-w-0 py-1 pl-1 pr-4">
                     {filteredRepositories.map((repo) => (
                       <Button
                         key={repo.githubId}
