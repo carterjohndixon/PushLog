@@ -320,7 +320,7 @@ export function RepositorySelectModal({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="mb-4 w-full min-w-0"
               />
-              <ScrollArea className="h-[300px] w-full min-w-0">
+              <ScrollArea className="h-[300px] w-full min-w-0 [&_[data-radix-scroll-area-viewport]>div]:!block">
                 {isLoading ? (
                   <div className="flex items-center justify-center h-full">
                     <p>Loading repositories...</p>
