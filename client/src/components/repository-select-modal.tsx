@@ -136,9 +136,9 @@ export function RepositorySelectModal({
   };
 
   // Filter repositories based on search query
-  const filteredRepositories = (repositories || []).filter((repo) =>
-    repo.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // const filteredRepositories = (repositories || []).filter((repo) =>
+    // repo.name.toLowerCase().includes(searchQuery.toLowerCase())
+  // );
 
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null);
 
