@@ -103,9 +103,9 @@ npm run build               # production build into dist/
 cargo test --workspace      # Rust tests
 ```
 
-## Traction
+## Status
 
-As of October 2026, PushLog has processed **802 GitHub pushes** in production, posted **799 Slack messages**, and generated **732 AI summaries** (the rest were sent without an AI summary).
+PushLog is live at [pushlog.ai](https://pushlog.ai) and I use it on its own development. As of October 2026 it has processed **802 GitHub pushes** in production, posted **799 Slack messages** and generated **732 AI summaries**. It doesn't have outside users yet.
 
 ## License
 
