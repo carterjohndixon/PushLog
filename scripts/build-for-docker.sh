@@ -42,7 +42,7 @@ cp target/release/incident-engine .docker-build/prebuilt/bin/
 CACHEBUST="${CACHEBUST:-$(git rev-parse HEAD 2>/dev/null || date +%s)}"
 echo "Docker cache-bust: $CACHEBUST"
 cat > .docker-build/prebuilt/Dockerfile << 'DOCKERFILE'
-FROM node:20-bookworm-slim
+FROM node:24-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 ARG CACHEBUST

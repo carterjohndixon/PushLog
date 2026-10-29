@@ -1,6 +1,6 @@
 # Promote service — runs production promotion via Docker (replaces PM2-based deploy-production.sh)
 # Uses Node Alpine as base, then adds Docker CLI + git + bash for promotion scripts.
-FROM node:20-alpine
+FROM node:24-alpine
 
 RUN apk add --no-cache docker-cli docker-cli-compose git bash \
  && if ! getent group app >/dev/null 2>&1; then addgroup -S app; fi \

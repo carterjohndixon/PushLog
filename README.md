@@ -58,7 +58,7 @@ Rust gives these predictable latency and low memory. It also keeps CPU-bound sco
 ## Tech stack
 
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui (Radix), TanStack Query, wouter, Recharts
-- **Backend:** Node.js 20, Express, TypeScript, Drizzle ORM (`postgres` driver), Zod
+- **Backend:** Node.js 24, Express, TypeScript, Drizzle ORM (`postgres` driver), Zod
 - **Rust:** Axum, Tokio, sqlx (Postgres), serde
 - **Database:** PostgreSQL (Supabase in production, `postgres:16` container in staging); sessions stored in Postgres with `connect-pg-simple`
 - **AI:** OpenAI API on PushLog's key (default `gpt-5.2`; also `gpt-5.1`, `gpt-4o`, `gpt-4o-mini` and Codex models), or bring your own [OpenRouter](https://openrouter.ai) key to use any OpenRouter model (e.g. `anthropic/claude-sonnet-4`)
@@ -77,7 +77,7 @@ Rust gives these predictable latency and low memory. It also keeps CPU-bound sco
 
 ## Running locally
 
-**Prerequisites:** Node 20 (`.nvmrc`), PostgreSQL, and optionally a Rust toolchain for the engines.
+**Prerequisites:** Node 24 (`.nvmrc`), PostgreSQL, and optionally a Rust toolchain for the engines.
 
 ```bash
 git clone https://github.com/pushlog-ai/PushLog.git
