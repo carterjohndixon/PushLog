@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Single build stage to reduce peak disk usage (avoids parallel Node + Rust builds)
-FROM node:20-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 
 # Default matches `node:*-bookworm-slim` PATH. We intentionally do **not** write
 # `ENV PATH="/root/.cargo/bin:$PATH"` because Docker may expand `$PATH` from the
@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=/opt/cargo/registry,sharing=locked \
  && rm -rf /opt/rustup/toolchains/*/share"
 
 # Minimal runtime
-FROM node:20-bookworm-slim AS runtime
+FROM node:24-bookworm-slim AS runtime
 
 WORKDIR /app
 ENV NODE_ENV=production
