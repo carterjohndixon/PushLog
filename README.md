@@ -1,6 +1,6 @@
 # PushLog
 
-AI-written Slack summaries of your GitHub pushes, with Sentry incident alerts. Live at **[pushlog.ai](https://pushlog.ai)**.
+AI-written Slack summaries of your GitHub pushes, with risk scoring. Live at **[pushlog.ai](https://pushlog.ai)**.
 
 ![PushLog Logo](./attached_assets/PushLog.png)
 
@@ -39,7 +39,7 @@ flowchart LR
 
 **Push flow** (`server/githubWebhook.ts`): verify the `X-Hub-Signature-256` HMAC against the raw body → find the repo and integration → add a compact diff from the GitHub API → run the AI summary → post to Slack → save the push event, its risk score and AI usage/cost.
 
-**Incident flow** (`server/sentryWebhook.ts`, `server/incidentEngine.ts`): verify the Sentry signature → send the event to the incident engine → the engine's summaries become in-app notifications (Server-Sent Events) and emails.
+**Incident flow** (experimental; behind the `INCIDENTS_ON` flag and off in production) (`server/sentryWebhook.ts`, `server/incidentEngine.ts`): verify the Sentry signature → send the event to the incident engine → the engine's summaries become in-app notifications (Server-Sent Events) and emails.
 
 **Billing** (`server/stripe.ts`, `server/routes/billing.ts`): Stripe Checkout and subscription webhooks drive plans and AI credits. Billing is behind the `BILLING_ENABLED` flag.
 
@@ -50,7 +50,7 @@ Three small Rust crates in a Cargo workspace (`Cargo.toml` at the root) handle t
 | Crate | How it runs | What it does |
 |---|---|---|
 | [`server/risk-engine`](server/risk-engine) | Runs once per push: JSON in on stdin, JSON out on stdout | Rule-based impact score (0–100), risk flags (auth, deps, migration, secrets, payment…), change-type tags and hotspot files. No network, no DB. If it fails or times out, the push is saved without a score. |
-| [`server/incident-engine`](server/incident-engine) | Long-running process that reads and writes one JSON object per line | Fingerprints errors (BLAKE3 over exception + top stack frames), keeps per-fingerprint EWMA baselines in memory, detects spikes, new issues and regressions, and ranks recent commits as likely causes. |
+| [`server/incident-engine`](server/incident-engine) | Long-running process that reads and writes one JSON object per line | *Experimental, off in production.* Fingerprints errors (BLAKE3 over exception + top stack frames), keeps per-fingerprint EWMA baselines in memory, detects spikes, new issues and regressions, and ranks recent commits as likely causes. |
 | [`server/streaming-stats`](server/streaming-stats) | Separate Axum HTTP service (its own container) | Updates precomputed daily aggregates in Postgres as each push arrives, so dashboard reads don't run heavy `GROUP BY` queries. |
 
 Rust gives these predictable latency and low memory. It also keeps CPU-bound scoring and in-memory streaming state off Node's event loop, and the crates are easy to test on their own (`cargo test`). A fourth crate, `tools/pkg-compare`, diffs `package.json` dependencies so deploy scripts can skip `npm install` when nothing changed.
