@@ -105,7 +105,7 @@ cargo test --workspace      # Rust tests
 
 ## Traction
 
-<!-- TODO(carter): add real numbers only (e.g. active workspaces, pushes summarized, incidents alerted). Delete this section if you'd rather not share. -->
+As of October 2026, PushLog has processed **802 GitHub pushes** in production, posted **799 Slack messages**, and generated **732 AI summaries** (the rest were sent without an AI summary).
 
 ## License
 
