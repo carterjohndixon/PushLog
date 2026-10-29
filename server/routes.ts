@@ -4622,10 +4622,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating integration:", error);
       if (error instanceof z.ZodError) {
-        const first = error.errors[0];
+        const first = error.issues[0];
         const message = first ? `${first.path.join(".")}: ${first.message}` : "Validation failed";
         // return res.status(400).json({ error: "Invalid integration data", details: message });
-        res.status(400).json({ error: "Invalid integration data"});
+        return res.status(400).json({ error: "Invalid integration data"});
       }
       res.status(400).json({ error: "Invalid integration data" });
     }
