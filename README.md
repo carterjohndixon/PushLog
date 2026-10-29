@@ -8,7 +8,7 @@ AI-written Slack summaries of your GitHub pushes, with Sentry incident alerts. L
 
 When you push to a connected GitHub repo, PushLog fetches the diff, scores how risky the change is, has an LLM write a short summary, and posts it to a Slack channel you choose. It also accepts Sentry webhooks, groups errors into incidents, links them to recent commits that may have caused them, and alerts your team in the app and by email.
 
-<!-- TODO(carter): add a screenshot or short GIF of a Slack summary + the dashboard, e.g. docs/screenshot.png -->
+![PushLog posting AI summaries of two pushes to Slack](docs/images/slack-summary.png)
 
 ## Architecture
 
